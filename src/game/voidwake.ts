@@ -623,8 +623,33 @@ export class Voidwake {
       case "save": return this.updateSave();
       case "station": return this.updateStation();
       case "quit-confirm": return this.updateQuitConfirm();
+      case "destroyed": return this.updateDestroyed();
     }
   }
+
+  // --- Destroyed (death) screen -------------------------------------------
+  destroyedItems = ["Load Last Save", "Return to Main Menu"];
+  updateDestroyed() {
+    this.menuNav(this.destroyedItems.length);
+    if (this.input.consume("enter")) {
+      const c = this.destroyedItems[this.menuCursor];
+      if (c === "Load Last Save") {
+        const saves = listSaves();
+        if (saves.length > 0) {
+          const blob = loadGame(saves[0].slot);
+          if (blob) {
+            this.applySave(blob);
+            this.screen = "playing";
+            this.pushLog(`Restored from ${saves[0].slot}.`);
+            return;
+          }
+        }
+        this.pushLog("No save available.");
+      }
+      this.player = null;
+      this.screen = "title";
+      this.menuCursor = 0;
+    }
 
   // --- Title --------------------------------------------------------------
   titleItems = ["New Game", "Load Game", "Options", "Quit"];
