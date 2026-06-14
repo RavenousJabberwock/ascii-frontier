@@ -590,6 +590,9 @@ export class Voidwake {
   // Timestamp (seconds) when the player entered the destroyed screen — used
   // for a short input grace period so the death banner is actually readable.
   destroyedAt = 0;
+  // Pause toggle (in-flight). When paused, world ticks halt but render continues.
+  paused = false;
+
   // Why the player died and who (or what) killed them. Surfaced on the
   // destroyed screen so the player understands what happened.
   deathReason: string | null = null;
