@@ -1218,6 +1218,33 @@ export class Voidwake {
       putText(g, 6, 6 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
     });
   }
+  renderDestroyed(g: Cell[][]) {
+    const cols = g[0].length;
+    const cx = Math.floor(cols / 2);
+    const banner = [
+      "  ____  _   _ ___ ____    ____  _____ ____ _____ ____   _____   _______ ____  ",
+      " / ___|| | | |_ _|  _ \\  |  _ \\| ____/ ___|_   _|  _ \\ / _ \\ \\ / / ____|  _ \\ ",
+      " \\___ \\| |_| || || |_) | | | | |  _| \\___ \\ | | | |_) | | | \\ V /|  _| | | | |",
+      "  ___) |  _  || ||  __/  | |_| | |___ ___) || | |  _ <| |_| || | | |___| |_| |",
+      " |____/|_| |_|___|_|     |____/|_____|____/ |_| |_| \\_\\___/ |_| |_____|____/ ",
+    ];
+    banner.forEach((line, i) => putText(g, Math.max(2, cx - Math.floor(line.length / 2)), 3 + i, line, "#ff4d4d"));
+    const p = this.player;
+    putText(g, cx - 18, 11, "Your ship has been destroyed.", "#fff");
+    if (p) {
+      putText(g, cx - 18, 13, `Cmdr ${p.char.name} — Rank ${p.rank}  ${p.credits}cr  XP ${p.xp}`, "#9fe");
+    }
+    const saves = listSaves();
+    const last = saves[0];
+    putText(g, cx - 18, 15, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
+    this.destroyedItems.forEach((it, i) => {
+      const sel = i === this.menuCursor;
+      const disabled = it === "Load Last Save" && !last;
+      const color = disabled ? "#555" : (sel ? "#fff" : "#9fe");
+      putText(g, cx - 16, 18 + i * 2, (sel ? "▸ " : "  ") + it, color);
+    });
+    putText(g, cx - 16, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
+  }
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
     items.forEach((it, i) => {
