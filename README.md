@@ -8,6 +8,12 @@ level up — all rendered as glyphs on an HTML5 `<canvas>`.
 Built with [TanStack Start](https://tanstack.com/start) + React 19 + Vite 7
 and styled with Tailwind v4.
 
+Play it live at https://ascii-frontier.lovable.app/
+
+Q: Wait, why isn't it on github.lo like the rest of your stuff?
+
+A: This is a TanStack Start app, which is built for SSR (server-side rendering) and serverless functions. GitHub Pages only serves static files — it can't run the server code that TanStack Start needs. So a standard github.io deploy won't work without restructuring the build.
+
 ---
 
 ## Quick start
