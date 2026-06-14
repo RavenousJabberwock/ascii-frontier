@@ -202,9 +202,13 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   cycleTarget: "t",
   dock: "f",
   station: "b",
-  mission: "j",
+  mission: "u",
+  boost: "shift",        // afterburner: extra speed while held, burns fuel fast
+  jettison: "j",         // drop one unit of the highest-volume cargo type
+  pause: "p",            // toggle pause while in flight
   menu: "escape",
 };
+
 
 function defaultOptions(): Options {
   return {
