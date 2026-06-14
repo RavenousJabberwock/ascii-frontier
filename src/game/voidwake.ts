@@ -547,6 +547,90 @@ function colorFor(kind: EntityKind): string {
   }
 }
 
+// ---- Visual decoration helpers --------------------------------------------
+// Cheap, deterministic per-id / per-cell hash. Used to give each entity its
+// own colour tint, surface texture, and ship variant without needing any
+// persisted state — same id always produces the same look.
+function hash01(n: number): number {
+  let x = ((n | 0) * 2654435761) >>> 0;
+  x ^= x >>> 16; x = Math.imul(x, 0x85ebca6b);
+  x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35);
+  x ^= x >>> 16;
+  return (x >>> 0) / 4294967295;
+}
+
+// Per-kind palettes — picked by entity id so each planet / station / sun
+// reads as its own distinct body instead of a uniform sphere of the same hue.
+const PLANET_FILLS  = ["#7ec8ff", "#9fd29b", "#d9a06a", "#c98aff", "#ffd28a", "#7fe3d1"];
+const PLANET_EDGES  = ["#3d6d9b", "#5a8a5a", "#8b6038", "#7a4eb0", "#a98a48", "#3d8a82"];
+const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0"];
+const STATION_FILLS = ["#c2c2ff", "#a8ffd0", "#ffc8a0", "#cfe8ff"];
+const STATION_TEX   = ["#", "H", "X", "=", "8"];
+const STAR_FILLS    = ["#ffd866", "#ffb27a", "#fff0a0", "#ff9966"];
+const ASTEROID_FILLS= ["#a6886a", "#8a7656", "#b89a78", "#7a6650"];
+const ASTEROID_TEX  = ["%", "*", "#", ":", "."];
+
+function tintFor(e: Entity): { fill: string; edge: string } {
+  const h = hash01(e.id);
+  switch (e.kind) {
+    case "planet": {
+      const i = Math.floor(h * PLANET_FILLS.length);
+      return { fill: PLANET_FILLS[i], edge: PLANET_EDGES[i] };
+    }
+    case "station": {
+      const i = Math.floor(h * STATION_FILLS.length);
+      return { fill: STATION_FILLS[i], edge: "#8a8ad0" };
+    }
+    case "star": {
+      const i = Math.floor(h * STAR_FILLS.length);
+      return { fill: STAR_FILLS[i], edge: "#7a5a20" };
+    }
+    case "asteroid": {
+      const i = Math.floor(h * ASTEROID_FILLS.length);
+      return { fill: ASTEROID_FILLS[i], edge: "#5a4838" };
+    }
+    default:
+      return { fill: colorFor(e.kind), edge: colorFor(e.kind) };
+  }
+}
+
+// Surface character for a given cell on a body. Mixes a few glyphs based on
+// world-space hashing so the silhouette shows banding / cratering rather than
+// being a flat fill of one character.
+function surfaceChar(e: Entity, gx: number, gy: number, onEdge: boolean, edgeCh: string, fillCh: string): string {
+  if (onEdge) return edgeCh;
+  const palette =
+    e.kind === "planet"  ? PLANET_TEX :
+    e.kind === "station" ? STATION_TEX :
+    e.kind === "asteroid"? ASTEROID_TEX :
+    null;
+  if (!palette) return fillCh;
+  const h = hash01(e.id * 131 + gx * 1009 + gy * 7919);
+  return palette[Math.floor(h * palette.length)];
+}
+
+// 3x3 ship silhouettes per faction. Multiple variants per faction so different
+// hostiles / freighters look like distinct hulls rather than identical dots.
+const SHIP_SPRITES: Record<string, string[][]> = {
+  hostile: [
+    [" ^ ", "<X>", " v "],
+    ["/^\\", "<#>", "\\v/"],
+    [".^.", "[=}", " v "],
+    [" A ", "{x}", " V "],
+  ],
+  friendly: [
+    [" ^ ", "[=>", " v "],
+    ["/^\\", "<O>", "\\v/"],
+    [" . ", "(=]", " ' "],
+  ],
+  neutral: [
+    [" . ", "(o)", " ' "],
+    [" ~ ", "[=]", " ~ "],
+    [" ^ ", "<o>", " v "],
+    ["___", "[D]", "   "],
+  ],
+};
+
 // =============================================================================
 // 11. Main engine class
 // =============================================================================
