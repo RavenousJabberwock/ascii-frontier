@@ -580,7 +580,24 @@ export class Voidwake {
   // Timestamp (seconds) when the player entered the destroyed screen — used
   // for a short input grace period so the death banner is actually readable.
   destroyedAt = 0;
-
+  // Why the player died and who (or what) killed them. Surfaced on the
+  // destroyed screen so the player understands what happened.
+  deathReason: string | null = null;
+  deathKiller: string | null = null;
+  // Crash diagnostics: when the loop throws we freeze on a crashed screen
+  // and show the error here so the user isn't silently kicked to the menu.
+  crashError: string | null = null;
+  crashStack: string | null = null;
+  // Autosave bookkeeping. We rotate into the dedicated "autosave" slot every
+  // `autosaveInterval` seconds while in flight.
+  autosaveTimer = 0;
+  autosaveInterval = 120; // seconds
+  // Simple FPS counter (toggleable in Options).
+  fps = 0;
+  private _fpsAcc = 0;
+  private _fpsFrames = 0;
+  // Audio: small WebAudio context for cheap beeps (hit / death / dock).
+  audio: AudioContext | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -591,6 +608,17 @@ export class Voidwake {
     window.addEventListener("resize", () => this.fit());
     this.input.attach(canvas);
     canvas.focus();
+    // Global error trap so async/uncaught errors during gameplay show on the
+    // crash screen instead of vanishing into the console.
+    window.addEventListener("error", (ev) => {
+      if (this.screen === "playing") this.crash(ev.error ?? new Error(ev.message));
+    });
+    window.addEventListener("unhandledrejection", (ev) => {
+      if (this.screen === "playing") {
+        const r = ev.reason;
+        this.crash(r instanceof Error ? r : new Error(String(r)));
+      }
+    });
   }
 
   fit() {
@@ -606,8 +634,20 @@ export class Voidwake {
       if (!this.running) return;
       const dt = Math.min(0.05, (ts - this.lastTs) / 1000);
       this.lastTs = ts;
-      this.update(dt);
-      this.render();
+      // FPS sampling
+      this._fpsAcc += dt; this._fpsFrames++;
+      if (this._fpsAcc >= 0.5) {
+        this.fps = Math.round(this._fpsFrames / this._fpsAcc);
+        this._fpsAcc = 0; this._fpsFrames = 0;
+      }
+      // Wrap update+render so a thrown exception lands on the crash screen
+      // with a readable stack instead of silently bouncing back to title.
+      try {
+        this.update(dt);
+        this.render();
+      } catch (err) {
+        this.crash(err);
+      }
       this.input.endFrame();
       this.rafId = requestAnimationFrame(loop);
     };
@@ -622,6 +662,51 @@ export class Voidwake {
     this.log.push({ t: performance.now() / 1000, msg });
     if (this.log.length > 6) this.log.shift();
   }
+
+  // Centralized death handler. Pass a human reason ("Killed by Hostile Reaver",
+  // "Collided with Planet P-42", "Hull breach: fuel detonation").
+  die(reason: string, killer?: string) {
+    if (this.screen === "destroyed") return;
+    this.deathReason = reason;
+    this.deathKiller = killer ?? null;
+    this.pushLog(`☠ ${reason}`);
+    this.screen = "destroyed";
+    this.destroyedAt = performance.now() / 1000;
+    this.menuCursor = 0;
+    this.beep(120, 0.6, "sawtooth");
+  }
+
+  // Capture a runtime error from the loop / global handlers and freeze on
+  // the crash screen. Keeps the player from being silently kicked to menu.
+  crash(err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    this.crashError = e.message || "Unknown error";
+    this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
+    // eslint-disable-next-line no-console
+    console.error("[Voidwake crash]", e);
+    this.screen = "crashed";
+    this.menuCursor = 0;
+  }
+
+  // Tiny WebAudio beep (no asset dependency). Used for hit/death/dock cues.
+  beep(freq = 440, dur = 0.08, type: OscillatorType = "square") {
+    try {
+      if (!this.audio) this.audio = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const ctx = this.audio;
+      if (ctx.state === "suspended") void ctx.resume();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const vol = this.options.volumeMaster * this.options.volumeSfx * 0.15;
+      o.type = type; o.frequency.value = freq;
+      g.gain.value = vol;
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      o.connect(g).connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + dur);
+    } catch { /* audio unavailable; non-fatal */ }
+  }
+
+
 
   // ---------------------------------------------------------------------------
   // UPDATE
