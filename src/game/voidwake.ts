@@ -607,6 +607,7 @@ function colorFor(kind: EntityKind): string {
     case "neutral": return "#dddddd";
     case "hostile": return "#ff5555";
     case "bullet": return "#fffa86";
+    case "loot": return "#ffe066";
   }
 }
 
