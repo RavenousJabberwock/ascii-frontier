@@ -547,6 +547,90 @@ function colorFor(kind: EntityKind): string {
   }
 }
 
+// ---- Visual decoration helpers --------------------------------------------
+// Cheap, deterministic per-id / per-cell hash. Used to give each entity its
+// own colour tint, surface texture, and ship variant without needing any
+// persisted state — same id always produces the same look.
+function hash01(n: number): number {
+  let x = ((n | 0) * 2654435761) >>> 0;
+  x ^= x >>> 16; x = Math.imul(x, 0x85ebca6b);
+  x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35);
+  x ^= x >>> 16;
+  return (x >>> 0) / 4294967295;
+}
+
+// Per-kind palettes — picked by entity id so each planet / station / sun
+// reads as its own distinct body instead of a uniform sphere of the same hue.
+const PLANET_FILLS  = ["#7ec8ff", "#9fd29b", "#d9a06a", "#c98aff", "#ffd28a", "#7fe3d1"];
+const PLANET_EDGES  = ["#3d6d9b", "#5a8a5a", "#8b6038", "#7a4eb0", "#a98a48", "#3d8a82"];
+const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0"];
+const STATION_FILLS = ["#c2c2ff", "#a8ffd0", "#ffc8a0", "#cfe8ff"];
+const STATION_TEX   = ["#", "H", "X", "=", "8"];
+const STAR_FILLS    = ["#ffd866", "#ffb27a", "#fff0a0", "#ff9966"];
+const ASTEROID_FILLS= ["#a6886a", "#8a7656", "#b89a78", "#7a6650"];
+const ASTEROID_TEX  = ["%", "*", "#", ":", "."];
+
+function tintFor(e: Entity): { fill: string; edge: string } {
+  const h = hash01(e.id);
+  switch (e.kind) {
+    case "planet": {
+      const i = Math.floor(h * PLANET_FILLS.length);
+      return { fill: PLANET_FILLS[i], edge: PLANET_EDGES[i] };
+    }
+    case "station": {
+      const i = Math.floor(h * STATION_FILLS.length);
+      return { fill: STATION_FILLS[i], edge: "#8a8ad0" };
+    }
+    case "star": {
+      const i = Math.floor(h * STAR_FILLS.length);
+      return { fill: STAR_FILLS[i], edge: "#7a5a20" };
+    }
+    case "asteroid": {
+      const i = Math.floor(h * ASTEROID_FILLS.length);
+      return { fill: ASTEROID_FILLS[i], edge: "#5a4838" };
+    }
+    default:
+      return { fill: colorFor(e.kind), edge: colorFor(e.kind) };
+  }
+}
+
+// Surface character for a given cell on a body. Mixes a few glyphs based on
+// world-space hashing so the silhouette shows banding / cratering rather than
+// being a flat fill of one character.
+function surfaceChar(e: Entity, gx: number, gy: number, onEdge: boolean, edgeCh: string, fillCh: string): string {
+  if (onEdge) return edgeCh;
+  const palette =
+    e.kind === "planet"  ? PLANET_TEX :
+    e.kind === "station" ? STATION_TEX :
+    e.kind === "asteroid"? ASTEROID_TEX :
+    null;
+  if (!palette) return fillCh;
+  const h = hash01(e.id * 131 + gx * 1009 + gy * 7919);
+  return palette[Math.floor(h * palette.length)];
+}
+
+// 3x3 ship silhouettes per faction. Multiple variants per faction so different
+// hostiles / freighters look like distinct hulls rather than identical dots.
+const SHIP_SPRITES: Record<string, string[][]> = {
+  hostile: [
+    [" ^ ", "<X>", " v "],
+    ["/^\\", "<#>", "\\v/"],
+    [".^.", "[=}", " v "],
+    [" A ", "{x}", " V "],
+  ],
+  friendly: [
+    [" ^ ", "[=>", " v "],
+    ["/^\\", "<O>", "\\v/"],
+    [" . ", "(=]", " ' "],
+  ],
+  neutral: [
+    [" . ", "(o)", " ' "],
+    [" ~ ", "[=]", " ~ "],
+    [" ^ ", "<o>", " v "],
+    ["___", "[D]", "   "],
+  ],
+};
+
 // =============================================================================
 // 11. Main engine class
 // =============================================================================
@@ -1765,20 +1849,98 @@ export class Voidwake {
       projected.push({ e, sx, sy: sy2, z: z2, r: rCells });
     }
     projected.sort((a, b) => b.z - a.z);
-    for (const sp of projected) {
-      const { e, sx, sy: sy2, r: rCells } = sp;
+
+    // Helper: project a world point into the same camera space as entities.
+    // Returns null if behind the camera. Used for ship exhaust trail endpoints.
+    const projectPoint = (wx: number, wy: number, wz: number): { sx: number; sy: number; z: number } | null => {
+      const rxw = wx - p.pos.x, ryw = wy - p.pos.y, rzw = wz - p.pos.z;
+      const x1 = cy * rxw - sy * rzw;
+      const z1 = sy * rxw + cy * rzw;
+      const y1 = cp * ryw - sp * z1;
+      const z2 = sp * ryw + cp * z1;
+      if (z2 <= 1) return null;
+      return {
+        sx: vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7),
+        sy: vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7),
+        z: z2,
+      };
+    };
+
+    for (const proj of projected) {
+      const { e, sx, sy: sy2, r: rCells } = proj;
       const glyph = GLYPHS[e.kind];
-      const color = colorFor(e.kind);
-      if (rCells < 1.2) {
-        // Far away: single glyph if on-screen.
-        if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
-        g[sy2][sx] = { ch: glyph, color };
+      const tint = tintFor(e);
+
+      // --- Ships (hostile / friendly / neutral): silhouette + exhaust ------
+      if (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") {
+        // Engine exhaust: a fading trail drawn behind the ship along its
+        // velocity vector. When the ship is moving away the trail points
+        // toward the camera and glows; when moving toward us it tucks behind
+        // the hull, which is the natural depth cue we want.
+        const vmag = Math.hypot(e.vel.x, e.vel.y, e.vel.z);
+        if (vmag > 0.5) {
+          const inv = 1 / vmag;
+          const ex = e.vel.x * inv, ey = e.vel.y * inv, ez = e.vel.z * inv;
+          // Trail length scales with apparent size and speed, capped so it
+          // never paints the entire viewport.
+          const trailLen = Math.min(60, 6 + vmag * 0.6);
+          const segs = 4;
+          const palette = e.kind === "hostile"
+            ? ["#ffd28a", "#ff8a3a", "#c34a14", "#5a1d08"]
+            : e.kind === "friendly"
+              ? ["#d8ffe2", "#7CFC00", "#2a8a14", "#0d3a08"]
+              : ["#cfe8ff", "#7aa8d8", "#3a5a8a", "#16223a"];
+          const trailCh = ["*", "+", ".", "·"];
+          for (let i = 1; i <= segs; i++) {
+            const t = (i / segs) * trailLen;
+            const wp = projectPoint(e.pos.x - ex * t, e.pos.y - ey * t, e.pos.z - ez * t);
+            if (!wp) break;
+            if (wp.sx <= vpLeft || wp.sx >= vpRight || wp.sy <= vpTop || wp.sy >= vpBottom) continue;
+            const cell = g[wp.sy][wp.sx];
+            if (cell.ch !== " " && cell.ch !== "." && cell.ch !== "·") continue;
+            g[wp.sy][wp.sx] = { ch: trailCh[i - 1], color: palette[i - 1] };
+          }
+        }
+
+        // Hull. Single glyph when far, 3x3 silhouette when close enough to read.
+        if (rCells < 1.0) {
+          if (sx > vpLeft && sx < vpRight && sy2 > vpTop && sy2 < vpBottom) {
+            g[sy2][sx] = { ch: glyph, color: tint.fill };
+          }
+        } else {
+          const variants = SHIP_SPRITES[e.kind];
+          const sprite = variants[Math.floor(hash01(e.id) * variants.length)];
+          for (let dy = -1; dy <= 1; dy++) {
+            const row = sprite[dy + 1];
+            for (let dx = -1; dx <= 1; dx++) {
+              const ch = row[dx + 1];
+              if (ch === " ") continue;
+              const gx = sx + dx, gy = sy2 + dy;
+              if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+              g[gy][gx] = { ch, color: tint.fill };
+            }
+          }
+        }
+
+        // Label far-enough ships so the player can identify what they see.
+        if (rCells >= 1.5 && e.name) {
+          const lx = sx - Math.floor(e.name.length / 2);
+          const ly = sy2 + 2;
+          if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe");
+        }
         continue;
       }
-      // Close enough to draw a filled sprite. Squash Y by cell aspect.
+
+      // --- Distant non-ship body: single glyph -----------------------------
+      if (rCells < 1.2) {
+        if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
+        g[sy2][sx] = { ch: glyph, color: tint.fill };
+        continue;
+      }
+
+      // --- Close non-ship body: textured filled sprite ---------------------
       const rx = Math.max(1, Math.round(rCells));
       const ry = Math.max(1, Math.round(rCells * (CELL_W / CELL_H)));
-      // Pick a fill character per kind for a recognizable silhouette.
       const fill =
         e.kind === "star" ? "*" :
         e.kind === "planet" ? "O" :
@@ -1788,18 +1950,42 @@ export class Voidwake {
         e.kind === "station" ? "=" :
         e.kind === "planet" ? "o" :
         e.kind === "star" ? "+" : fill;
+
+      // Star glow halo — a faint outer ring outside the solid disc so the
+      // central star reads as a luminous source rather than a flat blob.
+      if (e.kind === "star") {
+        const haloR = 1.45;
+        const haloChars = ["+", "·", "."];
+        const haloCol = "#5a4823";
+        const hrx = Math.max(2, Math.round(rx * haloR));
+        const hry = Math.max(1, Math.round(ry * haloR));
+        for (let dy = -hry; dy <= hry; dy++) {
+          for (let dx = -hrx; dx <= hrx; dx++) {
+            const nx = dx / hrx, ny = dy / hry;
+            const d2 = nx * nx + ny * ny;
+            if (d2 <= 1.0 || d2 > haloR * haloR) continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            if (g[gy][gx].ch !== " ") continue;
+            const t = Math.min(2, Math.floor((d2 - 1.0) / 0.15));
+            g[gy][gx] = { ch: haloChars[t], color: haloCol };
+          }
+        }
+      }
+
       for (let dy = -ry; dy <= ry; dy++) {
         for (let dx = -rx; dx <= rx; dx++) {
-          // Ellipse test in normalized space.
           const nx = dx / rx, ny = dy / ry;
           const d2 = nx * nx + ny * ny;
           if (d2 > 1) continue;
           const gx = sx + dx, gy = sy2 + dy;
           if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
           const onEdge = d2 > 0.7;
-          g[gy][gx] = { ch: onEdge ? edge : fill, color };
+          const ch = surfaceChar(e, gx, gy, onEdge, edge, fill);
+          g[gy][gx] = { ch, color: onEdge ? tint.edge : tint.fill };
         }
       }
+
       // Label big objects centered just below the sprite.
       if (rCells >= 3 && e.name) {
         const lx = sx - Math.floor(e.name.length / 2);
