@@ -1450,6 +1450,10 @@ export class Voidwake {
     this.pushLog("Mined 1 ore.");
   }
 
+  // Currently-docked station id, or null while flying. Drives the station
+  // menu's price tables (each station has its own market).
+  dockedStationId: number | null = null;
+
   tryDock() {
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
@@ -1459,10 +1463,13 @@ export class Voidwake {
     if (p.throttle > 0.05) { this.pushLog("Reduce throttle to dock."); return; }
     this.screen = "station";
     this.menuCursor = 0;
+    this.stationPage = "main";
+    this.dockedStationId = t.id;
     // Refuel & repair on dock (free)
     p.ship.fuel = p.ship.fuelMax;
     p.ship.hull = p.ship.hullMax;
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
+    this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.beep(660, 0.08, "sine"); this.beep(990, 0.08, "sine");
 
     // Hand in mission
