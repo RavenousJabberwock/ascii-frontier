@@ -1432,6 +1432,119 @@ export class Voidwake {
     }
   }
 
+  // Starfield -----------------------------------------------------------------
+  // World-space stars projected through the player's camera. Because the
+  // points are fixed in world coordinates, translating (throttle / afterburner)
+  // makes them stream outward from the heading vector and yawing/pitching
+  // sweeps them across the viewport — exactly the velocity cue requested.
+  drawWorldStarfield(g: Cell[][], _dt: number) {
+    const p = this.player; if (!p) return;
+    const cols = g[0].length, rows = g.length;
+    const vpTop = 1, vpLeft = 1, vpRight = cols - 28, vpBottom = rows - 9;
+    const vw = vpRight - vpLeft, vh = vpBottom - vpTop;
+
+    // Lazy seed / top-up: keep ~220 stars in a sphere around the player.
+    const TARGET = 220;
+    const R = 600;
+    if (this.stars.length === 0) {
+      for (let i = 0; i < TARGET; i++) this.stars.push(this.spawnWorldStar(R, false));
+    }
+
+    const cy = Math.cos(p.heading.yaw), sy = Math.sin(p.heading.yaw);
+    const cp = Math.cos(p.heading.pitch), sp = Math.sin(p.heading.pitch);
+    // Forward vector (inverse camera applied to +Z) — used to respawn stars
+    // ahead of the ship so the field never empties out as we fly.
+    const fwd = { x: sy * cp, y: sp, z: cy * cp };
+
+    // Three brightness tiers; gray, low-alpha-feeling palette.
+    const PAL = ["#1a1f2a", "#2b3346", "#3d4a66"];
+    const CH = [".", ".", "·"];
+
+    for (let i = 0; i < this.stars.length; i++) {
+      const s = this.stars[i];
+      const rx = s.x - p.pos.x, ry = s.y - p.pos.y, rz = s.z - p.pos.z;
+      const x1 = cy * rx - sy * rz;
+      const z1 = sy * rx + cy * rz;
+      const y1 = cp * ry - sp * z1;
+      const z2 = sp * ry + cp * z1;
+      // Cull behind / too-far / off-screen and respawn ahead of the ship.
+      const dist2 = rx * rx + ry * ry + rz * rz;
+      const offscreen = z2 <= 1 || dist2 > R * R * 2.2;
+      let sx = 0, sy2 = 0;
+      if (!offscreen) {
+        sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
+        sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
+      }
+      if (offscreen || sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) {
+        // Respawn somewhere in a forward cone so the next frame still has it.
+        const ahead = 0.35 * R + Math.random() * R * 0.9;
+        const spread = R * 0.9;
+        const ox = (Math.random() - 0.5) * spread;
+        const oy = (Math.random() - 0.5) * spread;
+        const oz = (Math.random() - 0.5) * spread;
+        s.x = p.pos.x + fwd.x * ahead + ox;
+        s.y = p.pos.y + fwd.y * ahead + oy;
+        s.z = p.pos.z + fwd.z * ahead + oz;
+        s.t = Math.floor(Math.random() * 3);
+        continue;
+      }
+      // Only paint into empty cells so the starfield never clobbers HUD/entities.
+      const cell = g[sy2][sx];
+      if (cell.ch === " ") {
+        const t = s.t | 0;
+        g[sy2][sx] = { ch: CH[t], color: PAL[t] };
+      }
+    }
+  }
+
+  // Pre-flight / menu starfield: a simple 2D parallax that drifts toward the
+  // viewer at a calm pace so the title doesn't feel static.
+  drawTitleStarfield(g: Cell[][], dt: number) {
+    const cols = g[0].length, rows = g.length;
+    if (this.titleStars.length === 0) {
+      for (let i = 0; i < 180; i++) {
+        this.titleStars.push({
+          x: (Math.random() - 0.5) * 2,
+          y: (Math.random() - 0.5) * 2,
+          z: 0.05 + Math.random() * 1.0,
+          t: Math.floor(Math.random() * 3),
+        });
+      }
+    }
+    const PAL = ["#181d27", "#262d3d", "#39455e"];
+    const CH = [".", ".", "·"];
+    const cx = cols / 2, cy0 = rows / 2;
+    for (const s of this.titleStars) {
+      s.z -= dt * 0.25; // drift toward viewer
+      if (s.z <= 0.04) {
+        s.x = (Math.random() - 0.5) * 2;
+        s.y = (Math.random() - 0.5) * 2;
+        s.z = 1.0;
+        s.t = Math.floor(Math.random() * 3);
+      }
+      const sx = Math.floor(cx + (s.x / s.z) * cols * 0.5);
+      const sy = Math.floor(cy0 + (s.y / s.z) * rows * 0.5);
+      if (sx < 0 || sx >= cols || sy < 0 || sy >= rows) continue;
+      if (g[sy][sx].ch !== " ") continue;
+      const t = s.t | 0;
+      g[sy][sx] = { ch: CH[t], color: PAL[t] };
+    }
+  }
+
+  // World-star spawner — uniform-ish points in a sphere around the player.
+  private spawnWorldStar(R: number, _ahead: boolean) {
+    const p = this.player;
+    const px = p?.pos.x ?? 0, py = p?.pos.y ?? 0, pz = p?.pos.z ?? 0;
+    // Reject-sample inside a sphere of radius R for an even distribution.
+    let x = 0, y = 0, z = 0;
+    do {
+      x = (Math.random() - 0.5) * 2 * R;
+      y = (Math.random() - 0.5) * 2 * R;
+      z = (Math.random() - 0.5) * 2 * R;
+    } while (x * x + y * y + z * z > R * R);
+    return { x: px + x, y: py + y, z: pz + z, t: Math.floor(Math.random() * 3) };
+  }
+
   // Title screen ------------------------------------------------------------
   renderTitle(g: Cell[][]) {
     // Clean block-letter banner. Each glyph is exactly 9 cols wide so the
