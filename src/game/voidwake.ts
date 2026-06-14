@@ -1491,6 +1491,136 @@ export class Voidwake {
     }
   }
 
+  // --- Gunner autopilot ---------------------------------------------------
+  // "Smart with rules" (selected during character creation discussion):
+  //  - Auto-fires only on hostiles that are centered in the reticle and in range.
+  //  - Auto-mines an asteroid centered in the reticle if cargo isn't full.
+  //  - Never auto-docks; instead, posts a "suggest we dock" chatter line.
+  // Targeting uses forward dot-product, not the cycled targetId, so the
+  // gunner reacts to whatever you actually point at.
+  updateGunner(dt: number, fwd: Vec3) {
+    const p = this.player; if (!p || !p.gunner || !p.gunner.enabled) return;
+    if (this.options.peaceful) return;
+    const g = p.gunner;
+    g.cooldown -= dt;
+    g.nextBarkAt -= dt;
+
+    // Pick the entity most aligned with forward (smallest angle), within 800u.
+    let best: Entity | null = null;
+    let bestDot = 0.94;       // cosine threshold (~20° cone)
+    let bestDist = Infinity;
+    for (const e of this.entities) {
+      if (e.kind !== "hostile" && e.kind !== "asteroid" && e.kind !== "station") continue;
+      if ((e.hull ?? 1) <= 0 && e.kind === "hostile") continue;
+      const rel = V.sub(e.pos, p.pos);
+      const d = V.len(rel);
+      if (d < 1 || d > 800) continue;
+      const dotv = (rel.x * fwd.x + rel.y * fwd.y + rel.z * fwd.z) / d;
+      if (dotv > bestDot) { bestDot = dotv; best = e; bestDist = d; }
+    }
+    if (!best) return;
+
+    const tag = `Gunner ${g.name.split(" ")[0]}`;
+    if (best.kind === "hostile") {
+      const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+      if (bestDist > w.range) return;
+      if (g.cooldown > 0) return;
+      g.cooldown = w.cooldown * 1.15;   // slightly slower than manual fire
+      this.entities.push({
+        id: nextId(), kind: "bullet", name: "shot",
+        pos: { ...p.pos }, vel: V.scale(fwd, 260),
+        faction: "player", ownerId: -2, ttl: 2,
+        ttlAt: performance.now() / 1000 + 2,
+      });
+      this.beep(820, 0.04, "square");
+      if (g.nextBarkAt <= 0) {
+        g.nextBarkAt = 2.5 + Math.random() * 2;
+        this.pushChatter(tag, GUNNER_BARKS_HOSTILE[Math.floor(Math.random() * GUNNER_BARKS_HOSTILE.length)], "#ff8a8a");
+      }
+    } else if (best.kind === "asteroid") {
+      if (bestDist > 200) return;
+      if (g.cooldown > 0) return;
+      if (cargoTotal(p) >= p.ship.cargoMax) return;
+      if ((best.ore ?? 0) <= 0) return;
+      g.cooldown = 0.35;
+      best.ore!--;
+      p.cargo.ore = (p.cargo.ore ?? 0) + 1;
+      awardXP(p, 1);
+      if (g.nextBarkAt <= 0) {
+        g.nextBarkAt = 4 + Math.random() * 3;
+        this.pushChatter(tag, GUNNER_BARKS_MINE[Math.floor(Math.random() * GUNNER_BARKS_MINE.length)], "#ffd066");
+      }
+    } else if (best.kind === "station") {
+      if (bestDist > 400) return;
+      if (g.nextBarkAt > 0) return;
+      g.nextBarkAt = 12 + Math.random() * 8;
+      this.pushChatter(tag, GUNNER_BARKS_DOCK[Math.floor(Math.random() * GUNNER_BARKS_DOCK.length)], "#9fe");
+    }
+  }
+
+  // Sweep loot canisters near the player and absorb their contents.
+  // Pickup radius widens if a "loot-magnet" module is installed.
+  pickupLoot() {
+    const p = this.player; if (!p) return;
+    const magnet = p.ship.modules.includes("loot-magnet") ? 60 : 20;
+    const before = this.entities.length;
+    this.entities = this.entities.filter((e) => {
+      if (e.kind !== "loot") return true;
+      if (V.len(V.sub(e.pos, p.pos)) > magnet) return true;
+      const cr = e.loot?.credits ?? 0;
+      const ore = e.loot?.ore ?? 0;
+      if (cr) p.credits += cr;
+      if (ore && cargoTotal(p) < p.ship.cargoMax) {
+        const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
+        p.cargo.ore = (p.cargo.ore ?? 0) + take;
+      }
+      this.pushLog(`Salvaged canister: +${cr}cr +${ore} ore`);
+      this.beep(540, 0.05, "sine");
+      return false;
+    });
+    void before;
+  }
+
+  // Periodically inject a flavor chatter line from nearby NPCs / stations /
+  // planets. Cheap timer-gated work, mostly atmospheric.
+  tickAmbientChatter(dt: number) {
+    const p = this.player; if (!p) return;
+    this._nextAmbientChatterAt -= dt;
+    if (this._nextAmbientChatterAt > 0) return;
+    this._nextAmbientChatterAt = 8 + Math.random() * 10;
+    // Find a candidate within 1500u, prefer interesting kinds.
+    const near = this.entities
+      .filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
+      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
+      .filter((x) => x.d < 1500)
+      .sort((a, b) => a.d - b.d);
+    if (near.length === 0) return;
+    const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
+    switch (pick.kind) {
+      case "hostile":
+        this.pushChatter(pick.name, HOSTILE_TAUNTS[Math.floor(Math.random() * HOSTILE_TAUNTS.length)], "#ff8a8a");
+        break;
+      case "friendly":
+        this.pushChatter(pick.name, FRIENDLY_GREETS[Math.floor(Math.random() * FRIENDLY_GREETS.length)], "#aef58a");
+        break;
+      case "neutral":
+        this.pushChatter(pick.name, NEUTRAL_CHATTER[Math.floor(Math.random() * NEUTRAL_CHATTER.length)], "#dddddd");
+        break;
+      case "station":
+        this.pushChatter(`Beacon ${pick.name}`, STATION_BROADCASTS[Math.floor(Math.random() * STATION_BROADCASTS.length)], "#c2c2ff");
+        break;
+      case "planet":
+        this.pushChatter(pick.name, PLANET_HAILS[Math.floor(Math.random() * PLANET_HAILS.length)], "#7ec8ff");
+        break;
+    }
+    // If the gunner is around and bored, occasionally chime in.
+    if (p.gunner && Math.random() < 0.35) {
+      const tag = `Gunner ${p.gunner.name.split(" ")[0]}`;
+      this.pushChatter(tag, GUNNER_BARKS_IDLE[Math.floor(Math.random() * GUNNER_BARKS_IDLE.length)], "#fc6");
+    }
+  }
+
+
   // --- Main menu -----------------------------------------------------------
   menuItems = ["Resume", "Save Game", "Load Game", "Options", "Quit"];
   updateMenu() {
