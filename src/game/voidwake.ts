@@ -1158,6 +1158,8 @@ export class Voidwake {
     p.ship.fuel = p.ship.fuelMax;
     p.ship.hull = p.ship.hullMax;
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
+    this.beep(660, 0.08, "sine"); this.beep(990, 0.08, "sine");
+
     // Hand in mission
     if (p.mission && p.mission.done) {
       p.credits += p.mission.reward;
