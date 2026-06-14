@@ -835,6 +835,16 @@ export class Voidwake {
   // `autosaveInterval` seconds while in flight.
   autosaveTimer = 0;
   autosaveInterval = 120; // seconds
+
+  // Per-station market state, lazily generated on first dock and cached
+  // for the rest of the session. Keyed by station entity id.
+  stationStocks = new Map<number, StationStock>();
+  // Comms / chatter feed (max ~6 lines kept). See pushChatter / renderChatter.
+  chatter: ChatterLine[] = [];
+  // Cursor in the multi-page station screen.
+  stationPage: "main" | "market" | "weapons" | "modules" | "crew" = "main";
+  // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
+  private _nextAmbientChatterAt = 0;
   // Simple FPS counter (toggleable in Options).
   fps = 0;
   private _fpsAcc = 0;
