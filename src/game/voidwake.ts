@@ -575,6 +575,10 @@ export class Voidwake {
 
   // HUD message log
   log: { t: number; msg: string }[] = [];
+  // Timestamp (seconds) when the player entered the destroyed screen — used
+  // for a short input grace period so the death banner is actually readable.
+  destroyedAt = 0;
+
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
