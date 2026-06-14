@@ -211,10 +211,13 @@ function defaultOptions(): Options {
     difficulty: "Normal",
     peaceful: false,
     cheat: false,
+    mouseSteer: true,
+    mouseSensitivity: 1.0,
     volumeMaster: 0.8,
     volumeSfx: 0.8,
     volumeMusic: 0.6,
     unsavedWarnMinutes: 10,
+
     keybinds: { ...DEFAULT_KEYBINDS },
   };
 }
