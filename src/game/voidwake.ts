@@ -132,6 +132,10 @@ interface Entity {
   ownerId?: number;          // for bullets
   ttl?: number;              // for bullets
   ttlAt?: number;
+  // Loot canister payload (kind === "loot"). Picked up on fly-through.
+  loot?: { credits?: number; ore?: number };
+  // Cosmetic: which palette slot ship variants use for chatter line tagging.
+  lastChatterAt?: number;
 }
 
 interface PlayerChar {
@@ -155,6 +159,20 @@ interface PlayerShip {
   modules: string[];
 }
 
+// A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
+// and suggest docking via chatter. See "Smart with rules" autopilot in
+// updateGunner(). Persisted on PlayerState so saves keep the crew.
+interface Gunner {
+  name: string;
+  species: string;
+  gender: string;
+  enabled: boolean;           // toggled by G key
+  hiredAt: number;            // ms timestamp, mostly cosmetic
+  cooldown: number;           // independent fire cadence
+  share: number;              // 0..1 — fraction of credits skimmed at docks
+  nextBarkAt: number;         // throttle idle barks
+}
+
 interface PlayerState {
   char: PlayerChar;
   ship: PlayerShip;
@@ -168,6 +186,10 @@ interface PlayerState {
   cooldown: number;
   mission?: Mission;
   lastSaveAt: number;
+  // New since 0.2: optional hired gunner, faction reputation, lifetime kill count.
+  gunner?: Gunner;
+  reputation?: Record<string, number>;
+  kills?: number;
 }
 
 type MissionKind = "deliver" | "destroy" | "scan";
@@ -180,6 +202,28 @@ interface Mission {
   cargoQty?: number;
   reward: number;
   done: boolean;
+}
+
+// Per-station market state. Generated deterministically from the station id
+// so prices and stock are stable between visits within a single session, but
+// vary station-to-station (a refinery sells cheap fuel, a frontier outpost
+// charges double). Persisted lazily in Voidwake.stationStocks at runtime.
+interface StationStock {
+  fuelPrice: number;          // cr per unit
+  orePrice: number;           // cr per unit sold to station
+  weapons: { id: string; price: number }[];
+  modules: { id: string; name: string; price: number; desc: string }[];
+  gunnerFee: number;          // one-time hiring cost
+  rumor: string;              // flavor line for the station screen
+}
+
+// One line in the comms / chatter feed. "who" is the speaker label
+// (e.g. "Gunner Mira", "Raider Drak", "Beacon"), "color" tints the source.
+interface ChatterLine {
+  t: number;                  // performance.now() / 1000 when posted
+  who: string;
+  msg: string;
+  color: string;
 }
 
 interface Options {
