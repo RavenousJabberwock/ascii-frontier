@@ -612,6 +612,14 @@ export class Voidwake {
   // Audio: small WebAudio context for cheap beeps (hit / death / dock).
   audio: AudioContext | null = null;
 
+  // Starfield: world-space points that parallax around the player to give a
+  // visceral sense of velocity and heading. Lazily seeded on first render.
+  // Each star carries a brightness "tier" so the field has depth.
+  private stars: { x: number; y: number; z: number; t: number }[] = [];
+  // Title-screen drifting stars (camera-local 2D, no player required).
+  private titleStars: { x: number; y: number; z: number; t: number }[] = [];
+  private _lastRenderTs = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
