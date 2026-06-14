@@ -876,8 +876,10 @@ export class Voidwake {
           if (p.ship.hull <= 0) {
             this.pushLog("Your ship was destroyed.");
             this.screen = "destroyed";
+            this.destroyedAt = performance.now() / 1000;
             this.menuCursor = 0;
           }
+
         }
         return false;
       }
