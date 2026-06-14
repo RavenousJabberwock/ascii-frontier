@@ -924,6 +924,20 @@ export class Voidwake {
     if (this.log.length > 6) this.log.shift();
   }
 
+  // Append a single line to the comms / chatter feed shown in the COMMS box.
+  // Newest line floats to the top. Capped at 6 lines so it never crowds the HUD.
+  pushChatter(who: string, msg: string, color = "#9fe") {
+    this.chatter.unshift({ t: performance.now() / 1000, who, msg, color });
+    if (this.chatter.length > 6) this.chatter.pop();
+  }
+
+  // Cached station market lookup. Generates on first request.
+  getStock(stationId: number): StationStock {
+    let s = this.stationStocks.get(stationId);
+    if (!s) { s = generateStationStock(stationId); this.stationStocks.set(stationId, s); }
+    return s;
+  }
+
   // Centralized death handler. Pass a human reason ("Killed by Hostile Reaver",
   // "Collided with Planet P-42", "Hull breach: fuel detonation").
   die(reason: string, killer?: string) {
