@@ -612,6 +612,14 @@ export class Voidwake {
   // Audio: small WebAudio context for cheap beeps (hit / death / dock).
   audio: AudioContext | null = null;
 
+  // Starfield: world-space points that parallax around the player to give a
+  // visceral sense of velocity and heading. Lazily seeded on first render.
+  // Each star carries a brightness "tier" so the field has depth.
+  private stars: { x: number; y: number; z: number; t: number }[] = [];
+  // Title-screen drifting stars (camera-local 2D, no player required).
+  private titleStars: { x: number; y: number; z: number; t: number }[] = [];
+  private _lastRenderTs = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
@@ -1378,6 +1386,23 @@ export class Voidwake {
     const rows = Math.max(20, Math.floor(h / CELL_H));
     const grid = blankGrid(cols, rows);
 
+    // Frame delta for starfield motion (independent of game tick).
+    const now = performance.now() / 1000;
+    const sdt = Math.min(0.1, this._lastRenderTs ? now - this._lastRenderTs : 0.016);
+    this._lastRenderTs = now;
+
+    // Starfield layer — drawn first so menus/HUD/entities overdraw it.
+    if (this.screen === "playing" && this.player) {
+      this.drawWorldStarfield(grid, sdt);
+    } else if (
+      this.screen === "title" || this.screen === "create-char" ||
+      this.screen === "create-ship" || this.screen === "load" ||
+      this.screen === "options" || this.screen === "destroyed" ||
+      this.screen === "crashed" || this.screen === "quit-confirm"
+    ) {
+      this.drawTitleStarfield(grid, sdt);
+    }
+
     switch (this.screen) {
       case "title": this.renderTitle(grid); break;
       case "create-char": this.renderCharCreate(grid); break;
@@ -1407,19 +1432,142 @@ export class Voidwake {
     }
   }
 
+  // Starfield -----------------------------------------------------------------
+  // World-space stars projected through the player's camera. Because the
+  // points are fixed in world coordinates, translating (throttle / afterburner)
+  // makes them stream outward from the heading vector and yawing/pitching
+  // sweeps them across the viewport — exactly the velocity cue requested.
+  drawWorldStarfield(g: Cell[][], _dt: number) {
+    const p = this.player; if (!p) return;
+    const cols = g[0].length, rows = g.length;
+    const vpTop = 1, vpLeft = 1, vpRight = cols - 28, vpBottom = rows - 9;
+    const vw = vpRight - vpLeft, vh = vpBottom - vpTop;
+
+    // Lazy seed / top-up: keep ~220 stars in a sphere around the player.
+    const TARGET = 220;
+    const R = 600;
+    if (this.stars.length === 0) {
+      for (let i = 0; i < TARGET; i++) this.stars.push(this.spawnWorldStar(R, false));
+    }
+
+    const cy = Math.cos(p.heading.yaw), sy = Math.sin(p.heading.yaw);
+    const cp = Math.cos(p.heading.pitch), sp = Math.sin(p.heading.pitch);
+    // Forward vector (inverse camera applied to +Z) — used to respawn stars
+    // ahead of the ship so the field never empties out as we fly.
+    const fwd = { x: sy * cp, y: sp, z: cy * cp };
+
+    // Three brightness tiers; gray, low-alpha-feeling palette.
+    const PAL = ["#1a1f2a", "#2b3346", "#3d4a66"];
+    const CH = [".", ".", "·"];
+
+    for (let i = 0; i < this.stars.length; i++) {
+      const s = this.stars[i];
+      const rx = s.x - p.pos.x, ry = s.y - p.pos.y, rz = s.z - p.pos.z;
+      const x1 = cy * rx - sy * rz;
+      const z1 = sy * rx + cy * rz;
+      const y1 = cp * ry - sp * z1;
+      const z2 = sp * ry + cp * z1;
+      // Cull behind / too-far / off-screen and respawn ahead of the ship.
+      const dist2 = rx * rx + ry * ry + rz * rz;
+      const offscreen = z2 <= 1 || dist2 > R * R * 2.2;
+      let sx = 0, sy2 = 0;
+      if (!offscreen) {
+        sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
+        sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
+      }
+      if (offscreen || sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) {
+        // Respawn somewhere in a forward cone so the next frame still has it.
+        const ahead = 0.35 * R + Math.random() * R * 0.9;
+        const spread = R * 0.9;
+        const ox = (Math.random() - 0.5) * spread;
+        const oy = (Math.random() - 0.5) * spread;
+        const oz = (Math.random() - 0.5) * spread;
+        s.x = p.pos.x + fwd.x * ahead + ox;
+        s.y = p.pos.y + fwd.y * ahead + oy;
+        s.z = p.pos.z + fwd.z * ahead + oz;
+        s.t = Math.floor(Math.random() * 3);
+        continue;
+      }
+      // Only paint into empty cells so the starfield never clobbers HUD/entities.
+      const cell = g[sy2][sx];
+      if (cell.ch === " ") {
+        const t = s.t | 0;
+        g[sy2][sx] = { ch: CH[t], color: PAL[t] };
+      }
+    }
+  }
+
+  // Pre-flight / menu starfield: a simple 2D parallax that drifts toward the
+  // viewer at a calm pace so the title doesn't feel static.
+  drawTitleStarfield(g: Cell[][], dt: number) {
+    const cols = g[0].length, rows = g.length;
+    if (this.titleStars.length === 0) {
+      for (let i = 0; i < 180; i++) {
+        this.titleStars.push({
+          x: (Math.random() - 0.5) * 2,
+          y: (Math.random() - 0.5) * 2,
+          z: 0.05 + Math.random() * 1.0,
+          t: Math.floor(Math.random() * 3),
+        });
+      }
+    }
+    const PAL = ["#181d27", "#262d3d", "#39455e"];
+    const CH = [".", ".", "·"];
+    const cx = cols / 2, cy0 = rows / 2;
+    for (const s of this.titleStars) {
+      s.z -= dt * 0.25; // drift toward viewer
+      if (s.z <= 0.04) {
+        s.x = (Math.random() - 0.5) * 2;
+        s.y = (Math.random() - 0.5) * 2;
+        s.z = 1.0;
+        s.t = Math.floor(Math.random() * 3);
+      }
+      const sx = Math.floor(cx + (s.x / s.z) * cols * 0.5);
+      const sy = Math.floor(cy0 + (s.y / s.z) * rows * 0.5);
+      if (sx < 0 || sx >= cols || sy < 0 || sy >= rows) continue;
+      if (g[sy][sx].ch !== " ") continue;
+      const t = s.t | 0;
+      g[sy][sx] = { ch: CH[t], color: PAL[t] };
+    }
+  }
+
+  // World-star spawner — uniform-ish points in a sphere around the player.
+  private spawnWorldStar(R: number, _ahead: boolean) {
+    const p = this.player;
+    const px = p?.pos.x ?? 0, py = p?.pos.y ?? 0, pz = p?.pos.z ?? 0;
+    // Reject-sample inside a sphere of radius R for an even distribution.
+    let x = 0, y = 0, z = 0;
+    do {
+      x = (Math.random() - 0.5) * 2 * R;
+      y = (Math.random() - 0.5) * 2 * R;
+      z = (Math.random() - 0.5) * 2 * R;
+    } while (x * x + y * y + z * z > R * R);
+    return { x: px + x, y: py + y, z: pz + z, t: Math.floor(Math.random() * 3) };
+  }
+
   // Title screen ------------------------------------------------------------
   renderTitle(g: Cell[][]) {
+    // Clean block-letter banner. Each glyph is exactly 9 cols wide so the
+    // whole word reads as "V O I D W A K E" instead of a tangled diagonal.
     const banner = [
-      " __     __   ___   ___   __   __     ___   _  _____ ",
-      " \\ \\   / /  / _ \\ |_ _| |  \\ /  \\   / / \\ | |/ / __|",
-      "  \\ \\_/ /  | (_) | | |  | |\\ V /\\ \\/ /|  \\| ' <| _| ",
-      "   \\___/    \\___/ |___| |_| \\_/  \\__/ |_|\\_|_|\\_\\___|",
+      "██╗   ██╗ ██████╗ ██╗██████╗ ██╗    ██╗ █████╗ ██╗  ██╗███████╗",
+      "██║   ██║██╔═══██╗██║██╔══██╗██║    ██║██╔══██╗██║ ██╔╝██╔════╝",
+      "██║   ██║██║   ██║██║██║  ██║██║ █╗ ██║███████║█████╔╝ █████╗  ",
+      "╚██╗ ██╔╝██║   ██║██║██║  ██║██║███╗██║██╔══██║██╔═██╗ ██╔══╝  ",
+      " ╚████╔╝ ╚██████╔╝██║██████╔╝╚███╔███╔╝██║  ██║██║  ██╗███████╗",
+      "  ╚═══╝   ╚═════╝ ╚═╝╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝",
     ];
-    banner.forEach((line, i) => putText(g, 4, 2 + i, line, "#7CFC00"));
-    putText(g, 4, 7, "An ASCII space simulation — v" + VERSION, "#5fc")
+    const cols = g[0].length;
+    const bx = Math.max(2, Math.floor((cols - banner[0].length) / 2));
+    banner.forEach((line, i) => putText(g, bx, 2 + i, line, "#7CFC00"));
+    const tag = "— ASCII SPACE SIMULATION —";
+    putText(g, Math.floor((cols - tag.length) / 2), 2 + banner.length, tag, "#5fc");
+    putText(g, Math.floor((cols - ("v" + VERSION).length) / 2), 3 + banner.length, "v" + VERSION, "#678");
+    const menuTop = 5 + banner.length + 2;
     this.titleItems.forEach((it, i) => {
       const sel = i === this.menuCursor;
-      putText(g, 6, 12 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      const label = (sel ? "▸ " : "  ") + it;
+      putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
