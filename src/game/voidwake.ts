@@ -168,12 +168,15 @@ interface Options {
   difficulty: typeof DIFFICULTIES[number];
   peaceful: boolean;
   cheat: boolean;
+  mouseSteer: boolean;
+  mouseSensitivity: number;
   volumeMaster: number;
   volumeSfx: number;
   volumeMusic: number;
   unsavedWarnMinutes: number;
   keybinds: Record<string, string>;
 }
+
 
 interface SaveBlob {
   version: string;
@@ -208,10 +211,13 @@ function defaultOptions(): Options {
     difficulty: "Normal",
     peaceful: false,
     cheat: false,
+    mouseSteer: true,
+    mouseSensitivity: 1.0,
     volumeMaster: 0.8,
     volumeSfx: 0.8,
     volumeMusic: 0.6,
     unsavedWarnMinutes: 10,
+
     keybinds: { ...DEFAULT_KEYBINDS },
   };
 }
@@ -415,6 +421,11 @@ function cargoTotal(p: PlayerState) {
 class Input {
   keys = new Set<string>();
   pressed = new Set<string>();
+  // Mouse position in normalized canvas coords (-1..1, center is 0,0).
+  // mouseInside is true while the cursor hovers the canvas.
+  mouseNX = 0;
+  mouseNY = 0;
+  mouseInside = false;
   attach(el: HTMLElement) {
     el.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();
@@ -423,7 +434,15 @@ class Input {
       if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
     });
     el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
-    el.addEventListener("blur", () => this.keys.clear());
+    el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; });
+    el.addEventListener("mousemove", (e) => {
+      const r = (el as HTMLCanvasElement).getBoundingClientRect();
+      this.mouseNX = ((e.clientX - r.left) / r.width) * 2 - 1;
+      this.mouseNY = ((e.clientY - r.top) / r.height) * 2 - 1;
+      this.mouseInside = true;
+    });
+    el.addEventListener("mouseleave", () => { this.mouseInside = false; });
+    el.addEventListener("mouseenter", () => { this.mouseInside = true; });
   }
   consume(k: string) {
     const had = this.pressed.has(k);
@@ -432,6 +451,7 @@ class Input {
   }
   endFrame() { this.pressed.clear(); }
 }
+
 
 // =============================================================================
 // 8. Menus — implemented as a state machine inside the Voidwake class.
@@ -555,6 +575,10 @@ export class Voidwake {
 
   // HUD message log
   log: { t: number; msg: string }[] = [];
+  // Timestamp (seconds) when the player entered the destroyed screen — used
+  // for a short input grace period so the death banner is actually readable.
+  destroyedAt = 0;
+
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -630,8 +654,20 @@ export class Voidwake {
   // --- Destroyed (death) screen -------------------------------------------
   destroyedItems = ["Load Last Save", "Return to Main Menu"];
   updateDestroyed() {
+    // Brief grace period so the player actually reads the banner rather than
+    // dismissing it with a held key from the moment of death.
+    const now = performance.now() / 1000;
+    const grace = 1.0;
+    if (now - this.destroyedAt < grace) {
+      // Drain any input that fired during the death frame.
+      this.input.consume("enter");
+      this.input.consume("arrowup");
+      this.input.consume("arrowdown");
+      return;
+    }
     this.menuNav(this.destroyedItems.length);
     if (this.input.consume("enter")) {
+
       const c = this.destroyedItems[this.menuCursor];
       if (c === "Load Last Save") {
         const saves = listSaves();
@@ -754,6 +790,14 @@ export class Voidwake {
   updatePlaying(dt: number) {
     const p = this.player;
     if (!p) { this.screen = "title"; return; }
+    // Safety net: if hull dropped to 0 by any path, go to destroyed screen.
+    if (p.ship.hull <= 0 && !this.options.cheat) {
+      this.pushLog("Your ship was destroyed.");
+      this.screen = "destroyed";
+      this.destroyedAt = performance.now() / 1000;
+      this.menuCursor = 0;
+      return;
+    }
     const k = this.options.keybinds;
     const keys = this.input.keys;
 
@@ -764,6 +808,20 @@ export class Voidwake {
     if (keys.has(k.yawRight)) p.heading.yaw += dt * 1.2;
     if (keys.has(k.pitchUp)) p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0);
     if (keys.has(k.pitchDown)) p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0);
+
+    // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
+    // A small dead-zone in the middle prevents drift when the cursor sits idle.
+    if (this.options.mouseSteer && this.input.mouseInside) {
+      const sens = this.options.mouseSensitivity;
+      const dz = 0.08; // dead-zone radius in normalized coords
+      const mx = this.input.mouseNX;
+      const my = this.input.mouseNY;
+      const ax = Math.abs(mx) > dz ? (mx - Math.sign(mx) * dz) : 0;
+      const ay = Math.abs(my) > dz ? (my - Math.sign(my) * dz) : 0;
+      p.heading.yaw += ax * dt * 1.4 * sens;
+      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ay * dt * 1.1 * sens));
+    }
+
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
@@ -818,8 +876,10 @@ export class Voidwake {
           if (p.ship.hull <= 0) {
             this.pushLog("Your ship was destroyed.");
             this.screen = "destroyed";
+            this.destroyedAt = performance.now() / 1000;
             this.menuCursor = 0;
           }
+
         }
         return false;
       }
@@ -990,6 +1050,8 @@ export class Voidwake {
       `Difficulty: ${this.options.difficulty}`,
       `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
       `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
+      `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
+      `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
       `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
@@ -1008,15 +1070,18 @@ export class Voidwake {
     }
     if (i === 1 && (left || right)) this.options.peaceful = !this.options.peaceful;
     if (i === 2 && (left || right)) this.options.cheat = !this.options.cheat;
-    if (i === 3) this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 4) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 5) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 6) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
+    if (i === 3 && (left || right)) this.options.mouseSteer = !this.options.mouseSteer;
+    if (i === 4) this.options.mouseSensitivity = Math.max(0.1, Math.min(3, this.options.mouseSensitivity + (right ? 0.1 : left ? -0.1 : 0)));
+    if (i === 5) this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 6) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 7) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 8) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
     if (this.input.consume("enter")) {
       if (items[i].startsWith("Reset")) this.options.keybinds = { ...DEFAULT_KEYBINDS };
       if (items[i] === "Back") this.screen = this.player ? "menu" : "title";
     }
   }
+
 
   // --- Save / Load screens -------------------------------------------------
   updateSave() {
@@ -1185,6 +1250,8 @@ export class Voidwake {
       `Difficulty: ${this.options.difficulty}`,
       `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
       `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
+      `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
+      `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
       `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
@@ -1192,6 +1259,7 @@ export class Voidwake {
       `Reset Keybinds`,
       "Back",
     ];
+
     this.renderListMenu(g, "OPTIONS", items);
     putText(g, 4, g.length - 2, "←/→ change   ↑/↓ field   ENTER confirm", "#888");
   }
@@ -1318,6 +1386,27 @@ export class Voidwake {
     } else {
       putText(g, panelX, cy2 + 2, "press T to cycle", "#888");
     }
+
+    // --- Controls reminder, anchored to the bottom of the right panel ------
+    // Always visible so new pilots aren't stranded looking for the keymap.
+    const cTop = vpBottom - 13;
+    putText(g, panelX, cTop, "[ CONTROLS ]", "#7CFC00");
+    const mouseLine = this.options.mouseSteer ? "Mouse  steer (toggle in Opts)" : "Mouse  off";
+    const ctrls: [string, string][] = [
+      ["W / S", "throttle ±"],
+      ["A / D", "yaw L/R"],
+      ["Q / E", "pitch U/D"],
+      ["SPACE", "fire"],
+      ["T", "cycle target"],
+      ["M", "mine target"],
+      ["F", "dock / station"],
+      ["ESC", "menu"],
+    ];
+    ctrls.forEach((row, i) => {
+      putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe");
+    });
+    putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf");
+
 
     // --- Bottom: radar + status ---
     const rTop = vpBottom + 1;
