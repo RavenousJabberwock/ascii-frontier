@@ -2458,11 +2458,34 @@ export class Voidwake {
       }
     }
 
-    // Crosshair
+    // Crosshair. Color shifts to indicate weapon-range state of whatever's
+    // closest to the reticle's forward vector:
+    //   green  → idle / nothing aligned
+    //   amber  → target aligned but out of weapon range
+    //   red    → target aligned AND in weapon range (free shot)
     const ccx = vpLeft + Math.floor(vw / 2), ccy = vpTop + Math.floor(vh / 2);
-    putText(g, ccx - 1, ccy, "-+-", "#3a6");
-    g[ccy - 1][ccx].ch = "|"; g[ccy - 1][ccx].color = "#3a6";
-    g[ccy + 1][ccx].ch = "|"; g[ccy + 1][ccx].color = "#3a6";
+    let reticleCol = "#3a6";
+    {
+      const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
+      let bestDot = 0.93, bestE: Entity | null = null, bestD = Infinity;
+      for (const e of this.entities) {
+        if (e.kind !== "hostile" && e.kind !== "neutral" && e.kind !== "friendly" && e.kind !== "asteroid" && e.kind !== "station") continue;
+        const rel = V.sub(e.pos, p.pos);
+        const d = V.len(rel); if (d < 1) continue;
+        const dotv = (rel.x * fwd.x + rel.y * fwd.y + rel.z * fwd.z) / d;
+        if (dotv > bestDot) { bestDot = dotv; bestE = e; bestD = d; }
+      }
+      if (bestE) {
+        const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+        const inRange = bestE.kind === "asteroid" ? bestD < 200
+          : bestE.kind === "station"  ? bestD < 400
+          : bestD < w.range;
+        reticleCol = inRange ? "#ff5555" : "#fc6";
+      }
+    }
+    putText(g, ccx - 1, ccy, "-+-", reticleCol);
+    g[ccy - 1][ccx].ch = "|"; g[ccy - 1][ccx].color = reticleCol;
+    g[ccy + 1][ccx].ch = "|"; g[ccy + 1][ccx].color = reticleCol;
 
     // --- Right-side cockpit panel ---
     const panelX = vpRight + 2;
