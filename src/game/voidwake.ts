@@ -220,6 +220,9 @@ function defaultOptions(): Options {
     cheat: false,
     mouseSteer: true,
     mouseSensitivity: 1.0,
+    showFps: false,
+    autosave: true,
+
     volumeMaster: 0.8,
     volumeSfx: 0.8,
     volumeMusic: 0.6,
