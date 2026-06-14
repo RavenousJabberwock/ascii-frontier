@@ -109,7 +109,8 @@ type EntityKind =
   | "friendly"
   | "neutral"
   | "hostile"
-  | "bullet";
+  | "bullet"
+  | "loot";
 
 interface Vec3 { x: number; y: number; z: number }
 
