@@ -1772,13 +1772,6 @@ export class Voidwake {
     }
   }
 
-  // --- Station menu --------------------------------------------------------
-  stationItems = ["Sell Ore (10cr ea)", "Buy Fuel (5cr/u)", "Refit Weapon", "Undock"];
-  updateStation() {
-    const p = this.player; if (!p) { this.screen = "title"; return; }
-    this.menuNav(this.stationItems.length);
-    if (this.input.consume("enter")) {
-      const c = this.stationItems[this.menuCursor];
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
