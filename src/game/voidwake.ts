@@ -51,7 +51,7 @@ const SAVE_PREFIX = "voidwake.save.";
 const VERSION = "0.1.0";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
-const GLYPHS = {
+const GLYPHS: Record<string, string> = {
   star: "*",
   planet: "O",
   asteroid: "%",
@@ -61,7 +61,7 @@ const GLYPHS = {
   hostile: "H",
   bullet: "·",
   player: "^",
-} as const;
+};
 
 const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
