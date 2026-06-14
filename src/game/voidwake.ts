@@ -474,6 +474,8 @@ function makePlayer(char: PlayerChar, hullId: string): PlayerState {
     throttle: 0,
     cooldown: 0,
     lastSaveAt: Date.now(),
+    reputation: { federation: 0, guild: 0, pirate: 0 },
+    kills: 0,
   };
 }
 
