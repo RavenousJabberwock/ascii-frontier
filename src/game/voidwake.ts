@@ -1643,16 +1643,20 @@ export class Voidwake {
       ["W / S", "throttle ±"],
       ["A / D", "yaw L/R"],
       ["Q / E", "pitch U/D"],
+      ["SHIFT", "afterburner"],
       ["SPACE", "fire"],
       ["T", "cycle target"],
       ["M", "mine target"],
       ["F", "dock / station"],
+      ["J", "jettison cargo"],
+      ["P", "pause"],
       ["ESC", "menu"],
     ];
     ctrls.forEach((row, i) => {
       putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe");
     });
     putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf");
+
 
 
     // --- Bottom: radar + status ---
