@@ -490,6 +490,86 @@ function cargoTotal(p: PlayerState) {
   return Object.values(p.cargo).reduce((a, b) => a + b, 0);
 }
 
+// ---- Faction reputation helpers ------------------------------------------
+// Reputation is a simple integer per faction. Killing a pirate raises
+// Federation/Guild standing slightly; killing a friendly/neutral tanks it.
+function adjustRep(p: PlayerState, faction: string, delta: number) {
+  if (!p.reputation) p.reputation = { federation: 0, guild: 0, pirate: 0 };
+  p.reputation[faction] = (p.reputation[faction] ?? 0) + delta;
+}
+function repLabel(v: number): string {
+  if (v >= 50) return "Allied";
+  if (v >= 20) return "Friendly";
+  if (v >= 5) return "Liked";
+  if (v <= -50) return "KOS";
+  if (v <= -20) return "Hostile";
+  if (v <= -5) return "Wary";
+  return "Neutral";
+}
+
+// ---- Gunner factory -------------------------------------------------------
+function generateGunner(rng: () => number): Gunner {
+  const first = GUNNER_FIRST[Math.floor(rng() * GUNNER_FIRST.length)];
+  const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
+  const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
+  const species = SPECIES[Math.floor(rng() * SPECIES.length)];
+  return {
+    name: `${first} ${last}`,
+    species,
+    gender,
+    enabled: true,
+    hiredAt: Date.now(),
+    cooldown: 0,
+    share: 0.0,    // currently cosmetic; reserved for future "wages"
+    nextBarkAt: 0,
+  };
+}
+
+// ---- Station market generation -------------------------------------------
+// Deterministic per station id so revisiting a station shows the same
+// market. Stock variety is intentional — frontier outposts charge more
+// for fuel, refineries pay better for ore, etc.
+const MODULE_CATALOG = [
+  { id: "cargo-expander",  name: "Cargo Expander",  price: 800,  desc: "+12 cargo capacity" },
+  { id: "shield-booster",  name: "Shield Booster",  price: 1100, desc: "+25 shield max" },
+  { id: "afterburner-od",  name: "Afterburner OD",  price: 650,  desc: "boost +20% (cheap)" },
+  { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
+  { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
+];
+
+function generateStationStock(stationId: number): StationStock {
+  const rng = mulberry32(stationId * 9176 + 7);
+  const fuelPrice = 4 + Math.floor(rng() * 5);      // 4..8
+  const orePrice  = 7 + Math.floor(rng() * 8);      // 7..14
+  // Each station carries 1-3 weapons and 1-3 modules from the catalog.
+  const shuffled = <T,>(arr: T[]) => arr.slice().sort(() => rng() - 0.5);
+  const weapons = shuffled(WEAPONS).slice(0, 1 + Math.floor(rng() * 3))
+    .map((w) => ({ id: w.id, price: Math.round((w.dmg * 40 + w.range * 0.4) * (0.8 + rng() * 0.5)) }));
+  const modules = shuffled(MODULE_CATALOG).slice(0, 1 + Math.floor(rng() * 3))
+    .map((m) => ({ ...m, price: Math.round(m.price * (0.85 + rng() * 0.4)) }));
+  const gunnerFee = 200 + Math.floor(rng() * 400);
+  const rumors = [
+    "Trader gossip: pirate wing prowling outer belt.",
+    "Surveyors report dense ore in deep field.",
+    "Federation patrols thin this rotation.",
+    "Bounty board: high-value raider sighted.",
+    "Refinery shift change — ore prices spike soon.",
+  ];
+  return {
+    fuelPrice, orePrice, weapons, modules, gunnerFee,
+    rumor: rumors[Math.floor(rng() * rumors.length)],
+  };
+}
+
+// Effective ship caps after module installs.
+function effectiveCargoMax(p: PlayerState): number {
+  const base = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.cargo ?? p.ship.cargoMax;
+  const expanders = p.ship.modules.filter((m) => m === "cargo-expander").length;
+  return base + expanders * 12;
+}
+
+
+
 // =============================================================================
 // 7. Input
 // =============================================================================
