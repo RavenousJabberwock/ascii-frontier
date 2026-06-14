@@ -415,6 +415,11 @@ function cargoTotal(p: PlayerState) {
 class Input {
   keys = new Set<string>();
   pressed = new Set<string>();
+  // Mouse position in normalized canvas coords (-1..1, center is 0,0).
+  // mouseInside is true while the cursor hovers the canvas.
+  mouseNX = 0;
+  mouseNY = 0;
+  mouseInside = false;
   attach(el: HTMLElement) {
     el.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();
@@ -423,7 +428,15 @@ class Input {
       if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
     });
     el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
-    el.addEventListener("blur", () => this.keys.clear());
+    el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; });
+    el.addEventListener("mousemove", (e) => {
+      const r = (el as HTMLCanvasElement).getBoundingClientRect();
+      this.mouseNX = ((e.clientX - r.left) / r.width) * 2 - 1;
+      this.mouseNY = ((e.clientY - r.top) / r.height) * 2 - 1;
+      this.mouseInside = true;
+    });
+    el.addEventListener("mouseleave", () => { this.mouseInside = false; });
+    el.addEventListener("mouseenter", () => { this.mouseInside = true; });
   }
   consume(k: string) {
     const had = this.pressed.has(k);
@@ -432,6 +445,7 @@ class Input {
   }
   endFrame() { this.pressed.clear(); }
 }
+
 
 // =============================================================================
 // 8. Menus — implemented as a state machine inside the Voidwake class.
