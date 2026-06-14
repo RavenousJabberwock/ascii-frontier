@@ -446,7 +446,8 @@ type Screen =
   | "station"
   | "load"
   | "save"
-  | "quit-confirm";
+  | "quit-confirm"
+  | "destroyed";
 
 // =============================================================================
 // 9. Save / Load — unencrypted JSON in localStorage (plus export/import)
@@ -622,8 +623,39 @@ export class Voidwake {
       case "save": return this.updateSave();
       case "station": return this.updateStation();
       case "quit-confirm": return this.updateQuitConfirm();
+      case "destroyed": return this.updateDestroyed();
     }
   }
+
+  // --- Destroyed (death) screen -------------------------------------------
+  destroyedItems = ["Load Last Save", "Return to Main Menu"];
+  updateDestroyed() {
+    this.menuNav(this.destroyedItems.length);
+    if (this.input.consume("enter")) {
+      const c = this.destroyedItems[this.menuCursor];
+      if (c === "Load Last Save") {
+        const saves = listSaves();
+        if (saves.length > 0) {
+          const blob = loadGame(saves[0].slot);
+          if (blob) {
+            this.seed = blob.seed;
+            this.rng = mulberry32(this.seed);
+            this.entities = blob.entities;
+            this.player = blob.player;
+            this.options = blob.options;
+            this.screen = "playing";
+            this.pushLog(`Restored from ${saves[0].slot}.`);
+            return;
+          }
+        }
+        this.pushLog("No save available.");
+      }
+      this.player = null;
+      this.screen = "title";
+      this.menuCursor = 0;
+    }
+  }
+
 
   // --- Title --------------------------------------------------------------
   titleItems = ["New Game", "Load Game", "Options", "Quit"];
@@ -783,7 +815,11 @@ export class Voidwake {
           const dmg = 6 * this.dmgScale();
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
-          if (p.ship.hull <= 0) { this.pushLog("Your ship was destroyed."); this.screen = "title"; this.player = null; }
+          if (p.ship.hull <= 0) {
+            this.pushLog("Your ship was destroyed.");
+            this.screen = "destroyed";
+            this.menuCursor = 0;
+          }
         }
         return false;
       }
@@ -1074,6 +1110,7 @@ export class Voidwake {
       case "save": this.renderSave(grid); break;
       case "station": this.renderStation(grid); break;
       case "quit-confirm": this.renderQuitConfirm(grid); break;
+      case "destroyed": this.renderDestroyed(grid); break;
     }
 
     // Paint grid
@@ -1181,6 +1218,33 @@ export class Voidwake {
       putText(g, 6, 6 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
     });
   }
+  renderDestroyed(g: Cell[][]) {
+    const cols = g[0].length;
+    const cx = Math.floor(cols / 2);
+    const banner = [
+      "  ____  _   _ ___ ____    ____  _____ ____ _____ ____   _____   _______ ____  ",
+      " / ___|| | | |_ _|  _ \\  |  _ \\| ____/ ___|_   _|  _ \\ / _ \\ \\ / / ____|  _ \\ ",
+      " \\___ \\| |_| || || |_) | | | | |  _| \\___ \\ | | | |_) | | | \\ V /|  _| | | | |",
+      "  ___) |  _  || ||  __/  | |_| | |___ ___) || | |  _ <| |_| || | | |___| |_| |",
+      " |____/|_| |_|___|_|     |____/|_____|____/ |_| |_| \\_\\___/ |_| |_____|____/ ",
+    ];
+    banner.forEach((line, i) => putText(g, Math.max(2, cx - Math.floor(line.length / 2)), 3 + i, line, "#ff4d4d"));
+    const p = this.player;
+    putText(g, cx - 18, 11, "Your ship has been destroyed.", "#fff");
+    if (p) {
+      putText(g, cx - 18, 13, `Cmdr ${p.char.name} — Rank ${p.rank}  ${p.credits}cr  XP ${p.xp}`, "#9fe");
+    }
+    const saves = listSaves();
+    const last = saves[0];
+    putText(g, cx - 18, 15, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
+    this.destroyedItems.forEach((it, i) => {
+      const sel = i === this.menuCursor;
+      const disabled = it === "Load Last Save" && !last;
+      const color = disabled ? "#555" : (sel ? "#fff" : "#9fe");
+      putText(g, cx - 16, 18 + i * 2, (sel ? "▸ " : "  ") + it, color);
+    });
+    putText(g, cx - 16, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
+  }
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
     items.forEach((it, i) => {
@@ -1263,7 +1327,43 @@ export class Voidwake {
     putText(g, 28, rTop + 2, `Pos ${p.pos.x.toFixed(0)},${p.pos.y.toFixed(0)},${p.pos.z.toFixed(0)}`, "#9fe");
     putText(g, 28, rTop + 3, `Heading yaw ${(p.heading.yaw).toFixed(2)} pitch ${(p.heading.pitch).toFixed(2)}`, "#9fe");
     putText(g, 28, rTop + 4, `Mission: ${p.mission ? p.mission.description : "(none)"}`, "#fb6");
-    if (p.mission?.done) putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6");
+    if (p.mission?.done) {
+      putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6");
+    } else if (p.mission) {
+      // Mission guidance: bearing + distance to objective.
+      const m = p.mission;
+      let mt: Entity | undefined;
+      if (m.targetId) mt = this.entities.find((e) => e.id === m.targetId);
+      else if (m.kind === "deliver") {
+        // nearest station for delivery
+        const stations = this.entities.filter((e) => e.kind === "station");
+        stations.sort((a, b) => V.len(V.sub(a.pos, p.pos)) - V.len(V.sub(b.pos, p.pos)));
+        mt = stations[0];
+      }
+      if (mt) {
+        const rel = V.sub(mt.pos, p.pos);
+        const d = V.len(rel);
+        // Project into camera space to derive an arrow
+        const cy3 = Math.cos(p.heading.yaw), sy3 = Math.sin(p.heading.yaw);
+        const cp3 = Math.cos(p.heading.pitch), sp3 = Math.sin(p.heading.pitch);
+        const x1 = cy3 * rel.x - sy3 * rel.z;
+        const z1 = sy3 * rel.x + cy3 * rel.z;
+        const y1 = cp3 * rel.y - sp3 * z1;
+        const z2 = sp3 * rel.y + cp3 * z1;
+        let arrow: string;
+        if (z2 < 0) arrow = "↻ TURN AROUND";
+        else {
+          const ax = Math.abs(x1), ay = Math.abs(y1);
+          if (ax < z2 * 0.1 && ay < z2 * 0.1) arrow = "● AHEAD";
+          else if (ax > ay) arrow = x1 > 0 ? "→ RIGHT" : "← LEFT";
+          else arrow = y1 > 0 ? "↓ DOWN" : "↑ UP";
+        }
+        const label = m.kind === "deliver" ? `nearest station ${mt.name}` : mt.name;
+        putText(g, 28, rTop + 5, `→ ${label}  ${d.toFixed(0)}u  ${arrow}`, "#cf6");
+      } else if (m.kind === "deliver") {
+        putText(g, 28, rTop + 5, `→ Collect ${m.cargoQty} ${m.cargoItem} then dock at any station`, "#cf6");
+      }
+    }
     if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
 
     // Log
