@@ -735,7 +735,38 @@ export class Voidwake {
       case "station": return this.updateStation();
       case "quit-confirm": return this.updateQuitConfirm();
       case "destroyed": return this.updateDestroyed();
+      case "crashed": return this.updateCrashed();
     }
+  }
+
+  // --- Crash screen (caught exception) ------------------------------------
+  crashedItems = ["Load Last Save", "Return to Main Menu", "Reload Page"];
+  updateCrashed() {
+    this.menuNav(this.crashedItems.length);
+    if (this.input.consume("enter")) {
+      const c = this.crashedItems[this.menuCursor];
+      if (c === "Reload Page") { window.location.reload(); return; }
+      if (c === "Load Last Save") {
+        const saves = listSaves();
+        if (saves.length > 0) {
+          const blob = loadGame(saves[0].slot);
+          if (blob) {
+            this.seed = blob.seed; this.rng = mulberry32(this.seed);
+            this.entities = blob.entities; this.player = blob.player; this.options = blob.options;
+            this.crashError = null; this.crashStack = null;
+            this.screen = "playing";
+            this.pushLog(`Recovered from crash via ${saves[0].slot}.`);
+            return;
+          }
+        }
+        this.pushLog("No save available.");
+      }
+      this.player = null;
+      this.crashError = null; this.crashStack = null;
+      this.screen = "title";
+      this.menuCursor = 0;
+    }
+
   }
 
   // --- Destroyed (death) screen -------------------------------------------
