@@ -1379,6 +1379,27 @@ export class Voidwake {
       putText(g, panelX, cy2 + 2, "press T to cycle", "#888");
     }
 
+    // --- Controls reminder, anchored to the bottom of the right panel ------
+    // Always visible so new pilots aren't stranded looking for the keymap.
+    const cTop = vpBottom - 13;
+    putText(g, panelX, cTop, "[ CONTROLS ]", "#7CFC00");
+    const mouseLine = this.options.mouseSteer ? "Mouse  steer (toggle in Opts)" : "Mouse  off";
+    const ctrls: [string, string][] = [
+      ["W / S", "throttle ±"],
+      ["A / D", "yaw L/R"],
+      ["Q / E", "pitch U/D"],
+      ["SPACE", "fire"],
+      ["T", "cycle target"],
+      ["M", "mine target"],
+      ["F", "dock / station"],
+      ["ESC", "menu"],
+    ];
+    ctrls.forEach((row, i) => {
+      putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe");
+    });
+    putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf");
+
+
     // --- Bottom: radar + status ---
     const rTop = vpBottom + 1;
     this.renderRadar(g, 2, rTop, 22, 7);
