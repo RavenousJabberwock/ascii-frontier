@@ -923,14 +923,19 @@ export class Voidwake {
     if (!p) { this.screen = "title"; return; }
     // Safety net: if hull dropped to 0 by any path, go to destroyed screen.
     if (p.ship.hull <= 0 && !this.options.cheat) {
-      this.pushLog("Your ship was destroyed.");
-      this.screen = "destroyed";
-      this.destroyedAt = performance.now() / 1000;
-      this.menuCursor = 0;
+      this.die(this.deathReason ?? "Catastrophic hull failure");
       return;
     }
     const k = this.options.keybinds;
     const keys = this.input.keys;
+
+    // Pause toggle. While paused, we skip all world updates but still let the
+    // player open the menu via ESC and read the HUD.
+    if (this.input.consume(k.pause)) {
+      this.paused = !this.paused;
+      this.pushLog(this.paused ? "‖ Paused" : "▶ Resumed");
+    }
+    if (this.paused) return;
 
     // Throttle / steering
     if (keys.has(k.throttleUp)) p.throttle = Math.min(1, p.throttle + dt * 0.7);
@@ -941,10 +946,9 @@ export class Voidwake {
     if (keys.has(k.pitchDown)) p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0);
 
     // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
-    // A small dead-zone in the middle prevents drift when the cursor sits idle.
     if (this.options.mouseSteer && this.input.mouseInside) {
       const sens = this.options.mouseSensitivity;
-      const dz = 0.08; // dead-zone radius in normalized coords
+      const dz = 0.08;
       const mx = this.input.mouseNX;
       const my = this.input.mouseNY;
       const ax = Math.abs(mx) > dz ? (mx - Math.sign(mx) * dz) : 0;
@@ -953,12 +957,22 @@ export class Voidwake {
       p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ay * dt * 1.1 * sens));
     }
 
+    // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
+    const boosting = keys.has(k.boost) && p.ship.fuel > 0;
+    const boostMul = boosting ? 1.6 : 1.0;
+    const fuelMul = boosting ? 4.0 : 1.0;
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
-    const sp = p.ship.speed * p.throttle;
+    // Out-of-fuel: throttle authority drops to a tiny drift. Player can still
+    // turn, but movement coasts at 15% until refueled at a station.
+    const fuelFactor = p.ship.fuel > 0 ? 1.0 : 0.15;
+    const sp = p.ship.speed * p.throttle * boostMul * fuelFactor;
     p.pos = V.add(p.pos, V.scale(fwd, sp * dt));
-    p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001);
+    if (p.ship.fuel > 0) {
+      p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
+      if (p.ship.fuel === 0) this.pushLog("⚠ FUEL EXHAUSTED — drift only. Dock to refuel.");
+    }
 
     // Shield regen
     p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * 4);
@@ -966,9 +980,23 @@ export class Voidwake {
     // Cycle target
     if (this.input.consume(k.cycleTarget)) this.cycleTarget();
 
+    // Jettison: drop one unit of the heaviest cargo item.
+    if (this.input.consume(k.jettison)) {
+      const items = Object.entries(p.cargo).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+      if (items.length) {
+        const [name] = items[0];
+        p.cargo[name] = (p.cargo[name] ?? 0) - 1;
+        if (p.cargo[name] <= 0) delete p.cargo[name];
+        this.pushLog(`Jettisoned 1 ${name}.`);
+        this.beep(320, 0.05);
+      } else {
+        this.pushLog("Cargo hold is empty.");
+      }
+    }
+
     // Fire
     p.cooldown -= dt;
-    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful) {
+    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0) {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
       p.cooldown = w.cooldown;
       this.entities.push({
@@ -977,6 +1005,7 @@ export class Voidwake {
         faction: "player", ownerId: -1, ttl: 2,
         ttlAt: performance.now() / 1000 + 2,
       });
+      this.beep(880, 0.04, "square");
     }
 
     // Mine
@@ -985,8 +1014,48 @@ export class Voidwake {
     if (this.input.consume(k.dock)) this.tryDock();
     // Open station menu shortcut
     if (this.input.consume(k.station)) this.tryDock();
-    // Mission accept already happens when docking
     void k.mission;
+
+    // Autosave on a timer (rotates into the dedicated "autosave" slot).
+    this.autosaveTimer += dt;
+    if (this.options.autosave && this.autosaveTimer >= this.autosaveInterval) {
+      this.autosaveTimer = 0;
+      try {
+        const blob: SaveBlob = {
+          version: VERSION, seed: this.seed,
+          player: p, entities: this.entities,
+          options: this.options, savedAt: Date.now(),
+        };
+        saveGame("autosave", blob);
+        p.lastSaveAt = Date.now();
+        this.pushLog("◉ Autosaved.");
+      } catch (err) {
+        console.warn("Autosave failed", err);
+      }
+    }
+
+    // Collision damage vs large bodies (planets / stars / stations / rocks).
+    // Stations dock instead of colliding at the dock-range we use elsewhere.
+    if (!this.options.cheat) {
+      for (const e of this.entities) {
+        if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid") continue;
+        const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : 10;
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < radius) {
+          // Push the player back to the surface and apply scaled damage.
+          const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
+          p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
+          const dmg = (e.kind === "star" ? 120 : 25) * this.dmgScale() * dt * 4;
+          if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
+          else p.ship.hull = Math.max(0, p.ship.hull - dmg);
+          this.beep(180, 0.05, "triangle");
+          if (p.ship.hull <= 0) {
+            this.die(`Collision with ${e.kind} ${e.name}`, e.name);
+            return;
+          }
+        }
+      }
+    }
 
     // Move entities
     const now = performance.now() / 1000;
@@ -1004,16 +1073,16 @@ export class Voidwake {
           const dmg = 6 * this.dmgScale();
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
+          this.beep(220, 0.04, "sawtooth");
           if (p.ship.hull <= 0) {
-            this.pushLog("Your ship was destroyed.");
-            this.screen = "destroyed";
-            this.destroyedAt = performance.now() / 1000;
-            this.menuCursor = 0;
+            const shooter = this.entities.find((x) => x.id === e.ownerId);
+            const killer = shooter?.name ?? e.faction;
+            this.die(`Killed by ${killer}`, killer);
           }
-
         }
         return false;
       }
+
       // Enemy hit
       for (const t of this.entities) {
         if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
