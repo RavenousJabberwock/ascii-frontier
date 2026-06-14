@@ -1605,7 +1605,7 @@ export class Voidwake {
       this.beep(540, 0.05, "sine");
       return false;
     });
-    void before;
+    
   }
 
   // Periodically inject a flavor chatter line from nearby NPCs / stations /
