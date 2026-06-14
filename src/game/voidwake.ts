@@ -1038,13 +1038,20 @@ export class Voidwake {
     // Stations dock instead of colliding at the dock-range we use elsewhere.
     if (!this.options.cheat) {
       for (const e of this.entities) {
-        if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid") continue;
-        const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : 10;
+        if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
+        const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
         if (d < radius) {
           // Push the player back to the surface and apply scaled damage.
           const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
+          if (e.kind === "station") {
+            // Stations bump but don't kill; remind the pilot to dock.
+            p.vel = V.scale(p.vel, 0.2);
+            this.pushLog(`Bumped ${e.name} — press F to dock.`);
+            this.beep(220, 0.06, "square");
+            continue;
+          }
           const dmg = (e.kind === "star" ? 120 : 25) * this.dmgScale() * dt * 4;
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
