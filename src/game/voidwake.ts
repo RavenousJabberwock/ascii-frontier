@@ -168,12 +168,15 @@ interface Options {
   difficulty: typeof DIFFICULTIES[number];
   peaceful: boolean;
   cheat: boolean;
+  mouseSteer: boolean;
+  mouseSensitivity: number;
   volumeMaster: number;
   volumeSfx: number;
   volumeMusic: number;
   unsavedWarnMinutes: number;
   keybinds: Record<string, string>;
 }
+
 
 interface SaveBlob {
   version: string;
