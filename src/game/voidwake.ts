@@ -170,12 +170,15 @@ interface Options {
   cheat: boolean;
   mouseSteer: boolean;
   mouseSensitivity: number;
+  showFps: boolean;
+  autosave: boolean;
   volumeMaster: number;
   volumeSfx: number;
   volumeMusic: number;
   unsavedWarnMinutes: number;
   keybinds: Record<string, string>;
 }
+
 
 
 interface SaveBlob {
@@ -202,9 +205,13 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   cycleTarget: "t",
   dock: "f",
   station: "b",
-  mission: "j",
+  mission: "u",
+  boost: "shift",        // afterburner: extra speed while held, burns fuel fast
+  jettison: "j",         // drop one unit of the highest-volume cargo type
+  pause: "p",            // toggle pause while in flight
   menu: "escape",
 };
+
 
 function defaultOptions(): Options {
   return {
@@ -213,6 +220,9 @@ function defaultOptions(): Options {
     cheat: false,
     mouseSteer: true,
     mouseSensitivity: 1.0,
+    showFps: false,
+    autosave: true,
+
     volumeMaster: 0.8,
     volumeSfx: 0.8,
     volumeMusic: 0.6,
@@ -467,7 +477,9 @@ type Screen =
   | "load"
   | "save"
   | "quit-confirm"
-  | "destroyed";
+  | "destroyed"
+  | "crashed";
+
 
 // =============================================================================
 // 9. Save / Load — unencrypted JSON in localStorage (plus export/import)
@@ -578,7 +590,27 @@ export class Voidwake {
   // Timestamp (seconds) when the player entered the destroyed screen — used
   // for a short input grace period so the death banner is actually readable.
   destroyedAt = 0;
+  // Pause toggle (in-flight). When paused, world ticks halt but render continues.
+  paused = false;
 
+  // Why the player died and who (or what) killed them. Surfaced on the
+  // destroyed screen so the player understands what happened.
+  deathReason: string | null = null;
+  deathKiller: string | null = null;
+  // Crash diagnostics: when the loop throws we freeze on a crashed screen
+  // and show the error here so the user isn't silently kicked to the menu.
+  crashError: string | null = null;
+  crashStack: string | null = null;
+  // Autosave bookkeeping. We rotate into the dedicated "autosave" slot every
+  // `autosaveInterval` seconds while in flight.
+  autosaveTimer = 0;
+  autosaveInterval = 120; // seconds
+  // Simple FPS counter (toggleable in Options).
+  fps = 0;
+  private _fpsAcc = 0;
+  private _fpsFrames = 0;
+  // Audio: small WebAudio context for cheap beeps (hit / death / dock).
+  audio: AudioContext | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -589,6 +621,17 @@ export class Voidwake {
     window.addEventListener("resize", () => this.fit());
     this.input.attach(canvas);
     canvas.focus();
+    // Global error trap so async/uncaught errors during gameplay show on the
+    // crash screen instead of vanishing into the console.
+    window.addEventListener("error", (ev) => {
+      if (this.screen === "playing") this.crash(ev.error ?? new Error(ev.message));
+    });
+    window.addEventListener("unhandledrejection", (ev) => {
+      if (this.screen === "playing") {
+        const r = ev.reason;
+        this.crash(r instanceof Error ? r : new Error(String(r)));
+      }
+    });
   }
 
   fit() {
@@ -604,8 +647,20 @@ export class Voidwake {
       if (!this.running) return;
       const dt = Math.min(0.05, (ts - this.lastTs) / 1000);
       this.lastTs = ts;
-      this.update(dt);
-      this.render();
+      // FPS sampling
+      this._fpsAcc += dt; this._fpsFrames++;
+      if (this._fpsAcc >= 0.5) {
+        this.fps = Math.round(this._fpsFrames / this._fpsAcc);
+        this._fpsAcc = 0; this._fpsFrames = 0;
+      }
+      // Wrap update+render so a thrown exception lands on the crash screen
+      // with a readable stack instead of silently bouncing back to title.
+      try {
+        this.update(dt);
+        this.render();
+      } catch (err) {
+        this.crash(err);
+      }
       this.input.endFrame();
       this.rafId = requestAnimationFrame(loop);
     };
@@ -620,6 +675,51 @@ export class Voidwake {
     this.log.push({ t: performance.now() / 1000, msg });
     if (this.log.length > 6) this.log.shift();
   }
+
+  // Centralized death handler. Pass a human reason ("Killed by Hostile Reaver",
+  // "Collided with Planet P-42", "Hull breach: fuel detonation").
+  die(reason: string, killer?: string) {
+    if (this.screen === "destroyed") return;
+    this.deathReason = reason;
+    this.deathKiller = killer ?? null;
+    this.pushLog(`☠ ${reason}`);
+    this.screen = "destroyed";
+    this.destroyedAt = performance.now() / 1000;
+    this.menuCursor = 0;
+    this.beep(120, 0.6, "sawtooth");
+  }
+
+  // Capture a runtime error from the loop / global handlers and freeze on
+  // the crash screen. Keeps the player from being silently kicked to menu.
+  crash(err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    this.crashError = e.message || "Unknown error";
+    this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
+    // eslint-disable-next-line no-console
+    console.error("[Voidwake crash]", e);
+    this.screen = "crashed";
+    this.menuCursor = 0;
+  }
+
+  // Tiny WebAudio beep (no asset dependency). Used for hit/death/dock cues.
+  beep(freq = 440, dur = 0.08, type: OscillatorType = "square") {
+    try {
+      if (!this.audio) this.audio = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const ctx = this.audio;
+      if (ctx.state === "suspended") void ctx.resume();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const vol = this.options.volumeMaster * this.options.volumeSfx * 0.15;
+      o.type = type; o.frequency.value = freq;
+      g.gain.value = vol;
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      o.connect(g).connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + dur);
+    } catch { /* audio unavailable; non-fatal */ }
+  }
+
+
 
   // ---------------------------------------------------------------------------
   // UPDATE
@@ -648,7 +748,38 @@ export class Voidwake {
       case "station": return this.updateStation();
       case "quit-confirm": return this.updateQuitConfirm();
       case "destroyed": return this.updateDestroyed();
+      case "crashed": return this.updateCrashed();
     }
+  }
+
+  // --- Crash screen (caught exception) ------------------------------------
+  crashedItems = ["Load Last Save", "Return to Main Menu", "Reload Page"];
+  updateCrashed() {
+    this.menuNav(this.crashedItems.length);
+    if (this.input.consume("enter")) {
+      const c = this.crashedItems[this.menuCursor];
+      if (c === "Reload Page") { window.location.reload(); return; }
+      if (c === "Load Last Save") {
+        const saves = listSaves();
+        if (saves.length > 0) {
+          const blob = loadGame(saves[0].slot);
+          if (blob) {
+            this.seed = blob.seed; this.rng = mulberry32(this.seed);
+            this.entities = blob.entities; this.player = blob.player; this.options = blob.options;
+            this.crashError = null; this.crashStack = null;
+            this.screen = "playing";
+            this.pushLog(`Recovered from crash via ${saves[0].slot}.`);
+            return;
+          }
+        }
+        this.pushLog("No save available.");
+      }
+      this.player = null;
+      this.crashError = null; this.crashStack = null;
+      this.screen = "title";
+      this.menuCursor = 0;
+    }
+
   }
 
   // --- Destroyed (death) screen -------------------------------------------
@@ -792,14 +923,19 @@ export class Voidwake {
     if (!p) { this.screen = "title"; return; }
     // Safety net: if hull dropped to 0 by any path, go to destroyed screen.
     if (p.ship.hull <= 0 && !this.options.cheat) {
-      this.pushLog("Your ship was destroyed.");
-      this.screen = "destroyed";
-      this.destroyedAt = performance.now() / 1000;
-      this.menuCursor = 0;
+      this.die(this.deathReason ?? "Catastrophic hull failure");
       return;
     }
     const k = this.options.keybinds;
     const keys = this.input.keys;
+
+    // Pause toggle. While paused, we skip all world updates but still let the
+    // player open the menu via ESC and read the HUD.
+    if (this.input.consume(k.pause)) {
+      this.paused = !this.paused;
+      this.pushLog(this.paused ? "‖ Paused" : "▶ Resumed");
+    }
+    if (this.paused) return;
 
     // Throttle / steering
     if (keys.has(k.throttleUp)) p.throttle = Math.min(1, p.throttle + dt * 0.7);
@@ -810,10 +946,9 @@ export class Voidwake {
     if (keys.has(k.pitchDown)) p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0);
 
     // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
-    // A small dead-zone in the middle prevents drift when the cursor sits idle.
     if (this.options.mouseSteer && this.input.mouseInside) {
       const sens = this.options.mouseSensitivity;
-      const dz = 0.08; // dead-zone radius in normalized coords
+      const dz = 0.08;
       const mx = this.input.mouseNX;
       const my = this.input.mouseNY;
       const ax = Math.abs(mx) > dz ? (mx - Math.sign(mx) * dz) : 0;
@@ -822,12 +957,22 @@ export class Voidwake {
       p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ay * dt * 1.1 * sens));
     }
 
+    // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
+    const boosting = keys.has(k.boost) && p.ship.fuel > 0;
+    const boostMul = boosting ? 1.6 : 1.0;
+    const fuelMul = boosting ? 4.0 : 1.0;
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
-    const sp = p.ship.speed * p.throttle;
+    // Out-of-fuel: throttle authority drops to a tiny drift. Player can still
+    // turn, but movement coasts at 15% until refueled at a station.
+    const fuelFactor = p.ship.fuel > 0 ? 1.0 : 0.15;
+    const sp = p.ship.speed * p.throttle * boostMul * fuelFactor;
     p.pos = V.add(p.pos, V.scale(fwd, sp * dt));
-    p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001);
+    if (p.ship.fuel > 0) {
+      p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
+      if (p.ship.fuel === 0) this.pushLog("⚠ FUEL EXHAUSTED — drift only. Dock to refuel.");
+    }
 
     // Shield regen
     p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * 4);
@@ -835,9 +980,23 @@ export class Voidwake {
     // Cycle target
     if (this.input.consume(k.cycleTarget)) this.cycleTarget();
 
+    // Jettison: drop one unit of the heaviest cargo item.
+    if (this.input.consume(k.jettison)) {
+      const items = Object.entries(p.cargo).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+      if (items.length) {
+        const [name] = items[0];
+        p.cargo[name] = (p.cargo[name] ?? 0) - 1;
+        if (p.cargo[name] <= 0) delete p.cargo[name];
+        this.pushLog(`Jettisoned 1 ${name}.`);
+        this.beep(320, 0.05);
+      } else {
+        this.pushLog("Cargo hold is empty.");
+      }
+    }
+
     // Fire
     p.cooldown -= dt;
-    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful) {
+    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0) {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
       p.cooldown = w.cooldown;
       this.entities.push({
@@ -846,6 +1005,7 @@ export class Voidwake {
         faction: "player", ownerId: -1, ttl: 2,
         ttlAt: performance.now() / 1000 + 2,
       });
+      this.beep(880, 0.04, "square");
     }
 
     // Mine
@@ -854,8 +1014,48 @@ export class Voidwake {
     if (this.input.consume(k.dock)) this.tryDock();
     // Open station menu shortcut
     if (this.input.consume(k.station)) this.tryDock();
-    // Mission accept already happens when docking
     void k.mission;
+
+    // Autosave on a timer (rotates into the dedicated "autosave" slot).
+    this.autosaveTimer += dt;
+    if (this.options.autosave && this.autosaveTimer >= this.autosaveInterval) {
+      this.autosaveTimer = 0;
+      try {
+        const blob: SaveBlob = {
+          version: VERSION, seed: this.seed,
+          player: p, entities: this.entities,
+          options: this.options, savedAt: Date.now(),
+        };
+        saveGame("autosave", blob);
+        p.lastSaveAt = Date.now();
+        this.pushLog("◉ Autosaved.");
+      } catch (err) {
+        console.warn("Autosave failed", err);
+      }
+    }
+
+    // Collision damage vs large bodies (planets / stars / stations / rocks).
+    // Stations dock instead of colliding at the dock-range we use elsewhere.
+    if (!this.options.cheat) {
+      for (const e of this.entities) {
+        if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid") continue;
+        const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : 10;
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < radius) {
+          // Push the player back to the surface and apply scaled damage.
+          const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
+          p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
+          const dmg = (e.kind === "star" ? 120 : 25) * this.dmgScale() * dt * 4;
+          if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
+          else p.ship.hull = Math.max(0, p.ship.hull - dmg);
+          this.beep(180, 0.05, "triangle");
+          if (p.ship.hull <= 0) {
+            this.die(`Collision with ${e.kind} ${e.name}`, e.name);
+            return;
+          }
+        }
+      }
+    }
 
     // Move entities
     const now = performance.now() / 1000;
@@ -873,16 +1073,16 @@ export class Voidwake {
           const dmg = 6 * this.dmgScale();
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
+          this.beep(220, 0.04, "sawtooth");
           if (p.ship.hull <= 0) {
-            this.pushLog("Your ship was destroyed.");
-            this.screen = "destroyed";
-            this.destroyedAt = performance.now() / 1000;
-            this.menuCursor = 0;
+            const shooter = this.entities.find((x) => x.id === e.ownerId);
+            const killer = shooter?.name ?? e.faction;
+            this.die(`Killed by ${killer}`, killer);
           }
-
         }
         return false;
       }
+
       // Enemy hit
       for (const t of this.entities) {
         if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
@@ -958,6 +1158,8 @@ export class Voidwake {
     p.ship.fuel = p.ship.fuelMax;
     p.ship.hull = p.ship.hullMax;
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
+    this.beep(660, 0.08, "sine"); this.beep(990, 0.08, "sine");
+
     // Hand in mission
     if (p.mission && p.mission.done) {
       p.credits += p.mission.reward;
@@ -1052,6 +1254,8 @@ export class Voidwake {
       `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
       `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
       `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
+      `Show FPS: ${this.options.showFps ? "ON" : "OFF"}`,
+      `Autosave: ${this.options.autosave ? "ON" : "OFF"}`,
       `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
@@ -1072,15 +1276,18 @@ export class Voidwake {
     if (i === 2 && (left || right)) this.options.cheat = !this.options.cheat;
     if (i === 3 && (left || right)) this.options.mouseSteer = !this.options.mouseSteer;
     if (i === 4) this.options.mouseSensitivity = Math.max(0.1, Math.min(3, this.options.mouseSensitivity + (right ? 0.1 : left ? -0.1 : 0)));
-    if (i === 5) this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 6) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 7) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 8) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
+    if (i === 5 && (left || right)) this.options.showFps = !this.options.showFps;
+    if (i === 6 && (left || right)) this.options.autosave = !this.options.autosave;
+    if (i === 7) this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 8) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 9) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 10) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
     if (this.input.consume("enter")) {
       if (items[i].startsWith("Reset")) this.options.keybinds = { ...DEFAULT_KEYBINDS };
       if (items[i] === "Back") this.screen = this.player ? "menu" : "title";
     }
   }
+
 
 
   // --- Save / Load screens -------------------------------------------------
@@ -1176,7 +1383,9 @@ export class Voidwake {
       case "station": this.renderStation(grid); break;
       case "quit-confirm": this.renderQuitConfirm(grid); break;
       case "destroyed": this.renderDestroyed(grid); break;
+      case "crashed": this.renderCrashed(grid); break;
     }
+
 
     // Paint grid
     ctx.font = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
@@ -1252,6 +1461,8 @@ export class Voidwake {
       `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
       `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
       `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
+      `Show FPS: ${this.options.showFps ? "ON" : "OFF"}`,
+      `Autosave: ${this.options.autosave ? "ON" : "OFF"}`,
       `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
@@ -1259,6 +1470,7 @@ export class Voidwake {
       `Reset Keybinds`,
       "Back",
     ];
+
 
     this.renderListMenu(g, "OPTIONS", items);
     putText(g, 4, g.length - 2, "←/→ change   ↑/↓ field   ENTER confirm", "#888");
@@ -1299,20 +1511,57 @@ export class Voidwake {
     banner.forEach((line, i) => putText(g, Math.max(2, cx - Math.floor(line.length / 2)), 3 + i, line, "#ff4d4d"));
     const p = this.player;
     putText(g, cx - 18, 11, "Your ship has been destroyed.", "#fff");
+    // Death reason / cause-of-death summary
+    if (this.deathReason) {
+      putText(g, cx - 18, 12, `Cause: ${this.deathReason}`, "#fc6");
+    }
     if (p) {
-      putText(g, cx - 18, 13, `Cmdr ${p.char.name} — Rank ${p.rank}  ${p.credits}cr  XP ${p.xp}`, "#9fe");
+      putText(g, cx - 18, 14, `Cmdr ${p.char.name} — Rank ${p.rank}  ${p.credits}cr  XP ${p.xp}`, "#9fe");
+      putText(g, cx - 18, 15, `Last position  ${p.pos.x.toFixed(0)}, ${p.pos.y.toFixed(0)}, ${p.pos.z.toFixed(0)}`, "#9fe");
     }
     const saves = listSaves();
     const last = saves[0];
-    putText(g, cx - 18, 15, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
+    putText(g, cx - 18, 17, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
     this.destroyedItems.forEach((it, i) => {
       const sel = i === this.menuCursor;
       const disabled = it === "Load Last Save" && !last;
       const color = disabled ? "#555" : (sel ? "#fff" : "#9fe");
-      putText(g, cx - 16, 18 + i * 2, (sel ? "▸ " : "  ") + it, color);
+      putText(g, cx - 16, 20 + i * 2, (sel ? "▸ " : "  ") + it, color);
     });
     putText(g, cx - 16, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
+
+  // Crash screen: shown when the game loop or a global error handler trips.
+  // Mirrors the destroyed-screen layout but uses a yellow banner and includes
+  // the error message + a short stack so the player can report what happened.
+  renderCrashed(g: Cell[][]) {
+    const cols = g[0].length;
+    const cx = Math.floor(cols / 2);
+    const banner = [
+      "  ____ ____      _    ____  _   _ _____ ____  ",
+      " / ___|  _ \\    / \\  / ___|| | | | ____|  _ \\ ",
+      "| |   | |_) |  / _ \\ \\___ \\| |_| |  _| | | | |",
+      "| |___|  _ <  / ___ \\ ___) |  _  | |___| |_| |",
+      " \\____|_| \\_\\/_/   \\_\\____/|_| |_|_____|____/ ",
+    ];
+    banner.forEach((line, i) => putText(g, Math.max(2, cx - Math.floor(line.length / 2)), 2 + i, line, "#ffcc33"));
+    putText(g, 4, 9, "The game loop hit an unexpected error.", "#fff");
+    putText(g, 4, 10, "Your last save (if any) is unaffected — recover below.", "#9fe");
+    putText(g, 4, 12, `error: ${this.crashError ?? "(unknown)"}`, "#ff8a8a");
+    const stack = (this.crashStack ?? "").split("\n");
+    stack.slice(0, 6).forEach((line, i) => putText(g, 6, 13 + i, line.slice(0, cols - 8), "#888"));
+    const saves = listSaves();
+    const last = saves[0];
+    putText(g, 4, 21, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
+    this.crashedItems.forEach((it, i) => {
+      const sel = i === this.menuCursor;
+      const disabled = it === "Load Last Save" && !last;
+      const color = disabled ? "#555" : (sel ? "#fff" : "#9fe");
+      putText(g, 6, 23 + i * 2, (sel ? "▸ " : "  ") + it, color);
+    });
+    putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
+  }
+
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
     items.forEach((it, i) => {
@@ -1389,23 +1638,27 @@ export class Voidwake {
 
     // --- Controls reminder, anchored to the bottom of the right panel ------
     // Always visible so new pilots aren't stranded looking for the keymap.
-    const cTop = vpBottom - 13;
+    const cTop = vpBottom - 16;
     putText(g, panelX, cTop, "[ CONTROLS ]", "#7CFC00");
     const mouseLine = this.options.mouseSteer ? "Mouse  steer (toggle in Opts)" : "Mouse  off";
     const ctrls: [string, string][] = [
       ["W / S", "throttle ±"],
       ["A / D", "yaw L/R"],
       ["Q / E", "pitch U/D"],
+      ["SHIFT", "afterburner"],
       ["SPACE", "fire"],
       ["T", "cycle target"],
       ["M", "mine target"],
       ["F", "dock / station"],
+      ["J", "jettison cargo"],
+      ["P", "pause"],
       ["ESC", "menu"],
     ];
     ctrls.forEach((row, i) => {
       putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe");
     });
     putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf");
+
 
 
     // --- Bottom: radar + status ---
@@ -1463,10 +1716,25 @@ export class Voidwake {
     }
 
     // Keys hint
-    putText(g, 2, rows - 1, "W/S throttle  A/D yaw  Q/E pitch  SPC fire  M mine  T target  F dock  ESC menu", "#666");
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu", "#666");
+
+    // FPS overlay (optional)
+    if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
+
+    // Boost indicator
+    if (this.input.keys.has(this.options.keybinds.boost) && p.ship.fuel > 0) {
+      putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6");
+    }
+
+    // Pause banner (big, centered, obvious)
+    if (this.paused) {
+      const msg = "‖ PAUSED — press P to resume";
+      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + Math.floor(vh / 2) - 1, msg, "#ffcc33");
+    }
 
     this.tickMissions();
   }
+
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
     const p = this.player; if (!p) return;
