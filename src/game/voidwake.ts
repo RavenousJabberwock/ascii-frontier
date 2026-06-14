@@ -1376,6 +1376,31 @@ export class Voidwake {
             this.pushLog(`Destroyed ${t.name}.`);
             awardXP(p, 25);
             p.credits += 50;
+            p.kills = (p.kills ?? 0) + 1;
+            // Faction reputation: smiting pirates curries favor with the
+            // Federation and Guild; popping civilians sours both.
+            if (t.faction === "pirate") {
+              adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
+            } else if (t.faction === "federation") {
+              adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
+            } else if (t.faction === "guild") {
+              adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
+            }
+            // Loot canister: small chance of credits + ore drop. Floats on
+            // the kill's velocity so the player can chase it down.
+            if (Math.random() < 0.85) {
+              this.entities.push({
+                id: nextId(), kind: "loot", name: "canister",
+                pos: { ...t.pos },
+                vel: V.scale(t.vel, 0.25),
+                faction: "wreck",
+                ttlAt: performance.now() / 1000 + 45,
+                loot: {
+                  credits: 20 + Math.floor(Math.random() * 80),
+                  ore: Math.floor(Math.random() * 4),
+                },
+              });
+            }
             // Mission progress
             if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
               p.mission.done = true;
