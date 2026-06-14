@@ -1983,10 +1983,15 @@ function bar(cur: number, max: number, width = 10): string {
 function clamp01(v: number) { return Math.max(0, Math.min(1, v)); }
 
 function headingToVec(yaw: number, pitch: number): Vec3 {
-  // yaw rotates around Y (xz plane), pitch around X (yz plane)
+  // Forward unit vector matching the camera projection in renderPlaying().
+  // The camera transform places "ahead" (reticle center) at world direction
+  // (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). Previously this
+  // returned -sp on Y, which made the ship fly opposite to the reticle
+  // whenever the player pitched up or down — the "I'm aimed at him but the
+  // distance is growing" bug.
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
-  return { x: sy * cp, y: -sp, z: cy * cp };
+  return { x: sy * cp, y: sp, z: cy * cp };
 }
 
 // Hash function exported for tooling tests; otherwise unused.
