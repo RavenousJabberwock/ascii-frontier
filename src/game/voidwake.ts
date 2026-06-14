@@ -1594,7 +1594,7 @@ export class Voidwake {
       ship: 4, bullet: 0.5,
     };
     // Sort far→near so close objects overdraw distant ones.
-    const projected = [] as { e: typeof this.entities[number]; sx: number; sy: number; z: number; r: number }[];
+    const projected: { e: Entity; sx: number; sy: number; z: number; r: number }[] = [];
     for (const e of this.entities) {
       const r = V.sub(e.pos, p.pos);
       const x1 = cy * r.x - sy * r.z;
