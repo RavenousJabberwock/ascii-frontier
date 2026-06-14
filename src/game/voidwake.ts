@@ -1714,10 +1714,25 @@ export class Voidwake {
     }
 
     // Keys hint
-    putText(g, 2, rows - 1, "W/S throttle  A/D yaw  Q/E pitch  SPC fire  M mine  T target  F dock  ESC menu", "#666");
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu", "#666");
+
+    // FPS overlay (optional)
+    if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
+
+    // Boost indicator
+    if (this.input.keys.has(this.options.keybinds.boost) && p.ship.fuel > 0) {
+      putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6");
+    }
+
+    // Pause banner (big, centered, obvious)
+    if (this.paused) {
+      const msg = "‖ PAUSED — press P to resume";
+      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + Math.floor(vh / 2) - 1, msg, "#ffcc33");
+    }
 
     this.tickMissions();
   }
+
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
     const p = this.player; if (!p) return;
