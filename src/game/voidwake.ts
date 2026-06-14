@@ -1588,9 +1588,11 @@ export class Voidwake {
   pickupLoot() {
     const p = this.player; if (!p) return;
     const magnet = p.ship.modules.includes("loot-magnet") ? 60 : 20;
-    const before = this.entities.length;
+    const now = performance.now() / 1000;
     this.entities = this.entities.filter((e) => {
       if (e.kind !== "loot") return true;
+      // Expire stale canisters so the world doesn't fill with junk.
+      if (e.ttlAt && e.ttlAt < now) return false;
       if (V.len(V.sub(e.pos, p.pos)) > magnet) return true;
       const cr = e.loot?.credits ?? 0;
       const ore = e.loot?.ore ?? 0;
