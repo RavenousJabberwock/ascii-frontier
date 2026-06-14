@@ -1386,6 +1386,23 @@ export class Voidwake {
     const rows = Math.max(20, Math.floor(h / CELL_H));
     const grid = blankGrid(cols, rows);
 
+    // Frame delta for starfield motion (independent of game tick).
+    const now = performance.now() / 1000;
+    const sdt = Math.min(0.1, this._lastRenderTs ? now - this._lastRenderTs : 0.016);
+    this._lastRenderTs = now;
+
+    // Starfield layer — drawn first so menus/HUD/entities overdraw it.
+    if (this.screen === "playing" && this.player) {
+      this.drawWorldStarfield(grid, sdt);
+    } else if (
+      this.screen === "title" || this.screen === "create-char" ||
+      this.screen === "create-ship" || this.screen === "load" ||
+      this.screen === "options" || this.screen === "destroyed" ||
+      this.screen === "crashed" || this.screen === "quit-confirm"
+    ) {
+      this.drawTitleStarfield(grid, sdt);
+    }
+
     switch (this.screen) {
       case "title": this.renderTitle(grid); break;
       case "create-char": this.renderCharCreate(grid); break;
