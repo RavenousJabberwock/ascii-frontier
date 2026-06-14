@@ -170,12 +170,15 @@ interface Options {
   cheat: boolean;
   mouseSteer: boolean;
   mouseSensitivity: number;
+  showFps: boolean;
+  autosave: boolean;
   volumeMaster: number;
   volumeSfx: number;
   volumeMusic: number;
   unsavedWarnMinutes: number;
   keybinds: Record<string, string>;
 }
+
 
 
 interface SaveBlob {
