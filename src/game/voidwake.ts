@@ -2585,7 +2585,23 @@ export class Voidwake {
     }
     if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
 
-    // Log
+    // --- COMMS / chatter box ---
+    // Lives along the bottom edge between the system column and the log.
+    // Newest line on top, dimmed by age so old lines fade visually.
+    const commsX = 28;
+    const commsY = rTop + 7;
+    putText(g, commsX, commsY, "[ COMMS ]", "#7CFC00");
+    const nowS = performance.now() / 1000;
+    const commsW = Math.max(20, (cols - 52) - commsX - 2);
+    for (let i = 0; i < Math.min(4, this.chatter.length); i++) {
+      const c = this.chatter[i];
+      const age = nowS - c.t;
+      const dim = age > 20 ? "#555" : age > 8 ? "#888" : c.color;
+      const line = `«${c.who}» ${c.msg}`;
+      putText(g, commsX, commsY + 1 + i, line.slice(0, commsW), dim);
+    }
+
+    // Log (mission / system events; separate from chatter).
     let ly = rTop;
     for (let i = this.log.length - 1; i >= 0; i--) {
       putText(g, cols - 52, ly++, "» " + this.log[i].msg, "#cfd");
@@ -2593,7 +2609,8 @@ export class Voidwake {
     }
 
     // Keys hint
-    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu", "#666");
+    const gunnerHint = p.gunner ? `  G ${p.gunner.enabled ? "gunner ON" : "gunner off"}` : "";
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu" + gunnerHint, "#666");
 
     // FPS overlay (optional)
     if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
