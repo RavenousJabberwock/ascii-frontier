@@ -1,29 +1,27 @@
+// Home route — mounts the Voidwake ASCII space sim.
 import { createFileRoute } from "@tanstack/react-router";
+import VoidwakeGame from "@/components/VoidwakeGame";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Your App" },
-      { name: "description", content: "Replace this with a one-sentence description of your app." },
-      { property: "og:title", content: "Your App" },
-      { property: "og:description", content: "Replace this with a one-sentence description of your app." },
+      { title: "VOIDWAKE — ASCII Space Sim" },
+      {
+        name: "description",
+        content:
+          "VOIDWAKE: a fully playable ASCII space simulation with cockpit UI, trading, mining, combat, AI ships, and a procedural universe.",
+      },
+      { property: "og:title", content: "VOIDWAKE — ASCII Space Sim" },
+      {
+        property: "og:description",
+        content:
+          "Fly an ASCII starship through a procedural universe. Trade, mine, fight, and progress.",
+      },
     ],
   }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
+  return <VoidwakeGame />;
 }
