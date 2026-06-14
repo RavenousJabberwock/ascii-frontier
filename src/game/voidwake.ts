@@ -638,7 +638,11 @@ export class Voidwake {
         if (saves.length > 0) {
           const blob = loadGame(saves[0].slot);
           if (blob) {
-            this.applySave(blob);
+            this.seed = blob.seed;
+            this.rng = mulberry32(this.seed);
+            this.entities = blob.entities;
+            this.player = blob.player;
+            this.options = blob.options;
             this.screen = "playing";
             this.pushLog(`Restored from ${saves[0].slot}.`);
             return;
@@ -650,6 +654,8 @@ export class Voidwake {
       this.screen = "title";
       this.menuCursor = 0;
     }
+  }
+
 
   // --- Title --------------------------------------------------------------
   titleItems = ["New Game", "Load Game", "Options", "Quit"];
