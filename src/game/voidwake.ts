@@ -1327,7 +1327,43 @@ export class Voidwake {
     putText(g, 28, rTop + 2, `Pos ${p.pos.x.toFixed(0)},${p.pos.y.toFixed(0)},${p.pos.z.toFixed(0)}`, "#9fe");
     putText(g, 28, rTop + 3, `Heading yaw ${(p.heading.yaw).toFixed(2)} pitch ${(p.heading.pitch).toFixed(2)}`, "#9fe");
     putText(g, 28, rTop + 4, `Mission: ${p.mission ? p.mission.description : "(none)"}`, "#fb6");
-    if (p.mission?.done) putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6");
+    if (p.mission?.done) {
+      putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6");
+    } else if (p.mission) {
+      // Mission guidance: bearing + distance to objective.
+      const m = p.mission;
+      let mt: Entity | undefined;
+      if (m.targetId) mt = this.entities.find((e) => e.id === m.targetId);
+      else if (m.kind === "deliver") {
+        // nearest station for delivery
+        const stations = this.entities.filter((e) => e.kind === "station");
+        stations.sort((a, b) => V.len(V.sub(a.pos, p.pos)) - V.len(V.sub(b.pos, p.pos)));
+        mt = stations[0];
+      }
+      if (mt) {
+        const rel = V.sub(mt.pos, p.pos);
+        const d = V.len(rel);
+        // Project into camera space to derive an arrow
+        const cy3 = Math.cos(p.heading.yaw), sy3 = Math.sin(p.heading.yaw);
+        const cp3 = Math.cos(p.heading.pitch), sp3 = Math.sin(p.heading.pitch);
+        const x1 = cy3 * rel.x - sy3 * rel.z;
+        const z1 = sy3 * rel.x + cy3 * rel.z;
+        const y1 = cp3 * rel.y - sp3 * z1;
+        const z2 = sp3 * rel.y + cp3 * z1;
+        let arrow: string;
+        if (z2 < 0) arrow = "↻ TURN AROUND";
+        else {
+          const ax = Math.abs(x1), ay = Math.abs(y1);
+          if (ax < z2 * 0.1 && ay < z2 * 0.1) arrow = "● AHEAD";
+          else if (ax > ay) arrow = x1 > 0 ? "→ RIGHT" : "← LEFT";
+          else arrow = y1 > 0 ? "↓ DOWN" : "↑ UP";
+        }
+        const label = m.kind === "deliver" ? `nearest station ${mt.name}` : mt.name;
+        putText(g, 28, rTop + 5, `→ ${label}  ${d.toFixed(0)}u  ${arrow}`, "#cf6");
+      } else if (m.kind === "deliver") {
+        putText(g, 28, rTop + 5, `→ Collect ${m.cargoQty} ${m.cargoItem} then dock at any station`, "#cf6");
+      }
+    }
     if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
 
     // Log
