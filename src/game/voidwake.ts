@@ -446,7 +446,8 @@ type Screen =
   | "station"
   | "load"
   | "save"
-  | "quit-confirm";
+  | "quit-confirm"
+  | "destroyed";
 
 // =============================================================================
 // 9. Save / Load — unencrypted JSON in localStorage (plus export/import)
