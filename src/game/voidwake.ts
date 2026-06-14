@@ -2177,12 +2177,21 @@ export class Voidwake {
   }
   renderStation(g: Cell[][]) {
     const p = this.player!;
-    putText(g, 4, 2, "DOCKED — STATION SERVICES", "#7CFC00");
-    putText(g, 4, 3, `credits: ${p.credits}   ore: ${p.cargo.ore ?? 0}   fuel: ${p.ship.fuel.toFixed(0)}/${p.ship.fuelMax}`, "#9fe");
+    const sid = this.dockedStationId;
+    const stationName = sid != null ? this.entities.find((e) => e.id === sid)?.name ?? "Station" : "Station";
+    const stock = sid != null ? this.getStock(sid) : null;
+    putText(g, 4, 2, `DOCKED — ${stationName.toUpperCase()}`, "#7CFC00");
+    putText(g, 4, 3, `credits: ${p.credits}   ore: ${p.cargo.ore ?? 0}   cargo: ${cargoTotal(p)}/${p.ship.cargoMax}   fuel: ${p.ship.fuel.toFixed(0)}/${p.ship.fuelMax}`, "#9fe");
     if (p.mission) putText(g, 4, 4, `mission: ${p.mission.description} ${p.mission.done ? "[READY]" : ""}`, "#fb6");
-    this.stationItems.forEach((it, i) => {
+    // Reputation summary so the player can see how the station regards them.
+    const rep = p.reputation ?? {};
+    putText(g, 4, 5, `rep — Fed:${repLabel(rep.federation ?? 0)} (${rep.federation ?? 0})   Guild:${repLabel(rep.guild ?? 0)} (${rep.guild ?? 0})   Pirate:${repLabel(rep.pirate ?? 0)} (${rep.pirate ?? 0})`, "#aef");
+    if (stock) putText(g, 4, 6, `“${stock.rumor}”`, "#fc6");
+    putText(g, 4, 7, `[ ${this.stationPage.toUpperCase()} ]   ESC back to menu`, "#7CFC00");
+    const lines = this.buildStationLines();
+    lines.forEach((it, i) => {
       const sel = i === this.menuCursor;
-      putText(g, 6, 7 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      putText(g, 6, 9 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
     });
   }
   renderQuitConfirm(g: Cell[][]) {
