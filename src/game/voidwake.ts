@@ -1636,7 +1636,7 @@ export class Voidwake {
 
     // --- Controls reminder, anchored to the bottom of the right panel ------
     // Always visible so new pilots aren't stranded looking for the keymap.
-    const cTop = vpBottom - 13;
+    const cTop = vpBottom - 16;
     putText(g, panelX, cTop, "[ CONTROLS ]", "#7CFC00");
     const mouseLine = this.options.mouseSteer ? "Mouse  steer (toggle in Opts)" : "Mouse  off";
     const ctrls: [string, string][] = [
