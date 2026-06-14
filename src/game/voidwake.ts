@@ -1501,20 +1501,57 @@ export class Voidwake {
     banner.forEach((line, i) => putText(g, Math.max(2, cx - Math.floor(line.length / 2)), 3 + i, line, "#ff4d4d"));
     const p = this.player;
     putText(g, cx - 18, 11, "Your ship has been destroyed.", "#fff");
+    // Death reason / cause-of-death summary
+    if (this.deathReason) {
+      putText(g, cx - 18, 12, `Cause: ${this.deathReason}`, "#fc6");
+    }
     if (p) {
-      putText(g, cx - 18, 13, `Cmdr ${p.char.name} — Rank ${p.rank}  ${p.credits}cr  XP ${p.xp}`, "#9fe");
+      putText(g, cx - 18, 14, `Cmdr ${p.char.name} — Rank ${p.rank}  ${p.credits}cr  XP ${p.xp}`, "#9fe");
+      putText(g, cx - 18, 15, `Last position  ${p.pos.x.toFixed(0)}, ${p.pos.y.toFixed(0)}, ${p.pos.z.toFixed(0)}`, "#9fe");
     }
     const saves = listSaves();
     const last = saves[0];
-    putText(g, cx - 18, 15, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
+    putText(g, cx - 18, 17, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
     this.destroyedItems.forEach((it, i) => {
       const sel = i === this.menuCursor;
       const disabled = it === "Load Last Save" && !last;
       const color = disabled ? "#555" : (sel ? "#fff" : "#9fe");
-      putText(g, cx - 16, 18 + i * 2, (sel ? "▸ " : "  ") + it, color);
+      putText(g, cx - 16, 20 + i * 2, (sel ? "▸ " : "  ") + it, color);
     });
     putText(g, cx - 16, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
+
+  // Crash screen: shown when the game loop or a global error handler trips.
+  // Mirrors the destroyed-screen layout but uses a yellow banner and includes
+  // the error message + a short stack so the player can report what happened.
+  renderCrashed(g: Cell[][]) {
+    const cols = g[0].length;
+    const cx = Math.floor(cols / 2);
+    const banner = [
+      "  ____ ____      _    ____  _   _ _____ ____  ",
+      " / ___|  _ \\    / \\  / ___|| | | | ____|  _ \\ ",
+      "| |   | |_) |  / _ \\ \\___ \\| |_| |  _| | | | |",
+      "| |___|  _ <  / ___ \\ ___) |  _  | |___| |_| |",
+      " \\____|_| \\_\\/_/   \\_\\____/|_| |_|_____|____/ ",
+    ];
+    banner.forEach((line, i) => putText(g, Math.max(2, cx - Math.floor(line.length / 2)), 2 + i, line, "#ffcc33"));
+    putText(g, 4, 9, "The game loop hit an unexpected error.", "#fff");
+    putText(g, 4, 10, "Your last save (if any) is unaffected — recover below.", "#9fe");
+    putText(g, 4, 12, `error: ${this.crashError ?? "(unknown)"}`, "#ff8a8a");
+    const stack = (this.crashStack ?? "").split("\n");
+    stack.slice(0, 6).forEach((line, i) => putText(g, 6, 13 + i, line.slice(0, cols - 8), "#888"));
+    const saves = listSaves();
+    const last = saves[0];
+    putText(g, 4, 21, last ? `Last save: ${last.slot} (${new Date(last.savedAt).toLocaleString()})` : "No saves on record.", "#888");
+    this.crashedItems.forEach((it, i) => {
+      const sel = i === this.menuCursor;
+      const disabled = it === "Load Last Save" && !last;
+      const color = disabled ? "#555" : (sel ? "#fff" : "#9fe");
+      putText(g, 6, 23 + i * 2, (sel ? "▸ " : "  ") + it, color);
+    });
+    putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
+  }
+
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
     items.forEach((it, i) => {
