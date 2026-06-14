@@ -2513,6 +2513,15 @@ export class Voidwake {
       putText(g, panelX, cy2 + 2, "press T to cycle", "#888");
     }
 
+    // Gunner status block — only shown when a gunner is hired.
+    if (p.gunner) {
+      const gy0 = cy2 + 6;
+      putText(g, panelX, gy0, "[ GUNNER ]", "#7CFC00");
+      putText(g, panelX, gy0 + 1, `${p.gunner.name}`, "#fff");
+      putText(g, panelX, gy0 + 2, `${p.gunner.species} · ${p.gunner.gender}`, "#9fe");
+      putText(g, panelX, gy0 + 3, p.gunner.enabled ? "AUTO  (G to disable)" : "STANDBY (G to enable)", p.gunner.enabled ? "#fc6" : "#888");
+    }
+
     // --- Controls reminder, anchored to the bottom of the right panel ------
     // Always visible so new pilots aren't stranded looking for the keymap.
     const cTop = vpBottom - 16;
