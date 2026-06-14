@@ -1417,17 +1417,27 @@ export class Voidwake {
 
   // Title screen ------------------------------------------------------------
   renderTitle(g: Cell[][]) {
+    // Clean block-letter banner. Each glyph is exactly 9 cols wide so the
+    // whole word reads as "V O I D W A K E" instead of a tangled diagonal.
     const banner = [
-      " __     __   ___   ___   __   __     ___   _  _____ ",
-      " \\ \\   / /  / _ \\ |_ _| |  \\ /  \\   / / \\ | |/ / __|",
-      "  \\ \\_/ /  | (_) | | |  | |\\ V /\\ \\/ /|  \\| ' <| _| ",
-      "   \\___/    \\___/ |___| |_| \\_/  \\__/ |_|\\_|_|\\_\\___|",
+      "██╗   ██╗ ██████╗ ██╗██████╗ ██╗    ██╗ █████╗ ██╗  ██╗███████╗",
+      "██║   ██║██╔═══██╗██║██╔══██╗██║    ██║██╔══██╗██║ ██╔╝██╔════╝",
+      "██║   ██║██║   ██║██║██║  ██║██║ █╗ ██║███████║█████╔╝ █████╗  ",
+      "╚██╗ ██╔╝██║   ██║██║██║  ██║██║███╗██║██╔══██║██╔═██╗ ██╔══╝  ",
+      " ╚████╔╝ ╚██████╔╝██║██████╔╝╚███╔███╔╝██║  ██║██║  ██╗███████╗",
+      "  ╚═══╝   ╚═════╝ ╚═╝╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝",
     ];
-    banner.forEach((line, i) => putText(g, 4, 2 + i, line, "#7CFC00"));
-    putText(g, 4, 7, "An ASCII space simulation — v" + VERSION, "#5fc")
+    const cols = g[0].length;
+    const bx = Math.max(2, Math.floor((cols - banner[0].length) / 2));
+    banner.forEach((line, i) => putText(g, bx, 2 + i, line, "#7CFC00"));
+    const tag = "— ASCII SPACE SIMULATION —";
+    putText(g, Math.floor((cols - tag.length) / 2), 2 + banner.length, tag, "#5fc");
+    putText(g, Math.floor((cols - ("v" + VERSION).length) / 2), 3 + banner.length, "v" + VERSION, "#678");
+    const menuTop = 5 + banner.length + 2;
     this.titleItems.forEach((it, i) => {
       const sel = i === this.menuCursor;
-      putText(g, 6, 12 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      const label = (sel ? "▸ " : "  ") + it;
+      putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
