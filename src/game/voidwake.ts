@@ -1354,6 +1354,12 @@ export class Voidwake {
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
           this.beep(220, 0.04, "sawtooth");
+          // Gunner reacts to incoming fire, throttled so it isn't spammy.
+          if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0) {
+            p.gunner.nextBarkAt = 4 + Math.random() * 3;
+            this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+              GUNNER_BARKS_HIT[Math.floor(Math.random() * GUNNER_BARKS_HIT.length)], "#ff8a8a");
+          }
           if (p.ship.hull <= 0) {
             const shooter = this.entities.find((x) => x.id === e.ownerId);
             const killer = shooter?.name ?? e.faction;
