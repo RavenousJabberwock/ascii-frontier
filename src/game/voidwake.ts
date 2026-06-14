@@ -1252,6 +1252,8 @@ export class Voidwake {
       `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
       `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
       `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
+      `Show FPS: ${this.options.showFps ? "ON" : "OFF"}`,
+      `Autosave: ${this.options.autosave ? "ON" : "OFF"}`,
       `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
@@ -1272,15 +1274,18 @@ export class Voidwake {
     if (i === 2 && (left || right)) this.options.cheat = !this.options.cheat;
     if (i === 3 && (left || right)) this.options.mouseSteer = !this.options.mouseSteer;
     if (i === 4) this.options.mouseSensitivity = Math.max(0.1, Math.min(3, this.options.mouseSensitivity + (right ? 0.1 : left ? -0.1 : 0)));
-    if (i === 5) this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 6) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 7) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 8) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
+    if (i === 5 && (left || right)) this.options.showFps = !this.options.showFps;
+    if (i === 6 && (left || right)) this.options.autosave = !this.options.autosave;
+    if (i === 7) this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 8) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 9) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 10) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
     if (this.input.consume("enter")) {
       if (items[i].startsWith("Reset")) this.options.keybinds = { ...DEFAULT_KEYBINDS };
       if (items[i] === "Back") this.screen = this.player ? "menu" : "title";
     }
   }
+
 
 
   // --- Save / Load screens -------------------------------------------------
