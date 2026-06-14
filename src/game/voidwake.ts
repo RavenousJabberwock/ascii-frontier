@@ -1038,13 +1038,20 @@ export class Voidwake {
     // Stations dock instead of colliding at the dock-range we use elsewhere.
     if (!this.options.cheat) {
       for (const e of this.entities) {
-        if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid") continue;
-        const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : 10;
+        if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
+        const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
         if (d < radius) {
           // Push the player back to the surface and apply scaled damage.
           const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
+          if (e.kind === "station") {
+            // Stations bump but don't kill; remind the pilot to dock.
+            p.throttle = Math.min(p.throttle, 0.1);
+            this.pushLog(`Bumped ${e.name} — press F to dock.`);
+            this.beep(220, 0.06, "square");
+            continue;
+          }
           const dmg = (e.kind === "star" ? 120 : 25) * this.dmgScale() * dt * 4;
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
@@ -1587,12 +1594,16 @@ export class Voidwake {
     // Project entities onto viewport using player heading as the camera
     const cy = Math.cos(p.heading.yaw), sy = Math.sin(p.heading.yaw);
     const cp = Math.cos(p.heading.pitch), sp = Math.sin(p.heading.pitch);
+    // World radius per entity kind — used to scale on-screen sprites with
+    // distance so big objects (stars, stations, planets) read as solid.
+    const worldRadius: Record<string, number> = {
+      star: 40, planet: 30, station: 18, asteroid: 8,
+      ship: 4, bullet: 0.5,
+    };
+    // Sort far→near so close objects overdraw distant ones.
+    const projected: { e: Entity; sx: number; sy: number; z: number; r: number }[] = [];
     for (const e of this.entities) {
-      if (e.kind === "bullet" && e.faction === "player") {
-        // small flicker
-      }
       const r = V.sub(e.pos, p.pos);
-      // rotate -yaw around Y, then -pitch around X
       const x1 = cy * r.x - sy * r.z;
       const z1 = sy * r.x + cy * r.z;
       const y1 = cp * r.y - sp * z1;
@@ -1600,8 +1611,53 @@ export class Voidwake {
       if (z2 <= 1) continue; // behind camera
       const sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
       const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
-      if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
-      g[sy2][sx] = { ch: GLYPHS[e.kind], color: colorFor(e.kind) };
+      // Apparent radius in grid cells. CELL_H/CELL_W ≈ 1.78 → squash vertically.
+      const wr = worldRadius[e.kind] ?? 1;
+      const rCells = (wr / z2) * vw * 0.7;
+      projected.push({ e, sx, sy: sy2, z: z2, r: rCells });
+    }
+    projected.sort((a, b) => b.z - a.z);
+    for (const sp of projected) {
+      const { e, sx, sy: sy2, r: rCells } = sp;
+      const glyph = GLYPHS[e.kind];
+      const color = colorFor(e.kind);
+      if (rCells < 1.2) {
+        // Far away: single glyph if on-screen.
+        if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
+        g[sy2][sx] = { ch: glyph, color };
+        continue;
+      }
+      // Close enough to draw a filled sprite. Squash Y by cell aspect.
+      const rx = Math.max(1, Math.round(rCells));
+      const ry = Math.max(1, Math.round(rCells * (CELL_W / CELL_H)));
+      // Pick a fill character per kind for a recognizable silhouette.
+      const fill =
+        e.kind === "star" ? "*" :
+        e.kind === "planet" ? "O" :
+        e.kind === "station" ? "#" :
+        e.kind === "asteroid" ? "%" : glyph;
+      const edge =
+        e.kind === "station" ? "=" :
+        e.kind === "planet" ? "o" :
+        e.kind === "star" ? "+" : fill;
+      for (let dy = -ry; dy <= ry; dy++) {
+        for (let dx = -rx; dx <= rx; dx++) {
+          // Ellipse test in normalized space.
+          const nx = dx / rx, ny = dy / ry;
+          const d2 = nx * nx + ny * ny;
+          if (d2 > 1) continue;
+          const gx = sx + dx, gy = sy2 + dy;
+          if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+          const onEdge = d2 > 0.7;
+          g[gy][gx] = { ch: onEdge ? edge : fill, color };
+        }
+      }
+      // Label big objects centered just below the sprite.
+      if (rCells >= 3 && e.name) {
+        const lx = sx - Math.floor(e.name.length / 2);
+        const ly = sy2 + ry + 1;
+        if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe");
+      }
     }
 
     // Crosshair
