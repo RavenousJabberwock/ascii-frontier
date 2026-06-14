@@ -654,8 +654,20 @@ export class Voidwake {
   // --- Destroyed (death) screen -------------------------------------------
   destroyedItems = ["Load Last Save", "Return to Main Menu"];
   updateDestroyed() {
+    // Brief grace period so the player actually reads the banner rather than
+    // dismissing it with a held key from the moment of death.
+    const now = performance.now() / 1000;
+    const grace = 1.0;
+    if (now - this.destroyedAt < grace) {
+      // Drain any input that fired during the death frame.
+      this.input.consume("enter");
+      this.input.consume("arrowup");
+      this.input.consume("arrowdown");
+      return;
+    }
     this.menuNav(this.destroyedItems.length);
     if (this.input.consume("enter")) {
+
       const c = this.destroyedItems[this.menuCursor];
       if (c === "Load Last Save") {
         const saves = listSaves();
