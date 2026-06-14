@@ -784,7 +784,11 @@ export class Voidwake {
           const dmg = 6 * this.dmgScale();
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
-          if (p.ship.hull <= 0) { this.pushLog("Your ship was destroyed."); this.screen = "title"; this.player = null; }
+          if (p.ship.hull <= 0) {
+            this.pushLog("Your ship was destroyed.");
+            this.screen = "destroyed";
+            this.menuCursor = 0;
+          }
         }
         return false;
       }
