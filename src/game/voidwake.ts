@@ -1250,6 +1250,8 @@ export class Voidwake {
       `Difficulty: ${this.options.difficulty}`,
       `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
       `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
+      `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
+      `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
       `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
@@ -1257,6 +1259,7 @@ export class Voidwake {
       `Reset Keybinds`,
       "Back",
     ];
+
     this.renderListMenu(g, "OPTIONS", items);
     putText(g, 4, g.length - 2, "←/→ change   ↑/↓ field   ENTER confirm", "#888");
   }
