@@ -1110,6 +1110,7 @@ export class Voidwake {
       case "save": this.renderSave(grid); break;
       case "station": this.renderStation(grid); break;
       case "quit-confirm": this.renderQuitConfirm(grid); break;
+      case "destroyed": this.renderDestroyed(grid); break;
     }
 
     // Paint grid
