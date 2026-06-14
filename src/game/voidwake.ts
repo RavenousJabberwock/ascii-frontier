@@ -774,6 +774,14 @@ export class Voidwake {
   updatePlaying(dt: number) {
     const p = this.player;
     if (!p) { this.screen = "title"; return; }
+    // Safety net: if hull dropped to 0 by any path, go to destroyed screen.
+    if (p.ship.hull <= 0 && !this.options.cheat) {
+      this.pushLog("Your ship was destroyed.");
+      this.screen = "destroyed";
+      this.destroyedAt = performance.now() / 1000;
+      this.menuCursor = 0;
+      return;
+    }
     const k = this.options.keybinds;
     const keys = this.input.keys;
 
@@ -784,6 +792,20 @@ export class Voidwake {
     if (keys.has(k.yawRight)) p.heading.yaw += dt * 1.2;
     if (keys.has(k.pitchUp)) p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0);
     if (keys.has(k.pitchDown)) p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0);
+
+    // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
+    // A small dead-zone in the middle prevents drift when the cursor sits idle.
+    if (this.options.mouseSteer && this.input.mouseInside) {
+      const sens = this.options.mouseSensitivity;
+      const dz = 0.08; // dead-zone radius in normalized coords
+      const mx = this.input.mouseNX;
+      const my = this.input.mouseNY;
+      const ax = Math.abs(mx) > dz ? (mx - Math.sign(mx) * dz) : 0;
+      const ay = Math.abs(my) > dz ? (my - Math.sign(my) * dz) : 0;
+      p.heading.yaw += ax * dt * 1.4 * sens;
+      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ay * dt * 1.1 * sens));
+    }
+
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
