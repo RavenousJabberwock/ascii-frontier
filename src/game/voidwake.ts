@@ -272,6 +272,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   jettison: "j",         // drop one unit of the highest-volume cargo type
   pause: "p",            // toggle pause while in flight
   menu: "escape",
+  toggleGunner: "g",     // toggle hired gunner's autopilot rules
 };
 
 
