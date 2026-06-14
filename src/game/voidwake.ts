@@ -1779,21 +1779,138 @@ export class Voidwake {
     this.menuNav(this.stationItems.length);
     if (this.input.consume("enter")) {
       const c = this.stationItems[this.menuCursor];
-      if (c.startsWith("Sell Ore")) {
+  // --- Station menu (paged) ------------------------------------------------
+  // Pages: main → market | weapons | modules | crew. Cursor resets between
+  // pages. Prices come from the cached StationStock for this station.
+  stationItems = ["Market", "Weapon Bay", "Module Shop", "Crew", "Undock"];
+
+  // Build the visible item list for the current station page so the
+  // renderer and update loop stay in lockstep (cursor indexes line up).
+  buildStationLines(): string[] {
+    const p = this.player!;
+    const sid = this.dockedStationId;
+    if (sid == null) return ["Undock"];
+    const stock = this.getStock(sid);
+    if (this.stationPage === "main") return this.stationItems;
+    if (this.stationPage === "market") {
+      const ore = p.cargo.ore ?? 0;
+      const fuelNeed = Math.ceil(p.ship.fuelMax - p.ship.fuel);
+      const fuelCost = fuelNeed * stock.fuelPrice;
+      return [
+        `Sell all ore (${ore} × ${stock.orePrice}cr = ${ore * stock.orePrice}cr)`,
+        `Buy fuel (${fuelNeed}u × ${stock.fuelPrice}cr = ${fuelCost}cr)`,
+        "Back",
+      ];
+    }
+    if (this.stationPage === "weapons") {
+      return [
+        ...stock.weapons.map((w) => {
+          const def = WEAPONS.find((x) => x.id === w.id)!;
+          const owned = p.ship.weaponId === w.id ? " (equipped)" : "";
+          return `${def.name} — ${w.price}cr${owned}`;
+        }),
+        "Back",
+      ];
+    }
+    if (this.stationPage === "modules") {
+      return [
+        ...stock.modules.map((m) => {
+          const owned = p.ship.modules.includes(m.id) ? " (installed)" : "";
+          return `${m.name} — ${m.price}cr — ${m.desc}${owned}`;
+        }),
+        "Back",
+      ];
+    }
+    if (this.stationPage === "crew") {
+      const hasGunner = !!p.gunner;
+      return [
+        hasGunner
+          ? `Dismiss ${p.gunner!.name}`
+          : `Recruit gunner — ${stock.gunnerFee}cr`,
+        "Back",
+      ];
+    }
+    return ["Back"];
+  }
+
+  updateStation() {
+    const p = this.player; if (!p) { this.screen = "title"; return; }
+    if (this.dockedStationId == null) { this.screen = "playing"; return; }
+    const lines = this.buildStationLines();
+    this.menuNav(lines.length);
+    if (!this.input.consume("enter")) return;
+    const i = this.menuCursor;
+    const sid = this.dockedStationId;
+    const stock = this.getStock(sid);
+
+    if (this.stationPage === "main") {
+      const c = this.stationItems[i];
+      if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
+      else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
+      else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
+      else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
+      else if (c === "Undock")  { this.screen = "playing"; this.dockedStationId = null; }
+      return;
+    }
+
+    if (lines[i] === "Back") { this.stationPage = "main"; this.menuCursor = 0; return; }
+
+    if (this.stationPage === "market") {
+      if (i === 0) {
         const ore = p.cargo.ore ?? 0;
-        if (ore > 0) { p.credits += ore * 10; p.cargo.ore = 0; this.pushLog(`Sold ${ore} ore.`); }
-      } else if (c.startsWith("Buy Fuel")) {
+        if (ore > 0) {
+          p.credits += ore * stock.orePrice;
+          p.cargo.ore = 0;
+          this.pushLog(`Sold ${ore} ore for ${ore * stock.orePrice}cr.`);
+        } else this.pushLog("No ore to sell.");
+      } else if (i === 1) {
         const need = p.ship.fuelMax - p.ship.fuel;
-        const cost = Math.ceil(need) * 5;
+        const cost = Math.ceil(need) * stock.fuelPrice;
+        if (cost === 0) { this.pushLog("Tanks already full."); return; }
         if (p.credits >= cost) { p.credits -= cost; p.ship.fuel = p.ship.fuelMax; this.pushLog(`Refueled (${cost}cr).`); }
         else this.pushLog("Not enough credits.");
-      } else if (c.startsWith("Refit")) {
-        const i = WEAPONS.findIndex((w) => w.id === p.ship.weaponId);
-        p.ship.weaponId = WEAPONS[(i + 1) % WEAPONS.length].id;
-        this.pushLog(`Equipped ${WEAPONS.find((w) => w.id === p.ship.weaponId)!.name}.`);
-      } else if (c === "Undock") {
-        this.screen = "playing";
       }
+      return;
+    }
+
+    if (this.stationPage === "weapons") {
+      const offer = stock.weapons[i];
+      if (!offer) return;
+      if (p.ship.weaponId === offer.id) { this.pushLog("Already equipped."); return; }
+      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= offer.price;
+      p.ship.weaponId = offer.id;
+      this.pushLog(`Equipped ${WEAPONS.find((w) => w.id === offer.id)!.name}.`);
+      return;
+    }
+
+    if (this.stationPage === "modules") {
+      const offer = stock.modules[i];
+      if (!offer) return;
+      if (p.ship.modules.includes(offer.id)) { this.pushLog("Already installed."); return; }
+      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= offer.price;
+      p.ship.modules.push(offer.id);
+      // Apply passive caps immediately so the player sees the change.
+      if (offer.id === "cargo-expander") p.ship.cargoMax += 12;
+      if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
+      this.pushLog(`Installed ${offer.name}.`);
+      return;
+    }
+
+    if (this.stationPage === "crew") {
+      if (i !== 0) return;
+      if (p.gunner) {
+        this.pushLog(`${p.gunner.name} signed off.`);
+        p.gunner = undefined;
+      } else {
+        if (p.credits < stock.gunnerFee) { this.pushLog("Not enough credits."); return; }
+        p.credits -= stock.gunnerFee;
+        p.gunner = generateGunner(Math.random);
+        this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
+        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`, "On board, Cmdr. Press G to toggle me.", "#fc6");
+      }
+      return;
     }
   }
 
