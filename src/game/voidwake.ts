@@ -1376,7 +1376,9 @@ export class Voidwake {
       case "station": this.renderStation(grid); break;
       case "quit-confirm": this.renderQuitConfirm(grid); break;
       case "destroyed": this.renderDestroyed(grid); break;
+      case "crashed": this.renderCrashed(grid); break;
     }
+
 
     // Paint grid
     ctx.font = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
