@@ -1276,7 +1276,18 @@ export class Voidwake {
     if (this.input.consume(k.dock)) this.tryDock();
     // Open station menu shortcut
     if (this.input.consume(k.station)) this.tryDock();
+    // Toggle gunner autopilot (if hired).
+    if (this.input.consume(k.toggleGunner) && p.gunner) {
+      p.gunner.enabled = !p.gunner.enabled;
+      const tag = `Gunner ${p.gunner.name.split(" ")[0]}`;
+      this.pushChatter(tag, p.gunner.enabled ? "Standing by, weapons hot." : "Standing down.", "#fc6");
+    }
     void k.mission;
+
+    // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
+    this.updateGunner(dt, fwd);
+    this.pickupLoot();
+    this.tickAmbientChatter(dt);
 
     // Autosave on a timer (rotates into the dedicated "autosave" slot).
     this.autosaveTimer += dt;
