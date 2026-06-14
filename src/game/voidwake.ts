@@ -61,7 +61,24 @@ const GLYPHS: Record<string, string> = {
   hostile: "H",
   bullet: "·",
   player: "^",
+  loot: "$",
 };
+
+// ---- Flavor data: names / barks / broadcasts -----------------------------
+// Used by the chatter system and gunner recruitment. Keep these small lists
+// punchy — they're cycled randomly so repetition gets old fast.
+const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Niri","Otho","Pell","Quill","Sable","Yara"];
+const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
+const GUNNER_BARKS_HOSTILE  = ["On him!","Got the lock — firing!","He's dust!","Eat plasma!","Burn, raider!"];
+const GUNNER_BARKS_MINE     = ["Nice vein.","Chewing rock.","Mining now, hold steady."];
+const GUNNER_BARKS_DOCK     = ["Suggest we dock here, Cmdr.","That station looks safe. Dock?","Could use a stretch — dock?"];
+const GUNNER_BARKS_HIT      = ["We're taking fire!","Shields buckling!","Hold her steady!"];
+const GUNNER_BARKS_IDLE     = ["Quiet out here.","Strange stars this sector.","I'd kill for hot coffee.","You ever miss dirtside?"];
+const HOSTILE_TAUNTS        = ["You're cargo now.","Should've stayed dirtside.","Drift well, scum.","I see you, little ship."];
+const FRIENDLY_GREETS       = ["Safe vectors, Cmdr.","Federation thanks you.","Fly true out there."];
+const NEUTRAL_CHATTER       = ["Guild traffic, hold lanes.","Got rocks to sell, push off.","Mind your wake, pilot."];
+const STATION_BROADCASTS    = ["...automated beacon: dock fees waived this cycle.","Approach vector clear. Welcome.","Maintenance bay open for refits."];
+const PLANET_HAILS          = ["Surface comms crackle faintly.","Atmospheric thermals reported.","Tradehouse requests manifests."];
 
 const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
@@ -92,7 +109,8 @@ type EntityKind =
   | "friendly"
   | "neutral"
   | "hostile"
-  | "bullet";
+  | "bullet"
+  | "loot";
 
 interface Vec3 { x: number; y: number; z: number }
 
@@ -114,6 +132,10 @@ interface Entity {
   ownerId?: number;          // for bullets
   ttl?: number;              // for bullets
   ttlAt?: number;
+  // Loot canister payload (kind === "loot"). Picked up on fly-through.
+  loot?: { credits?: number; ore?: number };
+  // Cosmetic: which palette slot ship variants use for chatter line tagging.
+  lastChatterAt?: number;
 }
 
 interface PlayerChar {
@@ -137,6 +159,20 @@ interface PlayerShip {
   modules: string[];
 }
 
+// A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
+// and suggest docking via chatter. See "Smart with rules" autopilot in
+// updateGunner(). Persisted on PlayerState so saves keep the crew.
+interface Gunner {
+  name: string;
+  species: string;
+  gender: string;
+  enabled: boolean;           // toggled by G key
+  hiredAt: number;            // ms timestamp, mostly cosmetic
+  cooldown: number;           // independent fire cadence
+  share: number;              // 0..1 — fraction of credits skimmed at docks
+  nextBarkAt: number;         // throttle idle barks
+}
+
 interface PlayerState {
   char: PlayerChar;
   ship: PlayerShip;
@@ -150,6 +186,10 @@ interface PlayerState {
   cooldown: number;
   mission?: Mission;
   lastSaveAt: number;
+  // New since 0.2: optional hired gunner, faction reputation, lifetime kill count.
+  gunner?: Gunner;
+  reputation?: Record<string, number>;
+  kills?: number;
 }
 
 type MissionKind = "deliver" | "destroy" | "scan";
@@ -162,6 +202,28 @@ interface Mission {
   cargoQty?: number;
   reward: number;
   done: boolean;
+}
+
+// Per-station market state. Generated deterministically from the station id
+// so prices and stock are stable between visits within a single session, but
+// vary station-to-station (a refinery sells cheap fuel, a frontier outpost
+// charges double). Persisted lazily in Voidwake.stationStocks at runtime.
+interface StationStock {
+  fuelPrice: number;          // cr per unit
+  orePrice: number;           // cr per unit sold to station
+  weapons: { id: string; price: number }[];
+  modules: { id: string; name: string; price: number; desc: string }[];
+  gunnerFee: number;          // one-time hiring cost
+  rumor: string;              // flavor line for the station screen
+}
+
+// One line in the comms / chatter feed. "who" is the speaker label
+// (e.g. "Gunner Mira", "Raider Drak", "Beacon"), "color" tints the source.
+interface ChatterLine {
+  t: number;                  // performance.now() / 1000 when posted
+  who: string;
+  msg: string;
+  color: string;
 }
 
 interface Options {
@@ -210,6 +272,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   jettison: "j",         // drop one unit of the highest-volume cargo type
   pause: "p",            // toggle pause while in flight
   menu: "escape",
+  toggleGunner: "g",     // toggle hired gunner's autopilot rules
 };
 
 
@@ -328,7 +391,7 @@ const V = {
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
-  if (e.kind === "station" || e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet") return;
+  if (e.kind === "station" || e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot") return;
   if (!e.hull || e.hull <= 0) return;
 
   const distToPlayer = V.len(V.sub(player.pos, e.pos));
@@ -411,6 +474,8 @@ function makePlayer(char: PlayerChar, hullId: string): PlayerState {
     throttle: 0,
     cooldown: 0,
     lastSaveAt: Date.now(),
+    reputation: { federation: 0, guild: 0, pirate: 0 },
+    kills: 0,
   };
 }
 
@@ -424,6 +489,86 @@ function awardXP(p: PlayerState, n: number) {
 function cargoTotal(p: PlayerState) {
   return Object.values(p.cargo).reduce((a, b) => a + b, 0);
 }
+
+// ---- Faction reputation helpers ------------------------------------------
+// Reputation is a simple integer per faction. Killing a pirate raises
+// Federation/Guild standing slightly; killing a friendly/neutral tanks it.
+function adjustRep(p: PlayerState, faction: string, delta: number) {
+  if (!p.reputation) p.reputation = { federation: 0, guild: 0, pirate: 0 };
+  p.reputation[faction] = (p.reputation[faction] ?? 0) + delta;
+}
+function repLabel(v: number): string {
+  if (v >= 50) return "Allied";
+  if (v >= 20) return "Friendly";
+  if (v >= 5) return "Liked";
+  if (v <= -50) return "KOS";
+  if (v <= -20) return "Hostile";
+  if (v <= -5) return "Wary";
+  return "Neutral";
+}
+
+// ---- Gunner factory -------------------------------------------------------
+function generateGunner(rng: () => number): Gunner {
+  const first = GUNNER_FIRST[Math.floor(rng() * GUNNER_FIRST.length)];
+  const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
+  const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
+  const species = SPECIES[Math.floor(rng() * SPECIES.length)];
+  return {
+    name: `${first} ${last}`,
+    species,
+    gender,
+    enabled: true,
+    hiredAt: Date.now(),
+    cooldown: 0,
+    share: 0.0,    // currently cosmetic; reserved for future "wages"
+    nextBarkAt: 0,
+  };
+}
+
+// ---- Station market generation -------------------------------------------
+// Deterministic per station id so revisiting a station shows the same
+// market. Stock variety is intentional — frontier outposts charge more
+// for fuel, refineries pay better for ore, etc.
+const MODULE_CATALOG = [
+  { id: "cargo-expander",  name: "Cargo Expander",  price: 800,  desc: "+12 cargo capacity" },
+  { id: "shield-booster",  name: "Shield Booster",  price: 1100, desc: "+25 shield max" },
+  { id: "afterburner-od",  name: "Afterburner OD",  price: 650,  desc: "boost +20% (cheap)" },
+  { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
+  { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
+];
+
+function generateStationStock(stationId: number): StationStock {
+  const rng = mulberry32(stationId * 9176 + 7);
+  const fuelPrice = 4 + Math.floor(rng() * 5);      // 4..8
+  const orePrice  = 7 + Math.floor(rng() * 8);      // 7..14
+  // Each station carries 1-3 weapons and 1-3 modules from the catalog.
+  const shuffled = <T,>(arr: T[]) => arr.slice().sort(() => rng() - 0.5);
+  const weapons = shuffled(WEAPONS).slice(0, 1 + Math.floor(rng() * 3))
+    .map((w) => ({ id: w.id, price: Math.round((w.dmg * 40 + w.range * 0.4) * (0.8 + rng() * 0.5)) }));
+  const modules = shuffled(MODULE_CATALOG).slice(0, 1 + Math.floor(rng() * 3))
+    .map((m) => ({ ...m, price: Math.round(m.price * (0.85 + rng() * 0.4)) }));
+  const gunnerFee = 200 + Math.floor(rng() * 400);
+  const rumors = [
+    "Trader gossip: pirate wing prowling outer belt.",
+    "Surveyors report dense ore in deep field.",
+    "Federation patrols thin this rotation.",
+    "Bounty board: high-value raider sighted.",
+    "Refinery shift change — ore prices spike soon.",
+  ];
+  return {
+    fuelPrice, orePrice, weapons, modules, gunnerFee,
+    rumor: rumors[Math.floor(rng() * rumors.length)],
+  };
+}
+
+// Effective ship caps after module installs.
+function effectiveCargoMax(p: PlayerState): number {
+  const base = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.cargo ?? p.ship.cargoMax;
+  const expanders = p.ship.modules.filter((m) => m === "cargo-expander").length;
+  return base + expanders * 12;
+}
+
+
 
 // =============================================================================
 // 7. Input
@@ -544,6 +689,7 @@ function colorFor(kind: EntityKind): string {
     case "neutral": return "#dddddd";
     case "hostile": return "#ff5555";
     case "bullet": return "#fffa86";
+    case "loot": return "#ffe066";
   }
 }
 
@@ -689,6 +835,16 @@ export class Voidwake {
   // `autosaveInterval` seconds while in flight.
   autosaveTimer = 0;
   autosaveInterval = 120; // seconds
+
+  // Per-station market state, lazily generated on first dock and cached
+  // for the rest of the session. Keyed by station entity id.
+  stationStocks = new Map<number, StationStock>();
+  // Comms / chatter feed (max ~6 lines kept). See pushChatter / renderChatter.
+  chatter: ChatterLine[] = [];
+  // Cursor in the multi-page station screen.
+  stationPage: "main" | "market" | "weapons" | "modules" | "crew" = "main";
+  // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
+  private _nextAmbientChatterAt = 0;
   // Simple FPS counter (toggleable in Options).
   fps = 0;
   private _fpsAcc = 0;
@@ -766,6 +922,20 @@ export class Voidwake {
   pushLog(msg: string) {
     this.log.push({ t: performance.now() / 1000, msg });
     if (this.log.length > 6) this.log.shift();
+  }
+
+  // Append a single line to the comms / chatter feed shown in the COMMS box.
+  // Newest line floats to the top. Capped at 6 lines so it never crowds the HUD.
+  pushChatter(who: string, msg: string, color = "#9fe") {
+    this.chatter.unshift({ t: performance.now() / 1000, who, msg, color });
+    if (this.chatter.length > 6) this.chatter.pop();
+  }
+
+  // Cached station market lookup. Generates on first request.
+  getStock(stationId: number): StationStock {
+    let s = this.stationStocks.get(stationId);
+    if (!s) { s = generateStationStock(stationId); this.stationStocks.set(stationId, s); }
+    return s;
   }
 
   // Centralized death handler. Pass a human reason ("Killed by Hostile Reaver",
@@ -1106,7 +1276,18 @@ export class Voidwake {
     if (this.input.consume(k.dock)) this.tryDock();
     // Open station menu shortcut
     if (this.input.consume(k.station)) this.tryDock();
+    // Toggle gunner autopilot (if hired).
+    if (this.input.consume(k.toggleGunner) && p.gunner) {
+      p.gunner.enabled = !p.gunner.enabled;
+      const tag = `Gunner ${p.gunner.name.split(" ")[0]}`;
+      this.pushChatter(tag, p.gunner.enabled ? "Standing by, weapons hot." : "Standing down.", "#fc6");
+    }
     void k.mission;
+
+    // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
+    this.updateGunner(dt, fwd);
+    this.pickupLoot();
+    this.tickAmbientChatter(dt);
 
     // Autosave on a timer (rotates into the dedicated "autosave" slot).
     this.autosaveTimer += dt;
@@ -1173,6 +1354,12 @@ export class Voidwake {
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
           this.beep(220, 0.04, "sawtooth");
+          // Gunner reacts to incoming fire, throttled so it isn't spammy.
+          if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0) {
+            p.gunner.nextBarkAt = 4 + Math.random() * 3;
+            this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+              GUNNER_BARKS_HIT[Math.floor(Math.random() * GUNNER_BARKS_HIT.length)], "#ff8a8a");
+          }
           if (p.ship.hull <= 0) {
             const shooter = this.entities.find((x) => x.id === e.ownerId);
             const killer = shooter?.name ?? e.faction;
@@ -1195,6 +1382,31 @@ export class Voidwake {
             this.pushLog(`Destroyed ${t.name}.`);
             awardXP(p, 25);
             p.credits += 50;
+            p.kills = (p.kills ?? 0) + 1;
+            // Faction reputation: smiting pirates curries favor with the
+            // Federation and Guild; popping civilians sours both.
+            if (t.faction === "pirate") {
+              adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
+            } else if (t.faction === "federation") {
+              adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
+            } else if (t.faction === "guild") {
+              adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
+            }
+            // Loot canister: small chance of credits + ore drop. Floats on
+            // the kill's velocity so the player can chase it down.
+            if (Math.random() < 0.85) {
+              this.entities.push({
+                id: nextId(), kind: "loot", name: "canister",
+                pos: { ...t.pos },
+                vel: V.scale(t.vel, 0.25),
+                faction: "wreck",
+                ttlAt: performance.now() / 1000 + 45,
+                loot: {
+                  credits: 20 + Math.floor(Math.random() * 80),
+                  ore: Math.floor(Math.random() * 4),
+                },
+              });
+            }
             // Mission progress
             if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
               p.mission.done = true;
@@ -1244,6 +1456,10 @@ export class Voidwake {
     this.pushLog("Mined 1 ore.");
   }
 
+  // Currently-docked station id, or null while flying. Drives the station
+  // menu's price tables (each station has its own market).
+  dockedStationId: number | null = null;
+
   tryDock() {
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
@@ -1253,10 +1469,13 @@ export class Voidwake {
     if (p.throttle > 0.05) { this.pushLog("Reduce throttle to dock."); return; }
     this.screen = "station";
     this.menuCursor = 0;
+    this.stationPage = "main";
+    this.dockedStationId = t.id;
     // Refuel & repair on dock (free)
     p.ship.fuel = p.ship.fuelMax;
     p.ship.hull = p.ship.hullMax;
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
+    this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.beep(660, 0.08, "sine"); this.beep(990, 0.08, "sine");
 
     // Hand in mission
@@ -1309,6 +1528,138 @@ export class Voidwake {
       if ((p.cargo[m.cargoItem!] ?? 0) >= (m.cargoQty ?? 0)) m.done = true;
     }
   }
+
+  // --- Gunner autopilot ---------------------------------------------------
+  // "Smart with rules" (selected during character creation discussion):
+  //  - Auto-fires only on hostiles that are centered in the reticle and in range.
+  //  - Auto-mines an asteroid centered in the reticle if cargo isn't full.
+  //  - Never auto-docks; instead, posts a "suggest we dock" chatter line.
+  // Targeting uses forward dot-product, not the cycled targetId, so the
+  // gunner reacts to whatever you actually point at.
+  updateGunner(dt: number, fwd: Vec3) {
+    const p = this.player; if (!p || !p.gunner || !p.gunner.enabled) return;
+    if (this.options.peaceful) return;
+    const g = p.gunner;
+    g.cooldown -= dt;
+    g.nextBarkAt -= dt;
+
+    // Pick the entity most aligned with forward (smallest angle), within 800u.
+    let best: Entity | null = null;
+    let bestDot = 0.94;       // cosine threshold (~20° cone)
+    let bestDist = Infinity;
+    for (const e of this.entities) {
+      if (e.kind !== "hostile" && e.kind !== "asteroid" && e.kind !== "station") continue;
+      if ((e.hull ?? 1) <= 0 && e.kind === "hostile") continue;
+      const rel = V.sub(e.pos, p.pos);
+      const d = V.len(rel);
+      if (d < 1 || d > 800) continue;
+      const dotv = (rel.x * fwd.x + rel.y * fwd.y + rel.z * fwd.z) / d;
+      if (dotv > bestDot) { bestDot = dotv; best = e; bestDist = d; }
+    }
+    if (!best) return;
+
+    const tag = `Gunner ${g.name.split(" ")[0]}`;
+    if (best.kind === "hostile") {
+      const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+      if (bestDist > w.range) return;
+      if (g.cooldown > 0) return;
+      g.cooldown = w.cooldown * 1.15;   // slightly slower than manual fire
+      this.entities.push({
+        id: nextId(), kind: "bullet", name: "shot",
+        pos: { ...p.pos }, vel: V.scale(fwd, 260),
+        faction: "player", ownerId: -2, ttl: 2,
+        ttlAt: performance.now() / 1000 + 2,
+      });
+      this.beep(820, 0.04, "square");
+      if (g.nextBarkAt <= 0) {
+        g.nextBarkAt = 2.5 + Math.random() * 2;
+        this.pushChatter(tag, GUNNER_BARKS_HOSTILE[Math.floor(Math.random() * GUNNER_BARKS_HOSTILE.length)], "#ff8a8a");
+      }
+    } else if (best.kind === "asteroid") {
+      if (bestDist > 200) return;
+      if (g.cooldown > 0) return;
+      if (cargoTotal(p) >= p.ship.cargoMax) return;
+      if ((best.ore ?? 0) <= 0) return;
+      g.cooldown = 0.35;
+      best.ore!--;
+      p.cargo.ore = (p.cargo.ore ?? 0) + 1;
+      awardXP(p, 1);
+      if (g.nextBarkAt <= 0) {
+        g.nextBarkAt = 4 + Math.random() * 3;
+        this.pushChatter(tag, GUNNER_BARKS_MINE[Math.floor(Math.random() * GUNNER_BARKS_MINE.length)], "#ffd066");
+      }
+    } else if (best.kind === "station") {
+      if (bestDist > 400) return;
+      if (g.nextBarkAt > 0) return;
+      g.nextBarkAt = 12 + Math.random() * 8;
+      this.pushChatter(tag, GUNNER_BARKS_DOCK[Math.floor(Math.random() * GUNNER_BARKS_DOCK.length)], "#9fe");
+    }
+  }
+
+  // Sweep loot canisters near the player and absorb their contents.
+  // Pickup radius widens if a "loot-magnet" module is installed.
+  pickupLoot() {
+    const p = this.player; if (!p) return;
+    const magnet = p.ship.modules.includes("loot-magnet") ? 60 : 20;
+    const now = performance.now() / 1000;
+    this.entities = this.entities.filter((e) => {
+      if (e.kind !== "loot") return true;
+      // Expire stale canisters so the world doesn't fill with junk.
+      if (e.ttlAt && e.ttlAt < now) return false;
+      if (V.len(V.sub(e.pos, p.pos)) > magnet) return true;
+      const cr = e.loot?.credits ?? 0;
+      const ore = e.loot?.ore ?? 0;
+      if (cr) p.credits += cr;
+      if (ore && cargoTotal(p) < p.ship.cargoMax) {
+        const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
+        p.cargo.ore = (p.cargo.ore ?? 0) + take;
+      }
+      this.pushLog(`Salvaged canister: +${cr}cr +${ore} ore`);
+      this.beep(540, 0.05, "sine");
+      return false;
+    });
+    
+  }
+
+  // Periodically inject a flavor chatter line from nearby NPCs / stations /
+  // planets. Cheap timer-gated work, mostly atmospheric.
+  tickAmbientChatter(dt: number) {
+    const p = this.player; if (!p) return;
+    this._nextAmbientChatterAt -= dt;
+    if (this._nextAmbientChatterAt > 0) return;
+    this._nextAmbientChatterAt = 8 + Math.random() * 10;
+    // Find a candidate within 1500u, prefer interesting kinds.
+    const near = this.entities
+      .filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
+      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
+      .filter((x) => x.d < 1500)
+      .sort((a, b) => a.d - b.d);
+    if (near.length === 0) return;
+    const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
+    switch (pick.kind) {
+      case "hostile":
+        this.pushChatter(pick.name, HOSTILE_TAUNTS[Math.floor(Math.random() * HOSTILE_TAUNTS.length)], "#ff8a8a");
+        break;
+      case "friendly":
+        this.pushChatter(pick.name, FRIENDLY_GREETS[Math.floor(Math.random() * FRIENDLY_GREETS.length)], "#aef58a");
+        break;
+      case "neutral":
+        this.pushChatter(pick.name, NEUTRAL_CHATTER[Math.floor(Math.random() * NEUTRAL_CHATTER.length)], "#dddddd");
+        break;
+      case "station":
+        this.pushChatter(`Beacon ${pick.name}`, STATION_BROADCASTS[Math.floor(Math.random() * STATION_BROADCASTS.length)], "#c2c2ff");
+        break;
+      case "planet":
+        this.pushChatter(pick.name, PLANET_HAILS[Math.floor(Math.random() * PLANET_HAILS.length)], "#7ec8ff");
+        break;
+    }
+    // If the gunner is around and bored, occasionally chime in.
+    if (p.gunner && Math.random() < 0.35) {
+      const tag = `Gunner ${p.gunner.name.split(" ")[0]}`;
+      this.pushChatter(tag, GUNNER_BARKS_IDLE[Math.floor(Math.random() * GUNNER_BARKS_IDLE.length)], "#fc6");
+    }
+  }
+
 
   // --- Main menu -----------------------------------------------------------
   menuItems = ["Resume", "Save Game", "Load Game", "Options", "Quit"];
@@ -1427,28 +1778,138 @@ export class Voidwake {
     }
   }
 
-  // --- Station menu --------------------------------------------------------
-  stationItems = ["Sell Ore (10cr ea)", "Buy Fuel (5cr/u)", "Refit Weapon", "Undock"];
+  // --- Station menu (paged) ------------------------------------------------
+  // Pages: main → market | weapons | modules | crew. Cursor resets between
+  // pages. Prices come from the cached StationStock for this station.
+  stationItems = ["Market", "Weapon Bay", "Module Shop", "Crew", "Undock"];
+
+  // Build the visible item list for the current station page so the
+  // renderer and update loop stay in lockstep (cursor indexes line up).
+  buildStationLines(): string[] {
+    const p = this.player!;
+    const sid = this.dockedStationId;
+    if (sid == null) return ["Undock"];
+    const stock = this.getStock(sid);
+    if (this.stationPage === "main") return this.stationItems;
+    if (this.stationPage === "market") {
+      const ore = p.cargo.ore ?? 0;
+      const fuelNeed = Math.ceil(p.ship.fuelMax - p.ship.fuel);
+      const fuelCost = fuelNeed * stock.fuelPrice;
+      return [
+        `Sell all ore (${ore} × ${stock.orePrice}cr = ${ore * stock.orePrice}cr)`,
+        `Buy fuel (${fuelNeed}u × ${stock.fuelPrice}cr = ${fuelCost}cr)`,
+        "Back",
+      ];
+    }
+    if (this.stationPage === "weapons") {
+      return [
+        ...stock.weapons.map((w) => {
+          const def = WEAPONS.find((x) => x.id === w.id)!;
+          const owned = p.ship.weaponId === w.id ? " (equipped)" : "";
+          return `${def.name} — ${w.price}cr${owned}`;
+        }),
+        "Back",
+      ];
+    }
+    if (this.stationPage === "modules") {
+      return [
+        ...stock.modules.map((m) => {
+          const owned = p.ship.modules.includes(m.id) ? " (installed)" : "";
+          return `${m.name} — ${m.price}cr — ${m.desc}${owned}`;
+        }),
+        "Back",
+      ];
+    }
+    if (this.stationPage === "crew") {
+      const hasGunner = !!p.gunner;
+      return [
+        hasGunner
+          ? `Dismiss ${p.gunner!.name}`
+          : `Recruit gunner — ${stock.gunnerFee}cr`,
+        "Back",
+      ];
+    }
+    return ["Back"];
+  }
+
   updateStation() {
     const p = this.player; if (!p) { this.screen = "title"; return; }
-    this.menuNav(this.stationItems.length);
-    if (this.input.consume("enter")) {
-      const c = this.stationItems[this.menuCursor];
-      if (c.startsWith("Sell Ore")) {
+    if (this.dockedStationId == null) { this.screen = "playing"; return; }
+    const lines = this.buildStationLines();
+    this.menuNav(lines.length);
+    if (!this.input.consume("enter")) return;
+    const i = this.menuCursor;
+    const sid = this.dockedStationId;
+    const stock = this.getStock(sid);
+
+    if (this.stationPage === "main") {
+      const c = this.stationItems[i];
+      if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
+      else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
+      else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
+      else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
+      else if (c === "Undock")  { this.screen = "playing"; this.dockedStationId = null; }
+      return;
+    }
+
+    if (lines[i] === "Back") { this.stationPage = "main"; this.menuCursor = 0; return; }
+
+    if (this.stationPage === "market") {
+      if (i === 0) {
         const ore = p.cargo.ore ?? 0;
-        if (ore > 0) { p.credits += ore * 10; p.cargo.ore = 0; this.pushLog(`Sold ${ore} ore.`); }
-      } else if (c.startsWith("Buy Fuel")) {
+        if (ore > 0) {
+          p.credits += ore * stock.orePrice;
+          p.cargo.ore = 0;
+          this.pushLog(`Sold ${ore} ore for ${ore * stock.orePrice}cr.`);
+        } else this.pushLog("No ore to sell.");
+      } else if (i === 1) {
         const need = p.ship.fuelMax - p.ship.fuel;
-        const cost = Math.ceil(need) * 5;
+        const cost = Math.ceil(need) * stock.fuelPrice;
+        if (cost === 0) { this.pushLog("Tanks already full."); return; }
         if (p.credits >= cost) { p.credits -= cost; p.ship.fuel = p.ship.fuelMax; this.pushLog(`Refueled (${cost}cr).`); }
         else this.pushLog("Not enough credits.");
-      } else if (c.startsWith("Refit")) {
-        const i = WEAPONS.findIndex((w) => w.id === p.ship.weaponId);
-        p.ship.weaponId = WEAPONS[(i + 1) % WEAPONS.length].id;
-        this.pushLog(`Equipped ${WEAPONS.find((w) => w.id === p.ship.weaponId)!.name}.`);
-      } else if (c === "Undock") {
-        this.screen = "playing";
       }
+      return;
+    }
+
+    if (this.stationPage === "weapons") {
+      const offer = stock.weapons[i];
+      if (!offer) return;
+      if (p.ship.weaponId === offer.id) { this.pushLog("Already equipped."); return; }
+      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= offer.price;
+      p.ship.weaponId = offer.id;
+      this.pushLog(`Equipped ${WEAPONS.find((w) => w.id === offer.id)!.name}.`);
+      return;
+    }
+
+    if (this.stationPage === "modules") {
+      const offer = stock.modules[i];
+      if (!offer) return;
+      if (p.ship.modules.includes(offer.id)) { this.pushLog("Already installed."); return; }
+      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= offer.price;
+      p.ship.modules.push(offer.id);
+      // Apply passive caps immediately so the player sees the change.
+      if (offer.id === "cargo-expander") p.ship.cargoMax += 12;
+      if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
+      this.pushLog(`Installed ${offer.name}.`);
+      return;
+    }
+
+    if (this.stationPage === "crew") {
+      if (i !== 0) return;
+      if (p.gunner) {
+        this.pushLog(`${p.gunner.name} signed off.`);
+        p.gunner = undefined;
+      } else {
+        if (p.credits < stock.gunnerFee) { this.pushLog("Not enough credits."); return; }
+        p.credits -= stock.gunnerFee;
+        p.gunner = generateGunner(Math.random);
+        this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
+        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`, "On board, Cmdr. Press G to toggle me.", "#fc6");
+      }
+      return;
     }
   }
 
@@ -1722,12 +2183,21 @@ export class Voidwake {
   }
   renderStation(g: Cell[][]) {
     const p = this.player!;
-    putText(g, 4, 2, "DOCKED — STATION SERVICES", "#7CFC00");
-    putText(g, 4, 3, `credits: ${p.credits}   ore: ${p.cargo.ore ?? 0}   fuel: ${p.ship.fuel.toFixed(0)}/${p.ship.fuelMax}`, "#9fe");
+    const sid = this.dockedStationId;
+    const stationName = sid != null ? this.entities.find((e) => e.id === sid)?.name ?? "Station" : "Station";
+    const stock = sid != null ? this.getStock(sid) : null;
+    putText(g, 4, 2, `DOCKED — ${stationName.toUpperCase()}`, "#7CFC00");
+    putText(g, 4, 3, `credits: ${p.credits}   ore: ${p.cargo.ore ?? 0}   cargo: ${cargoTotal(p)}/${p.ship.cargoMax}   fuel: ${p.ship.fuel.toFixed(0)}/${p.ship.fuelMax}`, "#9fe");
     if (p.mission) putText(g, 4, 4, `mission: ${p.mission.description} ${p.mission.done ? "[READY]" : ""}`, "#fb6");
-    this.stationItems.forEach((it, i) => {
+    // Reputation summary so the player can see how the station regards them.
+    const rep = p.reputation ?? {};
+    putText(g, 4, 5, `rep — Fed:${repLabel(rep.federation ?? 0)} (${rep.federation ?? 0})   Guild:${repLabel(rep.guild ?? 0)} (${rep.guild ?? 0})   Pirate:${repLabel(rep.pirate ?? 0)} (${rep.pirate ?? 0})`, "#aef");
+    if (stock) putText(g, 4, 6, `“${stock.rumor}”`, "#fc6");
+    putText(g, 4, 7, `[ ${this.stationPage.toUpperCase()} ]   ESC back to menu`, "#7CFC00");
+    const lines = this.buildStationLines();
+    lines.forEach((it, i) => {
       const sel = i === this.menuCursor;
-      putText(g, 6, 7 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      putText(g, 6, 9 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
     });
   }
   renderQuitConfirm(g: Cell[][]) {
@@ -1994,11 +2464,34 @@ export class Voidwake {
       }
     }
 
-    // Crosshair
+    // Crosshair. Color shifts to indicate weapon-range state of whatever's
+    // closest to the reticle's forward vector:
+    //   green  → idle / nothing aligned
+    //   amber  → target aligned but out of weapon range
+    //   red    → target aligned AND in weapon range (free shot)
     const ccx = vpLeft + Math.floor(vw / 2), ccy = vpTop + Math.floor(vh / 2);
-    putText(g, ccx - 1, ccy, "-+-", "#3a6");
-    g[ccy - 1][ccx].ch = "|"; g[ccy - 1][ccx].color = "#3a6";
-    g[ccy + 1][ccx].ch = "|"; g[ccy + 1][ccx].color = "#3a6";
+    let reticleCol = "#3a6";
+    {
+      const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
+      let bestDot = 0.93, bestE: Entity | null = null, bestD = Infinity;
+      for (const e of this.entities) {
+        if (e.kind !== "hostile" && e.kind !== "neutral" && e.kind !== "friendly" && e.kind !== "asteroid" && e.kind !== "station") continue;
+        const rel = V.sub(e.pos, p.pos);
+        const d = V.len(rel); if (d < 1) continue;
+        const dotv = (rel.x * fwd.x + rel.y * fwd.y + rel.z * fwd.z) / d;
+        if (dotv > bestDot) { bestDot = dotv; bestE = e; bestD = d; }
+      }
+      if (bestE) {
+        const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+        const inRange = bestE.kind === "asteroid" ? bestD < 200
+          : bestE.kind === "station"  ? bestD < 400
+          : bestD < w.range;
+        reticleCol = inRange ? "#ff5555" : "#fc6";
+      }
+    }
+    putText(g, ccx - 1, ccy, "-+-", reticleCol);
+    g[ccy - 1][ccx].ch = "|"; g[ccy - 1][ccx].color = reticleCol;
+    g[ccy + 1][ccx].ch = "|"; g[ccy + 1][ccx].color = reticleCol;
 
     // --- Right-side cockpit panel ---
     const panelX = vpRight + 2;
@@ -2024,6 +2517,15 @@ export class Voidwake {
       if (t.hull !== undefined) putText(g, panelX, cy2 + 4, `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
     } else {
       putText(g, panelX, cy2 + 2, "press T to cycle", "#888");
+    }
+
+    // Gunner status block — only shown when a gunner is hired.
+    if (p.gunner) {
+      const gy0 = cy2 + 6;
+      putText(g, panelX, gy0, "[ GUNNER ]", "#7CFC00");
+      putText(g, panelX, gy0 + 1, `${p.gunner.name}`, "#fff");
+      putText(g, panelX, gy0 + 2, `${p.gunner.species} · ${p.gunner.gender}`, "#9fe");
+      putText(g, panelX, gy0 + 3, p.gunner.enabled ? "AUTO  (G to disable)" : "STANDBY (G to enable)", p.gunner.enabled ? "#fc6" : "#888");
     }
 
     // --- Controls reminder, anchored to the bottom of the right panel ------
@@ -2098,7 +2600,23 @@ export class Voidwake {
     }
     if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
 
-    // Log
+    // --- COMMS / chatter box ---
+    // Lives along the bottom edge between the system column and the log.
+    // Newest line on top, dimmed by age so old lines fade visually.
+    const commsX = 28;
+    const commsY = rTop + 7;
+    putText(g, commsX, commsY, "[ COMMS ]", "#7CFC00");
+    const nowS = performance.now() / 1000;
+    const commsW = Math.max(20, (cols - 52) - commsX - 2);
+    for (let i = 0; i < Math.min(4, this.chatter.length); i++) {
+      const c = this.chatter[i];
+      const age = nowS - c.t;
+      const dim = age > 20 ? "#555" : age > 8 ? "#888" : c.color;
+      const line = `«${c.who}» ${c.msg}`;
+      putText(g, commsX, commsY + 1 + i, line.slice(0, commsW), dim);
+    }
+
+    // Log (mission / system events; separate from chatter).
     let ly = rTop;
     for (let i = this.log.length - 1; i >= 0; i--) {
       putText(g, cols - 52, ly++, "» " + this.log[i].msg, "#cfd");
@@ -2106,7 +2624,8 @@ export class Voidwake {
     }
 
     // Keys hint
-    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu", "#666");
+    const gunnerHint = p.gunner ? `  G ${p.gunner.enabled ? "gunner ON" : "gunner off"}` : "";
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu" + gunnerHint, "#666");
 
     // FPS overlay (optional)
     if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
