@@ -61,7 +61,24 @@ const GLYPHS: Record<string, string> = {
   hostile: "H",
   bullet: "·",
   player: "^",
+  loot: "$",
 };
+
+// ---- Flavor data: names / barks / broadcasts -----------------------------
+// Used by the chatter system and gunner recruitment. Keep these small lists
+// punchy — they're cycled randomly so repetition gets old fast.
+const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Niri","Otho","Pell","Quill","Sable","Yara"];
+const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
+const GUNNER_BARKS_HOSTILE  = ["On him!","Got the lock — firing!","He's dust!","Eat plasma!","Burn, raider!"];
+const GUNNER_BARKS_MINE     = ["Nice vein.","Chewing rock.","Mining now, hold steady."];
+const GUNNER_BARKS_DOCK     = ["Suggest we dock here, Cmdr.","That station looks safe. Dock?","Could use a stretch — dock?"];
+const GUNNER_BARKS_HIT      = ["We're taking fire!","Shields buckling!","Hold her steady!"];
+const GUNNER_BARKS_IDLE     = ["Quiet out here.","Strange stars this sector.","I'd kill for hot coffee.","You ever miss dirtside?"];
+const HOSTILE_TAUNTS        = ["You're cargo now.","Should've stayed dirtside.","Drift well, scum.","I see you, little ship."];
+const FRIENDLY_GREETS       = ["Safe vectors, Cmdr.","Federation thanks you.","Fly true out there."];
+const NEUTRAL_CHATTER       = ["Guild traffic, hold lanes.","Got rocks to sell, push off.","Mind your wake, pilot."];
+const STATION_BROADCASTS    = ["...automated beacon: dock fees waived this cycle.","Approach vector clear. Welcome.","Maintenance bay open for refits."];
+const PLANET_HAILS          = ["Surface comms crackle faintly.","Atmospheric thermals reported.","Tradehouse requests manifests."];
 
 const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
