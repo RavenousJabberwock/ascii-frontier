@@ -1047,7 +1047,7 @@ export class Voidwake {
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
           if (e.kind === "station") {
             // Stations bump but don't kill; remind the pilot to dock.
-            p.vel = V.scale(p.vel, 0.2);
+            p.throttle = Math.min(p.throttle, 0.1);
             this.pushLog(`Bumped ${e.name} — press F to dock.`);
             this.beep(220, 0.06, "square");
             continue;
