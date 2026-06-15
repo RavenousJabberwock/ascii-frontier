@@ -49,6 +49,7 @@ function hashString(s: string): number {
 // =============================================================================
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
+const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
 const VERSION = "0.1.0";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
@@ -374,6 +375,24 @@ interface SaveBlob {
   entities: Entity[];
   options: Options;
   savedAt: number;
+}
+
+interface FlightRecorder {
+  wall: number;
+  frame: number;
+  screen: Screen;
+  reason: string;
+  clean: boolean;
+  hull?: number;
+  hullMax?: number;
+  shield?: number;
+  shieldMax?: number;
+  fuel?: number;
+  pos?: Vec3;
+  entityCount: number;
+  lastLog?: string;
+  deathReason?: string | null;
+  crashError?: string | null;
 }
 
 // =============================================================================
@@ -921,6 +940,27 @@ function listSaves(): { slot: string; savedAt: number }[] {
   return out.sort((a, b) => b.savedAt - a.savedAt);
 }
 
+function readDiagnostic<T>(key: string): T | null {
+  for (const store of [sessionStorage, localStorage]) {
+    try {
+      const raw = store.getItem(key);
+      if (raw) return JSON.parse(raw) as T;
+    } catch { /* ignore unavailable storage / corrupt diagnostic */ }
+  }
+  return null;
+}
+function writeDiagnostic(key: string, value: unknown) {
+  const raw = JSON.stringify(value);
+  for (const store of [sessionStorage, localStorage]) {
+    try { store.setItem(key, raw); } catch { /* ignore unavailable storage */ }
+  }
+}
+function removeDiagnostic(key: string) {
+  for (const store of [sessionStorage, localStorage]) {
+    try { store.removeItem(key); } catch { /* ignore unavailable storage */ }
+  }
+}
+
 // =============================================================================
 // 10. Renderer — ASCII grid drawn to canvas
 // -----------------------------------------------------------------------------
@@ -1162,6 +1202,9 @@ export class Voidwake {
   // Title-screen drifting stars (camera-local 2D, no player required).
   private titleStars: { x: number; y: number; z: number; t: number }[] = [];
   private _lastRenderTs = 0;
+  private _frameNo = 0;
+  private _lastRecorderAt = 0;
+  private _lastRecordedScreen: Screen = "title";
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -1186,13 +1229,22 @@ export class Voidwake {
       }
     });
     try {
-      const raw = sessionStorage.getItem(TITLE_NOTICE_KEY);
-      const saved = raw ? JSON.parse(raw) as { reason?: string; wall?: number } : null;
+      const saved = readDiagnostic<{ reason?: string; wall?: number }>(TITLE_NOTICE_KEY);
       if (saved?.reason && saved.wall && Date.now() - saved.wall < 5 * 60_000) {
         this.titleNotice = saved.reason;
         this.titleNoticeAt = performance.now() / 1000;
       }
+      if (!this.titleNotice) {
+        const rec = readDiagnostic<FlightRecorder>(FLIGHT_RECORDER_KEY);
+        const fresh = rec?.wall && Date.now() - rec.wall < 5 * 60_000;
+        const wasInFlight = rec?.screen === "playing" || rec?.screen === "menu" || rec?.screen === "station" || rec?.screen === "destroyed" || rec?.screen === "crashed";
+        if (rec && fresh && wasInFlight && !rec.clean) {
+          const hull = rec.hullMax ? ` hull ${Math.round(rec.hull ?? 0)}/${Math.round(rec.hullMax)}` : "";
+          this.setTitleNotice(`Recovered after engine restart while ${rec.screen}; last record: ${rec.reason}${hull}; entities ${rec.entityCount}; frame ${rec.frame}.`);
+        }
+      }
     } catch { /* ignore diagnostic restore failures */ }
+    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true));
   }
 
   fit() {
@@ -1228,6 +1280,7 @@ export class Voidwake {
     this.rafId = requestAnimationFrame(loop);
   }
   stop() {
+    this.recordFlight(`engine stopped while ${this.screen}`, this.screen === "title", true);
     this.running = false;
     cancelAnimationFrame(this.rafId);
   }
@@ -1237,10 +1290,36 @@ export class Voidwake {
     if (this.log.length > 6) this.log.shift();
   }
 
+  recordFlight(reason: string, clean = false, force = false) {
+    const now = performance.now() / 1000;
+    if (!force && now - this._lastRecorderAt < 1.5 && this.screen === this._lastRecordedScreen) return;
+    this._lastRecorderAt = now;
+    this._lastRecordedScreen = this.screen;
+    const p = this.player;
+    const rec: FlightRecorder = {
+      wall: Date.now(),
+      frame: this._frameNo,
+      screen: this.screen,
+      reason,
+      clean,
+      hull: p?.ship.hull,
+      hullMax: p?.ship.hullMax,
+      shield: p?.ship.shield,
+      shieldMax: p?.ship.shieldMax,
+      fuel: p?.ship.fuel,
+      pos: p ? { ...p.pos } : undefined,
+      entityCount: this.entities.length,
+      lastLog: this.log[this.log.length - 1]?.msg,
+      deathReason: this.deathReason,
+      crashError: this.crashError,
+    };
+    writeDiagnostic(FLIGHT_RECORDER_KEY, rec);
+  }
+
   setTitleNotice(reason: string) {
     this.titleNotice = reason.slice(0, 220);
     this.titleNoticeAt = performance.now() / 1000;
-    try { sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({ reason: this.titleNotice, wall: Date.now() })); } catch { /* ignore */ }
+    writeDiagnostic(TITLE_NOTICE_KEY, { reason: this.titleNotice, wall: Date.now() });
     // eslint-disable-next-line no-console
     console.info("[ASCII Frontier] title return:", this.titleNotice);
   }
@@ -1248,12 +1327,14 @@ export class Voidwake {
   clearTitleNotice() {
     this.titleNotice = null;
     this.titleNoticeAt = 0;
-    try { sessionStorage.removeItem(TITLE_NOTICE_KEY); } catch { /* ignore */ }
+    removeDiagnostic(TITLE_NOTICE_KEY);
+    removeDiagnostic(FLIGHT_RECORDER_KEY);
   }
 
   returnToTitle(reason: string, clearPlayer = true) {
     if (clearPlayer) this.player = null;
     this.setTitleNotice(reason);
+    this.recordFlight(`explicit return to title: ${reason}`, true, true);
     this.screen = "title";
     this.menuCursor = 0;
   }
@@ -1335,17 +1416,13 @@ export class Voidwake {
     const e = err instanceof Error ? err : new Error(String(err));
     this.crashError = e.message || "Unknown error";
     this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
+    this.recordFlight(`crash: ${this.crashError}`, false, true);
     // eslint-disable-next-line no-console
     console.error("[Voidwake crash]", e);
     // Also persist as a title notice so if the page reloads (HMR, React
     // remount, etc.) and we land on the title without seeing the crash
     // screen, the LAST EXIT banner still reports the cause.
-    try {
-      sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({
-        reason: `Crash: ${this.crashError}`,
-        wall: Date.now(),
-      }));
-    } catch { /* ignore */ }
+    writeDiagnostic(TITLE_NOTICE_KEY, { reason: `Crash: ${this.crashError}`, wall: Date.now() });
     this.screen = "crashed";
     this.menuCursor = 0;
   }
@@ -1374,9 +1451,11 @@ export class Voidwake {
   // UPDATE
   // ---------------------------------------------------------------------------
   update(dt: number) {
+    this._frameNo++;
     const screenBefore = this.screen;
     const noticeAtBefore = this.titleNoticeAt;
     const kb = this.options.keybinds;
+    this.recordFlight(`updating ${this.screen}`);
     // Global: ESC toggles main menu while playing
     if (this.input.consume(kb.menu)) {
       if (this.screen === "playing") { this.prevPlayScreen = this.screen; this.screen = "menu"; this.menuCursor = 0; }
@@ -2756,29 +2835,34 @@ export class Voidwake {
       const label = blink + it;
       putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
-    if (this.titleNotice) {
-      const age = performance.now() / 1000 - this.titleNoticeAt;
-      const pulseNotice = Math.floor(age * 2) % 2 === 0;
-      const maxW = Math.max(24, Math.min(cols - 8, 92));
-      const raw = `LAST EXIT: ${this.titleNotice}`;
-      const lines: string[] = [];
-      let rest = raw;
-      while (rest.length > maxW && lines.length < 2) {
-        const cut = Math.max(18, rest.lastIndexOf(" ", maxW));
-        lines.push(rest.slice(0, cut));
-        rest = rest.slice(cut).trimStart();
-      }
-      lines.push(rest.length > maxW ? rest.slice(0, maxW - 1) + "…" : rest);
-      const y = Math.min(g.length - 6, menuTop + this.titleItems.length * 2 + 1);
-      const borderW = Math.min(maxW + 4, cols - 4);
-      const x = Math.max(2, Math.floor((cols - borderW) / 2));
-      putText(g, x, y, "┌" + "─".repeat(borderW - 2) + "┐", pulseNotice ? "#fc6" : "#b86");
-      lines.slice(0, 3).forEach((line, i) => {
-        putText(g, x, y + 1 + i, "│ " + line.padEnd(borderW - 4) + " │", "#fc6");
-      });
-      putText(g, x, y + 1 + lines.length, "└" + "─".repeat(borderW - 2) + "┘", pulseNotice ? "#fc6" : "#b86");
-    }
+    this.renderTitleNotice(g, Math.min(g.length - 6, menuTop + this.titleItems.length * 2 + 1));
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
+  }
+
+  renderTitleNotice(g: Cell[][], preferredY: number) {
+    if (!this.titleNotice) return;
+    const cols = g[0].length;
+    const age = performance.now() / 1000 - this.titleNoticeAt;
+    const pulseNotice = Math.floor(age * 2) % 2 === 0;
+    const maxW = Math.max(24, Math.min(cols - 8, 92));
+    const raw = `LAST EXIT: ${this.titleNotice}`;
+    const lines: string[] = [];
+    let rest = raw;
+    while (rest.length > maxW && lines.length < 2) {
+      const cut = Math.max(18, rest.lastIndexOf(" ", maxW));
+      lines.push(rest.slice(0, cut));
+      rest = rest.slice(cut).trimStart();
+    }
+    lines.push(rest.length > maxW ? rest.slice(0, maxW - 1) + "…" : rest);
+    const borderW = Math.min(maxW + 4, cols - 4);
+    const boxH = lines.length + 2;
+    const y = Math.max(1, Math.min(g.length - boxH - 2, preferredY));
+    const x = Math.max(2, Math.floor((cols - borderW) / 2));
+    putText(g, x, y, "┌" + "─".repeat(borderW - 2) + "┐", pulseNotice ? "#ffdd66" : "#b86");
+    lines.slice(0, 3).forEach((line, i) => {
+      putText(g, x, y + 1 + i, "│ " + line.padEnd(borderW - 4) + " │", "#ffdd66");
+    });
+    putText(g, x, y + 1 + lines.length, "└" + "─".repeat(borderW - 2) + "┘", pulseNotice ? "#ffdd66" : "#b86");
   }
 
   renderCharCreate(g: Cell[][]) {
@@ -2942,6 +3026,7 @@ export class Voidwake {
       const sel = i === this.menuCursor;
       putText(g, 6, 5 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
     });
+    if (this.titleNotice) this.renderTitleNotice(g, 5 + items.length * 2 + 2);
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm   ESC back", "#888");
   }
 
