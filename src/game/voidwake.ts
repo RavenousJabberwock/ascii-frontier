@@ -586,35 +586,113 @@ const V = {
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "station" || e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
-  if (!e.hull || e.hull <= 0) return;
+function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
+  if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
+
+  // Pirate bases: turrets fire at any non-pirate in range, including player.
+  if (e.kind === "station") {
+    if (e.faction !== "pirate") return;
+    e.cooldown = (e.cooldown ?? 0) - dt;
+    // Pick nearest non-pirate ship OR player within 700u.
+    let bestT: { pos: Vec3; id: number } | null = null;
+    let bestD = 700;
+    const playerD = V.len(V.sub(player.pos, e.pos));
+    if (playerD < bestD) { bestT = { pos: player.pos, id: -1 }; bestD = playerD; }
+    for (const t of ents) {
+      if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
+      if (t.faction === "pirate") continue;
+      const d = V.len(V.sub(t.pos, e.pos));
+      if (d < bestD) { bestD = d; bestT = { pos: t.pos, id: t.id }; }
+    }
+    if (bestT && (e.cooldown ?? 0) <= 0) {
+      e.cooldown = 0.6;
+      const dir = V.norm(V.sub(bestT.pos, e.pos));
+      ents.push(makeBullet(e, dir));
+    }
+    return;
+  }
 
   const distToPlayer = V.len(V.sub(player.pos, e.pos));
 
+  // Helper: nearest enemy NPC ship within `range`. Pirates hunt non-pirate
+  // ships; defenders (friendly/neutral) hunt pirates.
+  const findEnemyShip = (range: number): Entity | null => {
+    let best: Entity | null = null;
+    let bestD = range;
+    for (const t of ents) {
+      if (t.id === e.id) continue;
+      if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
+      if ((t.hull ?? 1) <= 0) continue;
+      // Pirates fight everyone non-pirate; defenders only engage pirates.
+      if (e.faction === "pirate") {
+        if (t.faction === "pirate") continue;
+      } else {
+        if (t.faction !== "pirate") continue;
+      }
+      const d = V.len(V.sub(t.pos, e.pos));
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    return best;
+  };
+
   if (e.kind === "hostile") {
-    // Chase & shoot
-    e.state = distToPlayer < 800 ? "attack" : "patrol";
-    if (e.state === "attack") {
-      const dir = V.norm(V.sub(player.pos, e.pos));
+    // Hostiles consider the player AND the nearest non-pirate NPC; closest wins.
+    const enemyShip = findEnemyShip(700);
+    const shipD = enemyShip ? V.len(V.sub(enemyShip.pos, e.pos)) : Infinity;
+    let targetPos: Vec3 | null = null;
+    let targetD = Infinity;
+    if (distToPlayer < 800) { targetPos = player.pos; targetD = distToPlayer; }
+    if (enemyShip && shipD < targetD) { targetPos = enemyShip.pos; targetD = shipD; e.targetId = enemyShip.id; }
+
+    if (targetPos) {
+      e.state = "attack";
+      const dir = V.norm(V.sub(targetPos, e.pos));
       e.vel = V.scale(dir, 35);
       e.cooldown = (e.cooldown ?? 0) - dt;
-      if (distToPlayer < 400 && (e.cooldown ?? 0) <= 0) {
+      if (targetD < 400 && (e.cooldown ?? 0) <= 0) {
         e.cooldown = 0.8;
         ents.push(makeBullet(e, dir));
       }
     } else {
-      // Wander
+      e.state = "patrol";
       if (Math.random() < 0.02) e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 15);
     }
   } else if (e.kind === "friendly") {
-    // Travel toward nearest station
-    const station = ents.find((x) => x.kind === "station");
+    // Defend: engage pirates within 500u, else continue station route.
+    const foe = findEnemyShip(500);
+    if (foe) {
+      const dir = V.norm(V.sub(foe.pos, e.pos));
+      e.vel = V.scale(dir, 28);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      const fd = V.len(V.sub(foe.pos, e.pos));
+      if (fd < 380 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 1.0;
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
+    const station = ents.find((x) => x.kind === "station" && x.faction !== "pirate");
     if (station) {
       const d = V.sub(station.pos, e.pos);
       if (V.len(d) > 80) e.vel = V.scale(V.norm(d), 20);
       else e.vel = { x: 0, y: 0, z: 0 };
     }
   } else if (e.kind === "neutral") {
-    // Mine: drift toward random asteroid
+    // Skittish: only shoots if a pirate gets close (<350u). Otherwise mines.
+    const foe = findEnemyShip(350);
+    if (foe) {
+      // Try to flee while plinking back.
+      const away = V.norm(V.sub(e.pos, foe.pos));
+      e.vel = V.scale(away, 24);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      const fd = V.len(V.sub(foe.pos, e.pos));
+      if (fd < 320 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 1.4;
+        const dir = V.norm(V.sub(foe.pos, e.pos));
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
     if (!e.targetId || rng() < 0.005) {
       const rocks = ents.filter((x) => x.kind === "asteroid");
       const t = rocks[Math.floor(rng() * rocks.length)];
