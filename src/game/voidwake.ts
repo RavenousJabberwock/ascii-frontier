@@ -376,6 +376,40 @@ function generateUniverse(seed: number): Entity[] {
     });
   }
 
+  // Comets: fast-moving, harmless. The renderer trails ~ glyphs along velocity.
+  for (let i = 0; i < 3; i++) {
+    const dir = V.norm({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 });
+    out.push({
+      id: nextId(), kind: "comet", name: nameFrom(rng, "Comet"),
+      pos: randPos(rng, 3200),
+      vel: V.scale(dir, 35 + rng() * 25),
+      faction: "nature",
+    });
+  }
+  // Nebula clouds: stationary fog. Inside they drain shields slowly and dim
+  // the starfield. Pure "atmosphere" hazard you can hide a pursuer in.
+  for (let i = 0; i < 4; i++) {
+    out.push({
+      id: nextId(), kind: "nebula", name: nameFrom(rng, "Neb"),
+      pos: randPos(rng, 2800),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "nature",
+    });
+  }
+  // Distress beacons: dock-on-touch for a small bounty (or pirate trap).
+  for (let i = 0; i < 2; i++) {
+    const trap = rng() < 0.35;
+    out.push({
+      id: nextId(), kind: "beacon",
+      name: trap ? "Distress (?)" : "Distress",
+      pos: randPos(rng, 2600),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "wreck",
+      state: trap ? "trap" : "rescue",
+      loot: { credits: 120 + Math.floor(rng() * 220) },
+    });
+  }
+
   return out;
 }
 
