@@ -2698,6 +2698,7 @@ export class Voidwake {
       ["A / D", "yaw L/R"],
       ["Q / E", "pitch U/D"],
       ["SHIFT", "afterburner"],
+      ["X", "supercruise (3x)"],
       ["SPACE", "fire"],
       ["T", "cycle target"],
       ["M", "mine target"],
