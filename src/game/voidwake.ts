@@ -3050,7 +3050,7 @@ export class Voidwake {
         if (rCells >= 1.5 && e.name) {
           const lx = sx - Math.floor(e.name.length / 2);
           const ly = sy2 + 2;
-          if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe");
+          if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe", vpRight);
         }
         continue;
       }
@@ -3058,7 +3058,7 @@ export class Voidwake {
       // --- Distant non-ship body: single glyph -----------------------------
       if (rCells < 1.2) {
         if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
-        g[sy2][sx] = { ch: glyph, color: tint.fill };
+        g[sy2][sx] = { ch: glyph, color: tint.fill, glow: e.kind === "star" };
         continue;
       }
 
@@ -3074,6 +3074,35 @@ export class Voidwake {
         e.kind === "station" ? "=" :
         e.kind === "planet" ? "o" :
         e.kind === "star" ? "+" : fill;
+
+      // Compute a camera-space 2D light direction for shading planets /
+      // stations / asteroids. The "light" is the nearest star to the entity,
+      // projected into the same camera basis the sprite is drawn in. Stars
+      // themselves and tiny bodies skip shading.
+      let lightX = 0, lightY = 0, lit = false;
+      if (e.kind === "planet" || e.kind === "station" || e.kind === "asteroid") {
+        let star: Entity | null = null;
+        let bestD = Infinity;
+        for (const s of this.entities) {
+          if (s.kind !== "star") continue;
+          const d = V.len(V.sub(s.pos, e.pos));
+          if (d < bestD) { bestD = d; star = s; }
+        }
+        if (star) {
+          const lr = V.sub(star.pos, e.pos);
+          const lx1 = cy * lr.x - sy * lr.z;
+          const lz1 = sy * lr.x + cy * lr.z;
+          const ly1 = cp * lr.y - sp * lz1;
+          // Screen Y grows downward, so flip the math-Y to match.
+          let lvx = lx1, lvy = -ly1;
+          const llen = Math.hypot(lvx, lvy);
+          if (llen > 0.001) {
+            lightX = lvx / llen;
+            lightY = lvy / llen;
+            lit = true;
+          }
+        }
+      }
 
       // Star glow halo — a faint outer ring outside the solid disc so the
       // central star reads as a luminous source rather than a flat blob.
@@ -3092,7 +3121,7 @@ export class Voidwake {
             if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
             if (g[gy][gx].ch !== " ") continue;
             const t = Math.min(2, Math.floor((d2 - 1.0) / 0.15));
-            g[gy][gx] = { ch: haloChars[t], color: haloCol };
+            g[gy][gx] = { ch: haloChars[t], color: haloCol, glow: true };
           }
         }
       }
@@ -3106,7 +3135,16 @@ export class Voidwake {
           if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
           const onEdge = d2 > 0.7;
           const ch = surfaceChar(e, gx, gy, onEdge, edge, fill);
-          g[gy][gx] = { ch, color: onEdge ? tint.edge : tint.fill };
+          let color = onEdge ? tint.edge : tint.fill;
+          if (lit) {
+            // Lambert-ish: dot of surface-normal proxy with light direction.
+            // Bias up so the lit hemisphere is bright, terminator is muted,
+            // and the back side fades to deep shadow.
+            const dot = nx * lightX + ny * lightY; // -1..1
+            const shadeFactor = 0.35 + 0.85 * Math.max(0, dot + 0.15);
+            color = shadeColor(color, shadeFactor);
+          }
+          g[gy][gx] = { ch, color, glow: e.kind === "star" };
         }
       }
 
@@ -3114,9 +3152,11 @@ export class Voidwake {
       if (rCells >= 3 && e.name) {
         const lx = sx - Math.floor(e.name.length / 2);
         const ly = sy2 + ry + 1;
-        if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe");
+        if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe", vpRight);
       }
     }
+
+
 
     // Crosshair. Color shifts to indicate weapon-range state of whatever's
     // closest to the reticle's forward vector:
