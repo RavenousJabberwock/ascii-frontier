@@ -2092,26 +2092,68 @@ export class Voidwake {
 
   // Title screen ------------------------------------------------------------
   renderTitle(g: Cell[][]) {
-    // Clean block-letter banner. Each glyph is exactly 9 cols wide so the
-    // whole word reads as "V O I D W A K E" instead of a tangled diagonal.
-    const banner = [
-      "██╗   ██╗ ██████╗ ██╗██████╗ ██╗    ██╗ █████╗ ██╗  ██╗███████╗",
-      "██║   ██║██╔═══██╗██║██╔══██╗██║    ██║██╔══██╗██║ ██╔╝██╔════╝",
-      "██║   ██║██║   ██║██║██║  ██║██║ █╗ ██║███████║█████╔╝ █████╗  ",
-      "╚██╗ ██╔╝██║   ██║██║██║  ██║██║███╗██║██╔══██║██╔═██╗ ██╔══╝  ",
-      " ╚████╔╝ ╚██████╔╝██║██████╔╝╚███╔███╔╝██║  ██║██║  ██╗███████╗",
-      "  ╚═══╝   ╚═════╝ ╚═╝╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝",
-    ];
+    // 6-row block font for letters used in "ASCII FRONTIER".
+    const F: Record<string, string[]> = {
+      A: [" █████╗ ", "██╔══██╗", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
+      S: ["███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝"],
+      C: [" ██████╗", "██╔════╝", "██║     ", "██║     ", "╚██████╗", " ╚═════╝"],
+      I: ["██╗", "██║", "██║", "██║", "██║", "╚═╝"],
+      F: ["███████╗", "██╔════╝", "█████╗  ", "██╔══╝  ", "██║     ", "╚═╝     "],
+      R: ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"],
+      O: [" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ "],
+      N: ["███╗   ██╗", "████╗  ██║", "██╔██╗ ██║", "██║╚██╗██║", "██║ ╚████║", "╚═╝  ╚═══╝"],
+      T: ["████████╗", "╚══██╔══╝", "   ██║   ", "   ██║   ", "   ██║   ", "   ╚═╝   "],
+      E: ["███████╗", "██╔════╝", "█████╗  ", "██╔══╝  ", "███████╗", "╚══════╝"],
+      " ": ["   ", "   ", "   ", "   ", "   ", "   "],
+    };
+    const assemble = (word: string) => {
+      const rows = ["", "", "", "", "", ""];
+      for (const ch of word) {
+        const glyph = F[ch] ?? F[" "];
+        for (let r = 0; r < 6; r++) rows[r] += glyph[r];
+      }
+      return rows;
+    };
+    const top = assemble("ASCII");
+    const bot = assemble("FRONTIER");
     const cols = g[0].length;
-    const bx = Math.max(2, Math.floor((cols - banner[0].length) / 2));
-    banner.forEach((line, i) => putText(g, bx, 2 + i, line, "#7CFC00"));
+    const t = performance.now() / 1000;
+
+    // Animated shimmer: hue sweeps across columns; selected color cycles.
+    const palette = ["#7CFC00", "#9dff3b", "#b8ff66", "#5fc879", "#39c9a8", "#5fc"];
+    const drawBanner = (rows: string[], yTop: number) => {
+      const w = rows[0].length;
+      const bx = Math.max(2, Math.floor((cols - w) / 2));
+      for (let r = 0; r < rows.length; r++) {
+        const line = rows[r];
+        // Draw char-by-char so each column can shimmer independently.
+        for (let c = 0; c < line.length; c++) {
+          const ch = line[c];
+          if (ch === " ") continue;
+          const wave = Math.sin((c * 0.18) - t * 2.2 + r * 0.35);
+          const idx = Math.floor(((wave + 1) / 2) * palette.length) % palette.length;
+          putText(g, bx + c, yTop + r, ch, palette[idx]);
+        }
+      }
+    };
+
+    drawBanner(top, 2);
+    drawBanner(bot, 2 + 6 + 1);
+
+    const bannerBottom = 2 + 6 + 1 + 6;
     const tag = "— ASCII SPACE SIMULATION —";
-    putText(g, Math.floor((cols - tag.length) / 2), 2 + banner.length, tag, "#5fc");
-    putText(g, Math.floor((cols - ("v" + VERSION).length) / 2), 3 + banner.length, "v" + VERSION, "#678");
-    const menuTop = 5 + banner.length + 2;
+    // Subtle tagline pulse.
+    const pulse = 0.6 + 0.4 * Math.sin(t * 2);
+    const cTag = pulse > 0.85 ? "#bff" : pulse > 0.5 ? "#5fc" : "#3aa";
+    putText(g, Math.floor((cols - tag.length) / 2), bannerBottom + 1, tag, cTag);
+    putText(g, Math.floor((cols - ("v" + VERSION).length) / 2), bannerBottom + 2, "v" + VERSION, "#678");
+
+    const menuTop = bannerBottom + 4;
     this.titleItems.forEach((it, i) => {
       const sel = i === this.menuCursor;
-      const label = (sel ? "▸ " : "  ") + it;
+      // Selected item gets a blinking marker.
+      const blink = sel && Math.floor(t * 3) % 2 === 0 ? "▶ " : sel ? "▸ " : "  ";
+      const label = blink + it;
       putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
