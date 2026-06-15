@@ -1,5 +1,5 @@
 // =============================================================================
-// VOIDWAKE — ASCII Space Simulation Engine
+// ASCII FRONTIER — ASCII Space Simulation Engine (engine module: voidwake.ts)
 // -----------------------------------------------------------------------------
 // A single-file, heavily-commented engine. Sections are clearly delimited so
 // you can navigate and extend it without ceremony. See ./README.md for the
