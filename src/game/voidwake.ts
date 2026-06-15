@@ -2085,6 +2085,30 @@ export class Voidwake {
       return true;
     });
 
+    // --- Damage-feedback alarms ----------------------------------------------
+    // Detect shield collapse this tick (any positive shield reaching zero),
+    // and run periodic low-hull / low-fuel klaxons. State is consumed by
+    // renderPlaying() for screen flash, bar blink, and critical fire FX.
+    const nowS = performance.now() / 1000;
+    if (this.prevShield > 0 && p.ship.shield <= 0) {
+      this.shieldFlashUntil = nowS + 0.45;
+      this.beep(160, 0.18, "sawtooth");
+      this.beep(110, 0.22, "triangle");
+    }
+    this.prevShield = p.ship.shield;
+    const hullPct = p.ship.hull / p.ship.hullMax;
+    if (hullPct > 0 && hullPct < 0.30 && nowS >= this.nextHullAlarmAt) {
+      // Faster, more urgent alarm as hull drops; 10% → 0.6s, 30% → 1.6s
+      const period = 0.6 + Math.max(0, (hullPct - 0.10)) * 5.0;
+      this.nextHullAlarmAt = nowS + period;
+      this.beep(720, 0.07, "square"); this.beep(540, 0.07, "square");
+    }
+    const fuelPct = p.ship.fuel / p.ship.fuelMax;
+    if (fuelPct > 0 && fuelPct < 0.15 && nowS >= this.nextFuelAlarmAt) {
+      this.nextFuelAlarmAt = nowS + 2.2;
+      this.beep(420, 0.12, "triangle");
+    }
+
     // Auto-save warn
     const mins = (Date.now() - p.lastSaveAt) / 60000;
     if (mins > this.options.unsavedWarnMinutes) {
