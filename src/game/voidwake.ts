@@ -3710,7 +3710,7 @@ export class Voidwake {
 
     // CRITICAL: hull <10% with no shields — animated fire dances across the
     // HUD edges so the player cannot miss they're seconds from breakup.
-    if (hullFrac < 0.10 && p.ship.shield <= 0) {
+    if (hullFrac < 0.10 && p.ship.shield <= 0 && !this._reducedMotion) {
       const fireGlyphs = ["^", "*", "v", "&", "%", "#"];
       const fireCols = ["#ffe066", "#ffa033", "#ff5522", "#cc2200"];
       const tFire = performance.now() / 1000;
