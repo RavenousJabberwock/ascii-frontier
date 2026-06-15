@@ -48,6 +48,7 @@ function hashString(s: string): number {
 // 2. Constants / Glyphs / Tunables
 // =============================================================================
 const SAVE_PREFIX = "voidwake.save.";
+const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const VERSION = "0.1.0";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
@@ -989,6 +990,10 @@ export class Voidwake {
   // destroyed screen so the player understands what happened.
   deathReason: string | null = null;
   deathKiller: string | null = null;
+  // Last reason gameplay returned to the title screen. Rendered on the title
+  // so an unexpected dump has a visible breadcrumb instead of feeling silent.
+  titleNotice: string | null = null;
+  titleNoticeAt = 0;
   // Crash diagnostics: when the loop throws we freeze on a crashed screen
   // and show the error here so the user isn't silently kicked to the menu.
   crashError: string | null = null;
@@ -1042,6 +1047,14 @@ export class Voidwake {
         this.crash(r instanceof Error ? r : new Error(String(r)));
       }
     });
+    try {
+      const raw = sessionStorage.getItem(TITLE_NOTICE_KEY);
+      const saved = raw ? JSON.parse(raw) as { reason?: string; wall?: number } : null;
+      if (saved?.reason && saved.wall && Date.now() - saved.wall < 5 * 60_000) {
+        this.titleNotice = saved.reason;
+        this.titleNoticeAt = performance.now() / 1000;
+      }
+    } catch { /* ignore diagnostic restore failures */ }
   }
 
   fit() {
@@ -1084,6 +1097,33 @@ export class Voidwake {
   pushLog(msg: string) {
     this.log.push({ t: performance.now() / 1000, msg });
     if (this.log.length > 6) this.log.shift();
+  }
+
+  setTitleNotice(reason: string) {
+    this.titleNotice = reason.slice(0, 220);
+    this.titleNoticeAt = performance.now() / 1000;
+    try { sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({ reason: this.titleNotice, wall: Date.now() })); } catch { /* ignore */ }
+    // eslint-disable-next-line no-console
+    console.info("[ASCII Frontier] title return:", this.titleNotice);
+  }
+
+  clearTitleNotice() {
+    this.titleNotice = null;
+    this.titleNoticeAt = 0;
+    try { sessionStorage.removeItem(TITLE_NOTICE_KEY); } catch { /* ignore */ }
+  }
+
+  returnToTitle(reason: string, clearPlayer = true) {
+    if (clearPlayer) this.player = null;
+    this.setTitleNotice(reason);
+    this.screen = "title";
+    this.menuCursor = 0;
+  }
+
+  noteImplicitTitleReturn(from: Screen, noticeAtBefore: number) {
+    if (from === "title" || this.screen !== "title" || this.titleNoticeAt !== noticeAtBefore) return;
+    if (from === "options" || from === "load" || from === "create-char" || from === "create-ship") return;
+    this.setTitleNotice(`Unexpected return to title from ${from}; no explicit reason was recorded.`);
   }
 
   // Append a single line to the comms / chatter feed shown in the COMMS box.
