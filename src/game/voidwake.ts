@@ -1175,10 +1175,12 @@ export class Voidwake {
     // Global error trap so async/uncaught errors during gameplay show on the
     // crash screen instead of vanishing into the console.
     window.addEventListener("error", (ev) => {
-      if (this.screen === "playing") this.crash(ev.error ?? new Error(ev.message));
+      if (this.screen !== "crashed" && this.screen !== "title") {
+        this.crash(ev.error ?? new Error(ev.message));
+      }
     });
     window.addEventListener("unhandledrejection", (ev) => {
-      if (this.screen === "playing") {
+      if (this.screen !== "crashed" && this.screen !== "title") {
         const r = ev.reason;
         this.crash(r instanceof Error ? r : new Error(String(r)));
       }
