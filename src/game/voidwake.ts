@@ -2756,6 +2756,19 @@ export class Voidwake {
       }
     }
     if (ctx.shadowBlur !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
+
+    // Shield-loss flash: brief cyan-white tint over the whole canvas the
+    // instant shields collapse, decaying smoothly so it reads as a hit and
+    // not a UI mode change.
+    if (this.screen === "playing") {
+      const tNow = performance.now() / 1000;
+      const remain = this.shieldFlashUntil - tNow;
+      if (remain > 0) {
+        const a = Math.min(0.55, remain / 0.45 * 0.55);
+        ctx.fillStyle = `rgba(170, 220, 255, ${a.toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
   }
 
 
