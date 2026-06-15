@@ -1252,12 +1252,24 @@ export class Voidwake {
   private _frameNo = 0;
   private _lastRecorderAt = 0;
   private _lastRecordedScreen: Screen = "title";
+  // Reusable grid buffer — allocated once per resize, reset in place each
+  // frame instead of allocating ~rows*cols fresh objects (was a major GC source).
+  private _gridBuf: Cell[][] | null = null;
+  private _gridCols = 0;
+  private _gridRows = 0;
+  // Respect OS-level motion preference. When true, skip flashes / fire FX /
+  // shimmer so motion-sensitive players aren't strobed.
+  private _reducedMotion = false;
+  // Pause flag toggled on visibilitychange — skip update+render while hidden
+  // so backgrounded tabs stop burning CPU.
+  private _hidden = false;
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
   private shieldFlashUntil = 0;     // wall-time (s) until the shield-loss flash decays
   private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
   private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
   private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
+
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
