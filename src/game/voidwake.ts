@@ -585,8 +585,6 @@ const V = {
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
-  if (e.kind === "station" || e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
-function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
 
   // Pirate bases: turrets fire at any non-pirate in range, including player.
