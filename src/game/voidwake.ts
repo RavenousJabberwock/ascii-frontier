@@ -62,6 +62,9 @@ const GLYPHS: Record<string, string> = {
   bullet: "·",
   player: "^",
   loot: "$",
+  comet: "~",
+  nebula: "▒",
+  beacon: "!",
 };
 
 // ---- Flavor data: names / barks / broadcasts -----------------------------
@@ -110,7 +113,10 @@ type EntityKind =
   | "neutral"
   | "hostile"
   | "bullet"
-  | "loot";
+  | "loot"
+  | "comet"
+  | "nebula"
+  | "beacon";
 
 interface Vec3 { x: number; y: number; z: number }
 
@@ -238,6 +244,7 @@ interface Options {
   volumeSfx: number;
   volumeMusic: number;
   unsavedWarnMinutes: number;
+  permadeath: boolean;       // when on, "Load Last Save" is disabled on death
   keybinds: Record<string, string>;
 }
 
@@ -268,11 +275,12 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   dock: "f",
   station: "b",
   mission: "u",
-  boost: "shift",        // afterburner: extra speed while held, burns fuel fast
-  jettison: "j",         // drop one unit of the highest-volume cargo type
-  pause: "p",            // toggle pause while in flight
+  boost: "shift",
+  jettison: "j",
+  pause: "p",
   menu: "escape",
-  toggleGunner: "g",     // toggle hired gunner's autopilot rules
+  toggleGunner: "g",
+  supercruise: "x",      // hold: 3x speed, 3x fuel burn — for long hauls
 };
 
 
@@ -290,6 +298,7 @@ function defaultOptions(): Options {
     volumeSfx: 0.8,
     volumeMusic: 0.6,
     unsavedWarnMinutes: 10,
+    permadeath: false,
 
     keybinds: { ...DEFAULT_KEYBINDS },
   };
@@ -367,6 +376,40 @@ function generateUniverse(seed: number): Entity[] {
     });
   }
 
+  // Comets: fast-moving, harmless. The renderer trails ~ glyphs along velocity.
+  for (let i = 0; i < 3; i++) {
+    const dir = V.norm({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 });
+    out.push({
+      id: nextId(), kind: "comet", name: nameFrom(rng, "Comet"),
+      pos: randPos(rng, 3200),
+      vel: V.scale(dir, 35 + rng() * 25),
+      faction: "nature",
+    });
+  }
+  // Nebula clouds: stationary fog. Inside they drain shields slowly and dim
+  // the starfield. Pure "atmosphere" hazard you can hide a pursuer in.
+  for (let i = 0; i < 4; i++) {
+    out.push({
+      id: nextId(), kind: "nebula", name: nameFrom(rng, "Neb"),
+      pos: randPos(rng, 2800),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "nature",
+    });
+  }
+  // Distress beacons: dock-on-touch for a small bounty (or pirate trap).
+  for (let i = 0; i < 2; i++) {
+    const trap = rng() < 0.35;
+    out.push({
+      id: nextId(), kind: "beacon",
+      name: trap ? "Distress (?)" : "Distress",
+      pos: randPos(rng, 2600),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "wreck",
+      state: trap ? "trap" : "rescue",
+      loot: { credits: 120 + Math.floor(rng() * 220) },
+    });
+  }
+
   return out;
 }
 
@@ -391,7 +434,7 @@ const V = {
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
-  if (e.kind === "station" || e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot") return;
+  if (e.kind === "station" || e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
   if (!e.hull || e.hull <= 0) return;
 
   const distToPlayer = V.len(V.sub(player.pos, e.pos));
@@ -690,6 +733,9 @@ function colorFor(kind: EntityKind): string {
     case "hostile": return "#ff5555";
     case "bullet": return "#fffa86";
     case "loot": return "#ffe066";
+    case "comet": return "#bff7ff";
+    case "nebula": return "#c47afc";
+    case "beacon": return "#ff66cc";
   }
 }
 
@@ -1050,9 +1096,8 @@ export class Voidwake {
     // Brief grace period so the player actually reads the banner rather than
     // dismissing it with a held key from the moment of death.
     const now = performance.now() / 1000;
-    const grace = 1.0;
+    const grace = 2.5;
     if (now - this.destroyedAt < grace) {
-      // Drain any input that fired during the death frame.
       this.input.consume("enter");
       this.input.consume("arrowup");
       this.input.consume("arrowdown");
@@ -1060,30 +1105,43 @@ export class Voidwake {
     }
     this.menuNav(this.destroyedItems.length);
     if (this.input.consume("enter")) {
-
       const c = this.destroyedItems[this.menuCursor];
+      const saves = listSaves();
       if (c === "Load Last Save") {
-        const saves = listSaves();
-        if (saves.length > 0) {
-          const blob = loadGame(saves[0].slot);
-          if (blob) {
-            this.seed = blob.seed;
-            this.rng = mulberry32(this.seed);
-            this.entities = blob.entities;
-            this.player = blob.player;
-            this.options = blob.options;
-            this.screen = "playing";
-            this.pushLog(`Restored from ${saves[0].slot}.`);
-            return;
-          }
+        // Permadeath disables save recovery entirely.
+        if (this.options.permadeath) {
+          this.pushLog("Permadeath: no recovery.");
+          return;
         }
-        this.pushLog("No save available.");
+        if (saves.length === 0) {
+          // Don't silently bounce to title — keep the player here so they
+          // know there is nothing to load. This was the "kicked to main
+          // menu with no idea why" bug after dying before any autosave.
+          this.pushLog("No save available — pick 'Return to Main Menu'.");
+          return;
+        }
+        const blob = loadGame(saves[0].slot);
+        if (!blob) {
+          this.pushLog(`Save '${saves[0].slot}' is corrupt.`);
+          return;
+        }
+        this.seed = blob.seed;
+        this.rng = mulberry32(this.seed);
+        this.entities = blob.entities;
+        this.player = blob.player;
+        this.options = blob.options;
+        this.screen = "playing";
+        this.pushLog(`Restored from ${saves[0].slot}.`);
+        return;
       }
+      // Return to Main Menu
+      console.info("[ASCII Frontier] returning to title:", this.deathReason ?? "(unknown)");
       this.player = null;
       this.screen = "title";
       this.menuCursor = 0;
     }
   }
+
 
 
   // --- Title --------------------------------------------------------------
@@ -1221,13 +1279,14 @@ export class Voidwake {
 
     // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
     const boosting = keys.has(k.boost) && p.ship.fuel > 0;
-    const boostMul = boosting ? 1.6 : 1.0;
-    const fuelMul = boosting ? 4.0 : 1.0;
+    // Supercruise: hold for 3x speed at 3x fuel burn. Stacks with afterburner
+    // but locks weapons (no fire while super-cruising) so it stays a travel tool.
+    const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
+    const boostMul = (boosting ? 1.6 : 1.0) * (supercruise ? 3.0 : 1.0);
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0);
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
-    // Out-of-fuel: throttle authority drops to a tiny drift. Player can still
-    // turn, but movement coasts at 15% until refueled at a station.
     const fuelFactor = p.ship.fuel > 0 ? 1.0 : 0.15;
     const sp = p.ship.speed * p.throttle * boostMul * fuelFactor;
     p.pos = V.add(p.pos, V.scale(fwd, sp * dt));
@@ -1236,8 +1295,56 @@ export class Voidwake {
       if (p.ship.fuel === 0) this.pushLog("⚠ FUEL EXHAUSTED — drift only. Dock to refuel.");
     }
 
-    // Shield regen
+    // Shield regen (suppressed while inside a nebula — applied below).
     p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * 4);
+
+    // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
+    let insideNebula = false;
+    for (const e of this.entities) {
+      if (e.kind === "nebula") {
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 280) {
+          insideNebula = true;
+          if (!this.options.cheat) {
+            // Slow shield burn; if shields are down, mild hull etch.
+            if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 3);
+            else p.ship.hull = Math.max(0, p.ship.hull - dt * 1.2);
+          }
+        }
+      } else if (e.kind === "beacon") {
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 30) {
+          if (e.state === "trap") {
+            // Spawn a small pirate wing on contact.
+            this.pushLog("☠ Beacon was a pirate trap!");
+            this.pushChatter("Beacon", "Got 'em, lads!", "#ff8a8a");
+            for (let i = 0; i < 2; i++) {
+              this.entities.push({
+                id: nextId(), kind: "hostile", name: "Trap Raider",
+                pos: V.add(p.pos, { x: (Math.random() - 0.5) * 80, y: (Math.random() - 0.5) * 80, z: (Math.random() - 0.5) * 80 }),
+                vel: { x: 0, y: 0, z: 0 },
+                faction: "pirate", hull: 45, shield: 25,
+                state: "attack", cooldown: 0, weaponId: "pulse",
+              });
+            }
+          } else {
+            const cr = e.loot?.credits ?? 150;
+            p.credits += cr;
+            p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + 25);
+            this.pushLog(`Distress payout: +${cr}cr, +25 fuel.`);
+            this.pushChatter("Survivor", "Stars bless you, pilot.", "#9fe");
+          }
+          // Consume the beacon either way.
+          e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
+        }
+      }
+    }
+    if (insideNebula && Math.random() < 0.01) this.pushChatter("Sensors", "Nebula wash — shields degrading.", "#c47afc");
+    // Save flag for renderer (dim starfield, fog overlay).
+    (this as unknown as { _inNebula: boolean })._inNebula = insideNebula;
+    // Block fire while super-cruising (preserved in fire block below via flag).
+    (this as unknown as { _supercruise: boolean })._supercruise = supercruise;
+
 
     // Cycle target
     if (this.input.consume(k.cycleTarget)) this.cycleTarget();
@@ -1256,9 +1363,10 @@ export class Voidwake {
       }
     }
 
-    // Fire
+    // Fire (locked while super-cruising — the FTL field destabilizes shots).
     p.cooldown -= dt;
-    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0) {
+    const _scState = (this as unknown as { _supercruise?: boolean })._supercruise;
+    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0 && !_scState) {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
       p.cooldown = w.cooldown;
       this.entities.push({
@@ -1269,6 +1377,7 @@ export class Voidwake {
       });
       this.beep(880, 0.04, "square");
     }
+
 
     // Mine
     if (this.input.consume(k.mine)) this.mineTarget();
@@ -1314,12 +1423,20 @@ export class Voidwake {
         if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
         const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
+        // Star fuel scoop: a "corona" ring just outside the kill radius.
+        // Drift through at low throttle to refuel for free; shields tick down.
+        if (e.kind === "star" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
+          p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 18);
+          if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 5);
+          else p.ship.hull = Math.max(0, p.ship.hull - dt * 2);
+          if (Math.random() < 0.02) this.pushLog("☼ Scooping stellar fuel — shields straining.");
+          if (p.ship.hull <= 0) { this.die(`Burned alive scooping ${e.name}`, e.name); return; }
+          continue;
+        }
         if (d < radius) {
-          // Push the player back to the surface and apply scaled damage.
           const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
           if (e.kind === "station") {
-            // Stations bump but don't kill; remind the pilot to dock.
             p.throttle = Math.min(p.throttle, 0.1);
             this.pushLog(`Bumped ${e.name} — press F to dock.`);
             this.beep(220, 0.06, "square");
@@ -1336,6 +1453,7 @@ export class Voidwake {
         }
       }
     }
+
 
     // Move entities
     const now = performance.now() / 1000;
@@ -1710,6 +1828,7 @@ export class Voidwake {
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
+      `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
       `Reset Keybinds (current: ${Object.keys(this.options.keybinds).length})`,
       "Back",
     ];
@@ -1732,6 +1851,7 @@ export class Voidwake {
     if (i === 8) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
     if (i === 9) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
     if (i === 10) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
+    if (i === 11 && (left || right)) this.options.permadeath = !this.options.permadeath;
     if (this.input.consume("enter")) {
       if (items[i].startsWith("Reset")) this.options.keybinds = { ...DEFAULT_KEYBINDS };
       if (items[i] === "Back") this.screen = this.player ? "menu" : "title";
@@ -2209,6 +2329,7 @@ export class Voidwake {
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
+      `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
       `Reset Keybinds`,
       "Back",
     ];
@@ -2342,7 +2463,7 @@ export class Voidwake {
     // distance so big objects (stars, stations, planets) read as solid.
     const worldRadius: Record<string, number> = {
       star: 40, planet: 30, station: 18, asteroid: 8,
-      ship: 4, bullet: 0.5,
+      ship: 4, bullet: 0.5, comet: 2, nebula: 240, beacon: 3,
     };
     // Sort far→near so close objects overdraw distant ones.
     const projected: { e: Entity; sx: number; sy: number; z: number; r: number }[] = [];
@@ -2580,6 +2701,7 @@ export class Voidwake {
       ["A / D", "yaw L/R"],
       ["Q / E", "pitch U/D"],
       ["SHIFT", "afterburner"],
+      ["X", "supercruise (3x)"],
       ["SPACE", "fire"],
       ["T", "cycle target"],
       ["M", "mine target"],
@@ -2676,6 +2798,44 @@ export class Voidwake {
     if (this.input.keys.has(this.options.keybinds.boost) && p.ship.fuel > 0) {
       putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6");
     }
+    // Supercruise banner — separate row so it can stack with afterburner.
+    if (this.input.keys.has(this.options.keybinds.supercruise) && p.ship.fuel > 0) {
+      const msg = "» » » SUPERCRUISE — weapons offline « « «";
+      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff");
+    }
+
+    // Cockpit damage state: when hull < 25%, etch crack patterns along the
+    // viewport edges and flash a warning. Pure decoration tied to ship health.
+    const hullFrac = p.ship.hull / Math.max(1, p.ship.hullMax);
+    if (hullFrac < 0.25) {
+      const flash = Math.floor(performance.now() / 400) % 2 === 0;
+      const crackCol = flash ? "#ff3a3a" : "#9a1a1a";
+      const cracks: [number, number, string][] = [
+        [vpLeft + 4, vpTop + 2, "/"], [vpLeft + 6, vpTop + 3, "\\"],
+        [vpRight - 4, vpTop + 2, "\\"], [vpRight - 6, vpTop + 4, "/"],
+        [vpLeft + 8, vpBottom - 3, "\\"], [vpRight - 8, vpBottom - 4, "/"],
+        [vpLeft + 12, vpTop + 6, "*"], [vpRight - 14, vpBottom - 7, "*"],
+        [vpLeft + 3, Math.floor((vpTop + vpBottom) / 2), "/"],
+        [vpRight - 3, Math.floor((vpTop + vpBottom) / 2) + 1, "\\"],
+      ];
+      for (const [cx2, cy2, ch] of cracks) {
+        if (cy2 > vpTop && cy2 < vpBottom && cx2 > vpLeft && cx2 < vpRight) {
+          g[cy2][cx2] = { ch, color: crackCol };
+        }
+      }
+      const warn = "‼ HULL CRITICAL ‼";
+      putText(g, vpLeft + Math.floor(vw / 2 - warn.length / 2), vpBottom - 2, warn, crackCol);
+    }
+
+    // Nebula fog overlay — softens viewport with scattered dim glyphs.
+    const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula;
+    if (inNeb) {
+      for (let i = 0; i < 30; i++) {
+        const x = vpLeft + 1 + Math.floor(Math.random() * (vw - 2));
+        const y = vpTop + 1 + Math.floor(Math.random() * (vh - 2));
+        if (g[y][x].ch === " ") g[y][x] = { ch: "░", color: "#5a3a7a" };
+      }
+    }
 
     // Pause banner (big, centered, obvious)
     if (this.paused) {
@@ -2685,6 +2845,7 @@ export class Voidwake {
 
     this.tickMissions();
   }
+
 
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
