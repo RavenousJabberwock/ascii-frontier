@@ -1252,6 +1252,12 @@ export class Voidwake {
   private _frameNo = 0;
   private _lastRecorderAt = 0;
   private _lastRecordedScreen: Screen = "title";
+  // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
+  private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
+  private shieldFlashUntil = 0;     // wall-time (s) until the shield-loss flash decays
+  private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
+  private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
+  private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
