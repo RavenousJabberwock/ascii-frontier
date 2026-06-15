@@ -1286,7 +1286,14 @@ export class Voidwake {
   }
 
   // --- Destroyed (death) screen -------------------------------------------
-  destroyedItems = ["Load Last Save", "Return to Main Menu"];
+  // Menu items are computed each frame so "Respawn at Station" only appears
+  // when permadeath is OFF — softcore players get a rescue path instead of
+  // being forced to load a save or dump to title.
+  get destroyedItems(): string[] {
+    return this.options.permadeath
+      ? ["Load Last Save", "Return to Main Menu"]
+      : ["Respawn at Station", "Load Last Save", "Return to Main Menu"];
+  }
   updateDestroyed() {
     // Brief grace period so the player actually reads the banner rather than
     // dismissing it with a held key from the moment of death.
@@ -1298,10 +1305,15 @@ export class Voidwake {
       this.input.consume("arrowdown");
       return;
     }
-    this.menuNav(this.destroyedItems.length);
+    const items = this.destroyedItems;
+    this.menuNav(items.length);
     if (this.input.consume("enter")) {
-      const c = this.destroyedItems[this.menuCursor];
+      const c = items[this.menuCursor];
       const saves = listSaves();
+      if (c === "Respawn at Station") {
+        this.respawnAtStation();
+        return;
+      }
       if (c === "Load Last Save") {
         // Permadeath disables save recovery entirely.
         if (this.options.permadeath) {
@@ -1332,6 +1344,44 @@ export class Voidwake {
       // Return to Main Menu
       this.returnToTitle(`Destroyed: ${this.deathReason ?? "unknown cause"}`);
     }
+  }
+
+  // Softcore rescue: teleport to nearest station, restore hull/shield, refuel,
+  // and skim a rescue fee from credits. Cargo is lost (went up with the ship).
+  respawnAtStation() {
+    const p = this.player;
+    if (!p) { this.returnToTitle("Respawn lost player state.", false); return; }
+    const stations = this.entities.filter((e) => e.kind === "station");
+    if (stations.length === 0) {
+      this.pushLog("No stations available for rescue.");
+      return;
+    }
+    // Nearest station by 3D distance from last position.
+    let best = stations[0];
+    let bestD = V.dist(p.pos, best.pos);
+    for (const s of stations) {
+      const d = V.dist(p.pos, s.pos);
+      if (d < bestD) { best = s; bestD = d; }
+    }
+    // Drop the player a short offset off the station so they don't spawn
+    // inside it and immediately collide.
+    p.pos = { x: best.pos.x + 30, y: best.pos.y + 10, z: best.pos.z + 30 };
+    p.heading = { yaw: 0, pitch: 0 };
+    p.throttle = 0;
+    p.cooldown = 0;
+    p.ship.hull = p.ship.hullMax;
+    p.ship.shield = p.ship.shieldMax;
+    p.ship.fuel = Math.max(p.ship.fuel, Math.floor(p.ship.fuelMax * 0.5));
+    // Rescue fee: 25% of credits, capped so brand-new commanders aren't wiped.
+    const fee = Math.min(p.credits, Math.max(0, Math.floor(p.credits * 0.25)));
+    p.credits -= fee;
+    // Cargo is lost with the wreck.
+    p.cargo = {};
+    this.deathReason = null;
+    this.deathKiller = null;
+    this.screen = "playing";
+    this.pushLog(`Rescued by ${best.name}. Hull restored. Fee: ${fee}cr. Cargo lost.`);
+    this.beep(440, 0.2, "sine");
   }
 
 
