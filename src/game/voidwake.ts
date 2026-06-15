@@ -2277,7 +2277,13 @@ export class Voidwake {
     } else if (best.kind === "asteroid") {
       if (bestDist > 200) return;
       if (g.cooldown > 0) return;
-      if (cargoTotal(p) >= p.ship.cargoMax) return;
+      if (cargoTotal(p) >= p.ship.cargoMax) {
+        if (g.nextBarkAt <= 0) {
+          g.nextBarkAt = 10 + Math.random() * 6;
+          this.pushChatter(tag, pickLine("gunner_cargofull", this.chatterCtx()), "#ffd066");
+        }
+        return;
+      }
       if ((best.ore ?? 0) <= 0) return;
       g.cooldown = 0.35;
       best.ore!--;
