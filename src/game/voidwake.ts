@@ -917,23 +917,24 @@ class Input {
   mouseNX = 0;
   mouseNY = 0;
   mouseInside = false;
-  attach(el: HTMLElement) {
+  attach(el: HTMLElement, signal?: AbortSignal) {
+    const opts = signal ? { signal } : undefined;
     el.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();
       if (!this.keys.has(k)) this.pressed.add(k);
       this.keys.add(k);
       if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
-    });
-    el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
-    el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; });
+    }, opts);
+    el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()), opts);
+    el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; }, opts);
     el.addEventListener("mousemove", (e) => {
       const r = (el as HTMLCanvasElement).getBoundingClientRect();
       this.mouseNX = ((e.clientX - r.left) / r.width) * 2 - 1;
       this.mouseNY = ((e.clientY - r.top) / r.height) * 2 - 1;
       this.mouseInside = true;
-    });
-    el.addEventListener("mouseleave", () => { this.mouseInside = false; });
-    el.addEventListener("mouseenter", () => { this.mouseInside = true; });
+    }, opts);
+    el.addEventListener("mouseleave", () => { this.mouseInside = false; }, opts);
+    el.addEventListener("mouseenter", () => { this.mouseInside = true; }, opts);
   }
   consume(k: string) {
     const had = this.pressed.has(k);
