@@ -1310,7 +1310,19 @@ export class Voidwake {
       }
     } catch { /* ignore diagnostic restore failures */ }
     window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true));
+    // Pause when the tab is hidden — no point burning rAF cycles offscreen.
+    document.addEventListener("visibilitychange", () => {
+      this._hidden = document.visibilityState === "hidden";
+      if (!this._hidden) this.lastTs = performance.now();
+    });
+    // Honour OS-level reduced-motion preference for flashes / fire FX.
+    try {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      this._reducedMotion = mq.matches;
+      mq.addEventListener?.("change", (e) => { this._reducedMotion = e.matches; });
+    } catch { /* matchMedia unavailable */ }
   }
+
 
   fit() {
     const r = this.canvas.getBoundingClientRect();
