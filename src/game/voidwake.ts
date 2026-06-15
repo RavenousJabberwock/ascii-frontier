@@ -1181,6 +1181,9 @@ export class Voidwake {
   // Title-screen drifting stars (camera-local 2D, no player required).
   private titleStars: { x: number; y: number; z: number; t: number }[] = [];
   private _lastRenderTs = 0;
+  private _frameNo = 0;
+  private _lastRecorderAt = 0;
+  private _lastRecordedScreen: Screen = "title";
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -1211,7 +1214,18 @@ export class Voidwake {
         this.titleNotice = saved.reason;
         this.titleNoticeAt = performance.now() / 1000;
       }
+      if (!this.titleNotice) {
+        const recRaw = sessionStorage.getItem(FLIGHT_RECORDER_KEY);
+        const rec = recRaw ? JSON.parse(recRaw) as FlightRecorder : null;
+        const fresh = rec?.wall && Date.now() - rec.wall < 5 * 60_000;
+        const wasInFlight = rec?.screen === "playing" || rec?.screen === "menu" || rec?.screen === "station" || rec?.screen === "destroyed" || rec?.screen === "crashed";
+        if (rec && fresh && wasInFlight && !rec.clean) {
+          const hull = rec.hullMax ? ` hull ${Math.round(rec.hull ?? 0)}/${Math.round(rec.hullMax)}` : "";
+          this.setTitleNotice(`Recovered after engine restart while ${rec.screen}; last record: ${rec.reason}${hull}; entities ${rec.entityCount}; frame ${rec.frame}.`);
+        }
+      }
     } catch { /* ignore diagnostic restore failures */ }
+    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", true, true));
   }
 
   fit() {
@@ -1247,6 +1261,7 @@ export class Voidwake {
     this.rafId = requestAnimationFrame(loop);
   }
   stop() {
+    this.recordFlight(`engine stopped while ${this.screen}`, this.screen === "title", true);
     this.running = false;
     cancelAnimationFrame(this.rafId);
   }
