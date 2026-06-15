@@ -3569,6 +3569,49 @@ export class Voidwake {
       putText(g, vpLeft + Math.floor(vw / 2 - warn.length / 2), vpBottom - 2, warn, crackCol);
     }
 
+    // CRITICAL: hull <10% with no shields — animated fire dances across the
+    // HUD edges so the player cannot miss they're seconds from breakup.
+    if (hullFrac < 0.10 && p.ship.shield <= 0) {
+      const fireGlyphs = ["^", "*", "v", "&", "%", "#"];
+      const fireCols = ["#ffe066", "#ffa033", "#ff5522", "#cc2200"];
+      const tFire = performance.now() / 1000;
+      // Top + bottom edges of the viewport
+      for (let x = vpLeft + 1; x < vpRight; x++) {
+        // Pseudo-noise — varies per column and time so flames flicker
+        const n1 = Math.sin(x * 0.7 + tFire * 8.2) * 0.5 + Math.sin(x * 1.9 + tFire * 5.1) * 0.5;
+        const n2 = Math.sin(x * 0.9 + tFire * 6.7 + 1.3) * 0.5 + Math.sin(x * 2.3 + tFire * 4.4) * 0.5;
+        if (n1 > -0.2) {
+          const ch = fireGlyphs[Math.floor((n1 + 1) * fireGlyphs.length / 2) % fireGlyphs.length];
+          const col = fireCols[Math.floor((n1 + 1) * fireCols.length / 2) % fireCols.length];
+          const y = vpTop + 1;
+          g[y][x] = { ch, color: col, glow: true };
+          if (n1 > 0.4) g[y + 1][x] = { ch: ".", color: fireCols[3] };
+        }
+        if (n2 > -0.2) {
+          const ch = fireGlyphs[Math.floor((n2 + 1) * fireGlyphs.length / 2) % fireGlyphs.length];
+          const col = fireCols[Math.floor((n2 + 1) * fireCols.length / 2) % fireCols.length];
+          const y = vpBottom - 1;
+          g[y][x] = { ch, color: col, glow: true };
+          if (n2 > 0.4) g[y - 1][x] = { ch: ".", color: fireCols[3] };
+        }
+      }
+      // Side edges, sparser
+      for (let y = vpTop + 2; y < vpBottom - 1; y++) {
+        const n = Math.sin(y * 1.3 + tFire * 7.0) * 0.5 + Math.sin(y * 2.1 + tFire * 3.9) * 0.5;
+        if (n > 0.1) {
+          const ch = fireGlyphs[Math.floor((n + 1) * fireGlyphs.length / 2) % fireGlyphs.length];
+          const col = fireCols[Math.floor((n + 1) * fireCols.length / 2) % fireCols.length];
+          g[y][vpLeft + 1] = { ch, color: col, glow: true };
+          g[y][vpRight - 1] = { ch, color: col, glow: true };
+        }
+      }
+      // Pulsing "BREAKUP IMMINENT" tag
+      const tagBlink = (Math.floor(performance.now() / 180) % 2) === 0;
+      const tag = "‼ ‼ ‼  BREAKUP IMMINENT — DOCK NOW  ‼ ‼ ‼";
+      putText(g, vpLeft + Math.floor(vw / 2 - tag.length / 2), vpTop + Math.floor(vh / 2) + 3,
+        tag, tagBlink ? "#ffe066" : "#ff3322");
+    }
+
     // Nebula fog overlay — softens viewport with scattered dim glyphs.
     const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula;
     if (inNeb) {
