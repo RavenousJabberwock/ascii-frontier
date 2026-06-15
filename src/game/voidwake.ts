@@ -79,7 +79,9 @@ const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","O
 
 type ChatterKind =
   | "hostile" | "friendly" | "neutral" | "station" | "planet"
-  | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit";
+  | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
+  | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
+  | "gunner_kill" | "gunner_docked" | "gunner_cargofull";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
 const FRAGMENTS: Record<string, string[]> = {
