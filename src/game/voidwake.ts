@@ -1453,10 +1453,18 @@ export class Voidwake {
     const shipName  = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.name ?? p.ship.hullId;
     const sector    = `${Math.floor(p.pos.x / 500)}:${Math.floor(p.pos.z / 500)}`;
     const target    = opts?.target ?? this.entities.find((e) => e.id === this.targetId) ?? null;
-    const nearestHostile = this.entities
-      .filter((e) => e.kind === "hostile")
-      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
-      .sort((a, b) => a.d - b.d)[0]?.e;
+    // Linear scan with squared-distance — no array/closure/sort overhead.
+    let nearestHostile: Entity | undefined;
+    {
+      let bestD2 = Infinity;
+      for (const e of this.entities) {
+        if (e.kind !== "hostile") continue;
+        const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bestD2) { bestD2 = d2; nearestHostile = e; }
+      }
+    }
+
     const speakerName = speaker?.name ?? "Comms";
     return {
       cmdr: p.char.name,
