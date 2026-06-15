@@ -449,6 +449,29 @@ function nameFrom(rng: () => number, prefix: string): string {
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
+// World scale + entity counts. Bumped substantially since 0.2 for a more
+// populated sandbox. If you tweak these, also revisit station/planet spawn
+// caps in maybeSpawnFromBodies() so the world doesn't drift past 2x baseline.
+const WORLD = {
+  starRadius: 0,
+  planetRadius: 5200,
+  asteroidRadius: 4200,
+  stationRadius: 4800,
+  shipRadius: 5600,
+  cometRadius: 6000,
+  nebulaRadius: 5200,
+  beaconRadius: 5000,
+  baseRadius: 5400,
+  planets: 12,
+  asteroids: 160,
+  stations: 6,
+  ships: 48,
+  comets: 8,
+  nebulae: 9,
+  beacons: 6,
+  pirateBases: 3,
+};
+
 function generateUniverse(seed: number): Entity[] {
   _entityIdSeq = 1;
   const rng = mulberry32(seed);
@@ -458,68 +481,79 @@ function generateUniverse(seed: number): Entity[] {
   out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sol"), pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
 
   // Planets
-  for (let i = 0; i < 5; i++) {
-    out.push({ id: nextId(), kind: "planet", name: nameFrom(rng, "P-"), pos: randPos(rng, 2500), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
+  for (let i = 0; i < WORLD.planets; i++) {
+    out.push({ id: nextId(), kind: "planet", name: nameFrom(rng, "P-"), pos: randPos(rng, WORLD.planetRadius), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
   }
   // Asteroid field
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < WORLD.asteroids; i++) {
     out.push({
-      id: nextId(), kind: "asteroid", name: "Rock", pos: randPos(rng, 1800),
+      id: nextId(), kind: "asteroid", name: "Rock", pos: randPos(rng, WORLD.asteroidRadius),
       vel: { x: (rng() - 0.5) * 2, y: (rng() - 0.5) * 2, z: (rng() - 0.5) * 2 },
       faction: "nature", ore: 5 + Math.floor(rng() * 20),
     });
   }
-  // Stations
-  for (let i = 0; i < 3; i++) {
+  // Civilian stations (dockable). Alternating federation/guild ownership.
+  for (let i = 0; i < WORLD.stations; i++) {
+    const fac = i % 2 === 0 ? "federation" : "guild";
     out.push({
-      id: nextId(), kind: "station", name: nameFrom(rng, "Station"),
-      pos: randPos(rng, 2200), vel: { x: 0, y: 0, z: 0 }, faction: "federation",
+      id: nextId(), kind: "station", name: nameFrom(rng, fac === "federation" ? "Station" : "Outpost"),
+      pos: randPos(rng, WORLD.stationRadius), vel: { x: 0, y: 0, z: 0 }, faction: fac,
       hull: 500, shield: 300, state: "idle",
+    });
+  }
+  // Pirate bases: fortified, hostile, undockable. Periodically spawn raiders
+  // and fire turret bullets at anything not flying pirate colors. Destroying
+  // one nets a fat bounty + rep, and stops local pirate respawns.
+  for (let i = 0; i < WORLD.pirateBases; i++) {
+    out.push({
+      id: nextId(), kind: "station", name: nameFrom(rng, "Den"),
+      pos: randPos(rng, WORLD.baseRadius), vel: { x: 0, y: 0, z: 0 }, faction: "pirate",
+      hull: 900, shield: 500, state: "pirate_base", cooldown: 0,
     });
   }
   // Ships
   const factions = ["federation", "guild", "pirate"];
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < WORLD.ships; i++) {
     const roll = rng();
     const kind: EntityKind = roll < 0.4 ? "friendly" : roll < 0.75 ? "neutral" : "hostile";
     const fac = kind === "friendly" ? "federation" : kind === "neutral" ? "guild" : "pirate";
     out.push({
       id: nextId(), kind, name: nameFrom(rng, kind === "hostile" ? "Raider" : "Ship"),
-      pos: randPos(rng, 3000),
+      pos: randPos(rng, WORLD.shipRadius),
       vel: { x: (rng() - 0.5) * 10, y: (rng() - 0.5) * 10, z: (rng() - 0.5) * 10 },
       faction: factions.includes(fac) ? fac : "guild",
       hull: kind === "hostile" ? 50 : 40, shield: 30,
-      state: "wander", cooldown: 0, weaponId: kind === "hostile" ? "pulse" : "pulse",
+      state: "wander", cooldown: 0, weaponId: "pulse",
     });
   }
 
   // Comets: fast-moving, harmless. The renderer trails ~ glyphs along velocity.
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < WORLD.comets; i++) {
     const dir = V.norm({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 });
     out.push({
       id: nextId(), kind: "comet", name: nameFrom(rng, "Comet"),
-      pos: randPos(rng, 3200),
+      pos: randPos(rng, WORLD.cometRadius),
       vel: V.scale(dir, 35 + rng() * 25),
       faction: "nature",
     });
   }
   // Nebula clouds: stationary fog. Inside they drain shields slowly and dim
   // the starfield. Pure "atmosphere" hazard you can hide a pursuer in.
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < WORLD.nebulae; i++) {
     out.push({
       id: nextId(), kind: "nebula", name: nameFrom(rng, "Neb"),
-      pos: randPos(rng, 2800),
+      pos: randPos(rng, WORLD.nebulaRadius),
       vel: { x: 0, y: 0, z: 0 },
       faction: "nature",
     });
   }
   // Distress beacons: dock-on-touch for a small bounty (or pirate trap).
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < WORLD.beacons; i++) {
     const trap = rng() < 0.35;
     out.push({
       id: nextId(), kind: "beacon",
       name: trap ? "Distress (?)" : "Distress",
-      pos: randPos(rng, 2600),
+      pos: randPos(rng, WORLD.beaconRadius),
       vel: { x: 0, y: 0, z: 0 },
       faction: "wreck",
       state: trap ? "trap" : "rescue",
@@ -551,36 +585,112 @@ const V = {
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
-  if (e.kind === "station" || e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
-  if (!e.hull || e.hull <= 0) return;
+  if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
+
+  // Pirate bases: turrets fire at any non-pirate in range, including player.
+  if (e.kind === "station") {
+    if (e.faction !== "pirate") return;
+    e.cooldown = (e.cooldown ?? 0) - dt;
+    // Pick nearest non-pirate ship OR player within 700u.
+    let bestT: { pos: Vec3; id: number } | null = null;
+    let bestD = 700;
+    const playerD = V.len(V.sub(player.pos, e.pos));
+    if (playerD < bestD) { bestT = { pos: player.pos, id: -1 }; bestD = playerD; }
+    for (const t of ents) {
+      if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
+      if (t.faction === "pirate") continue;
+      const d = V.len(V.sub(t.pos, e.pos));
+      if (d < bestD) { bestD = d; bestT = { pos: t.pos, id: t.id }; }
+    }
+    if (bestT && (e.cooldown ?? 0) <= 0) {
+      e.cooldown = 0.6;
+      const dir = V.norm(V.sub(bestT.pos, e.pos));
+      ents.push(makeBullet(e, dir));
+    }
+    return;
+  }
 
   const distToPlayer = V.len(V.sub(player.pos, e.pos));
 
+  // Helper: nearest enemy NPC ship within `range`. Pirates hunt non-pirate
+  // ships; defenders (friendly/neutral) hunt pirates.
+  const findEnemyShip = (range: number): Entity | null => {
+    let best: Entity | null = null;
+    let bestD = range;
+    for (const t of ents) {
+      if (t.id === e.id) continue;
+      if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
+      if ((t.hull ?? 1) <= 0) continue;
+      // Pirates fight everyone non-pirate; defenders only engage pirates.
+      if (e.faction === "pirate") {
+        if (t.faction === "pirate") continue;
+      } else {
+        if (t.faction !== "pirate") continue;
+      }
+      const d = V.len(V.sub(t.pos, e.pos));
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    return best;
+  };
+
   if (e.kind === "hostile") {
-    // Chase & shoot
-    e.state = distToPlayer < 800 ? "attack" : "patrol";
-    if (e.state === "attack") {
-      const dir = V.norm(V.sub(player.pos, e.pos));
+    // Hostiles consider the player AND the nearest non-pirate NPC; closest wins.
+    const enemyShip = findEnemyShip(700);
+    const shipD = enemyShip ? V.len(V.sub(enemyShip.pos, e.pos)) : Infinity;
+    let targetPos: Vec3 | null = null;
+    let targetD = Infinity;
+    if (distToPlayer < 800) { targetPos = player.pos; targetD = distToPlayer; }
+    if (enemyShip && shipD < targetD) { targetPos = enemyShip.pos; targetD = shipD; e.targetId = enemyShip.id; }
+
+    if (targetPos) {
+      e.state = "attack";
+      const dir = V.norm(V.sub(targetPos, e.pos));
       e.vel = V.scale(dir, 35);
       e.cooldown = (e.cooldown ?? 0) - dt;
-      if (distToPlayer < 400 && (e.cooldown ?? 0) <= 0) {
+      if (targetD < 400 && (e.cooldown ?? 0) <= 0) {
         e.cooldown = 0.8;
         ents.push(makeBullet(e, dir));
       }
     } else {
-      // Wander
+      e.state = "patrol";
       if (Math.random() < 0.02) e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 15);
     }
   } else if (e.kind === "friendly") {
-    // Travel toward nearest station
-    const station = ents.find((x) => x.kind === "station");
+    // Defend: engage pirates within 500u, else continue station route.
+    const foe = findEnemyShip(500);
+    if (foe) {
+      const dir = V.norm(V.sub(foe.pos, e.pos));
+      e.vel = V.scale(dir, 28);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      const fd = V.len(V.sub(foe.pos, e.pos));
+      if (fd < 380 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 1.0;
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
+    const station = ents.find((x) => x.kind === "station" && x.faction !== "pirate");
     if (station) {
       const d = V.sub(station.pos, e.pos);
       if (V.len(d) > 80) e.vel = V.scale(V.norm(d), 20);
       else e.vel = { x: 0, y: 0, z: 0 };
     }
   } else if (e.kind === "neutral") {
-    // Mine: drift toward random asteroid
+    // Skittish: only shoots if a pirate gets close (<350u). Otherwise mines.
+    const foe = findEnemyShip(350);
+    if (foe) {
+      // Try to flee while plinking back.
+      const away = V.norm(V.sub(e.pos, foe.pos));
+      e.vel = V.scale(away, 24);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      const fd = V.len(V.sub(foe.pos, e.pos));
+      if (fd < 320 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 1.4;
+        const dir = V.norm(V.sub(foe.pos, e.pos));
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
     if (!e.targetId || rng() < 0.005) {
       const rocks = ents.filter((x) => x.kind === "asteroid");
       const t = rocks[Math.floor(rng() * rocks.length)];
@@ -887,6 +997,7 @@ function tintFor(e: Entity): { fill: string; edge: string } {
       return { fill: PLANET_FILLS[i], edge: PLANET_EDGES[i] };
     }
     case "station": {
+      if (e.faction === "pirate") return { fill: "#c44", edge: "#ff7766" };
       const i = Math.floor(h * STATION_FILLS.length);
       return { fill: STATION_FILLS[i], edge: "#8a8ad0" };
     }
@@ -1012,6 +1123,10 @@ export class Voidwake {
   stationPage: "main" | "market" | "weapons" | "modules" | "crew" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
+  // Throttles for periodic respawning from stations / planets / pirate bases.
+  private _nextCivSpawnAt = 25;
+  private _nextPirateSpawnAt = 18;
+  private _nextPlanetSpawnAt = 60;
   // Simple FPS counter (toggleable in Options).
   fps = 0;
   private _fpsAcc = 0;
@@ -1639,6 +1754,7 @@ export class Voidwake {
     this.updateGunner(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    this.tickRespawns(dt);
 
     // Autosave on a timer (rotates into the dedicated "autosave" slot).
     this.autosaveTimer += dt;
@@ -1729,51 +1845,75 @@ export class Voidwake {
         return false;
       }
 
-      // Enemy hit
+      // Enemy hit. Stations are eligible only when their faction is hostile
+      // to the bullet's faction (currently: pirate bases shot by anyone non-pirate,
+      // civilian stations shot by pirates).
       for (const t of this.entities) {
-        if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
+        const isShip = t.kind === "hostile" || t.kind === "neutral" || t.kind === "friendly";
+        const isStation = t.kind === "station";
+        if (!isShip && !isStation) continue;
+        if ((t.hull ?? 0) <= 0) continue;
         if (e.ownerId === t.id) continue;
         if (e.faction === t.faction && e.faction !== "player") continue;
-        if (V.len(V.sub(e.pos, t.pos)) < 14) {
-          const w = WEAPONS.find((x) => x.id === (this.player?.ship.weaponId)) ?? WEAPONS[0];
-          if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - w.dmg);
-          else t.hull = Math.max(0, (t.hull ?? 0) - w.dmg);
+        // Player bullets are non-aggressive vs civilian stations (would be too
+        // easy to grief friendly outposts) — only pirate stations are valid.
+        if (isStation && t.faction !== "pirate") continue;
+        const hitRadius = isStation ? 22 : 14;
+        if (V.len(V.sub(e.pos, t.pos)) < hitRadius) {
+          // Damage value: player's weapon if the shot came from the player,
+          // otherwise a flat NPC damage value.
+          const playerShot = e.faction === "player";
+          const dmg = playerShot
+            ? (WEAPONS.find((x) => x.id === (this.player?.ship.weaponId)) ?? WEAPONS[0]).dmg
+            : 6;
+          if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
+          else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
           if ((t.hull ?? 0) <= 0) {
-            this.pushLog(`Destroyed ${t.name}.`);
-            awardXP(p, 25);
-            p.credits += 50;
-            p.kills = (p.kills ?? 0) + 1;
-            // Faction reputation: smiting pirates curries favor with the
-            // Federation and Guild; popping civilians sours both.
-            if (t.faction === "pirate") {
-              adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
-            } else if (t.faction === "federation") {
-              adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
-            } else if (t.faction === "guild") {
-              adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
+            const isPirateBase = isStation && t.faction === "pirate";
+            // Only credit the player when they pulled the trigger.
+            if (playerShot) {
+              this.pushLog(isPirateBase ? `★ Pirate base ${t.name} obliterated!` : `Destroyed ${t.name}.`);
+              awardXP(p, isPirateBase ? 250 : 25);
+              p.credits += isPirateBase ? 1500 : 50;
+              p.kills = (p.kills ?? 0) + 1;
+              if (isPirateBase) {
+                adjustRep(p, "federation", 12); adjustRep(p, "guild", 8); adjustRep(p, "pirate", -15);
+              } else if (t.faction === "pirate") {
+                adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
+              } else if (t.faction === "federation") {
+                adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
+              } else if (t.faction === "guild") {
+                adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
+              }
+              // Loot canister
+              if (Math.random() < (isPirateBase ? 1.0 : 0.85)) {
+                this.entities.push({
+                  id: nextId(), kind: "loot", name: isPirateBase ? "cache" : "canister",
+                  pos: { ...t.pos },
+                  vel: V.scale(t.vel, 0.25),
+                  faction: "wreck",
+                  ttlAt: performance.now() / 1000 + (isPirateBase ? 120 : 45),
+                  loot: {
+                    credits: isPirateBase ? 600 + Math.floor(Math.random() * 800) : 20 + Math.floor(Math.random() * 80),
+                    ore: isPirateBase ? 10 + Math.floor(Math.random() * 15) : Math.floor(Math.random() * 4),
+                  },
+                });
+              }
+              if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
+                p.mission.done = true;
+                this.pushLog("Bounty completed — return to a station.");
+              }
+            } else {
+              // NPC-on-NPC kill — just log it as ambient color.
+              if (Math.random() < 0.4) this.pushLog(`${t.name} was destroyed in a skirmish.`);
             }
-            // Loot canister: small chance of credits + ore drop. Floats on
-            // the kill's velocity so the player can chase it down.
-            if (Math.random() < 0.85) {
-              this.entities.push({
-                id: nextId(), kind: "loot", name: "canister",
-                pos: { ...t.pos },
-                vel: V.scale(t.vel, 0.25),
-                faction: "wreck",
-                ttlAt: performance.now() / 1000 + 45,
-                loot: {
-                  credits: 20 + Math.floor(Math.random() * 80),
-                  ore: Math.floor(Math.random() * 4),
-                },
-              });
+            // Convert to debris so AI/render stop treating it as a live ship.
+            if (isStation) {
+              // Stations become a chunky debris field marker.
+              t.kind = "asteroid"; t.ore = 0; t.name = "wreckage"; t.hull = 0;
+            } else {
+              t.kind = "asteroid"; t.ore = 0; t.name = "debris";
             }
-            // Mission progress
-            if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
-              p.mission.done = true;
-              this.pushLog("Bounty completed — return to a station.");
-            }
-            // remove dead ship next pass
-            t.kind = "asteroid"; t.ore = 0; t.name = "debris";
           }
           return false;
         }
@@ -1824,6 +1964,7 @@ export class Voidwake {
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
     if (!t || t.kind !== "station") { this.pushLog("Target a station with T."); return; }
+    if (t.faction === "pirate") { this.pushLog(`${t.name} is a pirate stronghold — no docking permitted.`); return; }
     const d = V.len(V.sub(t.pos, p.pos));
     if (d > 200) { this.pushLog("Too far to dock."); return; }
     if (p.throttle > 0.05) { this.pushLog("Reduce throttle to dock."); return; }
@@ -1980,6 +2121,61 @@ export class Voidwake {
     });
     
   }
+
+  // Periodically reseed ship population so the world doesn't depopulate.
+  // Civilian stations launch friendlies/neutrals; pirate bases launch raiders;
+  // planets occasionally emit a trader. All capped to keep entity count sane.
+  tickRespawns(dt: number) {
+    const ships = this.entities.filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral").length;
+    const SHIP_CAP = 80;
+    this._nextCivSpawnAt -= dt;
+    this._nextPirateSpawnAt -= dt;
+    this._nextPlanetSpawnAt -= dt;
+
+    const spawnNear = (origin: Vec3, kind: EntityKind, faction: string, name: string, hull: number) => {
+      const jitter = (): number => (Math.random() - 0.5) * 80;
+      this.entities.push({
+        id: nextId(), kind, name,
+        pos: { x: origin.x + jitter(), y: origin.y + jitter(), z: origin.z + jitter() },
+        vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
+        faction, hull, shield: 30, state: "wander", cooldown: 0, weaponId: "pulse",
+      });
+    };
+
+    if (this._nextCivSpawnAt <= 0) {
+      this._nextCivSpawnAt = 30 + Math.random() * 25;
+      if (ships < SHIP_CAP) {
+        const civStations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 0) > 0);
+        const src = civStations[Math.floor(Math.random() * civStations.length)];
+        if (src) {
+          const kind: EntityKind = Math.random() < 0.55 ? "friendly" : "neutral";
+          const fac = kind === "friendly" ? "federation" : "guild";
+          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Patrol" : "Hauler"), 40);
+        }
+      }
+    }
+    if (this._nextPirateSpawnAt <= 0) {
+      this._nextPirateSpawnAt = 22 + Math.random() * 20;
+      if (ships < SHIP_CAP) {
+        const bases = this.entities.filter((e) => e.kind === "station" && e.faction === "pirate" && (e.hull ?? 0) > 0);
+        const src = bases[Math.floor(Math.random() * bases.length)];
+        if (src) spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
+      }
+    }
+    if (this._nextPlanetSpawnAt <= 0) {
+      this._nextPlanetSpawnAt = 70 + Math.random() * 40;
+      if (ships < SHIP_CAP) {
+        const planets = this.entities.filter((e) => e.kind === "planet");
+        const src = planets[Math.floor(Math.random() * planets.length)];
+        if (src) {
+          const kind: EntityKind = Math.random() < 0.7 ? "neutral" : "friendly";
+          const fac = kind === "friendly" ? "federation" : "guild";
+          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Courier" : "Trader"), 40);
+        }
+      }
+    }
+  }
+
 
   // Periodically inject a flavor chatter line from nearby NPCs / stations /
   // planets. Cheap timer-gated work, mostly atmospheric.
