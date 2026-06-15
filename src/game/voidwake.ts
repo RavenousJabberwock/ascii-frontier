@@ -1019,13 +1019,9 @@ const CELL_H = 16;  // px per glyph row
 
 interface Cell { ch: string; color: string; glow?: boolean }
 
-function blankGrid(cols: number, rows: number): Cell[][] {
-  const g: Cell[][] = [];
-  for (let y = 0; y < rows; y++) {
-    g.push(Array.from({ length: cols }, () => ({ ch: " ", color: "#0f0" })));
-  }
-  return g;
-}
+// (blankGrid removed — replaced by Voidwake.acquireGrid which reuses a
+// single buffer across frames instead of allocating cols*rows cells per frame.)
+
 
 // putText writes a string into the grid, optionally clipped to a right-edge
 // column (exclusive) so HUD overlays can't bleed into adjacent panels.
