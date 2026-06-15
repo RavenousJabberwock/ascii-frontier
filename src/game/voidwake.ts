@@ -1437,9 +1437,11 @@ export class Voidwake {
   // UPDATE
   // ---------------------------------------------------------------------------
   update(dt: number) {
+    this._frameNo++;
     const screenBefore = this.screen;
     const noticeAtBefore = this.titleNoticeAt;
     const kb = this.options.keybinds;
+    this.recordFlight(`updating ${this.screen}`);
     // Global: ESC toggles main menu while playing
     if (this.input.consume(kb.menu)) {
       if (this.screen === "playing") { this.prevPlayScreen = this.screen; this.screen = "menu"; this.menuCursor = 0; }
