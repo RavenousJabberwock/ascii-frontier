@@ -48,6 +48,7 @@ function hashString(s: string): number {
 // 2. Constants / Glyphs / Tunables
 // =============================================================================
 const SAVE_PREFIX = "voidwake.save.";
+const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const VERSION = "0.1.0";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
@@ -989,6 +990,10 @@ export class Voidwake {
   // destroyed screen so the player understands what happened.
   deathReason: string | null = null;
   deathKiller: string | null = null;
+  // Last reason gameplay returned to the title screen. Rendered on the title
+  // so an unexpected dump has a visible breadcrumb instead of feeling silent.
+  titleNotice: string | null = null;
+  titleNoticeAt = 0;
   // Crash diagnostics: when the loop throws we freeze on a crashed screen
   // and show the error here so the user isn't silently kicked to the menu.
   crashError: string | null = null;
@@ -1042,6 +1047,14 @@ export class Voidwake {
         this.crash(r instanceof Error ? r : new Error(String(r)));
       }
     });
+    try {
+      const raw = sessionStorage.getItem(TITLE_NOTICE_KEY);
+      const saved = raw ? JSON.parse(raw) as { reason?: string; wall?: number } : null;
+      if (saved?.reason && saved.wall && Date.now() - saved.wall < 5 * 60_000) {
+        this.titleNotice = saved.reason;
+        this.titleNoticeAt = performance.now() / 1000;
+      }
+    } catch { /* ignore diagnostic restore failures */ }
   }
 
   fit() {
@@ -1084,6 +1097,33 @@ export class Voidwake {
   pushLog(msg: string) {
     this.log.push({ t: performance.now() / 1000, msg });
     if (this.log.length > 6) this.log.shift();
+  }
+
+  setTitleNotice(reason: string) {
+    this.titleNotice = reason.slice(0, 220);
+    this.titleNoticeAt = performance.now() / 1000;
+    try { sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({ reason: this.titleNotice, wall: Date.now() })); } catch { /* ignore */ }
+    // eslint-disable-next-line no-console
+    console.info("[ASCII Frontier] title return:", this.titleNotice);
+  }
+
+  clearTitleNotice() {
+    this.titleNotice = null;
+    this.titleNoticeAt = 0;
+    try { sessionStorage.removeItem(TITLE_NOTICE_KEY); } catch { /* ignore */ }
+  }
+
+  returnToTitle(reason: string, clearPlayer = true) {
+    if (clearPlayer) this.player = null;
+    this.setTitleNotice(reason);
+    this.screen = "title";
+    this.menuCursor = 0;
+  }
+
+  noteImplicitTitleReturn(from: Screen, noticeAtBefore: number) {
+    if (from === "title" || this.screen !== "title" || this.titleNoticeAt !== noticeAtBefore) return;
+    if (from === "options" || from === "load" || from === "create-char" || from === "create-ship") return;
+    this.setTitleNotice(`Unexpected return to title from ${from}; no explicit reason was recorded.`);
   }
 
   // Append a single line to the comms / chatter feed shown in the COMMS box.
@@ -1187,6 +1227,8 @@ export class Voidwake {
   // UPDATE
   // ---------------------------------------------------------------------------
   update(dt: number) {
+    const screenBefore = this.screen;
+    const noticeAtBefore = this.titleNoticeAt;
     const kb = this.options.keybinds;
     // Global: ESC toggles main menu while playing
     if (this.input.consume(kb.menu)) {
@@ -1199,19 +1241,20 @@ export class Voidwake {
     }
 
     switch (this.screen) {
-      case "title": return this.updateTitle();
-      case "create-char": return this.updateCharCreate();
-      case "create-ship": return this.updateShipCreate();
-      case "playing": return this.updatePlaying(dt);
-      case "menu": return this.updateMenu();
-      case "options": return this.updateOptions();
-      case "load": return this.updateLoad();
-      case "save": return this.updateSave();
-      case "station": return this.updateStation();
-      case "quit-confirm": return this.updateQuitConfirm();
-      case "destroyed": return this.updateDestroyed();
-      case "crashed": return this.updateCrashed();
+      case "title": this.updateTitle(); break;
+      case "create-char": this.updateCharCreate(); break;
+      case "create-ship": this.updateShipCreate(); break;
+      case "playing": this.updatePlaying(dt); break;
+      case "menu": this.updateMenu(); break;
+      case "options": this.updateOptions(); break;
+      case "load": this.updateLoad(); break;
+      case "save": this.updateSave(); break;
+      case "station": this.updateStation(); break;
+      case "quit-confirm": this.updateQuitConfirm(); break;
+      case "destroyed": this.updateDestroyed(); break;
+      case "crashed": this.updateCrashed(); break;
     }
+    this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
   }
 
   // --- Crash screen (caught exception) ------------------------------------
@@ -1236,10 +1279,8 @@ export class Voidwake {
         }
         this.pushLog("No save available.");
       }
-      this.player = null;
+      this.returnToTitle(`Crash menu: ${this.crashError ?? "unknown error"}`);
       this.crashError = null; this.crashStack = null;
-      this.screen = "title";
-      this.menuCursor = 0;
     }
 
   }
@@ -1289,10 +1330,7 @@ export class Voidwake {
         return;
       }
       // Return to Main Menu
-      console.info("[ASCII Frontier] returning to title:", this.deathReason ?? "(unknown)");
-      this.player = null;
-      this.screen = "title";
-      this.menuCursor = 0;
+      this.returnToTitle(`Destroyed: ${this.deathReason ?? "unknown cause"}`);
     }
   }
 
@@ -1304,8 +1342,8 @@ export class Voidwake {
     this.menuNav(this.titleItems.length);
     if (this.input.consume("enter")) {
       const choice = this.titleItems[this.menuCursor];
-      if (choice === "New Game") { this.screen = "create-char"; this.menuCursor = 0; }
-      else if (choice === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
+      if (choice === "New Game") { this.clearTitleNotice(); this.screen = "create-char"; this.menuCursor = 0; }
+      else if (choice === "Load Game") { this.clearTitleNotice(); this.screen = "load"; this.menuCursor = 0; }
       else if (choice === "Options") { this.screen = "options"; this.menuCursor = 0; }
       else if (choice === "Quit") this.tryQuit();
     }
@@ -1394,7 +1432,7 @@ export class Voidwake {
   // --- Playing -------------------------------------------------------------
   updatePlaying(dt: number) {
     const p = this.player;
-    if (!p) { this.screen = "title"; return; }
+    if (!p) { this.returnToTitle("Gameplay lost player state; returned to title.", false); return; }
     // Safety net: if hull dropped to 0 by any path, go to destroyed screen.
     if (p.ship.hull <= 0 && !this.options.cheat) {
       this.die(this.deathReason ?? "Catastrophic hull failure");
@@ -1956,15 +1994,14 @@ export class Voidwake {
         return;
       }
     }
-    this.player = null;
-    this.screen = "title";
+    this.returnToTitle(this.player ? "Quit from pause menu." : "Quit from title menu.");
   }
 
   updateQuitConfirm() {
     const items = ["Cancel", "Quit Anyway"];
     this.menuNav(items.length);
     if (this.input.consume("enter")) {
-      if (items[this.menuCursor] === "Quit Anyway") { this.player = null; this.screen = "title"; }
+      if (items[this.menuCursor] === "Quit Anyway") this.returnToTitle("Quit without saving from confirmation menu.");
       else this.screen = "menu";
     }
   }
@@ -2108,7 +2145,7 @@ export class Voidwake {
   }
 
   updateStation() {
-    const p = this.player; if (!p) { this.screen = "title"; return; }
+    const p = this.player; if (!p) { this.returnToTitle("Station screen lost player state; returned to title.", false); return; }
     if (this.dockedStationId == null) { this.screen = "playing"; return; }
     const lines = this.buildStationLines();
     this.menuNav(lines.length);
@@ -2431,6 +2468,28 @@ export class Voidwake {
       const label = blink + it;
       putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
+    if (this.titleNotice) {
+      const age = performance.now() / 1000 - this.titleNoticeAt;
+      const pulseNotice = Math.floor(age * 2) % 2 === 0;
+      const maxW = Math.max(24, Math.min(cols - 8, 92));
+      const raw = `LAST EXIT: ${this.titleNotice}`;
+      const lines: string[] = [];
+      let rest = raw;
+      while (rest.length > maxW && lines.length < 2) {
+        const cut = Math.max(18, rest.lastIndexOf(" ", maxW));
+        lines.push(rest.slice(0, cut));
+        rest = rest.slice(cut).trimStart();
+      }
+      lines.push(rest.length > maxW ? rest.slice(0, maxW - 1) + "…" : rest);
+      const y = Math.min(g.length - 6, menuTop + this.titleItems.length * 2 + 1);
+      const borderW = Math.min(maxW + 4, cols - 4);
+      const x = Math.max(2, Math.floor((cols - borderW) / 2));
+      putText(g, x, y, "┌" + "─".repeat(borderW - 2) + "┐", pulseNotice ? "#fc6" : "#b86");
+      lines.slice(0, 3).forEach((line, i) => {
+        putText(g, x, y + 1 + i, "│ " + line.padEnd(borderW - 4) + " │", "#fc6");
+      });
+      putText(g, x, y + 1 + lines.length, "└" + "─".repeat(borderW - 2) + "┘", pulseNotice ? "#fc6" : "#b86");
+    }
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
 
