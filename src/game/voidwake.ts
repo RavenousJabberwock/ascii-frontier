@@ -1290,8 +1290,9 @@ export class Voidwake {
     if (!ctx) throw new Error("Canvas 2D unavailable");
     this.ctx = ctx;
     this.fit();
-    window.addEventListener("resize", () => this.fit());
-    this.input.attach(canvas);
+    const sig = this._abort.signal;
+    window.addEventListener("resize", () => this.fit(), { signal: sig });
+    this.input.attach(canvas, sig);
     canvas.focus();
     // Global error trap so async/uncaught errors during gameplay show on the
     // crash screen instead of vanishing into the console.
@@ -1299,13 +1300,13 @@ export class Voidwake {
       if (this.screen !== "crashed" && this.screen !== "title") {
         this.crash(ev.error ?? new Error(ev.message));
       }
-    });
+    }, { signal: sig });
     window.addEventListener("unhandledrejection", (ev) => {
       if (this.screen !== "crashed" && this.screen !== "title") {
         const r = ev.reason;
         this.crash(r instanceof Error ? r : new Error(String(r)));
       }
-    });
+    }, { signal: sig });
     try {
       const saved = readDiagnostic<{ reason?: string; wall?: number }>(TITLE_NOTICE_KEY);
       if (saved?.reason && saved.wall && Date.now() - saved.wall < 5 * 60_000) {
@@ -1323,17 +1324,17 @@ export class Voidwake {
 
       }
     } catch { /* ignore diagnostic restore failures */ }
-    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true));
+    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true), { signal: sig });
     // Pause when the tab is hidden — no point burning rAF cycles offscreen.
     document.addEventListener("visibilitychange", () => {
       this._hidden = document.visibilityState === "hidden";
       if (!this._hidden) this.lastTs = performance.now();
-    });
+    }, { signal: sig });
     // Honour OS-level reduced-motion preference for flashes / fire FX.
     try {
       const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
       this._reducedMotion = mq.matches;
-      mq.addEventListener?.("change", (e) => { this._reducedMotion = e.matches; });
+      mq.addEventListener?.("change", (e) => { this._reducedMotion = e.matches; }, { signal: sig });
     } catch { /* matchMedia unavailable */ }
   }
 
