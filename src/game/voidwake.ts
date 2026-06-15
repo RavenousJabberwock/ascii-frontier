@@ -940,6 +940,27 @@ function listSaves(): { slot: string; savedAt: number }[] {
   return out.sort((a, b) => b.savedAt - a.savedAt);
 }
 
+function readDiagnostic<T>(key: string): T | null {
+  for (const store of [sessionStorage, localStorage]) {
+    try {
+      const raw = store.getItem(key);
+      if (raw) return JSON.parse(raw) as T;
+    } catch { /* ignore unavailable storage / corrupt diagnostic */ }
+  }
+  return null;
+}
+function writeDiagnostic(key: string, value: unknown) {
+  const raw = JSON.stringify(value);
+  for (const store of [sessionStorage, localStorage]) {
+    try { store.setItem(key, raw); } catch { /* ignore unavailable storage */ }
+  }
+}
+function removeDiagnostic(key: string) {
+  for (const store of [sessionStorage, localStorage]) {
+    try { store.removeItem(key); } catch { /* ignore unavailable storage */ }
+  }
+}
+
 // =============================================================================
 // 10. Renderer — ASCII grid drawn to canvas
 // -----------------------------------------------------------------------------
