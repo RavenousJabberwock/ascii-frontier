@@ -1335,6 +1335,12 @@ export class Voidwake {
     this.lastTs = performance.now();
     const loop = (ts: number) => {
       if (!this.running) return;
+      // While the tab is hidden, idle cheaply — don't update or render.
+      if (this._hidden) {
+        this.lastTs = ts;
+        this.rafId = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(0.05, (ts - this.lastTs) / 1000);
       this.lastTs = ts;
       // FPS sampling
@@ -1356,6 +1362,7 @@ export class Voidwake {
     };
     this.rafId = requestAnimationFrame(loop);
   }
+
   stop() {
     this.recordFlight(`engine stopped while ${this.screen}`, this.screen === "title", true);
     this.running = false;
