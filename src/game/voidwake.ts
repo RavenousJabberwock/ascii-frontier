@@ -1278,6 +1278,10 @@ export class Voidwake {
   private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
   private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
   private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
+  // AbortController used to detach every window/document listener on stop().
+  // Without this, HMR remounts in dev (or a future second-instance scenario)
+  // would leak listeners that keep stale engine refs alive.
+  private _abort = new AbortController();
 
 
   constructor(canvas: HTMLCanvasElement) {
