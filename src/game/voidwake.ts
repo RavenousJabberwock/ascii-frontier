@@ -930,7 +930,7 @@ function listSaves(): { slot: string; savedAt: number }[] {
 const CELL_W = 9;   // px per glyph column
 const CELL_H = 16;  // px per glyph row
 
-interface Cell { ch: string; color: string }
+interface Cell { ch: string; color: string; glow?: boolean }
 
 function blankGrid(cols: number, rows: number): Cell[][] {
   const g: Cell[][] = [];
@@ -940,13 +940,34 @@ function blankGrid(cols: number, rows: number): Cell[][] {
   return g;
 }
 
-function putText(g: Cell[][], x: number, y: number, text: string, color = "#9fe"): void {
+// putText writes a string into the grid, optionally clipped to a right-edge
+// column (exclusive) so HUD overlays can't bleed into adjacent panels.
+function putText(g: Cell[][], x: number, y: number, text: string, color = "#9fe", rightLimit?: number): void {
   if (y < 0 || y >= g.length) return;
+  const cols = g[0].length;
+  const maxX = rightLimit !== undefined ? Math.min(cols, rightLimit) : cols;
   for (let i = 0; i < text.length; i++) {
     const xi = x + i;
-    if (xi < 0 || xi >= g[0].length) continue;
+    if (xi < 0 || xi >= maxX) continue;
     g[y][xi] = { ch: text[i], color };
   }
+}
+
+// Multiplies an #rgb / #rrggbb hex color's RGB channels by `f` (clamped 0..1.4)
+// and returns a #rrggbb string. Used to shade planet/station surfaces based on
+// the angle to the nearest star (front lit vs. terminator vs. shadow side).
+function shadeColor(hex: string, f: number): string {
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  if (h.length !== 6) return hex;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const k = Math.max(0, Math.min(1.4, f));
+  const rr = Math.max(0, Math.min(255, Math.round(r * k)));
+  const gg = Math.max(0, Math.min(255, Math.round(g * k)));
+  const bb = Math.max(0, Math.min(255, Math.round(b * k)));
+  return "#" + rr.toString(16).padStart(2, "0") + gg.toString(16).padStart(2, "0") + bb.toString(16).padStart(2, "0");
 }
 
 function colorFor(kind: EntityKind): string {
