@@ -1432,7 +1432,7 @@ export class Voidwake {
   // --- Playing -------------------------------------------------------------
   updatePlaying(dt: number) {
     const p = this.player;
-    if (!p) { this.screen = "title"; return; }
+    if (!p) { this.returnToTitle("Gameplay lost player state; returned to title.", false); return; }
     // Safety net: if hull dropped to 0 by any path, go to destroyed screen.
     if (p.ship.hull <= 0 && !this.options.cheat) {
       this.die(this.deathReason ?? "Catastrophic hull failure");
@@ -1994,15 +1994,14 @@ export class Voidwake {
         return;
       }
     }
-    this.player = null;
-    this.screen = "title";
+    this.returnToTitle(this.player ? "Quit from pause menu." : "Quit from title menu.");
   }
 
   updateQuitConfirm() {
     const items = ["Cancel", "Quit Anyway"];
     this.menuNav(items.length);
     if (this.input.consume("enter")) {
-      if (items[this.menuCursor] === "Quit Anyway") { this.player = null; this.screen = "title"; }
+      if (items[this.menuCursor] === "Quit Anyway") this.returnToTitle("Quit without saving from confirmation menu.");
       else this.screen = "menu";
     }
   }
@@ -2146,7 +2145,7 @@ export class Voidwake {
   }
 
   updateStation() {
-    const p = this.player; if (!p) { this.screen = "title"; return; }
+    const p = this.player; if (!p) { this.returnToTitle("Station screen lost player state; returned to title.", false); return; }
     if (this.dockedStationId == null) { this.screen = "playing"; return; }
     const lines = this.buildStationLines();
     this.menuNav(lines.length);
