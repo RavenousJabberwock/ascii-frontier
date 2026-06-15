@@ -1279,13 +1279,14 @@ export class Voidwake {
 
     // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
     const boosting = keys.has(k.boost) && p.ship.fuel > 0;
-    const boostMul = boosting ? 1.6 : 1.0;
-    const fuelMul = boosting ? 4.0 : 1.0;
+    // Supercruise: hold for 3x speed at 3x fuel burn. Stacks with afterburner
+    // but locks weapons (no fire while super-cruising) so it stays a travel tool.
+    const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
+    const boostMul = (boosting ? 1.6 : 1.0) * (supercruise ? 3.0 : 1.0);
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0);
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
-    // Out-of-fuel: throttle authority drops to a tiny drift. Player can still
-    // turn, but movement coasts at 15% until refueled at a station.
     const fuelFactor = p.ship.fuel > 0 ? 1.0 : 0.15;
     const sp = p.ship.speed * p.throttle * boostMul * fuelFactor;
     p.pos = V.add(p.pos, V.scale(fwd, sp * dt));
@@ -1294,8 +1295,56 @@ export class Voidwake {
       if (p.ship.fuel === 0) this.pushLog("⚠ FUEL EXHAUSTED — drift only. Dock to refuel.");
     }
 
-    // Shield regen
+    // Shield regen (suppressed while inside a nebula — applied below).
     p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * 4);
+
+    // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
+    let insideNebula = false;
+    for (const e of this.entities) {
+      if (e.kind === "nebula") {
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 280) {
+          insideNebula = true;
+          if (!this.options.cheat) {
+            // Slow shield burn; if shields are down, mild hull etch.
+            if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 3);
+            else p.ship.hull = Math.max(0, p.ship.hull - dt * 1.2);
+          }
+        }
+      } else if (e.kind === "beacon") {
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 30) {
+          if (e.state === "trap") {
+            // Spawn a small pirate wing on contact.
+            this.pushLog("☠ Beacon was a pirate trap!");
+            this.pushChatter("Beacon", "Got 'em, lads!", "#ff8a8a");
+            for (let i = 0; i < 2; i++) {
+              this.entities.push({
+                id: nextId(), kind: "hostile", name: "Trap Raider",
+                pos: V.add(p.pos, { x: (Math.random() - 0.5) * 80, y: (Math.random() - 0.5) * 80, z: (Math.random() - 0.5) * 80 }),
+                vel: { x: 0, y: 0, z: 0 },
+                faction: "pirate", hull: 45, shield: 25,
+                state: "attack", cooldown: 0, weaponId: "pulse",
+              });
+            }
+          } else {
+            const cr = e.loot?.credits ?? 150;
+            p.credits += cr;
+            p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + 25);
+            this.pushLog(`Distress payout: +${cr}cr, +25 fuel.`);
+            this.pushChatter("Survivor", "Stars bless you, pilot.", "#9fe");
+          }
+          // Consume the beacon either way.
+          e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
+        }
+      }
+    }
+    if (insideNebula && Math.random() < 0.01) this.pushChatter("Sensors", "Nebula wash — shields degrading.", "#c47afc");
+    // Save flag for renderer (dim starfield, fog overlay).
+    (this as unknown as { _inNebula: boolean })._inNebula = insideNebula;
+    // Block fire while super-cruising (preserved in fire block below via flag).
+    (this as unknown as { _supercruise: boolean })._supercruise = supercruise;
+
 
     // Cycle target
     if (this.input.consume(k.cycleTarget)) this.cycleTarget();
