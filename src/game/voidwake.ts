@@ -2774,29 +2774,34 @@ export class Voidwake {
 
     // Paint grid. Cells with `glow` get a CSS-style canvas shadow that bleeds
     // their color outward — used for stars and other "luminous" glyphs.
-    ctx.font = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
+    const fontStr = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
+    if (this._lastFont !== fontStr) { ctx.font = fontStr; this._lastFont = fontStr; }
     ctx.textBaseline = "top";
+    let lastFill: string | null = null;
+    let lastShadow = 0;
     for (let y = 0; y < rows; y++) {
+      const row = grid[y];
       for (let x = 0; x < cols; x++) {
-        const c = grid[y][x];
+        const c = row[x];
         if (c.ch === " ") continue;
         if (c.glow) {
+          if (lastShadow !== 9) { ctx.shadowBlur = 9; lastShadow = 9; }
           ctx.shadowColor = c.color;
-          ctx.shadowBlur = 9;
-        } else if (ctx.shadowBlur !== 0) {
+        } else if (lastShadow !== 0) {
           ctx.shadowColor = "transparent";
           ctx.shadowBlur = 0;
+          lastShadow = 0;
         }
-        ctx.fillStyle = c.color;
+        if (c.color !== lastFill) { ctx.fillStyle = c.color; lastFill = c.color; }
         ctx.fillText(c.ch, x * CELL_W, y * CELL_H);
       }
     }
-    if (ctx.shadowBlur !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
+    if (lastShadow !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
 
     // Shield-loss flash: brief cyan-white tint over the whole canvas the
     // instant shields collapse, decaying smoothly so it reads as a hit and
-    // not a UI mode change.
-    if (this.screen === "playing") {
+    // not a UI mode change. Skipped for reduced-motion users.
+    if (this.screen === "playing" && !this._reducedMotion) {
       const tNow = performance.now() / 1000;
       const remain = this.shieldFlashUntil - tNow;
       if (remain > 0) {
@@ -2806,6 +2811,36 @@ export class Voidwake {
       }
     }
   }
+
+  // Reusable cell grid — allocate once per resize, reset characters in place.
+  // Replaces the per-frame blankGrid() that produced ~rows*cols fresh objects.
+  private _lastFont: string | null = null;
+  acquireGrid(cols: number, rows: number): Cell[][] {
+    if (!this._gridBuf || this._gridCols !== cols || this._gridRows !== rows) {
+      const g: Cell[][] = [];
+      for (let y = 0; y < rows; y++) {
+        const row: Cell[] = new Array(cols);
+        for (let x = 0; x < cols; x++) row[x] = { ch: " ", color: "#0f0" };
+        g.push(row);
+      }
+      this._gridBuf = g;
+      this._gridCols = cols;
+      this._gridRows = rows;
+      return g;
+    }
+    const g = this._gridBuf;
+    for (let y = 0; y < rows; y++) {
+      const row = g[y];
+      for (let x = 0; x < cols; x++) {
+        const c = row[x];
+        if (c.ch !== " ") c.ch = " ";
+        if (c.glow) c.glow = false;
+        // color is overwritten by any draw; resetting it is unnecessary.
+      }
+    }
+    return g;
+  }
+
 
 
   // Starfield -----------------------------------------------------------------
