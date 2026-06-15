@@ -1858,7 +1858,7 @@ export class Voidwake {
       awardXP(p, 1);
       if (g.nextBarkAt <= 0) {
         g.nextBarkAt = 4 + Math.random() * 3;
-        this.pushChatter(tag, GUNNER_BARKS_MINE[Math.floor(Math.random() * GUNNER_BARKS_MINE.length)], "#ffd066");
+        this.pushChatter(tag, pickLine("gunner_mine", this.chatterCtx(undefined, { target: best })), "#ffd066");
       }
     } else if (best.kind === "station") {
       if (bestDist > 400) return;
