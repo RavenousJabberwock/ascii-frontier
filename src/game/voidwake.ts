@@ -2383,8 +2383,7 @@ export class Voidwake {
     src.length = w;
   }
 
-    
-  }
+
 
   // Periodically reseed ship population so the world doesn't depopulate.
   // Civilian stations launch friendlies/neutrals; pirate bases launch raiders;
