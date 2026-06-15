@@ -33,7 +33,13 @@ export default tseslint.config(
         },
       ],
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      // Warn (not error) on unused vars so dead code is visible during lint
+      // without breaking the build. Prefix intentionally-unused args with `_`
+      // to silence per-occurrence — e.g. `(_event, value) => ...`.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
     },
   },
   eslintPluginPrettier,

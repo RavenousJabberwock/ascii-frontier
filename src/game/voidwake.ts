@@ -917,23 +917,24 @@ class Input {
   mouseNX = 0;
   mouseNY = 0;
   mouseInside = false;
-  attach(el: HTMLElement) {
+  attach(el: HTMLElement, signal?: AbortSignal) {
+    const opts = signal ? { signal } : undefined;
     el.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();
       if (!this.keys.has(k)) this.pressed.add(k);
       this.keys.add(k);
       if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
-    });
-    el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
-    el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; });
+    }, opts);
+    el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()), opts);
+    el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; }, opts);
     el.addEventListener("mousemove", (e) => {
       const r = (el as HTMLCanvasElement).getBoundingClientRect();
       this.mouseNX = ((e.clientX - r.left) / r.width) * 2 - 1;
       this.mouseNY = ((e.clientY - r.top) / r.height) * 2 - 1;
       this.mouseInside = true;
-    });
-    el.addEventListener("mouseleave", () => { this.mouseInside = false; });
-    el.addEventListener("mouseenter", () => { this.mouseInside = true; });
+    }, opts);
+    el.addEventListener("mouseleave", () => { this.mouseInside = false; }, opts);
+    el.addEventListener("mouseenter", () => { this.mouseInside = true; }, opts);
   }
   consume(k: string) {
     const had = this.pressed.has(k);
@@ -965,8 +966,21 @@ type Screen =
 // =============================================================================
 // 9. Save / Load — unencrypted JSON in localStorage (plus export/import)
 // =============================================================================
-function saveGame(slot: string, blob: SaveBlob) {
-  localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(blob, null, 2));
+function saveGame(slot: string, blob: SaveBlob): { ok: true } | { ok: false; reason: "quota" | "error"; error?: unknown } {
+  try {
+    localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(blob, null, 2));
+    return { ok: true };
+  } catch (e) {
+    // QuotaExceededError / NS_ERROR_DOM_QUOTA_REACHED — disk full, private-mode,
+    // or save grew past the ~5 MB origin quota. Caller can warn the player
+    // instead of crashing the engine.
+    const isQuota =
+      e instanceof DOMException &&
+      (e.code === 22 || e.code === 1014 || /quota/i.test(e.name));
+    // eslint-disable-next-line no-console
+    console.warn("[ASCII Frontier] saveGame failed:", e);
+    return { ok: false, reason: isQuota ? "quota" : "error", error: e };
+  }
 }
 function loadGame(slot: string): SaveBlob | null {
   const raw = localStorage.getItem(SAVE_PREFIX + slot);
@@ -1278,6 +1292,10 @@ export class Voidwake {
   private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
   private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
   private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
+  // AbortController used to detach every window/document listener on stop().
+  // Without this, HMR remounts in dev (or a future second-instance scenario)
+  // would leak listeners that keep stale engine refs alive.
+  private _abort = new AbortController();
 
 
   constructor(canvas: HTMLCanvasElement) {
@@ -1286,8 +1304,9 @@ export class Voidwake {
     if (!ctx) throw new Error("Canvas 2D unavailable");
     this.ctx = ctx;
     this.fit();
-    window.addEventListener("resize", () => this.fit());
-    this.input.attach(canvas);
+    const sig = this._abort.signal;
+    window.addEventListener("resize", () => this.fit(), { signal: sig });
+    this.input.attach(canvas, sig);
     canvas.focus();
     // Global error trap so async/uncaught errors during gameplay show on the
     // crash screen instead of vanishing into the console.
@@ -1295,13 +1314,13 @@ export class Voidwake {
       if (this.screen !== "crashed" && this.screen !== "title") {
         this.crash(ev.error ?? new Error(ev.message));
       }
-    });
+    }, { signal: sig });
     window.addEventListener("unhandledrejection", (ev) => {
       if (this.screen !== "crashed" && this.screen !== "title") {
         const r = ev.reason;
         this.crash(r instanceof Error ? r : new Error(String(r)));
       }
-    });
+    }, { signal: sig });
     try {
       const saved = readDiagnostic<{ reason?: string; wall?: number }>(TITLE_NOTICE_KEY);
       if (saved?.reason && saved.wall && Date.now() - saved.wall < 5 * 60_000) {
@@ -1319,17 +1338,17 @@ export class Voidwake {
 
       }
     } catch { /* ignore diagnostic restore failures */ }
-    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true));
+    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true), { signal: sig });
     // Pause when the tab is hidden — no point burning rAF cycles offscreen.
     document.addEventListener("visibilitychange", () => {
       this._hidden = document.visibilityState === "hidden";
       if (!this._hidden) this.lastTs = performance.now();
-    });
+    }, { signal: sig });
     // Honour OS-level reduced-motion preference for flashes / fire FX.
     try {
       const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
       this._reducedMotion = mq.matches;
-      mq.addEventListener?.("change", (e) => { this._reducedMotion = e.matches; });
+      mq.addEventListener?.("change", (e) => { this._reducedMotion = e.matches; }, { signal: sig });
     } catch { /* matchMedia unavailable */ }
   }
 
@@ -1377,6 +1396,8 @@ export class Voidwake {
     this.recordFlight(`engine stopped while ${this.screen}`, this.screen === "title", true);
     this.running = false;
     cancelAnimationFrame(this.rafId);
+    // Detach every window/document/canvas listener registered with this signal.
+    this._abort.abort();
   }
 
   pushLog(msg: string) {
@@ -1983,9 +2004,13 @@ export class Voidwake {
           player: p, entities: this.entities,
           options: this.options, savedAt: Date.now(),
         };
-        saveGame("autosave", blob);
-        p.lastSaveAt = Date.now();
-        this.pushLog("◉ Autosaved.");
+        const res = saveGame("autosave", blob);
+        if (!res.ok) {
+          this.pushLog(res.reason === "quota" ? "⚠ Autosave failed: browser storage full." : "⚠ Autosave failed.");
+        } else {
+          p.lastSaveAt = Date.now();
+          this.pushLog("◉ Autosaved.");
+        }
       } catch (err) {
         console.warn("Autosave failed", err);
       }
@@ -2430,6 +2455,12 @@ export class Voidwake {
     this._nextPlanetSpawnAt -= dt;
 
     const spawnNear = (origin: Vec3, kind: EntityKind, faction: string, name: string, hull: number) => {
+      // INTENTIONALLY UNSEEDED: spawnNear runs during live gameplay (NPC
+      // respawn ticks), not during universe generation. The seeded mulberry32
+      // RNG (`rng`) is reserved for procedural placement that must reproduce
+      // from a seed — stations, planets, starting layout. Using it here would
+      // make every respawn identical across saves and reveal RNG state to the
+      // player. Math.random() is the correct choice for runtime variance.
       const jitter = (): number => (Math.random() - 0.5) * 80;
       this.entities.push({
         id: nextId(), kind, name,
@@ -2602,10 +2633,14 @@ export class Voidwake {
         player: this.player, entities: this.entities,
         options: this.options, savedAt: Date.now(),
       };
-      saveGame(c, blob);
-      this.player.lastSaveAt = Date.now();
-      this.pushLog(`Saved to ${c}.`);
-      this.screen = "menu";
+      const res = saveGame(c, blob);
+      if (!res.ok) {
+        this.pushLog(res.reason === "quota" ? `Save to ${c} failed — storage full.` : `Save to ${c} failed.`);
+      } else {
+        this.player.lastSaveAt = Date.now();
+        this.pushLog(`Saved to ${c}.`);
+        this.screen = "menu";
+      }
     }
   }
   updateLoad() {
