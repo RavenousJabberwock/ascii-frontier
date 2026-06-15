@@ -2329,6 +2329,7 @@ export class Voidwake {
       `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
+      `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
       `Reset Keybinds`,
       "Back",
     ];
