@@ -1,4 +1,4 @@
-# VOIDWAKE — ASCII Space Simulation
+# ASCII FRONTIER — ASCII Space Simulation
 
 A fully playable, browser-based ASCII space sim inspired by Elite Dangerous.
 Pilot a procedurally-generated starship through a procedural universe: trade
