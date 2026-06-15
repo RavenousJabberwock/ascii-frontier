@@ -2737,7 +2737,7 @@ export class Voidwake {
     ctx.fillRect(0, 0, w, h);
     const cols = Math.max(40, Math.floor(w / CELL_W));
     const rows = Math.max(20, Math.floor(h / CELL_H));
-    const grid = blankGrid(cols, rows);
+    const grid = this.acquireGrid(cols, rows);
 
     // Frame delta for starfield motion (independent of game tick).
     const now = performance.now() / 1000;
