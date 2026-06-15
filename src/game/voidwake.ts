@@ -2795,6 +2795,44 @@ export class Voidwake {
     if (this.input.keys.has(this.options.keybinds.boost) && p.ship.fuel > 0) {
       putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6");
     }
+    // Supercruise banner — separate row so it can stack with afterburner.
+    if (this.input.keys.has(this.options.keybinds.supercruise) && p.ship.fuel > 0) {
+      const msg = "» » » SUPERCRUISE — weapons offline « « «";
+      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff");
+    }
+
+    // Cockpit damage state: when hull < 25%, etch crack patterns along the
+    // viewport edges and flash a warning. Pure decoration tied to ship health.
+    const hullFrac = p.ship.hull / Math.max(1, p.ship.hullMax);
+    if (hullFrac < 0.25) {
+      const flash = Math.floor(performance.now() / 400) % 2 === 0;
+      const crackCol = flash ? "#ff3a3a" : "#9a1a1a";
+      const cracks: [number, number, string][] = [
+        [vpLeft + 4, vpTop + 2, "/"], [vpLeft + 6, vpTop + 3, "\\"],
+        [vpRight - 4, vpTop + 2, "\\"], [vpRight - 6, vpTop + 4, "/"],
+        [vpLeft + 8, vpBottom - 3, "\\"], [vpRight - 8, vpBottom - 4, "/"],
+        [vpLeft + 12, vpTop + 6, "*"], [vpRight - 14, vpBottom - 7, "*"],
+        [vpLeft + 3, Math.floor((vpTop + vpBottom) / 2), "/"],
+        [vpRight - 3, Math.floor((vpTop + vpBottom) / 2) + 1, "\\"],
+      ];
+      for (const [cx2, cy2, ch] of cracks) {
+        if (cy2 > vpTop && cy2 < vpBottom && cx2 > vpLeft && cx2 < vpRight) {
+          g[cy2][cx2] = { ch, color: crackCol };
+        }
+      }
+      const warn = "‼ HULL CRITICAL ‼";
+      putText(g, vpLeft + Math.floor(vw / 2 - warn.length / 2), vpBottom - 2, warn, crackCol);
+    }
+
+    // Nebula fog overlay — softens viewport with scattered dim glyphs.
+    const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula;
+    if (inNeb) {
+      for (let i = 0; i < 30; i++) {
+        const x = vpLeft + 1 + Math.floor(Math.random() * (vw - 2));
+        const y = vpTop + 1 + Math.floor(Math.random() * (vh - 2));
+        if (g[y][x].ch === " ") g[y][x] = { ch: "░", color: "#5a3a7a" };
+      }
+    }
 
     // Pause banner (big, centered, obvious)
     if (this.paused) {
@@ -2804,6 +2842,7 @@ export class Voidwake {
 
     this.tickMissions();
   }
+
 
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
