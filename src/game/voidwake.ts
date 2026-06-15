@@ -1958,6 +1958,7 @@ export class Voidwake {
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
     if (!t || t.kind !== "station") { this.pushLog("Target a station with T."); return; }
+    if (t.faction === "pirate") { this.pushLog(`${t.name} is a pirate stronghold — no docking permitted.`); return; }
     const d = V.len(V.sub(t.pos, p.pos));
     if (d > 200) { this.pushLog("Too far to dock."); return; }
     if (p.throttle > 0.05) { this.pushLog("Reduce throttle to dock."); return; }
