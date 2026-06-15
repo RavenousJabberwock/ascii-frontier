@@ -2389,7 +2389,24 @@ export class Voidwake {
   // Civilian stations launch friendlies/neutrals; pirate bases launch raiders;
   // planets occasionally emit a trader. All capped to keep entity count sane.
   tickRespawns(dt: number) {
-    const ships = this.entities.filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral").length;
+    // Single linear pass: count ships and bucket potential spawn parents
+    // by category so we don't run three more .filter()s below.
+    let ships = 0;
+    const civStations: Entity[] = [];
+    const pirateBases: Entity[] = [];
+    const planets: Entity[] = [];
+    for (const e of this.entities) {
+      if (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") {
+        ships++;
+      } else if (e.kind === "station") {
+        if ((e.hull ?? 0) > 0) {
+          if (e.faction === "pirate") pirateBases.push(e);
+          else civStations.push(e);
+        }
+      } else if (e.kind === "planet") {
+        planets.push(e);
+      }
+    }
     const SHIP_CAP = 80;
     this._nextCivSpawnAt -= dt;
     this._nextPirateSpawnAt -= dt;
@@ -2407,37 +2424,31 @@ export class Voidwake {
 
     if (this._nextCivSpawnAt <= 0) {
       this._nextCivSpawnAt = 30 + Math.random() * 25;
-      if (ships < SHIP_CAP) {
-        const civStations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 0) > 0);
+      if (ships < SHIP_CAP && civStations.length) {
         const src = civStations[Math.floor(Math.random() * civStations.length)];
-        if (src) {
-          const kind: EntityKind = Math.random() < 0.55 ? "friendly" : "neutral";
-          const fac = kind === "friendly" ? "federation" : "guild";
-          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Patrol" : "Hauler"), 40);
-        }
+        const kind: EntityKind = Math.random() < 0.55 ? "friendly" : "neutral";
+        const fac = kind === "friendly" ? "federation" : "guild";
+        spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Patrol" : "Hauler"), 40);
       }
     }
     if (this._nextPirateSpawnAt <= 0) {
       this._nextPirateSpawnAt = 22 + Math.random() * 20;
-      if (ships < SHIP_CAP) {
-        const bases = this.entities.filter((e) => e.kind === "station" && e.faction === "pirate" && (e.hull ?? 0) > 0);
-        const src = bases[Math.floor(Math.random() * bases.length)];
-        if (src) spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
+      if (ships < SHIP_CAP && pirateBases.length) {
+        const src = pirateBases[Math.floor(Math.random() * pirateBases.length)];
+        spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
       }
     }
     if (this._nextPlanetSpawnAt <= 0) {
       this._nextPlanetSpawnAt = 70 + Math.random() * 40;
-      if (ships < SHIP_CAP) {
-        const planets = this.entities.filter((e) => e.kind === "planet");
+      if (ships < SHIP_CAP && planets.length) {
         const src = planets[Math.floor(Math.random() * planets.length)];
-        if (src) {
-          const kind: EntityKind = Math.random() < 0.7 ? "neutral" : "friendly";
-          const fac = kind === "friendly" ? "federation" : "guild";
-          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Courier" : "Trader"), 40);
-        }
+        const kind: EntityKind = Math.random() < 0.7 ? "neutral" : "friendly";
+        const fac = kind === "friendly" ? "federation" : "guild";
+        spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Courier" : "Trader"), 40);
       }
     }
   }
+
 
 
   // Periodically inject a flavor chatter line from nearby NPCs / stations /
