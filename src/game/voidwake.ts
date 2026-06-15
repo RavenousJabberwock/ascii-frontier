@@ -2468,6 +2468,28 @@ export class Voidwake {
       const label = blink + it;
       putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
+    if (this.titleNotice) {
+      const age = performance.now() / 1000 - this.titleNoticeAt;
+      const pulseNotice = Math.floor(age * 2) % 2 === 0;
+      const maxW = Math.max(24, Math.min(cols - 8, 92));
+      const raw = `LAST EXIT: ${this.titleNotice}`;
+      const lines: string[] = [];
+      let rest = raw;
+      while (rest.length > maxW && lines.length < 2) {
+        const cut = Math.max(18, rest.lastIndexOf(" ", maxW));
+        lines.push(rest.slice(0, cut));
+        rest = rest.slice(cut).trimStart();
+      }
+      lines.push(rest.length > maxW ? rest.slice(0, maxW - 1) + "…" : rest);
+      const y = Math.min(g.length - 6, menuTop + this.titleItems.length * 2 + 1);
+      const borderW = Math.min(maxW + 4, cols - 4);
+      const x = Math.max(2, Math.floor((cols - borderW) / 2));
+      putText(g, x, y, "┌" + "─".repeat(borderW - 2) + "┐", pulseNotice ? "#fc6" : "#b86");
+      lines.slice(0, 3).forEach((line, i) => {
+        putText(g, x, y + 1 + i, "│ " + line.padEnd(borderW - 4) + " │", "#fc6");
+      });
+      putText(g, x, y + 1 + lines.length, "└" + "─".repeat(borderW - 2) + "┘", pulseNotice ? "#fc6" : "#b86");
+    }
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
 
