@@ -1229,15 +1229,13 @@ export class Voidwake {
       }
     });
     try {
-      const raw = sessionStorage.getItem(TITLE_NOTICE_KEY);
-      const saved = raw ? JSON.parse(raw) as { reason?: string; wall?: number } : null;
+      const saved = readDiagnostic<{ reason?: string; wall?: number }>(TITLE_NOTICE_KEY);
       if (saved?.reason && saved.wall && Date.now() - saved.wall < 5 * 60_000) {
         this.titleNotice = saved.reason;
         this.titleNoticeAt = performance.now() / 1000;
       }
       if (!this.titleNotice) {
-        const recRaw = sessionStorage.getItem(FLIGHT_RECORDER_KEY);
-        const rec = recRaw ? JSON.parse(recRaw) as FlightRecorder : null;
+        const rec = readDiagnostic<FlightRecorder>(FLIGHT_RECORDER_KEY);
         const fresh = rec?.wall && Date.now() - rec.wall < 5 * 60_000;
         const wasInFlight = rec?.screen === "playing" || rec?.screen === "menu" || rec?.screen === "station" || rec?.screen === "destroyed" || rec?.screen === "crashed";
         if (rec && fresh && wasInFlight && !rec.clean) {
@@ -1315,13 +1313,13 @@ export class Voidwake {
       deathReason: this.deathReason,
       crashError: this.crashError,
     };
-    try { sessionStorage.setItem(FLIGHT_RECORDER_KEY, JSON.stringify(rec)); } catch { /* ignore */ }
+    writeDiagnostic(FLIGHT_RECORDER_KEY, rec);
   }
 
   setTitleNotice(reason: string) {
     this.titleNotice = reason.slice(0, 220);
     this.titleNoticeAt = performance.now() / 1000;
-    try { sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({ reason: this.titleNotice, wall: Date.now() })); } catch { /* ignore */ }
+    writeDiagnostic(TITLE_NOTICE_KEY, { reason: this.titleNotice, wall: Date.now() });
     // eslint-disable-next-line no-console
     console.info("[ASCII Frontier] title return:", this.titleNotice);
   }
@@ -1329,8 +1327,8 @@ export class Voidwake {
   clearTitleNotice() {
     this.titleNotice = null;
     this.titleNoticeAt = 0;
-    try { sessionStorage.removeItem(TITLE_NOTICE_KEY); } catch { /* ignore */ }
-    try { sessionStorage.removeItem(FLIGHT_RECORDER_KEY); } catch { /* ignore */ }
+    removeDiagnostic(TITLE_NOTICE_KEY);
+    removeDiagnostic(FLIGHT_RECORDER_KEY);
   }
 
   returnToTitle(reason: string, clearPlayer = true) {
@@ -1424,12 +1422,7 @@ export class Voidwake {
     // Also persist as a title notice so if the page reloads (HMR, React
     // remount, etc.) and we land on the title without seeing the crash
     // screen, the LAST EXIT banner still reports the cause.
-    try {
-      sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({
-        reason: `Crash: ${this.crashError}`,
-        wall: Date.now(),
-      }));
-    } catch { /* ignore */ }
+    writeDiagnostic(TITLE_NOTICE_KEY, { reason: `Crash: ${this.crashError}`, wall: Date.now() });
     this.screen = "crashed";
     this.menuCursor = 0;
   }
