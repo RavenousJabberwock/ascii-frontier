@@ -1093,6 +1093,44 @@ export class Voidwake {
     if (this.chatter.length > 6) this.chatter.pop();
   }
 
+  // Build the slot dictionary used by the procedural chatter generator.
+  // Pulls live state so generated lines reference the player's actual ship,
+  // hull%, current target, sector coords, cargo, etc. — not canned text.
+  chatterCtx(speaker?: Entity, opts?: { target?: Entity | null }): ChatterCtx {
+    const p = this.player!;
+    const hullPct   = Math.round(100 * (p.ship.hull / p.ship.hullMax));
+    const shieldPct = Math.round(100 * (p.ship.shield / Math.max(1, p.ship.shieldMax)));
+    const fuelPct   = Math.round(100 * (p.ship.fuel / Math.max(1, p.ship.fuelMax)));
+    const cargoPct  = Math.round(100 * (cargoTotal(p) / Math.max(1, p.ship.cargoMax)));
+    const shipName  = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.name ?? p.ship.hullId;
+    const sector    = `${Math.floor(p.pos.x / 500)}:${Math.floor(p.pos.z / 500)}`;
+    const target    = opts?.target ?? this.entities.find((e) => e.id === this.targetId) ?? null;
+    const nearestHostile = this.entities
+      .filter((e) => e.kind === "hostile")
+      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
+      .sort((a, b) => a.d - b.d)[0]?.e;
+    const speakerName = speaker?.name ?? "Comms";
+    return {
+      cmdr: p.char.name,
+      ship: shipName,
+      speaker: speakerName,
+      short: speakerName.split(" ")[0],
+      hull: String(hullPct),
+      shield: String(shieldPct),
+      fuel: String(fuelPct),
+      cargo: String(cargoPct),
+      credits: String(p.credits),
+      kills: String(p.kills ?? 0),
+      target: target?.name ?? "the target",
+      nearest: nearestHostile?.name ?? speakerName,
+      sector,
+      ore: String(p.cargo.ore ?? 0),
+      fac: speaker?.faction ?? "Federation",
+      dist: target ? String(Math.round(V.len(V.sub(target.pos, p.pos)))) : "?",
+    };
+  }
+
+
   // Cached station market lookup. Generates on first request.
   getStock(stationId: number): StationStock {
     let s = this.stationStocks.get(stationId);
