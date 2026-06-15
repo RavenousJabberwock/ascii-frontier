@@ -966,8 +966,21 @@ type Screen =
 // =============================================================================
 // 9. Save / Load — unencrypted JSON in localStorage (plus export/import)
 // =============================================================================
-function saveGame(slot: string, blob: SaveBlob) {
-  localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(blob, null, 2));
+function saveGame(slot: string, blob: SaveBlob): { ok: true } | { ok: false; reason: "quota" | "error"; error?: unknown } {
+  try {
+    localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(blob, null, 2));
+    return { ok: true };
+  } catch (e) {
+    // QuotaExceededError / NS_ERROR_DOM_QUOTA_REACHED — disk full, private-mode,
+    // or save grew past the ~5 MB origin quota. Caller can warn the player
+    // instead of crashing the engine.
+    const isQuota =
+      e instanceof DOMException &&
+      (e.code === 22 || e.code === 1014 || /quota/i.test(e.name));
+    // eslint-disable-next-line no-console
+    console.warn("[ASCII Frontier] saveGame failed:", e);
+    return { ok: false, reason: isQuota ? "quota" : "error", error: e };
+  }
 }
 function loadGame(slot: string): SaveBlob | null {
   const raw = localStorage.getItem(SAVE_PREFIX + slot);
