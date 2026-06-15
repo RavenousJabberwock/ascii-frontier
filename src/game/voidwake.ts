@@ -2627,10 +2627,14 @@ export class Voidwake {
         player: this.player, entities: this.entities,
         options: this.options, savedAt: Date.now(),
       };
-      saveGame(c, blob);
-      this.player.lastSaveAt = Date.now();
-      this.pushLog(`Saved to ${c}.`);
-      this.screen = "menu";
+      const res = saveGame(c, blob);
+      if (!res.ok) {
+        this.pushLog(res.reason === "quota" ? `Save to ${c} failed — storage full.` : `Save to ${c} failed.`);
+      } else {
+        this.player.lastSaveAt = Date.now();
+        this.pushLog(`Saved to ${c}.`);
+        this.screen = "menu";
+      }
     }
   }
   updateLoad() {
