@@ -2004,9 +2004,13 @@ export class Voidwake {
           player: p, entities: this.entities,
           options: this.options, savedAt: Date.now(),
         };
-        saveGame("autosave", blob);
-        p.lastSaveAt = Date.now();
-        this.pushLog("◉ Autosaved.");
+        const res = saveGame("autosave", blob);
+        if (!res.ok) {
+          this.pushLog(res.reason === "quota" ? "⚠ Autosave failed: browser storage full." : "⚠ Autosave failed.");
+        } else {
+          p.lastSaveAt = Date.now();
+          this.pushLog("◉ Autosaved.");
+        }
       } catch (err) {
         console.warn("Autosave failed", err);
       }
