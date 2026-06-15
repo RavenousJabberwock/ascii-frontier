@@ -1123,6 +1123,10 @@ export class Voidwake {
   stationPage: "main" | "market" | "weapons" | "modules" | "crew" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
+  // Throttles for periodic respawning from stations / planets / pirate bases.
+  private _nextCivSpawnAt = 25;
+  private _nextPirateSpawnAt = 18;
+  private _nextPlanetSpawnAt = 60;
   // Simple FPS counter (toggleable in Options).
   fps = 0;
   private _fpsAcc = 0;
