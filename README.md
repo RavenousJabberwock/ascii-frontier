@@ -146,8 +146,8 @@ Lovable auto-push to GitHub; pushes to GitHub auto-sync back into Lovable.
 To work locally:
 
 ```bash
-git clone <your-repo-url>
-cd <repo>
+git clone https://github.com/RavenousJabberwock/ascii-frontier/
+cd ascii-frontier
 bun install
 bun run dev
 ```
