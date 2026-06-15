@@ -2166,6 +2166,10 @@ export class Voidwake {
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.beep(660, 0.08, "sine"); this.beep(990, 0.08, "sine");
+    if (p.gunner) {
+      this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+        pickLine("gunner_docked", this.chatterCtx(t)), "#fc6");
+    }
 
     // Hand in mission
     if (p.mission && p.mission.done) {
