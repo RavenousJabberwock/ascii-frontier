@@ -244,6 +244,7 @@ interface Options {
   volumeSfx: number;
   volumeMusic: number;
   unsavedWarnMinutes: number;
+  permadeath: boolean;       // when on, "Load Last Save" is disabled on death
   keybinds: Record<string, string>;
 }
 
