@@ -696,6 +696,9 @@ function colorFor(kind: EntityKind): string {
     case "hostile": return "#ff5555";
     case "bullet": return "#fffa86";
     case "loot": return "#ffe066";
+    case "comet": return "#bff7ff";
+    case "nebula": return "#c47afc";
+    case "beacon": return "#ff66cc";
   }
 }
 
