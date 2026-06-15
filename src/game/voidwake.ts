@@ -1043,19 +1043,32 @@ function putText(g: Cell[][], x: number, y: number, text: string, color = "#9fe"
 // Multiplies an #rgb / #rrggbb hex color's RGB channels by `f` (clamped 0..1.4)
 // and returns a #rrggbb string. Used to shade planet/station surfaces based on
 // the angle to the nearest star (front lit vs. terminator vs. shadow side).
+// Memoized shadeColor — planet surfaces call this for nearly every cell.
+// Quantizing the factor into ~16 buckets means a planet's worth of cells
+// reuses a tiny set of cached strings instead of doing fresh parse/multiply/
+// hex-format work each time.
+const _shadeCache = new Map<string, string>();
 function shadeColor(hex: string, f: number): string {
+  const k = Math.max(0, Math.min(1.4, f));
+  const bucket = Math.round(k * 16); // 0..22 unique steps
+  const key = hex + "|" + bucket;
+  const hit = _shadeCache.get(key);
+  if (hit !== undefined) return hit;
   let h = hex.replace("#", "");
   if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-  if (h.length !== 6) return hex;
+  if (h.length !== 6) { _shadeCache.set(key, hex); return hex; }
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
-  const k = Math.max(0, Math.min(1.4, f));
-  const rr = Math.max(0, Math.min(255, Math.round(r * k)));
-  const gg = Math.max(0, Math.min(255, Math.round(g * k)));
-  const bb = Math.max(0, Math.min(255, Math.round(b * k)));
-  return "#" + rr.toString(16).padStart(2, "0") + gg.toString(16).padStart(2, "0") + bb.toString(16).padStart(2, "0");
+  const kq = bucket / 16;
+  const rr = Math.max(0, Math.min(255, Math.round(r * kq)));
+  const gg = Math.max(0, Math.min(255, Math.round(g * kq)));
+  const bb = Math.max(0, Math.min(255, Math.round(b * kq)));
+  const out = "#" + rr.toString(16).padStart(2, "0") + gg.toString(16).padStart(2, "0") + bb.toString(16).padStart(2, "0");
+  _shadeCache.set(key, out);
+  return out;
 }
+
 
 function colorFor(kind: EntityKind): string {
   switch (kind) {
