@@ -1423,12 +1423,20 @@ export class Voidwake {
         if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
         const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
+        // Star fuel scoop: a "corona" ring just outside the kill radius.
+        // Drift through at low throttle to refuel for free; shields tick down.
+        if (e.kind === "star" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
+          p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 18);
+          if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 5);
+          else p.ship.hull = Math.max(0, p.ship.hull - dt * 2);
+          if (Math.random() < 0.02) this.pushLog("☼ Scooping stellar fuel — shields straining.");
+          if (p.ship.hull <= 0) { this.die(`Burned alive scooping ${e.name}`, e.name); return; }
+          continue;
+        }
         if (d < radius) {
-          // Push the player back to the surface and apply scaled damage.
           const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
           if (e.kind === "station") {
-            // Stations bump but don't kill; remind the pilot to dock.
             p.throttle = Math.min(p.throttle, 0.1);
             this.pushLog(`Bumped ${e.name} — press F to dock.`);
             this.beep(220, 0.06, "square");
@@ -1445,6 +1453,7 @@ export class Voidwake {
         }
       }
     }
+
 
     // Move entities
     const now = performance.now() / 1000;
