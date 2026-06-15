@@ -1839,51 +1839,75 @@ export class Voidwake {
         return false;
       }
 
-      // Enemy hit
+      // Enemy hit. Stations are eligible only when their faction is hostile
+      // to the bullet's faction (currently: pirate bases shot by anyone non-pirate,
+      // civilian stations shot by pirates).
       for (const t of this.entities) {
-        if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
+        const isShip = t.kind === "hostile" || t.kind === "neutral" || t.kind === "friendly";
+        const isStation = t.kind === "station";
+        if (!isShip && !isStation) continue;
+        if ((t.hull ?? 0) <= 0) continue;
         if (e.ownerId === t.id) continue;
         if (e.faction === t.faction && e.faction !== "player") continue;
-        if (V.len(V.sub(e.pos, t.pos)) < 14) {
-          const w = WEAPONS.find((x) => x.id === (this.player?.ship.weaponId)) ?? WEAPONS[0];
-          if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - w.dmg);
-          else t.hull = Math.max(0, (t.hull ?? 0) - w.dmg);
+        // Player bullets are non-aggressive vs civilian stations (would be too
+        // easy to grief friendly outposts) — only pirate stations are valid.
+        if (isStation && t.faction !== "pirate") continue;
+        const hitRadius = isStation ? 22 : 14;
+        if (V.len(V.sub(e.pos, t.pos)) < hitRadius) {
+          // Damage value: player's weapon if the shot came from the player,
+          // otherwise a flat NPC damage value.
+          const playerShot = e.faction === "player";
+          const dmg = playerShot
+            ? (WEAPONS.find((x) => x.id === (this.player?.ship.weaponId)) ?? WEAPONS[0]).dmg
+            : 6;
+          if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
+          else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
           if ((t.hull ?? 0) <= 0) {
-            this.pushLog(`Destroyed ${t.name}.`);
-            awardXP(p, 25);
-            p.credits += 50;
-            p.kills = (p.kills ?? 0) + 1;
-            // Faction reputation: smiting pirates curries favor with the
-            // Federation and Guild; popping civilians sours both.
-            if (t.faction === "pirate") {
-              adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
-            } else if (t.faction === "federation") {
-              adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
-            } else if (t.faction === "guild") {
-              adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
+            const isPirateBase = isStation && t.faction === "pirate";
+            // Only credit the player when they pulled the trigger.
+            if (playerShot) {
+              this.pushLog(isPirateBase ? `★ Pirate base ${t.name} obliterated!` : `Destroyed ${t.name}.`);
+              awardXP(p, isPirateBase ? 250 : 25);
+              p.credits += isPirateBase ? 1500 : 50;
+              p.kills = (p.kills ?? 0) + 1;
+              if (isPirateBase) {
+                adjustRep(p, "federation", 12); adjustRep(p, "guild", 8); adjustRep(p, "pirate", -15);
+              } else if (t.faction === "pirate") {
+                adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
+              } else if (t.faction === "federation") {
+                adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
+              } else if (t.faction === "guild") {
+                adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
+              }
+              // Loot canister
+              if (Math.random() < (isPirateBase ? 1.0 : 0.85)) {
+                this.entities.push({
+                  id: nextId(), kind: "loot", name: isPirateBase ? "cache" : "canister",
+                  pos: { ...t.pos },
+                  vel: V.scale(t.vel, 0.25),
+                  faction: "wreck",
+                  ttlAt: performance.now() / 1000 + (isPirateBase ? 120 : 45),
+                  loot: {
+                    credits: isPirateBase ? 600 + Math.floor(Math.random() * 800) : 20 + Math.floor(Math.random() * 80),
+                    ore: isPirateBase ? 10 + Math.floor(Math.random() * 15) : Math.floor(Math.random() * 4),
+                  },
+                });
+              }
+              if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
+                p.mission.done = true;
+                this.pushLog("Bounty completed — return to a station.");
+              }
+            } else {
+              // NPC-on-NPC kill — just log it as ambient color.
+              if (Math.random() < 0.4) this.pushLog(`${t.name} was destroyed in a skirmish.`);
             }
-            // Loot canister: small chance of credits + ore drop. Floats on
-            // the kill's velocity so the player can chase it down.
-            if (Math.random() < 0.85) {
-              this.entities.push({
-                id: nextId(), kind: "loot", name: "canister",
-                pos: { ...t.pos },
-                vel: V.scale(t.vel, 0.25),
-                faction: "wreck",
-                ttlAt: performance.now() / 1000 + 45,
-                loot: {
-                  credits: 20 + Math.floor(Math.random() * 80),
-                  ore: Math.floor(Math.random() * 4),
-                },
-              });
+            // Convert to debris so AI/render stop treating it as a live ship.
+            if (isStation) {
+              // Stations become a chunky debris field marker.
+              t.kind = "asteroid"; t.ore = 0; t.name = "wreckage"; t.hull = 0;
+            } else {
+              t.kind = "asteroid"; t.ore = 0; t.name = "debris";
             }
-            // Mission progress
-            if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
-              p.mission.done = true;
-              this.pushLog("Bounty completed — return to a station.");
-            }
-            // remove dead ship next pass
-            t.kind = "asteroid"; t.ore = 0; t.name = "debris";
           }
           return false;
         }
