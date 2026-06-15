@@ -1845,7 +1845,7 @@ export class Voidwake {
       this.beep(820, 0.04, "square");
       if (g.nextBarkAt <= 0) {
         g.nextBarkAt = 2.5 + Math.random() * 2;
-        this.pushChatter(tag, GUNNER_BARKS_HOSTILE[Math.floor(Math.random() * GUNNER_BARKS_HOSTILE.length)], "#ff8a8a");
+        this.pushChatter(tag, pickLine("gunner_hostile", this.chatterCtx(undefined, { target: best })), "#ff8a8a");
       }
     } else if (best.kind === "asteroid") {
       if (bestDist > 200) return;
