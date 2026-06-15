@@ -62,6 +62,9 @@ const GLYPHS: Record<string, string> = {
   bullet: "·",
   player: "^",
   loot: "$",
+  comet: "~",
+  nebula: "▒",
+  beacon: "!",
 };
 
 // ---- Flavor data: names / barks / broadcasts -----------------------------
