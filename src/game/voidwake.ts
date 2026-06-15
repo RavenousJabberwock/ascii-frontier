@@ -2166,11 +2166,20 @@ export class Voidwake {
 
   cycleTarget() {
     const p = this.player; if (!p) return;
+    // Squared-distance comparator — no sqrt needed and we already skip bullets/self.
     const cand = this.entities
-      .filter((e) => e.kind !== "bullet" && e.id !== this.targetId)
-      .sort((a, b) => V.len(V.sub(a.pos, p.pos)) - V.len(V.sub(b.pos, p.pos)));
-    this.targetId = cand[0]?.id ?? null;
+      .filter((e) => e.kind !== "bullet" && e.id !== this.targetId);
+    let bestI = -1, bestD2 = Infinity;
+    for (let i = 0; i < cand.length; i++) {
+      const dx = cand[i].pos.x - p.pos.x;
+      const dy = cand[i].pos.y - p.pos.y;
+      const dz = cand[i].pos.z - p.pos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; bestI = i; }
+    }
+    this.targetId = bestI >= 0 ? cand[bestI].id : null;
   }
+
 
   mineTarget() {
     const p = this.player; if (!p) return;
