@@ -2543,18 +2543,26 @@ export class Voidwake {
     }
 
 
-    // Paint grid
+    // Paint grid. Cells with `glow` get a CSS-style canvas shadow that bleeds
+    // their color outward — used for stars and other "luminous" glyphs.
     ctx.font = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
     ctx.textBaseline = "top";
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         const c = grid[y][x];
         if (c.ch === " ") continue;
+        if (c.glow) {
+          ctx.shadowColor = c.color;
+          ctx.shadowBlur = 9;
+        } else if (ctx.shadowBlur !== 0) {
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+        }
         ctx.fillStyle = c.color;
         ctx.fillText(c.ch, x * CELL_W, y * CELL_H);
       }
     }
-  }
+    if (ctx.shadowBlur !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
 
   // Starfield -----------------------------------------------------------------
   // World-space stars projected through the player's camera. Because the
