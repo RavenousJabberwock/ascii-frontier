@@ -1358,9 +1358,9 @@ export class Voidwake {
     }
     // Nearest station by 3D distance from last position.
     let best = stations[0];
-    let bestD = V.dist(p.pos, best.pos);
+    let bestD = V.len(V.sub(p.pos, best.pos));
     for (const s of stations) {
-      const d = V.dist(p.pos, s.pos);
+      const d = V.len(V.sub(p.pos, s.pos));
       if (d < bestD) { best = s; bestD = d; }
     }
     // Drop the player a short offset off the station so they don't spawn
