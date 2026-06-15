@@ -2563,6 +2563,8 @@ export class Voidwake {
       }
     }
     if (ctx.shadowBlur !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
+  }
+
 
   // Starfield -----------------------------------------------------------------
   // World-space stars projected through the player's camera. Because the
