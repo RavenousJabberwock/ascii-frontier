@@ -1279,10 +1279,8 @@ export class Voidwake {
         }
         this.pushLog("No save available.");
       }
-      this.player = null;
+      this.returnToTitle(`Crash menu: ${this.crashError ?? "unknown error"}`);
       this.crashError = null; this.crashStack = null;
-      this.screen = "title";
-      this.menuCursor = 0;
     }
 
   }
@@ -1332,10 +1330,7 @@ export class Voidwake {
         return;
       }
       // Return to Main Menu
-      console.info("[ASCII Frontier] returning to title:", this.deathReason ?? "(unknown)");
-      this.player = null;
-      this.screen = "title";
-      this.menuCursor = 0;
+      this.returnToTitle(`Destroyed: ${this.deathReason ?? "unknown cause"}`);
     }
   }
 
@@ -1347,8 +1342,8 @@ export class Voidwake {
     this.menuNav(this.titleItems.length);
     if (this.input.consume("enter")) {
       const choice = this.titleItems[this.menuCursor];
-      if (choice === "New Game") { this.screen = "create-char"; this.menuCursor = 0; }
-      else if (choice === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
+      if (choice === "New Game") { this.clearTitleNotice(); this.screen = "create-char"; this.menuCursor = 0; }
+      else if (choice === "Load Game") { this.clearTitleNotice(); this.screen = "load"; this.menuCursor = 0; }
       else if (choice === "Options") { this.screen = "options"; this.menuCursor = 0; }
       else if (choice === "Quit") this.tryQuit();
     }
