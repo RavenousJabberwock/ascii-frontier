@@ -997,6 +997,7 @@ function tintFor(e: Entity): { fill: string; edge: string } {
       return { fill: PLANET_FILLS[i], edge: PLANET_EDGES[i] };
     }
     case "station": {
+      if (e.faction === "pirate") return { fill: "#c44", edge: "#ff7766" };
       const i = Math.floor(h * STATION_FILLS.length);
       return { fill: STATION_FILLS[i], edge: "#8a8ad0" };
     }
