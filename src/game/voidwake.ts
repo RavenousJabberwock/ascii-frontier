@@ -449,6 +449,29 @@ function nameFrom(rng: () => number, prefix: string): string {
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
+// World scale + entity counts. Bumped substantially since 0.2 for a more
+// populated sandbox. If you tweak these, also revisit station/planet spawn
+// caps in maybeSpawnFromBodies() so the world doesn't drift past 2x baseline.
+const WORLD = {
+  starRadius: 0,
+  planetRadius: 5200,
+  asteroidRadius: 4200,
+  stationRadius: 4800,
+  shipRadius: 5600,
+  cometRadius: 6000,
+  nebulaRadius: 5200,
+  beaconRadius: 5000,
+  baseRadius: 5400,
+  planets: 12,
+  asteroids: 160,
+  stations: 6,
+  ships: 48,
+  comets: 8,
+  nebulae: 9,
+  beacons: 6,
+  pirateBases: 3,
+};
+
 function generateUniverse(seed: number): Entity[] {
   _entityIdSeq = 1;
   const rng = mulberry32(seed);
@@ -458,68 +481,79 @@ function generateUniverse(seed: number): Entity[] {
   out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sol"), pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
 
   // Planets
-  for (let i = 0; i < 5; i++) {
-    out.push({ id: nextId(), kind: "planet", name: nameFrom(rng, "P-"), pos: randPos(rng, 2500), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
+  for (let i = 0; i < WORLD.planets; i++) {
+    out.push({ id: nextId(), kind: "planet", name: nameFrom(rng, "P-"), pos: randPos(rng, WORLD.planetRadius), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
   }
   // Asteroid field
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < WORLD.asteroids; i++) {
     out.push({
-      id: nextId(), kind: "asteroid", name: "Rock", pos: randPos(rng, 1800),
+      id: nextId(), kind: "asteroid", name: "Rock", pos: randPos(rng, WORLD.asteroidRadius),
       vel: { x: (rng() - 0.5) * 2, y: (rng() - 0.5) * 2, z: (rng() - 0.5) * 2 },
       faction: "nature", ore: 5 + Math.floor(rng() * 20),
     });
   }
-  // Stations
-  for (let i = 0; i < 3; i++) {
+  // Civilian stations (dockable). Alternating federation/guild ownership.
+  for (let i = 0; i < WORLD.stations; i++) {
+    const fac = i % 2 === 0 ? "federation" : "guild";
     out.push({
-      id: nextId(), kind: "station", name: nameFrom(rng, "Station"),
-      pos: randPos(rng, 2200), vel: { x: 0, y: 0, z: 0 }, faction: "federation",
+      id: nextId(), kind: "station", name: nameFrom(rng, fac === "federation" ? "Station" : "Outpost"),
+      pos: randPos(rng, WORLD.stationRadius), vel: { x: 0, y: 0, z: 0 }, faction: fac,
       hull: 500, shield: 300, state: "idle",
+    });
+  }
+  // Pirate bases: fortified, hostile, undockable. Periodically spawn raiders
+  // and fire turret bullets at anything not flying pirate colors. Destroying
+  // one nets a fat bounty + rep, and stops local pirate respawns.
+  for (let i = 0; i < WORLD.pirateBases; i++) {
+    out.push({
+      id: nextId(), kind: "station", name: nameFrom(rng, "Den"),
+      pos: randPos(rng, WORLD.baseRadius), vel: { x: 0, y: 0, z: 0 }, faction: "pirate",
+      hull: 900, shield: 500, state: "pirate_base", cooldown: 0,
     });
   }
   // Ships
   const factions = ["federation", "guild", "pirate"];
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < WORLD.ships; i++) {
     const roll = rng();
     const kind: EntityKind = roll < 0.4 ? "friendly" : roll < 0.75 ? "neutral" : "hostile";
     const fac = kind === "friendly" ? "federation" : kind === "neutral" ? "guild" : "pirate";
     out.push({
       id: nextId(), kind, name: nameFrom(rng, kind === "hostile" ? "Raider" : "Ship"),
-      pos: randPos(rng, 3000),
+      pos: randPos(rng, WORLD.shipRadius),
       vel: { x: (rng() - 0.5) * 10, y: (rng() - 0.5) * 10, z: (rng() - 0.5) * 10 },
       faction: factions.includes(fac) ? fac : "guild",
       hull: kind === "hostile" ? 50 : 40, shield: 30,
-      state: "wander", cooldown: 0, weaponId: kind === "hostile" ? "pulse" : "pulse",
+      state: "wander", cooldown: 0, weaponId: "pulse",
     });
   }
 
   // Comets: fast-moving, harmless. The renderer trails ~ glyphs along velocity.
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < WORLD.comets; i++) {
     const dir = V.norm({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 });
     out.push({
       id: nextId(), kind: "comet", name: nameFrom(rng, "Comet"),
-      pos: randPos(rng, 3200),
+      pos: randPos(rng, WORLD.cometRadius),
       vel: V.scale(dir, 35 + rng() * 25),
       faction: "nature",
     });
   }
   // Nebula clouds: stationary fog. Inside they drain shields slowly and dim
   // the starfield. Pure "atmosphere" hazard you can hide a pursuer in.
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < WORLD.nebulae; i++) {
     out.push({
       id: nextId(), kind: "nebula", name: nameFrom(rng, "Neb"),
-      pos: randPos(rng, 2800),
+      pos: randPos(rng, WORLD.nebulaRadius),
       vel: { x: 0, y: 0, z: 0 },
       faction: "nature",
     });
   }
   // Distress beacons: dock-on-touch for a small bounty (or pirate trap).
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < WORLD.beacons; i++) {
     const trap = rng() < 0.35;
     out.push({
       id: nextId(), kind: "beacon",
       name: trap ? "Distress (?)" : "Distress",
-      pos: randPos(rng, 2600),
+      pos: randPos(rng, WORLD.beaconRadius),
       vel: { x: 0, y: 0, z: 0 },
       faction: "wreck",
       state: trap ? "trap" : "rescue",
