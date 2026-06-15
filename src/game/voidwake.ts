@@ -3392,9 +3392,21 @@ export class Voidwake {
     putText(g, panelX, vpTop + 2, `Cmdr ${p.char.name}`, "#fff");
     putText(g, panelX, vpTop + 3, `Rank ${p.rank}  XP ${p.xp}`, "#9fe");
     putText(g, panelX, vpTop + 4, `Credits ${p.credits}`, "#fb6");
-    putText(g, panelX, vpTop + 6, `Hull   ${bar(p.ship.hull, p.ship.hullMax)}`, "#f88");
-    putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, "#8cf");
-    putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, "#fc6");
+    // Hull / Shield / Fuel — blink and brighten when in alarm range so the
+    // player can't miss critical states even at a glance.
+    const blinkOn = (Math.floor(performance.now() / 220) % 2) === 0;
+    const hullPctR = p.ship.hull / p.ship.hullMax;
+    const fuelPctR = p.ship.fuel / p.ship.fuelMax;
+    const hullCol = hullPctR < 0.10 ? (blinkOn ? "#ff2222" : "#660000")
+                  : hullPctR < 0.30 ? (blinkOn ? "#ff8a8a" : "#aa3333")
+                  : "#f88";
+    const shieldCol = (p.ship.shield <= 0 && performance.now() / 1000 < this.shieldFlashUntil)
+                  ? (blinkOn ? "#ffffff" : "#8cf")
+                  : "#8cf";
+    const fuelCol = fuelPctR < 0.15 ? (blinkOn ? "#ffcc33" : "#664400") : "#fc6";
+    putText(g, panelX, vpTop + 6, `Hull   ${bar(p.ship.hull, p.ship.hullMax)}`, hullCol);
+    putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, shieldCol);
+    putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, fuelCol);
     putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%`, "#9fe");
     putText(g, panelX, vpTop + 10, `Speed ${(p.ship.speed * p.throttle).toFixed(0)} u/s`, "#9fe");
     putText(g, panelX, vpTop + 12, `Cargo ${cargoTotal(p)}/${p.ship.cargoMax}`, "#9fe");
