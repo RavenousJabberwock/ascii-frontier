@@ -2646,6 +2646,15 @@ export class Voidwake {
     if (this.stationPage === "crew") {
       if (i !== 0) return;
       if (p.gunner) {
+        // Tone of the farewell depends on how the tour went: a long-served,
+        // well-paid, well-kept gunner leaves happy; a short, broke, or
+        // bullet-pocked one storms off cursing.
+        const tenureMin = (Date.now() - p.gunner.hiredAt) / 60000;
+        const hullPct = p.ship.hull / p.ship.hullMax;
+        const happy = tenureMin > 3 && p.credits > 500 && hullPct > 0.5;
+        const kind: ChatterKind = happy ? "gunner_farewell_good" : "gunner_farewell_bad";
+        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+          pickLine(kind, this.chatterCtx()), happy ? "#fc6" : "#f88");
         this.pushLog(`${p.gunner.name} signed off.`);
         p.gunner = undefined;
       } else {
@@ -2653,7 +2662,8 @@ export class Voidwake {
         p.credits -= stock.gunnerFee;
         p.gunner = generateGunner(Math.random);
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
-        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`, "On board, Cmdr. Press G to toggle me.", "#fc6");
+        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+          pickLine("gunner_greet", this.chatterCtx()), "#fc6");
       }
       return;
     }
