@@ -1244,7 +1244,7 @@ export class Voidwake {
         }
       }
     } catch { /* ignore diagnostic restore failures */ }
-    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", true, true));
+    window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true));
   }
 
   fit() {
@@ -3026,6 +3026,7 @@ export class Voidwake {
       const sel = i === this.menuCursor;
       putText(g, 6, 5 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
     });
+    if (this.titleNotice) this.renderTitleNotice(g, 5 + items.length * 2 + 2);
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm   ESC back", "#888");
   }
 
