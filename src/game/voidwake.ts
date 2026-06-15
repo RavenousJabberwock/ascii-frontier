@@ -1383,6 +1383,8 @@ export class Voidwake {
     this.recordFlight(`engine stopped while ${this.screen}`, this.screen === "title", true);
     this.running = false;
     cancelAnimationFrame(this.rafId);
+    // Detach every window/document/canvas listener registered with this signal.
+    this._abort.abort();
   }
 
   pushLog(msg: string) {
