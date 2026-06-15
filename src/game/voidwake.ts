@@ -1864,7 +1864,7 @@ export class Voidwake {
       if (bestDist > 400) return;
       if (g.nextBarkAt > 0) return;
       g.nextBarkAt = 12 + Math.random() * 8;
-      this.pushChatter(tag, GUNNER_BARKS_DOCK[Math.floor(Math.random() * GUNNER_BARKS_DOCK.length)], "#9fe");
+      this.pushChatter(tag, pickLine("gunner_dock", this.chatterCtx(undefined, { target: best })), "#9fe");
     }
   }
 
