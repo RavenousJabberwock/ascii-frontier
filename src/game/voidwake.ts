@@ -79,7 +79,9 @@ const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","O
 
 type ChatterKind =
   | "hostile" | "friendly" | "neutral" | "station" | "planet"
-  | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit";
+  | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
+  | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
+  | "gunner_kill" | "gunner_docked" | "gunner_cargofull";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
 const FRAGMENTS: Record<string, string[]> = {
@@ -176,6 +178,51 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Shields buckling — {shield}% left!",
     "Hold her steady, {cmdr}!",
     "That's coming from {nearest}!",
+    "Evasive! Hull at {hull}%!",
+    "Whoever's shooting us — they'll regret it.",
+  ],
+  gunner_greet: [
+    "On board, Cmdr. Press G to toggle me.",
+    "{cmdr}! Heard you needed a trigger finger. Glad to ride.",
+    "Permission to stow my kit? Beautiful ship, this {ship}.",
+    "Reporting for duty. Coffee tastes like {coffee} here too — perfect.",
+    "Cmdr {cmdr}, I'll keep your six warm. Press G to put me to work.",
+    "First time aboard a {ship}. Don't let me down and I won't let you.",
+    "Last captain owed me three jumps' wage. You won't, right?",
+    "{praise}, that's what I want to see. Let's burn some {curse} types.",
+    "Quiet bunk, working guns — that's all I ask. G to wake me up.",
+  ],
+  gunner_farewell_good: [
+    "Been an honor, Cmdr. {praise} out there.",
+    "Safe vectors, {cmdr}. I'll buy the first round.",
+    "Keep the {ship} clean. You're a fine pilot.",
+    "If you ever need a gun again, I'm in {sector}.",
+    "Cmdr — thanks for the ride. {kills} kills together. Not bad.",
+  ],
+  gunner_farewell_bad: [
+    "Should've signed with the Guild. Good riddance.",
+    "Pay's late, hull's wrecked — I'm done. Don't call.",
+    "Hope your next gunner likes {curse}s as much as you do.",
+    "Fly into a star for all I care, Cmdr.",
+    "Worst tour I ever flew. Out.",
+  ],
+  gunner_kill: [
+    "{target} — splashed!",
+    "That's another {curse} for the void.",
+    "Scratch one. Kill count: {kills}.",
+    "Cleaner than I expected. Nice angle.",
+    "Down they go. Manifest 'em, Cmdr.",
+  ],
+  gunner_docked: [
+    "Solid dock. I'll stretch the legs.",
+    "Fuel's flowing, hull's mending. Good call, Cmdr.",
+    "Beacon's friendly. I'll grab a {coffee}.",
+    "Nice approach. Some of my old captains couldn't park a barge.",
+  ],
+  gunner_cargofull: [
+    "Hold's full, Cmdr — find a buyer.",
+    "Cargo at max. Time to offload.",
+    "No room for more rock. Dock somewhere?",
   ],
 };
 
@@ -1205,6 +1252,12 @@ export class Voidwake {
   private _frameNo = 0;
   private _lastRecorderAt = 0;
   private _lastRecordedScreen: Screen = "title";
+  // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
+  private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
+  private shieldFlashUntil = 0;     // wall-time (s) until the shield-loss flash decays
+  private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
+  private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
+  private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -1987,6 +2040,12 @@ export class Voidwake {
               awardXP(p, isPirateBase ? 250 : 25);
               p.credits += isPirateBase ? 1500 : 50;
               p.kills = (p.kills ?? 0) + 1;
+              // Gunner reacts to the kill (when active and not over-talking).
+              if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0 && Math.random() < 0.7) {
+                p.gunner.nextBarkAt = 3 + Math.random() * 2;
+                this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+                  pickLine("gunner_kill", this.chatterCtx(undefined, { target: t })), "#fc6");
+              }
               if (isPirateBase) {
                 adjustRep(p, "federation", 12); adjustRep(p, "guild", 8); adjustRep(p, "pirate", -15);
               } else if (t.faction === "pirate") {
@@ -2031,6 +2090,30 @@ export class Voidwake {
       }
       return true;
     });
+
+    // --- Damage-feedback alarms ----------------------------------------------
+    // Detect shield collapse this tick (any positive shield reaching zero),
+    // and run periodic low-hull / low-fuel klaxons. State is consumed by
+    // renderPlaying() for screen flash, bar blink, and critical fire FX.
+    const nowS = performance.now() / 1000;
+    if (this.prevShield > 0 && p.ship.shield <= 0) {
+      this.shieldFlashUntil = nowS + 0.45;
+      this.beep(160, 0.18, "sawtooth");
+      this.beep(110, 0.22, "triangle");
+    }
+    this.prevShield = p.ship.shield;
+    const hullPct = p.ship.hull / p.ship.hullMax;
+    if (hullPct > 0 && hullPct < 0.30 && nowS >= this.nextHullAlarmAt) {
+      // Faster, more urgent alarm as hull drops; 10% → 0.6s, 30% → 1.6s
+      const period = 0.6 + Math.max(0, (hullPct - 0.10)) * 5.0;
+      this.nextHullAlarmAt = nowS + period;
+      this.beep(720, 0.07, "square"); this.beep(540, 0.07, "square");
+    }
+    const fuelPct = p.ship.fuel / p.ship.fuelMax;
+    if (fuelPct > 0 && fuelPct < 0.15 && nowS >= this.nextFuelAlarmAt) {
+      this.nextFuelAlarmAt = nowS + 2.2;
+      this.beep(420, 0.12, "triangle");
+    }
 
     // Auto-save warn
     const mins = (Date.now() - p.lastSaveAt) / 60000;
@@ -2089,6 +2172,10 @@ export class Voidwake {
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.beep(660, 0.08, "sine"); this.beep(990, 0.08, "sine");
+    if (p.gunner) {
+      this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+        pickLine("gunner_docked", this.chatterCtx(t)), "#fc6");
+    }
 
     // Hand in mission
     if (p.mission && p.mission.done) {
@@ -2190,7 +2277,13 @@ export class Voidwake {
     } else if (best.kind === "asteroid") {
       if (bestDist > 200) return;
       if (g.cooldown > 0) return;
-      if (cargoTotal(p) >= p.ship.cargoMax) return;
+      if (cargoTotal(p) >= p.ship.cargoMax) {
+        if (g.nextBarkAt <= 0) {
+          g.nextBarkAt = 10 + Math.random() * 6;
+          this.pushChatter(tag, pickLine("gunner_cargofull", this.chatterCtx()), "#ffd066");
+        }
+        return;
+      }
       if ((best.ore ?? 0) <= 0) return;
       g.cooldown = 0.35;
       best.ore!--;
@@ -2569,6 +2662,15 @@ export class Voidwake {
     if (this.stationPage === "crew") {
       if (i !== 0) return;
       if (p.gunner) {
+        // Tone of the farewell depends on how the tour went: a long-served,
+        // well-paid, well-kept gunner leaves happy; a short, broke, or
+        // bullet-pocked one storms off cursing.
+        const tenureMin = (Date.now() - p.gunner.hiredAt) / 60000;
+        const hullPct = p.ship.hull / p.ship.hullMax;
+        const happy = tenureMin > 3 && p.credits > 500 && hullPct > 0.5;
+        const kind: ChatterKind = happy ? "gunner_farewell_good" : "gunner_farewell_bad";
+        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+          pickLine(kind, this.chatterCtx()), happy ? "#fc6" : "#f88");
         this.pushLog(`${p.gunner.name} signed off.`);
         p.gunner = undefined;
       } else {
@@ -2576,7 +2678,8 @@ export class Voidwake {
         p.credits -= stock.gunnerFee;
         p.gunner = generateGunner(Math.random);
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
-        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`, "On board, Cmdr. Press G to toggle me.", "#fc6");
+        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+          pickLine("gunner_greet", this.chatterCtx()), "#fc6");
       }
       return;
     }
@@ -2653,6 +2756,19 @@ export class Voidwake {
       }
     }
     if (ctx.shadowBlur !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
+
+    // Shield-loss flash: brief cyan-white tint over the whole canvas the
+    // instant shields collapse, decaying smoothly so it reads as a hit and
+    // not a UI mode change.
+    if (this.screen === "playing") {
+      const tNow = performance.now() / 1000;
+      const remain = this.shieldFlashUntil - tNow;
+      if (remain > 0) {
+        const a = Math.min(0.55, remain / 0.45 * 0.55);
+        ctx.fillStyle = `rgba(170, 220, 255, ${a.toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
   }
 
 
@@ -3289,9 +3405,21 @@ export class Voidwake {
     putText(g, panelX, vpTop + 2, `Cmdr ${p.char.name}`, "#fff");
     putText(g, panelX, vpTop + 3, `Rank ${p.rank}  XP ${p.xp}`, "#9fe");
     putText(g, panelX, vpTop + 4, `Credits ${p.credits}`, "#fb6");
-    putText(g, panelX, vpTop + 6, `Hull   ${bar(p.ship.hull, p.ship.hullMax)}`, "#f88");
-    putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, "#8cf");
-    putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, "#fc6");
+    // Hull / Shield / Fuel — blink and brighten when in alarm range so the
+    // player can't miss critical states even at a glance.
+    const blinkOn = (Math.floor(performance.now() / 220) % 2) === 0;
+    const hullPctR = p.ship.hull / p.ship.hullMax;
+    const fuelPctR = p.ship.fuel / p.ship.fuelMax;
+    const hullCol = hullPctR < 0.10 ? (blinkOn ? "#ff2222" : "#660000")
+                  : hullPctR < 0.30 ? (blinkOn ? "#ff8a8a" : "#aa3333")
+                  : "#f88";
+    const shieldCol = (p.ship.shield <= 0 && performance.now() / 1000 < this.shieldFlashUntil)
+                  ? (blinkOn ? "#ffffff" : "#8cf")
+                  : "#8cf";
+    const fuelCol = fuelPctR < 0.15 ? (blinkOn ? "#ffcc33" : "#664400") : "#fc6";
+    putText(g, panelX, vpTop + 6, `Hull   ${bar(p.ship.hull, p.ship.hullMax)}`, hullCol);
+    putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, shieldCol);
+    putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, fuelCol);
     putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%`, "#9fe");
     putText(g, panelX, vpTop + 10, `Speed ${(p.ship.speed * p.throttle).toFixed(0)} u/s`, "#9fe");
     putText(g, panelX, vpTop + 12, `Cargo ${cargoTotal(p)}/${p.ship.cargoMax}`, "#9fe");
@@ -3452,6 +3580,49 @@ export class Voidwake {
       }
       const warn = "‼ HULL CRITICAL ‼";
       putText(g, vpLeft + Math.floor(vw / 2 - warn.length / 2), vpBottom - 2, warn, crackCol);
+    }
+
+    // CRITICAL: hull <10% with no shields — animated fire dances across the
+    // HUD edges so the player cannot miss they're seconds from breakup.
+    if (hullFrac < 0.10 && p.ship.shield <= 0) {
+      const fireGlyphs = ["^", "*", "v", "&", "%", "#"];
+      const fireCols = ["#ffe066", "#ffa033", "#ff5522", "#cc2200"];
+      const tFire = performance.now() / 1000;
+      // Top + bottom edges of the viewport
+      for (let x = vpLeft + 1; x < vpRight; x++) {
+        // Pseudo-noise — varies per column and time so flames flicker
+        const n1 = Math.sin(x * 0.7 + tFire * 8.2) * 0.5 + Math.sin(x * 1.9 + tFire * 5.1) * 0.5;
+        const n2 = Math.sin(x * 0.9 + tFire * 6.7 + 1.3) * 0.5 + Math.sin(x * 2.3 + tFire * 4.4) * 0.5;
+        if (n1 > -0.2) {
+          const ch = fireGlyphs[Math.floor((n1 + 1) * fireGlyphs.length / 2) % fireGlyphs.length];
+          const col = fireCols[Math.floor((n1 + 1) * fireCols.length / 2) % fireCols.length];
+          const y = vpTop + 1;
+          g[y][x] = { ch, color: col, glow: true };
+          if (n1 > 0.4) g[y + 1][x] = { ch: ".", color: fireCols[3] };
+        }
+        if (n2 > -0.2) {
+          const ch = fireGlyphs[Math.floor((n2 + 1) * fireGlyphs.length / 2) % fireGlyphs.length];
+          const col = fireCols[Math.floor((n2 + 1) * fireCols.length / 2) % fireCols.length];
+          const y = vpBottom - 1;
+          g[y][x] = { ch, color: col, glow: true };
+          if (n2 > 0.4) g[y - 1][x] = { ch: ".", color: fireCols[3] };
+        }
+      }
+      // Side edges, sparser
+      for (let y = vpTop + 2; y < vpBottom - 1; y++) {
+        const n = Math.sin(y * 1.3 + tFire * 7.0) * 0.5 + Math.sin(y * 2.1 + tFire * 3.9) * 0.5;
+        if (n > 0.1) {
+          const ch = fireGlyphs[Math.floor((n + 1) * fireGlyphs.length / 2) % fireGlyphs.length];
+          const col = fireCols[Math.floor((n + 1) * fireCols.length / 2) % fireCols.length];
+          g[y][vpLeft + 1] = { ch, color: col, glow: true };
+          g[y][vpRight - 1] = { ch, color: col, glow: true };
+        }
+      }
+      // Pulsing "BREAKUP IMMINENT" tag
+      const tagBlink = (Math.floor(performance.now() / 180) % 2) === 0;
+      const tag = "‼ ‼ ‼  BREAKUP IMMINENT — DOCK NOW  ‼ ‼ ‼";
+      putText(g, vpLeft + Math.floor(vw / 2 - tag.length / 2), vpTop + Math.floor(vh / 2) + 3,
+        tag, tagBlink ? "#ffe066" : "#ff3322");
     }
 
     // Nebula fog overlay — softens viewport with scattered dim glyphs.
