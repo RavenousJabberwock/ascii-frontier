@@ -1754,6 +1754,7 @@ export class Voidwake {
     this.updateGunner(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    this.tickRespawns(dt);
 
     // Autosave on a timer (rotates into the dedicated "autosave" slot).
     this.autosaveTimer += dt;
