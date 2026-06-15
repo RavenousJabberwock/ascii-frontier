@@ -1418,7 +1418,9 @@ export class Voidwake {
 
   returnToTitle(reason: string, clearPlayer = true) {
     if (clearPlayer) this.player = null;
-    this.setTitleNotice(reason);
+    // Diagnostic return-to-title notices are debug noise for normal play —
+    // surface them only when the player has Cheat Mode (dev mode) on.
+    if (this.options.cheat) this.setTitleNotice(reason);
     this.recordFlight(`explicit return to title: ${reason}`, true, true);
     this.screen = "title";
     this.menuCursor = 0;
@@ -1427,7 +1429,9 @@ export class Voidwake {
   noteImplicitTitleReturn(from: Screen, noticeAtBefore: number) {
     if (from === "title" || this.screen !== "title" || this.titleNoticeAt !== noticeAtBefore) return;
     if (from === "options" || from === "load" || from === "create-char" || from === "create-ship") return;
+    if (!this.options.cheat) return; // debug-only diagnostic
     this.setTitleNotice(`Unexpected return to title from ${from}; no explicit reason was recorded.`);
+
   }
 
   // Append a single line to the comms / chatter feed shown in the COMMS box.
