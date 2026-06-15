@@ -2122,6 +2122,61 @@ export class Voidwake {
     
   }
 
+  // Periodically reseed ship population so the world doesn't depopulate.
+  // Civilian stations launch friendlies/neutrals; pirate bases launch raiders;
+  // planets occasionally emit a trader. All capped to keep entity count sane.
+  tickRespawns(dt: number) {
+    const ships = this.entities.filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral").length;
+    const SHIP_CAP = 80;
+    this._nextCivSpawnAt -= dt;
+    this._nextPirateSpawnAt -= dt;
+    this._nextPlanetSpawnAt -= dt;
+
+    const spawnNear = (origin: Vec3, kind: EntityKind, faction: string, name: string, hull: number) => {
+      const jitter = (): number => (Math.random() - 0.5) * 80;
+      this.entities.push({
+        id: nextId(), kind, name,
+        pos: { x: origin.x + jitter(), y: origin.y + jitter(), z: origin.z + jitter() },
+        vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
+        faction, hull, shield: 30, state: "wander", cooldown: 0, weaponId: "pulse",
+      });
+    };
+
+    if (this._nextCivSpawnAt <= 0) {
+      this._nextCivSpawnAt = 30 + Math.random() * 25;
+      if (ships < SHIP_CAP) {
+        const civStations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 0) > 0);
+        const src = civStations[Math.floor(Math.random() * civStations.length)];
+        if (src) {
+          const kind: EntityKind = Math.random() < 0.55 ? "friendly" : "neutral";
+          const fac = kind === "friendly" ? "federation" : "guild";
+          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Patrol" : "Hauler"), 40);
+        }
+      }
+    }
+    if (this._nextPirateSpawnAt <= 0) {
+      this._nextPirateSpawnAt = 22 + Math.random() * 20;
+      if (ships < SHIP_CAP) {
+        const bases = this.entities.filter((e) => e.kind === "station" && e.faction === "pirate" && (e.hull ?? 0) > 0);
+        const src = bases[Math.floor(Math.random() * bases.length)];
+        if (src) spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
+      }
+    }
+    if (this._nextPlanetSpawnAt <= 0) {
+      this._nextPlanetSpawnAt = 70 + Math.random() * 40;
+      if (ships < SHIP_CAP) {
+        const planets = this.entities.filter((e) => e.kind === "planet");
+        const src = planets[Math.floor(Math.random() * planets.length)];
+        if (src) {
+          const kind: EntityKind = Math.random() < 0.7 ? "neutral" : "friendly";
+          const fac = kind === "friendly" ? "federation" : "guild";
+          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Courier" : "Trader"), 40);
+        }
+      }
+    }
+  }
+
+
   // Periodically inject a flavor chatter line from nearby NPCs / stations /
   // planets. Cheap timer-gated work, mostly atmospheric.
   tickAmbientChatter(dt: number) {
