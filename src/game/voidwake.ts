@@ -1096,9 +1096,8 @@ export class Voidwake {
     // Brief grace period so the player actually reads the banner rather than
     // dismissing it with a held key from the moment of death.
     const now = performance.now() / 1000;
-    const grace = 1.0;
+    const grace = 2.5;
     if (now - this.destroyedAt < grace) {
-      // Drain any input that fired during the death frame.
       this.input.consume("enter");
       this.input.consume("arrowup");
       this.input.consume("arrowdown");
@@ -1106,30 +1105,43 @@ export class Voidwake {
     }
     this.menuNav(this.destroyedItems.length);
     if (this.input.consume("enter")) {
-
       const c = this.destroyedItems[this.menuCursor];
+      const saves = listSaves();
       if (c === "Load Last Save") {
-        const saves = listSaves();
-        if (saves.length > 0) {
-          const blob = loadGame(saves[0].slot);
-          if (blob) {
-            this.seed = blob.seed;
-            this.rng = mulberry32(this.seed);
-            this.entities = blob.entities;
-            this.player = blob.player;
-            this.options = blob.options;
-            this.screen = "playing";
-            this.pushLog(`Restored from ${saves[0].slot}.`);
-            return;
-          }
+        // Permadeath disables save recovery entirely.
+        if (this.options.permadeath) {
+          this.pushLog("Permadeath: no recovery.");
+          return;
         }
-        this.pushLog("No save available.");
+        if (saves.length === 0) {
+          // Don't silently bounce to title — keep the player here so they
+          // know there is nothing to load. This was the "kicked to main
+          // menu with no idea why" bug after dying before any autosave.
+          this.pushLog("No save available — pick 'Return to Main Menu'.");
+          return;
+        }
+        const blob = loadGame(saves[0].slot);
+        if (!blob) {
+          this.pushLog(`Save '${saves[0].slot}' is corrupt.`);
+          return;
+        }
+        this.seed = blob.seed;
+        this.rng = mulberry32(this.seed);
+        this.entities = blob.entities;
+        this.player = blob.player;
+        this.options = blob.options;
+        this.screen = "playing";
+        this.pushLog(`Restored from ${saves[0].slot}.`);
+        return;
       }
+      // Return to Main Menu
+      console.info("[ASCII Frontier] returning to title:", this.deathReason ?? "(unknown)");
       this.player = null;
       this.screen = "title";
       this.menuCursor = 0;
     }
   }
+
 
 
   // --- Title --------------------------------------------------------------
