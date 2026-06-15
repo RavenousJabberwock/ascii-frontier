@@ -1227,6 +1227,8 @@ export class Voidwake {
   // UPDATE
   // ---------------------------------------------------------------------------
   update(dt: number) {
+    const screenBefore = this.screen;
+    const noticeAtBefore = this.titleNoticeAt;
     const kb = this.options.keybinds;
     // Global: ESC toggles main menu while playing
     if (this.input.consume(kb.menu)) {
@@ -1239,19 +1241,20 @@ export class Voidwake {
     }
 
     switch (this.screen) {
-      case "title": return this.updateTitle();
-      case "create-char": return this.updateCharCreate();
-      case "create-ship": return this.updateShipCreate();
-      case "playing": return this.updatePlaying(dt);
-      case "menu": return this.updateMenu();
-      case "options": return this.updateOptions();
-      case "load": return this.updateLoad();
-      case "save": return this.updateSave();
-      case "station": return this.updateStation();
-      case "quit-confirm": return this.updateQuitConfirm();
-      case "destroyed": return this.updateDestroyed();
-      case "crashed": return this.updateCrashed();
+      case "title": this.updateTitle(); break;
+      case "create-char": this.updateCharCreate(); break;
+      case "create-ship": this.updateShipCreate(); break;
+      case "playing": this.updatePlaying(dt); break;
+      case "menu": this.updateMenu(); break;
+      case "options": this.updateOptions(); break;
+      case "load": this.updateLoad(); break;
+      case "save": this.updateSave(); break;
+      case "station": this.updateStation(); break;
+      case "quit-confirm": this.updateQuitConfirm(); break;
+      case "destroyed": this.updateDestroyed(); break;
+      case "crashed": this.updateCrashed(); break;
     }
+    this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
   }
 
   // --- Crash screen (caught exception) ------------------------------------
