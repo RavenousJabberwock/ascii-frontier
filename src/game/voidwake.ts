@@ -2351,23 +2351,38 @@ export class Voidwake {
   pickupLoot() {
     const p = this.player; if (!p) return;
     const magnet = p.ship.modules.includes("loot-magnet") ? 60 : 20;
+    const magnet2 = magnet * magnet;
     const now = performance.now() / 1000;
-    this.entities = this.entities.filter((e) => {
-      if (e.kind !== "loot") return true;
-      // Expire stale canisters so the world doesn't fill with junk.
-      if (e.ttlAt && e.ttlAt < now) return false;
-      if (V.len(V.sub(e.pos, p.pos)) > magnet) return true;
-      const cr = e.loot?.credits ?? 0;
-      const ore = e.loot?.ore ?? 0;
-      if (cr) p.credits += cr;
-      if (ore && cargoTotal(p) < p.ship.cargoMax) {
-        const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
-        p.cargo.ore = (p.cargo.ore ?? 0) + take;
+    // In-place sweep — avoids allocating a new entities array each call.
+    const src = this.entities;
+    let w = 0;
+    for (let r = 0; r < src.length; r++) {
+      const e = src[r];
+      let keep = true;
+      if (e.kind === "loot") {
+        if (e.ttlAt && e.ttlAt < now) {
+          keep = false;
+        } else {
+          const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+          if (dx * dx + dy * dy + dz * dz <= magnet2) {
+            const cr = e.loot?.credits ?? 0;
+            const ore = e.loot?.ore ?? 0;
+            if (cr) p.credits += cr;
+            if (ore && cargoTotal(p) < p.ship.cargoMax) {
+              const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
+              p.cargo.ore = (p.cargo.ore ?? 0) + take;
+            }
+            this.pushLog(`Salvaged canister: +${cr}cr +${ore} ore`);
+            this.beep(540, 0.05, "sine");
+            keep = false;
+          }
+        }
       }
-      this.pushLog(`Salvaged canister: +${cr}cr +${ore} ore`);
-      this.beep(540, 0.05, "sine");
-      return false;
-    });
+      if (keep) { src[w++] = e; }
+    }
+    src.length = w;
+  }
+
     
   }
 
