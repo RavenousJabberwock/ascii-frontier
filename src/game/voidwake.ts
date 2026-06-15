@@ -49,6 +49,7 @@ function hashString(s: string): number {
 // =============================================================================
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
+const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
 const VERSION = "0.1.0";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
@@ -374,6 +375,24 @@ interface SaveBlob {
   entities: Entity[];
   options: Options;
   savedAt: number;
+}
+
+interface FlightRecorder {
+  wall: number;
+  frame: number;
+  screen: Screen;
+  reason: string;
+  clean: boolean;
+  hull?: number;
+  hullMax?: number;
+  shield?: number;
+  shieldMax?: number;
+  fuel?: number;
+  pos?: Vec3;
+  entityCount: number;
+  lastLog?: string;
+  deathReason?: string | null;
+  crashError?: string | null;
 }
 
 // =============================================================================
