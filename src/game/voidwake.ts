@@ -1487,9 +1487,9 @@ export class Voidwake {
   respawnAtStation() {
     const p = this.player;
     if (!p) { this.returnToTitle("Respawn lost player state.", false); return; }
-    const stations = this.entities.filter((e) => e.kind === "station");
+    const stations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 1) > 0);
     if (stations.length === 0) {
-      this.pushLog("No stations available for rescue.");
+      this.pushLog("No friendly stations available for rescue.");
       return;
     }
     // Nearest station by 3D distance from last position.
