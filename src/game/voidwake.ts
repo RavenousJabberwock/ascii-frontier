@@ -1908,27 +1908,28 @@ export class Voidwake {
       .sort((a, b) => a.d - b.d);
     if (near.length === 0) return;
     const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
+    const ctx = this.chatterCtx(pick);
     switch (pick.kind) {
       case "hostile":
-        this.pushChatter(pick.name, HOSTILE_TAUNTS[Math.floor(Math.random() * HOSTILE_TAUNTS.length)], "#ff8a8a");
+        this.pushChatter(pick.name, pickLine("hostile", ctx), "#ff8a8a");
         break;
       case "friendly":
-        this.pushChatter(pick.name, FRIENDLY_GREETS[Math.floor(Math.random() * FRIENDLY_GREETS.length)], "#aef58a");
+        this.pushChatter(pick.name, pickLine("friendly", ctx), "#aef58a");
         break;
       case "neutral":
-        this.pushChatter(pick.name, NEUTRAL_CHATTER[Math.floor(Math.random() * NEUTRAL_CHATTER.length)], "#dddddd");
+        this.pushChatter(pick.name, pickLine("neutral", ctx), "#dddddd");
         break;
       case "station":
-        this.pushChatter(`Beacon ${pick.name}`, STATION_BROADCASTS[Math.floor(Math.random() * STATION_BROADCASTS.length)], "#c2c2ff");
+        this.pushChatter(`Beacon ${pick.name}`, pickLine("station", ctx), "#c2c2ff");
         break;
       case "planet":
-        this.pushChatter(pick.name, PLANET_HAILS[Math.floor(Math.random() * PLANET_HAILS.length)], "#7ec8ff");
+        this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
         break;
     }
     // If the gunner is around and bored, occasionally chime in.
     if (p.gunner && Math.random() < 0.35) {
       const tag = `Gunner ${p.gunner.name.split(" ")[0]}`;
-      this.pushChatter(tag, GUNNER_BARKS_IDLE[Math.floor(Math.random() * GUNNER_BARKS_IDLE.length)], "#fc6");
+      this.pushChatter(tag, pickLine("gunner_idle", this.chatterCtx()), "#fc6");
     }
   }
 
