@@ -2040,6 +2040,12 @@ export class Voidwake {
               awardXP(p, isPirateBase ? 250 : 25);
               p.credits += isPirateBase ? 1500 : 50;
               p.kills = (p.kills ?? 0) + 1;
+              // Gunner reacts to the kill (when active and not over-talking).
+              if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0 && Math.random() < 0.7) {
+                p.gunner.nextBarkAt = 3 + Math.random() * 2;
+                this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
+                  pickLine("gunner_kill", this.chatterCtx(undefined, { target: t })), "#fc6");
+              }
               if (isPirateBase) {
                 adjustRep(p, "federation", 12); adjustRep(p, "guild", 8); adjustRep(p, "pirate", -15);
               } else if (t.faction === "pirate") {
