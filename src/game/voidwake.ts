@@ -1303,10 +1303,11 @@ export class Voidwake {
         const rec = readDiagnostic<FlightRecorder>(FLIGHT_RECORDER_KEY);
         const fresh = rec?.wall && Date.now() - rec.wall < 5 * 60_000;
         const wasInFlight = rec?.screen === "playing" || rec?.screen === "menu" || rec?.screen === "station" || rec?.screen === "destroyed" || rec?.screen === "crashed";
-        if (rec && fresh && wasInFlight && !rec.clean) {
+        if (rec && fresh && wasInFlight && !rec.clean && this.options.cheat) {
           const hull = rec.hullMax ? ` hull ${Math.round(rec.hull ?? 0)}/${Math.round(rec.hullMax)}` : "";
           this.setTitleNotice(`Recovered after engine restart while ${rec.screen}; last record: ${rec.reason}${hull}; entities ${rec.entityCount}; frame ${rec.frame}.`);
         }
+
       }
     } catch { /* ignore diagnostic restore failures */ }
     window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true));
