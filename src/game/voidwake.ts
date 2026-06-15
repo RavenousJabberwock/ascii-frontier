@@ -1271,6 +1271,32 @@ export class Voidwake {
     if (this.log.length > 6) this.log.shift();
   }
 
+  recordFlight(reason: string, clean = false, force = false) {
+    const now = performance.now() / 1000;
+    if (!force && now - this._lastRecorderAt < 1.5 && this.screen === this._lastRecordedScreen) return;
+    this._lastRecorderAt = now;
+    this._lastRecordedScreen = this.screen;
+    const p = this.player;
+    const rec: FlightRecorder = {
+      wall: Date.now(),
+      frame: this._frameNo,
+      screen: this.screen,
+      reason,
+      clean,
+      hull: p?.ship.hull,
+      hullMax: p?.ship.hullMax,
+      shield: p?.ship.shield,
+      shieldMax: p?.ship.shieldMax,
+      fuel: p?.ship.fuel,
+      pos: p ? { ...p.pos } : undefined,
+      entityCount: this.entities.length,
+      lastLog: this.log[this.log.length - 1]?.msg,
+      deathReason: this.deathReason,
+      crashError: this.crashError,
+    };
+    try { sessionStorage.setItem(FLIGHT_RECORDER_KEY, JSON.stringify(rec)); } catch { /* ignore */ }
+  }
+
   setTitleNotice(reason: string) {
     this.titleNotice = reason.slice(0, 220);
     this.titleNoticeAt = performance.now() / 1000;
@@ -1283,11 +1309,13 @@ export class Voidwake {
     this.titleNotice = null;
     this.titleNoticeAt = 0;
     try { sessionStorage.removeItem(TITLE_NOTICE_KEY); } catch { /* ignore */ }
+    try { sessionStorage.removeItem(FLIGHT_RECORDER_KEY); } catch { /* ignore */ }
   }
 
   returnToTitle(reason: string, clearPlayer = true) {
     if (clearPlayer) this.player = null;
     this.setTitleNotice(reason);
+    this.recordFlight(`explicit return to title: ${reason}`, true, true);
     this.screen = "title";
     this.menuCursor = 0;
   }
@@ -1369,6 +1397,7 @@ export class Voidwake {
     const e = err instanceof Error ? err : new Error(String(err));
     this.crashError = e.message || "Unknown error";
     this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
+    this.recordFlight(`crash: ${this.crashError}`, false, true);
     // eslint-disable-next-line no-console
     console.error("[Voidwake crash]", e);
     // Also persist as a title notice so if the page reloads (HMR, React
