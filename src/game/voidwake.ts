@@ -298,6 +298,7 @@ function defaultOptions(): Options {
     volumeSfx: 0.8,
     volumeMusic: 0.6,
     unsavedWarnMinutes: 10,
+    permadeath: false,
 
     keybinds: { ...DEFAULT_KEYBINDS },
   };
