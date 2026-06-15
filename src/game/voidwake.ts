@@ -1019,13 +1019,9 @@ const CELL_H = 16;  // px per glyph row
 
 interface Cell { ch: string; color: string; glow?: boolean }
 
-function blankGrid(cols: number, rows: number): Cell[][] {
-  const g: Cell[][] = [];
-  for (let y = 0; y < rows; y++) {
-    g.push(Array.from({ length: cols }, () => ({ ch: " ", color: "#0f0" })));
-  }
-  return g;
-}
+// (blankGrid removed — replaced by Voidwake.acquireGrid which reuses a
+// single buffer across frames instead of allocating cols*rows cells per frame.)
+
 
 // putText writes a string into the grid, optionally clipped to a right-edge
 // column (exclusive) so HUD overlays can't bleed into adjacent panels.
@@ -1043,19 +1039,32 @@ function putText(g: Cell[][], x: number, y: number, text: string, color = "#9fe"
 // Multiplies an #rgb / #rrggbb hex color's RGB channels by `f` (clamped 0..1.4)
 // and returns a #rrggbb string. Used to shade planet/station surfaces based on
 // the angle to the nearest star (front lit vs. terminator vs. shadow side).
+// Memoized shadeColor — planet surfaces call this for nearly every cell.
+// Quantizing the factor into ~16 buckets means a planet's worth of cells
+// reuses a tiny set of cached strings instead of doing fresh parse/multiply/
+// hex-format work each time.
+const _shadeCache = new Map<string, string>();
 function shadeColor(hex: string, f: number): string {
+  const k = Math.max(0, Math.min(1.4, f));
+  const bucket = Math.round(k * 16); // 0..22 unique steps
+  const key = hex + "|" + bucket;
+  const hit = _shadeCache.get(key);
+  if (hit !== undefined) return hit;
   let h = hex.replace("#", "");
   if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-  if (h.length !== 6) return hex;
+  if (h.length !== 6) { _shadeCache.set(key, hex); return hex; }
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
-  const k = Math.max(0, Math.min(1.4, f));
-  const rr = Math.max(0, Math.min(255, Math.round(r * k)));
-  const gg = Math.max(0, Math.min(255, Math.round(g * k)));
-  const bb = Math.max(0, Math.min(255, Math.round(b * k)));
-  return "#" + rr.toString(16).padStart(2, "0") + gg.toString(16).padStart(2, "0") + bb.toString(16).padStart(2, "0");
+  const kq = bucket / 16;
+  const rr = Math.max(0, Math.min(255, Math.round(r * kq)));
+  const gg = Math.max(0, Math.min(255, Math.round(g * kq)));
+  const bb = Math.max(0, Math.min(255, Math.round(b * kq)));
+  const out = "#" + rr.toString(16).padStart(2, "0") + gg.toString(16).padStart(2, "0") + bb.toString(16).padStart(2, "0");
+  _shadeCache.set(key, out);
+  return out;
 }
+
 
 function colorFor(kind: EntityKind): string {
   switch (kind) {
@@ -1252,12 +1261,24 @@ export class Voidwake {
   private _frameNo = 0;
   private _lastRecorderAt = 0;
   private _lastRecordedScreen: Screen = "title";
+  // Reusable grid buffer — allocated once per resize, reset in place each
+  // frame instead of allocating ~rows*cols fresh objects (was a major GC source).
+  private _gridBuf: Cell[][] | null = null;
+  private _gridCols = 0;
+  private _gridRows = 0;
+  // Respect OS-level motion preference. When true, skip flashes / fire FX /
+  // shimmer so motion-sensitive players aren't strobed.
+  private _reducedMotion = false;
+  // Pause flag toggled on visibilitychange — skip update+render while hidden
+  // so backgrounded tabs stop burning CPU.
+  private _hidden = false;
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
   private shieldFlashUntil = 0;     // wall-time (s) until the shield-loss flash decays
   private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
   private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
   private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
+
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -1291,14 +1312,27 @@ export class Voidwake {
         const rec = readDiagnostic<FlightRecorder>(FLIGHT_RECORDER_KEY);
         const fresh = rec?.wall && Date.now() - rec.wall < 5 * 60_000;
         const wasInFlight = rec?.screen === "playing" || rec?.screen === "menu" || rec?.screen === "station" || rec?.screen === "destroyed" || rec?.screen === "crashed";
-        if (rec && fresh && wasInFlight && !rec.clean) {
+        if (rec && fresh && wasInFlight && !rec.clean && this.options.cheat) {
           const hull = rec.hullMax ? ` hull ${Math.round(rec.hull ?? 0)}/${Math.round(rec.hullMax)}` : "";
           this.setTitleNotice(`Recovered after engine restart while ${rec.screen}; last record: ${rec.reason}${hull}; entities ${rec.entityCount}; frame ${rec.frame}.`);
         }
+
       }
     } catch { /* ignore diagnostic restore failures */ }
     window.addEventListener("pagehide", () => this.recordFlight("page hidden/unloaded", this.screen === "title", true));
+    // Pause when the tab is hidden — no point burning rAF cycles offscreen.
+    document.addEventListener("visibilitychange", () => {
+      this._hidden = document.visibilityState === "hidden";
+      if (!this._hidden) this.lastTs = performance.now();
+    });
+    // Honour OS-level reduced-motion preference for flashes / fire FX.
+    try {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      this._reducedMotion = mq.matches;
+      mq.addEventListener?.("change", (e) => { this._reducedMotion = e.matches; });
+    } catch { /* matchMedia unavailable */ }
   }
+
 
   fit() {
     const r = this.canvas.getBoundingClientRect();
@@ -1311,6 +1345,12 @@ export class Voidwake {
     this.lastTs = performance.now();
     const loop = (ts: number) => {
       if (!this.running) return;
+      // While the tab is hidden, idle cheaply — don't update or render.
+      if (this._hidden) {
+        this.lastTs = ts;
+        this.rafId = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(0.05, (ts - this.lastTs) / 1000);
       this.lastTs = ts;
       // FPS sampling
@@ -1332,6 +1372,7 @@ export class Voidwake {
     };
     this.rafId = requestAnimationFrame(loop);
   }
+
   stop() {
     this.recordFlight(`engine stopped while ${this.screen}`, this.screen === "title", true);
     this.running = false;
@@ -1386,7 +1427,9 @@ export class Voidwake {
 
   returnToTitle(reason: string, clearPlayer = true) {
     if (clearPlayer) this.player = null;
-    this.setTitleNotice(reason);
+    // Diagnostic return-to-title notices are debug noise for normal play —
+    // surface them only when the player has Cheat Mode (dev mode) on.
+    if (this.options.cheat) this.setTitleNotice(reason);
     this.recordFlight(`explicit return to title: ${reason}`, true, true);
     this.screen = "title";
     this.menuCursor = 0;
@@ -1395,7 +1438,9 @@ export class Voidwake {
   noteImplicitTitleReturn(from: Screen, noticeAtBefore: number) {
     if (from === "title" || this.screen !== "title" || this.titleNoticeAt !== noticeAtBefore) return;
     if (from === "options" || from === "load" || from === "create-char" || from === "create-ship") return;
+    if (!this.options.cheat) return; // debug-only diagnostic
     this.setTitleNotice(`Unexpected return to title from ${from}; no explicit reason was recorded.`);
+
   }
 
   // Append a single line to the comms / chatter feed shown in the COMMS box.
@@ -1417,10 +1462,18 @@ export class Voidwake {
     const shipName  = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.name ?? p.ship.hullId;
     const sector    = `${Math.floor(p.pos.x / 500)}:${Math.floor(p.pos.z / 500)}`;
     const target    = opts?.target ?? this.entities.find((e) => e.id === this.targetId) ?? null;
-    const nearestHostile = this.entities
-      .filter((e) => e.kind === "hostile")
-      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
-      .sort((a, b) => a.d - b.d)[0]?.e;
+    // Linear scan with squared-distance — no array/closure/sort overhead.
+    let nearestHostile: Entity | undefined;
+    {
+      let bestD2 = Infinity;
+      for (const e of this.entities) {
+        if (e.kind !== "hostile") continue;
+        const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bestD2) { bestD2 = d2; nearestHostile = e; }
+      }
+    }
+
     const speakerName = speaker?.name ?? "Comms";
     return {
       cmdr: p.char.name,
@@ -2130,11 +2183,20 @@ export class Voidwake {
 
   cycleTarget() {
     const p = this.player; if (!p) return;
+    // Squared-distance comparator — no sqrt needed and we already skip bullets/self.
     const cand = this.entities
-      .filter((e) => e.kind !== "bullet" && e.id !== this.targetId)
-      .sort((a, b) => V.len(V.sub(a.pos, p.pos)) - V.len(V.sub(b.pos, p.pos)));
-    this.targetId = cand[0]?.id ?? null;
+      .filter((e) => e.kind !== "bullet" && e.id !== this.targetId);
+    let bestI = -1, bestD2 = Infinity;
+    for (let i = 0; i < cand.length; i++) {
+      const dx = cand[i].pos.x - p.pos.x;
+      const dy = cand[i].pos.y - p.pos.y;
+      const dz = cand[i].pos.z - p.pos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; bestI = i; }
+    }
+    this.targetId = bestI >= 0 ? cand[bestI].id : null;
   }
+
 
   mineTarget() {
     const p = this.player; if (!p) return;
@@ -2306,31 +2368,62 @@ export class Voidwake {
   pickupLoot() {
     const p = this.player; if (!p) return;
     const magnet = p.ship.modules.includes("loot-magnet") ? 60 : 20;
+    const magnet2 = magnet * magnet;
     const now = performance.now() / 1000;
-    this.entities = this.entities.filter((e) => {
-      if (e.kind !== "loot") return true;
-      // Expire stale canisters so the world doesn't fill with junk.
-      if (e.ttlAt && e.ttlAt < now) return false;
-      if (V.len(V.sub(e.pos, p.pos)) > magnet) return true;
-      const cr = e.loot?.credits ?? 0;
-      const ore = e.loot?.ore ?? 0;
-      if (cr) p.credits += cr;
-      if (ore && cargoTotal(p) < p.ship.cargoMax) {
-        const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
-        p.cargo.ore = (p.cargo.ore ?? 0) + take;
+    // In-place sweep — avoids allocating a new entities array each call.
+    const src = this.entities;
+    let w = 0;
+    for (let r = 0; r < src.length; r++) {
+      const e = src[r];
+      let keep = true;
+      if (e.kind === "loot") {
+        if (e.ttlAt && e.ttlAt < now) {
+          keep = false;
+        } else {
+          const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+          if (dx * dx + dy * dy + dz * dz <= magnet2) {
+            const cr = e.loot?.credits ?? 0;
+            const ore = e.loot?.ore ?? 0;
+            if (cr) p.credits += cr;
+            if (ore && cargoTotal(p) < p.ship.cargoMax) {
+              const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
+              p.cargo.ore = (p.cargo.ore ?? 0) + take;
+            }
+            this.pushLog(`Salvaged canister: +${cr}cr +${ore} ore`);
+            this.beep(540, 0.05, "sine");
+            keep = false;
+          }
+        }
       }
-      this.pushLog(`Salvaged canister: +${cr}cr +${ore} ore`);
-      this.beep(540, 0.05, "sine");
-      return false;
-    });
-    
+      if (keep) { src[w++] = e; }
+    }
+    src.length = w;
   }
+
+
 
   // Periodically reseed ship population so the world doesn't depopulate.
   // Civilian stations launch friendlies/neutrals; pirate bases launch raiders;
   // planets occasionally emit a trader. All capped to keep entity count sane.
   tickRespawns(dt: number) {
-    const ships = this.entities.filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral").length;
+    // Single linear pass: count ships and bucket potential spawn parents
+    // by category so we don't run three more .filter()s below.
+    let ships = 0;
+    const civStations: Entity[] = [];
+    const pirateBases: Entity[] = [];
+    const planets: Entity[] = [];
+    for (const e of this.entities) {
+      if (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") {
+        ships++;
+      } else if (e.kind === "station") {
+        if ((e.hull ?? 0) > 0) {
+          if (e.faction === "pirate") pirateBases.push(e);
+          else civStations.push(e);
+        }
+      } else if (e.kind === "planet") {
+        planets.push(e);
+      }
+    }
     const SHIP_CAP = 80;
     this._nextCivSpawnAt -= dt;
     this._nextPirateSpawnAt -= dt;
@@ -2348,37 +2441,31 @@ export class Voidwake {
 
     if (this._nextCivSpawnAt <= 0) {
       this._nextCivSpawnAt = 30 + Math.random() * 25;
-      if (ships < SHIP_CAP) {
-        const civStations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 0) > 0);
+      if (ships < SHIP_CAP && civStations.length) {
         const src = civStations[Math.floor(Math.random() * civStations.length)];
-        if (src) {
-          const kind: EntityKind = Math.random() < 0.55 ? "friendly" : "neutral";
-          const fac = kind === "friendly" ? "federation" : "guild";
-          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Patrol" : "Hauler"), 40);
-        }
+        const kind: EntityKind = Math.random() < 0.55 ? "friendly" : "neutral";
+        const fac = kind === "friendly" ? "federation" : "guild";
+        spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Patrol" : "Hauler"), 40);
       }
     }
     if (this._nextPirateSpawnAt <= 0) {
       this._nextPirateSpawnAt = 22 + Math.random() * 20;
-      if (ships < SHIP_CAP) {
-        const bases = this.entities.filter((e) => e.kind === "station" && e.faction === "pirate" && (e.hull ?? 0) > 0);
-        const src = bases[Math.floor(Math.random() * bases.length)];
-        if (src) spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
+      if (ships < SHIP_CAP && pirateBases.length) {
+        const src = pirateBases[Math.floor(Math.random() * pirateBases.length)];
+        spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
       }
     }
     if (this._nextPlanetSpawnAt <= 0) {
       this._nextPlanetSpawnAt = 70 + Math.random() * 40;
-      if (ships < SHIP_CAP) {
-        const planets = this.entities.filter((e) => e.kind === "planet");
+      if (ships < SHIP_CAP && planets.length) {
         const src = planets[Math.floor(Math.random() * planets.length)];
-        if (src) {
-          const kind: EntityKind = Math.random() < 0.7 ? "neutral" : "friendly";
-          const fac = kind === "friendly" ? "federation" : "guild";
-          spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Courier" : "Trader"), 40);
-        }
+        const kind: EntityKind = Math.random() < 0.7 ? "neutral" : "friendly";
+        const fac = kind === "friendly" ? "federation" : "guild";
+        spawnNear(src.pos, kind, fac, nameFrom(this.rng, kind === "friendly" ? "Courier" : "Trader"), 40);
       }
     }
   }
+
 
 
   // Periodically inject a flavor chatter line from nearby NPCs / stations /
@@ -2701,7 +2788,7 @@ export class Voidwake {
     ctx.fillRect(0, 0, w, h);
     const cols = Math.max(40, Math.floor(w / CELL_W));
     const rows = Math.max(20, Math.floor(h / CELL_H));
-    const grid = blankGrid(cols, rows);
+    const grid = this.acquireGrid(cols, rows);
 
     // Frame delta for starfield motion (independent of game tick).
     const now = performance.now() / 1000;
@@ -2738,29 +2825,34 @@ export class Voidwake {
 
     // Paint grid. Cells with `glow` get a CSS-style canvas shadow that bleeds
     // their color outward — used for stars and other "luminous" glyphs.
-    ctx.font = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
+    const fontStr = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
+    if (this._lastFont !== fontStr) { ctx.font = fontStr; this._lastFont = fontStr; }
     ctx.textBaseline = "top";
+    let lastFill: string | null = null;
+    let lastShadow = 0;
     for (let y = 0; y < rows; y++) {
+      const row = grid[y];
       for (let x = 0; x < cols; x++) {
-        const c = grid[y][x];
+        const c = row[x];
         if (c.ch === " ") continue;
         if (c.glow) {
+          if (lastShadow !== 9) { ctx.shadowBlur = 9; lastShadow = 9; }
           ctx.shadowColor = c.color;
-          ctx.shadowBlur = 9;
-        } else if (ctx.shadowBlur !== 0) {
+        } else if (lastShadow !== 0) {
           ctx.shadowColor = "transparent";
           ctx.shadowBlur = 0;
+          lastShadow = 0;
         }
-        ctx.fillStyle = c.color;
+        if (c.color !== lastFill) { ctx.fillStyle = c.color; lastFill = c.color; }
         ctx.fillText(c.ch, x * CELL_W, y * CELL_H);
       }
     }
-    if (ctx.shadowBlur !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
+    if (lastShadow !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
 
     // Shield-loss flash: brief cyan-white tint over the whole canvas the
     // instant shields collapse, decaying smoothly so it reads as a hit and
-    // not a UI mode change.
-    if (this.screen === "playing") {
+    // not a UI mode change. Skipped for reduced-motion users.
+    if (this.screen === "playing" && !this._reducedMotion) {
       const tNow = performance.now() / 1000;
       const remain = this.shieldFlashUntil - tNow;
       if (remain > 0) {
@@ -2770,6 +2862,36 @@ export class Voidwake {
       }
     }
   }
+
+  // Reusable cell grid — allocate once per resize, reset characters in place.
+  // Replaces the per-frame blankGrid() that produced ~rows*cols fresh objects.
+  private _lastFont: string | null = null;
+  acquireGrid(cols: number, rows: number): Cell[][] {
+    if (!this._gridBuf || this._gridCols !== cols || this._gridRows !== rows) {
+      const g: Cell[][] = [];
+      for (let y = 0; y < rows; y++) {
+        const row: Cell[] = new Array(cols);
+        for (let x = 0; x < cols; x++) row[x] = { ch: " ", color: "#0f0" };
+        g.push(row);
+      }
+      this._gridBuf = g;
+      this._gridCols = cols;
+      this._gridRows = rows;
+      return g;
+    }
+    const g = this._gridBuf;
+    for (let y = 0; y < rows; y++) {
+      const row = g[y];
+      for (let x = 0; x < cols; x++) {
+        const c = row[x];
+        if (c.ch !== " ") c.ch = " ";
+        if (c.glow) c.glow = false;
+        // color is overwritten by any draw; resetting it is unnecessary.
+      }
+    }
+    return g;
+  }
+
 
 
   // Starfield -----------------------------------------------------------------
@@ -3584,7 +3706,7 @@ export class Voidwake {
 
     // CRITICAL: hull <10% with no shields — animated fire dances across the
     // HUD edges so the player cannot miss they're seconds from breakup.
-    if (hullFrac < 0.10 && p.ship.shield <= 0) {
+    if (hullFrac < 0.10 && p.ship.shield <= 0 && !this._reducedMotion) {
       const fireGlyphs = ["^", "*", "v", "&", "%", "#"];
       const fireCols = ["#ffe066", "#ffa033", "#ff5522", "#cc2200"];
       const tFire = performance.now() / 1000;
