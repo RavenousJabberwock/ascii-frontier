@@ -2455,6 +2455,12 @@ export class Voidwake {
     this._nextPlanetSpawnAt -= dt;
 
     const spawnNear = (origin: Vec3, kind: EntityKind, faction: string, name: string, hull: number) => {
+      // INTENTIONALLY UNSEEDED: spawnNear runs during live gameplay (NPC
+      // respawn ticks), not during universe generation. The seeded mulberry32
+      // RNG (`rng`) is reserved for procedural placement that must reproduce
+      // from a seed — stations, planets, starting layout. Using it here would
+      // make every respawn identical across saves and reveal RNG state to the
+      // player. Math.random() is the correct choice for runtime variance.
       const jitter = (): number => (Math.random() - 0.5) * 80;
       this.entities.push({
         id: nextId(), kind, name,
