@@ -274,11 +274,12 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   dock: "f",
   station: "b",
   mission: "u",
-  boost: "shift",        // afterburner: extra speed while held, burns fuel fast
-  jettison: "j",         // drop one unit of the highest-volume cargo type
-  pause: "p",            // toggle pause while in flight
+  boost: "shift",
+  jettison: "j",
+  pause: "p",
   menu: "escape",
-  toggleGunner: "g",     // toggle hired gunner's autopilot rules
+  toggleGunner: "g",
+  supercruise: "x",      // hold: 3x speed, 3x fuel burn — for long hauls
 };
 
 
