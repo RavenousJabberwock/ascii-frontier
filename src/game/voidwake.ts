@@ -67,21 +67,137 @@ const GLYPHS: Record<string, string> = {
   beacon: "!",
 };
 
-// ---- Flavor data: names / barks / broadcasts -----------------------------
-// Used by the chatter system and gunner recruitment. Keep these small lists
-// punchy — they're cycled randomly so repetition gets old fast.
+// ---- Flavor data: names + procedural chatter generator -------------------
+// Chatter is generated, not selected. pickLine(kind, ctx) chooses a template
+// grammar then fills slots from live game state (hull%, current target name,
+// sector coords, cargo, kills, etc.) and randomly resolves nested fragments.
+// To add variety: extend a TEMPLATES[kind] array or a FRAGMENTS bucket.
 const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Niri","Otho","Pell","Quill","Sable","Yara"];
 const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
-const GUNNER_BARKS_HOSTILE  = ["On him!","Got the lock — firing!","He's dust!","Eat plasma!","Burn, raider!"];
-const GUNNER_BARKS_MINE     = ["Nice vein.","Chewing rock.","Mining now, hold steady."];
-const GUNNER_BARKS_DOCK     = ["Suggest we dock here, Cmdr.","That station looks safe. Dock?","Could use a stretch — dock?"];
-const GUNNER_BARKS_HIT      = ["We're taking fire!","Shields buckling!","Hold her steady!"];
-const GUNNER_BARKS_IDLE     = ["Quiet out here.","Strange stars this sector.","I'd kill for hot coffee.","You ever miss dirtside?"];
-const HOSTILE_TAUNTS        = ["You're cargo now.","Should've stayed dirtside.","Drift well, scum.","I see you, little ship."];
-const FRIENDLY_GREETS       = ["Safe vectors, Cmdr.","Federation thanks you.","Fly true out there."];
-const NEUTRAL_CHATTER       = ["Guild traffic, hold lanes.","Got rocks to sell, push off.","Mind your wake, pilot."];
-const STATION_BROADCASTS    = ["...automated beacon: dock fees waived this cycle.","Approach vector clear. Welcome.","Maintenance bay open for refits."];
-const PLANET_HAILS          = ["Surface comms crackle faintly.","Atmospheric thermals reported.","Tradehouse requests manifests."];
+
+type ChatterKind =
+  | "hostile" | "friendly" | "neutral" | "station" | "planet"
+  | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit";
+
+// Reusable fragments. Resolved recursively via {bucket} slots in templates.
+const FRAGMENTS: Record<string, string[]> = {
+  threat:    ["scrap","cargo","dust","a memory","wreckage","scrap-paint","ghost-mass"],
+  curse:     ["void-spit","star-rat","drift-leech","hull-rat","oxy-thief"],
+  praise:    ["clean burn","steady hands","fine vector","tight line"],
+  weather:   ["solar wind's high","ion storm building coreward","the dark feels thin tonight","mag-flux is jumpy"],
+  smalltalk: ["recycled air tastes like {coffee}","my bunk smells like {coffee}","last shore leave was {shore}","I miss {miss}"],
+  coffee:    ["copper","ozone","old socks","engine grease","wet rope"],
+  shore:     ["three jumps ago","before the war","a lifetime","two refits back"],
+  miss:      ["real gravity","blue sky","running water","silence"],
+  rumor:     ["a derelict drifting past the {planet} belt","pirates massing near {sector}","a Guild convoy late from {sector}","cheap fuel at {sector}"],
+  planet:    ["Karn","Vex Prime","Old Hollow","Theta-9","Brindle","Mott"],
+  hailVerb:  ["hails","pings","squawks","raises you"],
+  approach:  ["closing","on intercept","in your six","drifting close"],
+};
+
+// Templates per chatter kind. Slots: {cmdr} {ship} {hull} {shield} {fuel}
+// {cargo} {credits} {kills} {speaker} {short} {target} {nearest} {sector}
+// {ore} {fac} {dist} — plus any FRAGMENTS bucket name.
+const TEMPLATES: Record<ChatterKind, string[]> = {
+  hostile: [
+    "{cmdr}, you're {threat} now.",
+    "That {ship}? Pretty paint for {threat}.",
+    "Drift well, {curse}.",
+    "I count {hull}% hull on you, {cmdr}. Not for long.",
+    "Wing, mark the {ship} — {approach}.",
+    "Should've stayed dirtside, {curse}.",
+    "{cmdr} of the {ship}, last words?",
+    "Cargo manifest or vacuum — pick.",
+    "Your bounty pays my fuel, {cmdr}.",
+  ],
+  friendly: [
+    "Safe vectors, Cmdr {cmdr}.",
+    "{ship}, you're clear to pass. {praise}.",
+    "{fac} thanks you, {cmdr}. Watch the {sector} lanes.",
+    "Heard about your {kills} kills — fly true.",
+    "Need anything? Nearest dock pings from {sector}.",
+    "Eyes up — {rumor}.",
+  ],
+  neutral: [
+    "{ship}, mind your wake.",
+    "Guild traffic, hold lanes near {sector}.",
+    "Got rocks to sell, push off.",
+    "Heard {rumor}. Probably nothing.",
+    "Comms check — read you five-by, {cmdr}.",
+    "If you see {curse} types out here, don't engage.",
+  ],
+  station: [
+    "...automated beacon, {sector}: dock fees waived this cycle.",
+    "Approach vector clear for {ship}. Welcome, {cmdr}.",
+    "Maintenance bay open. Refits at standard rate.",
+    "Advisory: {weather}.",
+    "Market tick — ore moving well today.",
+    "Manifest scan ready when you dock, {cmdr}.",
+  ],
+  planet: [
+    "Surface comms crackle: {weather}.",
+    "{speaker} tradehouse requests manifests from the {ship}.",
+    "Atmospheric thermals strong over the northern arc.",
+    "Local chatter mentions {rumor}.",
+    "Orbital relay {hailVerb} you, Cmdr {cmdr}.",
+  ],
+  gunner_idle: [
+    "Quiet out here. {weather}.",
+    "{smalltalk}.",
+    "Hull's at {hull}%, shields {shield}%. Comfortable.",
+    "We've got {credits} credits and {cargo}% cargo. Not bad.",
+    "Sector {sector} feels off. Could be nothing.",
+    "Kill count's {kills}, Cmdr. You're getting sharp.",
+    "Strange stars this sector. {weather}.",
+  ],
+  gunner_hostile: [
+    "On {target}! Firing!",
+    "{target} in the reticle — burn 'em!",
+    "Got the lock — {target}'s {threat}!",
+    "Eat plasma, {curse}!",
+    "Range good, {target} lit up!",
+  ],
+  gunner_mine: [
+    "Chewing rock — {ore} in the hold.",
+    "Nice vein. Cargo at {cargo}%.",
+    "Mining {target}, hold her steady.",
+    "Ore tally: {ore}. Keep us pointed.",
+  ],
+  gunner_dock: [
+    "Suggest we dock at {target}, Cmdr.",
+    "{target} looks safe. Fuel's at {fuel}%.",
+    "Could use a stretch — {target}'s right there.",
+    "Hull {hull}%, shields {shield}% — dock at {target}?",
+  ],
+  gunner_hit: [
+    "We're taking fire! Hull {hull}%!",
+    "Shields buckling — {shield}% left!",
+    "Hold her steady, {cmdr}!",
+    "That's coming from {nearest}!",
+  ],
+};
+
+interface ChatterCtx {
+  cmdr: string; ship: string; speaker: string; short: string;
+  hull: string; shield: string; fuel: string; cargo: string;
+  credits: string; kills: string; target: string; nearest: string;
+  sector: string; ore: string; fac: string; dist: string;
+}
+
+function fillTemplate(tpl: string, ctx: ChatterCtx, depth = 0): string {
+  if (depth > 4) return tpl;
+  return tpl.replace(/\{(\w+)\}/g, (_m, key: string) => {
+    if (key in ctx) return (ctx as unknown as Record<string, string>)[key];
+    const bucket = FRAGMENTS[key];
+    if (bucket) return fillTemplate(bucket[Math.floor(Math.random() * bucket.length)], ctx, depth + 1);
+    return "";
+  });
+}
+
+function pickLine(kind: ChatterKind, ctx: ChatterCtx): string {
+  const arr = TEMPLATES[kind];
+  return fillTemplate(arr[Math.floor(Math.random() * arr.length)], ctx);
+}
 
 const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
