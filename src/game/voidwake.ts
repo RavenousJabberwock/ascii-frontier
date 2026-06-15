@@ -1337,6 +1337,15 @@ export class Voidwake {
     this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
     // eslint-disable-next-line no-console
     console.error("[Voidwake crash]", e);
+    // Also persist as a title notice so if the page reloads (HMR, React
+    // remount, etc.) and we land on the title without seeing the crash
+    // screen, the LAST EXIT banner still reports the cause.
+    try {
+      sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({
+        reason: `Crash: ${this.crashError}`,
+        wall: Date.now(),
+      }));
+    } catch { /* ignore */ }
     this.screen = "crashed";
     this.menuCursor = 0;
   }
