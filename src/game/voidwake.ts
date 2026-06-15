@@ -3327,12 +3327,12 @@ export class Voidwake {
 
     // Boost indicator
     if (this.input.keys.has(this.options.keybinds.boost) && p.ship.fuel > 0) {
-      putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6");
+      putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6", vpRight);
     }
     // Supercruise banner — separate row so it can stack with afterburner.
     if (this.input.keys.has(this.options.keybinds.supercruise) && p.ship.fuel > 0) {
       const msg = "» » » SUPERCRUISE — weapons offline « « «";
-      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff");
+      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff", vpRight);
     }
 
     // Cockpit damage state: when hull < 25%, etch crack patterns along the
