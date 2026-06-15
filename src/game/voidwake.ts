@@ -930,7 +930,7 @@ function listSaves(): { slot: string; savedAt: number }[] {
 const CELL_W = 9;   // px per glyph column
 const CELL_H = 16;  // px per glyph row
 
-interface Cell { ch: string; color: string }
+interface Cell { ch: string; color: string; glow?: boolean }
 
 function blankGrid(cols: number, rows: number): Cell[][] {
   const g: Cell[][] = [];
@@ -940,13 +940,34 @@ function blankGrid(cols: number, rows: number): Cell[][] {
   return g;
 }
 
-function putText(g: Cell[][], x: number, y: number, text: string, color = "#9fe"): void {
+// putText writes a string into the grid, optionally clipped to a right-edge
+// column (exclusive) so HUD overlays can't bleed into adjacent panels.
+function putText(g: Cell[][], x: number, y: number, text: string, color = "#9fe", rightLimit?: number): void {
   if (y < 0 || y >= g.length) return;
+  const cols = g[0].length;
+  const maxX = rightLimit !== undefined ? Math.min(cols, rightLimit) : cols;
   for (let i = 0; i < text.length; i++) {
     const xi = x + i;
-    if (xi < 0 || xi >= g[0].length) continue;
+    if (xi < 0 || xi >= maxX) continue;
     g[y][xi] = { ch: text[i], color };
   }
+}
+
+// Multiplies an #rgb / #rrggbb hex color's RGB channels by `f` (clamped 0..1.4)
+// and returns a #rrggbb string. Used to shade planet/station surfaces based on
+// the angle to the nearest star (front lit vs. terminator vs. shadow side).
+function shadeColor(hex: string, f: number): string {
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  if (h.length !== 6) return hex;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const k = Math.max(0, Math.min(1.4, f));
+  const rr = Math.max(0, Math.min(255, Math.round(r * k)));
+  const gg = Math.max(0, Math.min(255, Math.round(g * k)));
+  const bb = Math.max(0, Math.min(255, Math.round(b * k)));
+  return "#" + rr.toString(16).padStart(2, "0") + gg.toString(16).padStart(2, "0") + bb.toString(16).padStart(2, "0");
 }
 
 function colorFor(kind: EntityKind): string {
@@ -1154,10 +1175,12 @@ export class Voidwake {
     // Global error trap so async/uncaught errors during gameplay show on the
     // crash screen instead of vanishing into the console.
     window.addEventListener("error", (ev) => {
-      if (this.screen === "playing") this.crash(ev.error ?? new Error(ev.message));
+      if (this.screen !== "crashed" && this.screen !== "title") {
+        this.crash(ev.error ?? new Error(ev.message));
+      }
     });
     window.addEventListener("unhandledrejection", (ev) => {
-      if (this.screen === "playing") {
+      if (this.screen !== "crashed" && this.screen !== "title") {
         const r = ev.reason;
         this.crash(r instanceof Error ? r : new Error(String(r)));
       }
@@ -1314,6 +1337,15 @@ export class Voidwake {
     this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
     // eslint-disable-next-line no-console
     console.error("[Voidwake crash]", e);
+    // Also persist as a title notice so if the page reloads (HMR, React
+    // remount, etc.) and we land on the title without seeing the crash
+    // screen, the LAST EXIT banner still reports the cause.
+    try {
+      sessionStorage.setItem(TITLE_NOTICE_KEY, JSON.stringify({
+        reason: `Crash: ${this.crashError}`,
+        wall: Date.now(),
+      }));
+    } catch { /* ignore */ }
     this.screen = "crashed";
     this.menuCursor = 0;
   }
@@ -1466,9 +1498,9 @@ export class Voidwake {
   respawnAtStation() {
     const p = this.player;
     if (!p) { this.returnToTitle("Respawn lost player state.", false); return; }
-    const stations = this.entities.filter((e) => e.kind === "station");
+    const stations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 1) > 0);
     if (stations.length === 0) {
-      this.pushLog("No stations available for rescue.");
+      this.pushLog("No friendly stations available for rescue.");
       return;
     }
     // Nearest station by 3D distance from last position.
@@ -2522,18 +2554,28 @@ export class Voidwake {
     }
 
 
-    // Paint grid
+    // Paint grid. Cells with `glow` get a CSS-style canvas shadow that bleeds
+    // their color outward — used for stars and other "luminous" glyphs.
     ctx.font = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
     ctx.textBaseline = "top";
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         const c = grid[y][x];
         if (c.ch === " ") continue;
+        if (c.glow) {
+          ctx.shadowColor = c.color;
+          ctx.shadowBlur = 9;
+        } else if (ctx.shadowBlur !== 0) {
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+        }
         ctx.fillStyle = c.color;
         ctx.fillText(c.ch, x * CELL_W, y * CELL_H);
       }
     }
+    if (ctx.shadowBlur !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
   }
+
 
   // Starfield -----------------------------------------------------------------
   // World-space stars projected through the player's camera. Because the
@@ -3019,7 +3061,7 @@ export class Voidwake {
         if (rCells >= 1.5 && e.name) {
           const lx = sx - Math.floor(e.name.length / 2);
           const ly = sy2 + 2;
-          if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe");
+          if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe", vpRight);
         }
         continue;
       }
@@ -3027,7 +3069,7 @@ export class Voidwake {
       // --- Distant non-ship body: single glyph -----------------------------
       if (rCells < 1.2) {
         if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
-        g[sy2][sx] = { ch: glyph, color: tint.fill };
+        g[sy2][sx] = { ch: glyph, color: tint.fill, glow: e.kind === "star" };
         continue;
       }
 
@@ -3043,6 +3085,35 @@ export class Voidwake {
         e.kind === "station" ? "=" :
         e.kind === "planet" ? "o" :
         e.kind === "star" ? "+" : fill;
+
+      // Compute a camera-space 2D light direction for shading planets /
+      // stations / asteroids. The "light" is the nearest star to the entity,
+      // projected into the same camera basis the sprite is drawn in. Stars
+      // themselves and tiny bodies skip shading.
+      let lightX = 0, lightY = 0, lit = false;
+      if (e.kind === "planet" || e.kind === "station" || e.kind === "asteroid") {
+        let star: Entity | null = null;
+        let bestD = Infinity;
+        for (const s of this.entities) {
+          if (s.kind !== "star") continue;
+          const d = V.len(V.sub(s.pos, e.pos));
+          if (d < bestD) { bestD = d; star = s; }
+        }
+        if (star) {
+          const lr = V.sub(star.pos, e.pos);
+          const lx1 = cy * lr.x - sy * lr.z;
+          const lz1 = sy * lr.x + cy * lr.z;
+          const ly1 = cp * lr.y - sp * lz1;
+          // Screen Y grows downward, so flip the math-Y to match.
+          let lvx = lx1, lvy = -ly1;
+          const llen = Math.hypot(lvx, lvy);
+          if (llen > 0.001) {
+            lightX = lvx / llen;
+            lightY = lvy / llen;
+            lit = true;
+          }
+        }
+      }
 
       // Star glow halo — a faint outer ring outside the solid disc so the
       // central star reads as a luminous source rather than a flat blob.
@@ -3061,7 +3132,7 @@ export class Voidwake {
             if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
             if (g[gy][gx].ch !== " ") continue;
             const t = Math.min(2, Math.floor((d2 - 1.0) / 0.15));
-            g[gy][gx] = { ch: haloChars[t], color: haloCol };
+            g[gy][gx] = { ch: haloChars[t], color: haloCol, glow: true };
           }
         }
       }
@@ -3075,7 +3146,16 @@ export class Voidwake {
           if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
           const onEdge = d2 > 0.7;
           const ch = surfaceChar(e, gx, gy, onEdge, edge, fill);
-          g[gy][gx] = { ch, color: onEdge ? tint.edge : tint.fill };
+          let color = onEdge ? tint.edge : tint.fill;
+          if (lit) {
+            // Lambert-ish: dot of surface-normal proxy with light direction.
+            // Bias up so the lit hemisphere is bright, terminator is muted,
+            // and the back side fades to deep shadow.
+            const dot = nx * lightX + ny * lightY; // -1..1
+            const shadeFactor = 0.35 + 0.85 * Math.max(0, dot + 0.15);
+            color = shadeColor(color, shadeFactor);
+          }
+          g[gy][gx] = { ch, color, glow: e.kind === "star" };
         }
       }
 
@@ -3083,9 +3163,11 @@ export class Voidwake {
       if (rCells >= 3 && e.name) {
         const lx = sx - Math.floor(e.name.length / 2);
         const ly = sy2 + ry + 1;
-        if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe");
+        if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe", vpRight);
       }
     }
+
+
 
     // Crosshair. Color shifts to indicate weapon-range state of whatever's
     // closest to the reticle's forward vector:
@@ -3256,12 +3338,12 @@ export class Voidwake {
 
     // Boost indicator
     if (this.input.keys.has(this.options.keybinds.boost) && p.ship.fuel > 0) {
-      putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6");
+      putText(g, vpLeft + Math.floor(vw / 2) - 5, vpBottom - 1, "» AFTERBURNER «", "#fc6", vpRight);
     }
     // Supercruise banner — separate row so it can stack with afterburner.
     if (this.input.keys.has(this.options.keybinds.supercruise) && p.ship.fuel > 0) {
       const msg = "» » » SUPERCRUISE — weapons offline « « «";
-      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff");
+      putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff", vpRight);
     }
 
     // Cockpit damage state: when hull < 25%, etch crack patterns along the
