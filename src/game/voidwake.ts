@@ -1630,7 +1630,7 @@ export class Voidwake {
           if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0) {
             p.gunner.nextBarkAt = 4 + Math.random() * 3;
             this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
-              GUNNER_BARKS_HIT[Math.floor(Math.random() * GUNNER_BARKS_HIT.length)], "#ff8a8a");
+              pickLine("gunner_hit", this.chatterCtx()), "#ff8a8a");
           }
           if (p.ship.hull <= 0) {
             const shooter = this.entities.find((x) => x.id === e.ownerId);
