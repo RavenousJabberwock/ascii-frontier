@@ -962,7 +962,8 @@ type Screen =
   | "save"
   | "quit-confirm"
   | "destroyed"
-  | "crashed";
+  | "crashed"
+  | "codex";
 
 
 // =============================================================================
