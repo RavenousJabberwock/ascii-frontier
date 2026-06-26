@@ -4005,7 +4005,7 @@ export class Voidwake {
 
     // Keys hint
     const gunnerHint = p.gunner ? `  G ${p.gunner.enabled ? "gunner ON" : "gunner off"}` : "";
-    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu" + gunnerHint, "#666");
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  L legend  K quest  P pause  ESC menu" + gunnerHint, "#666");
 
     // FPS overlay (optional)
     if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
