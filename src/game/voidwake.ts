@@ -2560,7 +2560,7 @@ export class Voidwake {
 
 
   // --- Main menu -----------------------------------------------------------
-  menuItems = ["Resume", "Save Game", "Load Game", "Options", "Quit"];
+  menuItems = ["Resume", "Save Game", "Load Game", "Legend (Codex)", "Options", "Quit"];
   updateMenu() {
     this.menuNav(this.menuItems.length);
     if (this.input.consume("enter")) {
@@ -2568,6 +2568,7 @@ export class Voidwake {
       if (c === "Resume") this.screen = "playing";
       else if (c === "Save Game") { this.screen = "save"; this.menuCursor = 0; }
       else if (c === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
+      else if (c === "Legend (Codex)") { this._codexReturn = "menu"; this.screen = "codex"; this.menuCursor = 0; }
       else if (c === "Options") { this.screen = "options"; this.menuCursor = 0; }
       else if (c === "Quit") this.tryQuit();
     }
