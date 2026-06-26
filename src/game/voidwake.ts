@@ -3314,6 +3314,112 @@ export class Voidwake {
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
 
+  // --- Codex / Legend ------------------------------------------------------
+  // Single overlay that documents every glyph, color, and keybind so players
+  // don't have to guess what `%`, a pulsing red bracket, or a magenta `▒` mean.
+  // Pages are flipped with ←/→; ESC closes back to whichever screen opened it.
+  updateCodex() {
+    if (this.input.consume("arrowleft"))  this._codexPage = (this._codexPage + 2) % 3;
+    if (this.input.consume("arrowright")) this._codexPage = (this._codexPage + 1) % 3;
+    if (this.input.consume("enter")) this._codexPage = (this._codexPage + 1) % 3;
+    if (this.input.consume(this.options.keybinds.menu) ||
+        this.input.consume(this.options.keybinds.legend)) {
+      this.screen = this._codexReturn;
+      this.menuCursor = 0;
+    }
+  }
+
+  renderCodex(g: Cell[][]) {
+    const cols = g[0].length;
+    const pages = ["SYMBOLS", "COLORS", "KEYS"];
+    const title = `[ CODEX — ${pages[this._codexPage]} ]   ←/→ pages   ESC close`;
+    putText(g, 4, 1, title, "#7CFC00");
+
+    if (this._codexPage === 0) {
+      // Symbols: pull names from GLYPHS so the legend can never drift.
+      const rows: [string, string, string][] = [
+        ["@", "#7CFC00", "your ship (radar)"],
+        [GLYPHS.player, "#7CFC00", "your ship (cockpit)"],
+        [GLYPHS.star, colorFor("star"), "star — fuel scoop in corona at low throttle"],
+        [GLYPHS.planet, colorFor("planet"), "planet — landmark; collision damage on touch"],
+        [GLYPHS.station, colorFor("station"), "station — dock for repair/refuel/shop (F)"],
+        [GLYPHS.station, "#ff7766", "pirate base — fortified, hostile turrets"],
+        [GLYPHS.asteroid, colorFor("asteroid"), "asteroid — minable ore (M)"],
+        [GLYPHS.friendly, colorFor("friendly"), "friendly ship (Federation)"],
+        [GLYPHS.neutral, colorFor("neutral"), "neutral ship (Guild trader)"],
+        [GLYPHS.hostile, colorFor("hostile"), "hostile ship (Pirate raider)"],
+        [GLYPHS.bullet, colorFor("bullet"), "weapon round in flight"],
+        [GLYPHS.loot, colorFor("loot"), "loot canister — fly through to collect"],
+        [GLYPHS.comet, colorFor("comet"), "comet — fast, harmless decoration"],
+        [GLYPHS.nebula, colorFor("nebula"), "nebula cloud — drains shields, hides ships"],
+        [GLYPHS.beacon, colorFor("beacon"), "distress beacon — payout, or a pirate trap"],
+        ["[ ]", "#ffaa55", "targeting brackets — current target on-screen"],
+        ["◣◢◤◥", "#fc6", "edge pointer — target off-screen (distance shown)"],
+        ["+", "#ffaa55", "lead indicator — fire here to hit a moving target"],
+        ["◇", "#cf6", "mission objective marker"],
+        ["-+-", "#3a6", "reticle — green idle, amber aligned, red in-range"],
+      ];
+      rows.forEach((r, i) => {
+        const y = 4 + i;
+        if (y >= g.length - 2) return;
+        putText(g, 4, y, r[0].padEnd(5), r[1]);
+        putText(g, 10, y, r[2], "#cfd");
+      });
+    } else if (this._codexPage === 1) {
+      const swatches: [string, string][] = [
+        ["#7CFC00", "friendly / system OK / your ship"],
+        ["#ff5555", "hostile / hull critical / in-range lock"],
+        ["#fc6",    "warning / out-of-range lock / gunner"],
+        ["#c2c2ff", "station / civilian infrastructure"],
+        ["#ff7766", "pirate base / forbidden zone"],
+        ["#7ec8ff", "planet / friendly comms"],
+        ["#a6886a", "asteroid / ore / mineable"],
+        ["#ffd866", "star / luminous source"],
+        ["#ffe066", "loot / credits / pickup"],
+        ["#c47afc", "nebula / sensor wash"],
+        ["#ff66cc", "beacon / distress signal"],
+        ["#bff7ff", "comet / supercruise FTL"],
+        ["#888888", "older comms / disabled menu item"],
+        ["#cf6",    "mission tracker / objective"],
+      ];
+      swatches.forEach((s, i) => {
+        const y = 4 + i;
+        if (y >= g.length - 2) return;
+        putText(g, 4, y, "████", s[0]);
+        putText(g, 10, y, s[1], "#cfd");
+      });
+    } else {
+      const kb = this.options.keybinds;
+      const rows: [string, string][] = [
+        [kb.throttleUp.toUpperCase() + " / " + kb.throttleDown.toUpperCase(), "throttle up / down"],
+        [kb.yawLeft.toUpperCase() + " / " + kb.yawRight.toUpperCase(), "yaw left / right"],
+        [kb.pitchUp.toUpperCase() + " / " + kb.pitchDown.toUpperCase(), "pitch up / down"],
+        ["SHIFT",  "afterburner (4× fuel burn, +60% speed)"],
+        [kb.supercruise.toUpperCase(), "supercruise (hold, 3× speed, weapons offline)"],
+        ["SPACE",  "fire weapon"],
+        [kb.cycleTarget.toUpperCase(), "cycle nearest target"],
+        [kb.mine.toUpperCase(), "mine targeted asteroid"],
+        [kb.dock.toUpperCase() + " / " + kb.station.toUpperCase(), "dock at targeted station"],
+        [kb.jettison.toUpperCase(), "jettison heaviest cargo"],
+        [kb.toggleGunner.toUpperCase(), "toggle hired gunner AUTO / STANDBY"],
+        [kb.legend.toUpperCase(), "open this Codex"],
+        [kb.pinQuest.toUpperCase(), "pin / unpin quest tracker"],
+        [kb.pause.toUpperCase(), "pause"],
+        ["ESC",    "main menu / close overlay"],
+      ];
+      rows.forEach((r, i) => {
+        const y = 4 + i;
+        if (y >= g.length - 2) return;
+        putText(g, 4, y, r[0].padEnd(14), "#fff");
+        putText(g, 20, y, r[1], "#cfd");
+      });
+    }
+
+    putText(g, 4, g.length - 2,
+      "Tip: brackets tighten when a new target is acquired; the chevron shows where to turn.", "#888");
+    void cols;
+  }
+
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
     items.forEach((it, i) => {
