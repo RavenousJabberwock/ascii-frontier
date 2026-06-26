@@ -464,6 +464,8 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   menu: "escape",
   toggleGunner: "g",
   supercruise: "x",      // hold: 3x speed, 3x fuel burn — for long hauls
+  legend: "l",           // open the Codex / Legend overlay
+  pinQuest: "k",         // toggle the persistent quest tracker panel
 };
 
 
