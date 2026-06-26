@@ -2006,6 +2006,18 @@ export class Voidwake {
       this.pushChatter(tag, p.gunner.enabled ? "Standing by, weapons hot." : "Standing down.", "#fc6");
     }
     void k.mission;
+    // Open the Codex/Legend overlay from flight.
+    if (this.input.consume(k.legend)) {
+      this._codexReturn = "playing";
+      this.screen = "codex";
+      this.menuCursor = 0;
+      return;
+    }
+    // Toggle the pinned quest tracker.
+    if (this.input.consume(k.pinQuest)) {
+      this.questPinned = !this.questPinned;
+      this.pushLog(this.questPinned ? "Quest tracker pinned." : "Quest tracker hidden.");
+    }
 
     // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
     this.updateGunner(dt, fwd);
