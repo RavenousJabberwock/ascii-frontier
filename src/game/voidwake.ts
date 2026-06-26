@@ -3553,9 +3553,18 @@ export class Voidwake {
     };
 
     for (const proj of projected) {
-      const { e, sx, sy: sy2, r: rCells } = proj;
+      const { e, sx, sy: sy2, r: rCells, far } = proj;
       const glyph = GLYPHS[e.kind];
       const tint = tintFor(e);
+
+      // Far entities (>5k units): render as a single colored period and skip
+      // sprites, trails, halos, and labels. Cheap, low-clutter long-range scope.
+      if (far) {
+        if (sx > vpLeft && sx < vpRight && sy2 > vpTop && sy2 < vpBottom) {
+          if (g[sy2][sx].ch === " ") g[sy2][sx] = { ch: ".", color: tint.fill };
+        }
+        continue;
+      }
 
       // --- Ships (hostile / friendly / neutral): silhouette + exhaust ------
       if (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") {
