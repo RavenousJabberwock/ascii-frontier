@@ -496,7 +496,7 @@ function defaultOptions(): Options {
 // cube. Coordinates are in arbitrary units; the cockpit radar is sized to a
 // fixed range so distant entities just appear faint.
 // =============================================================================
-const WORLD_RADIUS = 4000;
+const WORLD_RADIUS = 9000;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
@@ -517,28 +517,31 @@ function nameFrom(rng: () => number, prefix: string): string {
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
-// World scale + entity counts. Bumped substantially since 0.2 for a more
-// populated sandbox. If you tweak these, also revisit station/planet spawn
-// caps in maybeSpawnFromBodies() so the world doesn't drift past 2x baseline.
+// World scale + entity counts. Universe is intentionally vast — most entities
+// will be far from the player at any time, and the renderer fades anything
+// past 5k to a single colored period and culls past 10k. If you tweak these,
+// also revisit station/planet spawn caps in maybeSpawnFromBodies() so the
+// world doesn't drift past 2x baseline.
 const WORLD = {
   starRadius: 0,
-  planetRadius: 5200,
-  asteroidRadius: 4200,
-  stationRadius: 4800,
-  shipRadius: 5600,
-  cometRadius: 6000,
-  nebulaRadius: 5200,
-  beaconRadius: 5000,
-  baseRadius: 5400,
-  planets: 12,
-  asteroids: 160,
-  stations: 6,
-  ships: 48,
-  comets: 8,
-  nebulae: 9,
-  beacons: 6,
-  pirateBases: 3,
+  planetRadius: 9000,
+  asteroidRadius: 7500,
+  stationRadius: 8500,
+  shipRadius: 9500,
+  cometRadius: 10500,
+  nebulaRadius: 9000,
+  beaconRadius: 9000,
+  baseRadius: 9500,
+  planets: 18,
+  asteroids: 240,
+  stations: 9,
+  ships: 70,
+  comets: 12,
+  nebulae: 12,
+  beacons: 9,
+  pirateBases: 5,
 };
+
 
 function generateUniverse(seed: number): Entity[] {
   _entityIdSeq = 1;
