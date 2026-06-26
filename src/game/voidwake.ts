@@ -1758,13 +1758,14 @@ export class Voidwake {
 
 
   // --- Title --------------------------------------------------------------
-  titleItems = ["New Game", "Load Game", "Options", "Quit"];
+  titleItems = ["New Game", "Load Game", "Legend (Codex)", "Options", "Quit"];
   updateTitle() {
     this.menuNav(this.titleItems.length);
     if (this.input.consume("enter")) {
       const choice = this.titleItems[this.menuCursor];
       if (choice === "New Game") { this.clearTitleNotice(); this.screen = "create-char"; this.menuCursor = 0; }
       else if (choice === "Load Game") { this.clearTitleNotice(); this.screen = "load"; this.menuCursor = 0; }
+      else if (choice === "Legend (Codex)") { this._codexReturn = "title"; this.screen = "codex"; this.menuCursor = 0; }
       else if (choice === "Options") { this.screen = "options"; this.menuCursor = 0; }
       else if (choice === "Quit") this.tryQuit();
     }
