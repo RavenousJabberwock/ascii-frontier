@@ -466,6 +466,8 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   supercruise: "x",      // hold: 3x speed, 3x fuel burn — for long hauls
   legend: "l",           // open the Codex / Legend overlay
   pinQuest: "k",         // toggle the persistent quest tracker panel
+  cycleCatPrev: "[",     // target nearest of previous category (station/rock/hostile/...)
+  cycleCatNext: "]",     // target nearest of next category
 };
 
 
@@ -496,7 +498,7 @@ function defaultOptions(): Options {
 // cube. Coordinates are in arbitrary units; the cockpit radar is sized to a
 // fixed range so distant entities just appear faint.
 // =============================================================================
-const WORLD_RADIUS = 4000;
+const WORLD_RADIUS = 9000;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
@@ -517,28 +519,31 @@ function nameFrom(rng: () => number, prefix: string): string {
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
-// World scale + entity counts. Bumped substantially since 0.2 for a more
-// populated sandbox. If you tweak these, also revisit station/planet spawn
-// caps in maybeSpawnFromBodies() so the world doesn't drift past 2x baseline.
+// World scale + entity counts. Universe is intentionally vast — most entities
+// will be far from the player at any time, and the renderer fades anything
+// past 5k to a single colored period and culls past 10k. If you tweak these,
+// also revisit station/planet spawn caps in maybeSpawnFromBodies() so the
+// world doesn't drift past 2x baseline.
 const WORLD = {
   starRadius: 0,
-  planetRadius: 5200,
-  asteroidRadius: 4200,
-  stationRadius: 4800,
-  shipRadius: 5600,
-  cometRadius: 6000,
-  nebulaRadius: 5200,
-  beaconRadius: 5000,
-  baseRadius: 5400,
-  planets: 12,
-  asteroids: 160,
-  stations: 6,
-  ships: 48,
-  comets: 8,
-  nebulae: 9,
-  beacons: 6,
-  pirateBases: 3,
+  planetRadius: 9000,
+  asteroidRadius: 7500,
+  stationRadius: 8500,
+  shipRadius: 9500,
+  cometRadius: 10500,
+  nebulaRadius: 9000,
+  beaconRadius: 9000,
+  baseRadius: 9500,
+  planets: 18,
+  asteroids: 240,
+  stations: 9,
+  ships: 70,
+  comets: 12,
+  nebulae: 12,
+  beacons: 9,
+  pirateBases: 5,
 };
+
 
 function generateUniverse(seed: number): Entity[] {
   _entityIdSeq = 1;
@@ -1965,6 +1970,8 @@ export class Voidwake {
 
     // Cycle target
     if (this.input.consume(k.cycleTarget)) this.cycleTarget();
+    if (this.input.consume(k.cycleCatNext)) this.cycleTargetCategory(1);
+    if (this.input.consume(k.cycleCatPrev)) this.cycleTargetCategory(-1);
 
     // Jettison: drop one unit of the heaviest cargo item.
     if (this.input.consume(k.jettison)) {
@@ -2255,6 +2262,43 @@ export class Voidwake {
     }
     this.targetId = bestI >= 0 ? cand[bestI].id : null;
   }
+
+  // Category-cycle order for [ / ]. Each press steps to the next category and
+  // locks the nearest entity matching it. Skips categories with no candidates.
+  private _targetCategories: { label: string; match: (e: Entity) => boolean }[] = [
+    { label: "STATION",  match: (e) => e.kind === "station" && e.faction !== "pirate" },
+    { label: "ASTEROID", match: (e) => e.kind === "asteroid" },
+    { label: "HOSTILE",  match: (e) => e.kind === "hostile" || (e.kind === "station" && e.faction === "pirate") },
+    { label: "FRIENDLY", match: (e) => e.kind === "friendly" },
+    { label: "NEUTRAL",  match: (e) => e.kind === "neutral" },
+    { label: "BEACON",   match: (e) => e.kind === "beacon" },
+    { label: "PLANET",   match: (e) => e.kind === "planet" },
+  ];
+  private _targetCatIdx = -1;
+
+  cycleTargetCategory(step: 1 | -1) {
+    const p = this.player; if (!p) return;
+    const n = this._targetCategories.length;
+    // Try each category once; skip ones with no candidates in range.
+    for (let attempt = 0; attempt < n; attempt++) {
+      this._targetCatIdx = ((this._targetCatIdx + step) % n + n) % n;
+      const cat = this._targetCategories[this._targetCatIdx];
+      let bestId = -1, bestD2 = Infinity;
+      for (const e of this.entities) {
+        if (!cat.match(e)) continue;
+        const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bestD2) { bestD2 = d2; bestId = e.id; }
+      }
+      if (bestId >= 0) {
+        this.targetId = bestId;
+        this.pushLog(`Target: ${cat.label} — ${this.entities.find(e => e.id === bestId)?.name ?? "?"}`);
+        return;
+      }
+    }
+    this.pushLog("No targets in any category.");
+  }
+
 
 
   mineTarget() {
@@ -3412,7 +3456,8 @@ export class Voidwake {
         ["SHIFT",  "afterburner (4× fuel burn, +60% speed)"],
         [kb.supercruise.toUpperCase(), "supercruise (hold, 3× speed, weapons offline)"],
         ["SPACE",  "fire weapon"],
-        [kb.cycleTarget.toUpperCase(), "cycle nearest target"],
+        [kb.cycleTarget.toUpperCase(), "cycle nearest target (any kind)"],
+        [kb.cycleCatPrev + " / " + kb.cycleCatNext, "cycle nearest by category (stations / rocks / hostiles / ...)"],
         [kb.mine.toUpperCase(), "mine targeted asteroid"],
         [kb.dock.toUpperCase() + " / " + kb.station.toUpperCase(), "dock at targeted station"],
         [kb.jettison.toUpperCase(), "jettison heaviest cargo"],
@@ -3468,9 +3513,14 @@ export class Voidwake {
       ship: 4, bullet: 0.5, comet: 2, nebula: 240, beacon: 3,
     };
     // Sort far→near so close objects overdraw distant ones.
-    const projected: { e: Entity; sx: number; sy: number; z: number; r: number }[] = [];
+    // Distance falloff: past 5000u, force single-glyph "dot"; past 10000u, cull.
+    const FAR_DOT = 5000;
+    const FAR_CULL = 10000;
+    const projected: { e: Entity; sx: number; sy: number; z: number; r: number; far: boolean }[] = [];
     for (const e of this.entities) {
       const r = V.sub(e.pos, p.pos);
+      const dist2 = r.x * r.x + r.y * r.y + r.z * r.z;
+      if (dist2 > FAR_CULL * FAR_CULL && e.kind !== "star") continue;
       const x1 = cy * r.x - sy * r.z;
       const z1 = sy * r.x + cy * r.z;
       const y1 = cp * r.y - sp * z1;
@@ -3478,12 +3528,14 @@ export class Voidwake {
       if (z2 <= 1) continue; // behind camera
       const sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
       const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
-      // Apparent radius in grid cells. CELL_H/CELL_W ≈ 1.78 → squash vertically.
+      const far = dist2 > FAR_DOT * FAR_DOT && e.kind !== "star";
       const wr = worldRadius[e.kind] ?? 1;
-      const rCells = (wr / z2) * vw * 0.7;
-      projected.push({ e, sx, sy: sy2, z: z2, r: rCells });
+      // Far entities collapse to a single colored period regardless of true size.
+      const rCells = far ? 0 : (wr / z2) * vw * 0.7;
+      projected.push({ e, sx, sy: sy2, z: z2, r: rCells, far });
     }
     projected.sort((a, b) => b.z - a.z);
+
 
     // Helper: project a world point into the same camera space as entities.
     // Returns null if behind the camera. Used for ship exhaust trail endpoints.
@@ -3502,9 +3554,18 @@ export class Voidwake {
     };
 
     for (const proj of projected) {
-      const { e, sx, sy: sy2, r: rCells } = proj;
+      const { e, sx, sy: sy2, r: rCells, far } = proj;
       const glyph = GLYPHS[e.kind];
       const tint = tintFor(e);
+
+      // Far entities (>5k units): render as a single colored period and skip
+      // sprites, trails, halos, and labels. Cheap, low-clutter long-range scope.
+      if (far) {
+        if (sx > vpLeft && sx < vpRight && sy2 > vpTop && sy2 < vpBottom) {
+          if (g[sy2][sx].ch === " ") g[sy2][sx] = { ch: ".", color: tint.fill };
+        }
+        continue;
+      }
 
       // --- Ships (hostile / friendly / neutral): silhouette + exhaust ------
       if (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") {
@@ -3898,7 +3959,7 @@ export class Voidwake {
       putText(g, panelX, cy2 + 3, `${t.kind}  d=${d.toFixed(0)}u`, "#9fe");
       if (t.hull !== undefined) putText(g, panelX, cy2 + 4, `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
     } else {
-      putText(g, panelX, cy2 + 2, "press T to cycle", "#888");
+      putText(g, panelX, cy2 + 2, "T cycle  [ ] by kind", "#888");
     }
 
     // Gunner status block — only shown when a gunner is hired.
@@ -3923,6 +3984,7 @@ export class Voidwake {
       ["X", "supercruise (3x)"],
       ["SPACE", "fire"],
       ["T", "cycle target"],
+      ["[ / ]", "cycle by kind"],
       ["M", "mine target"],
       ["F", "dock / station"],
       ["J", "jettison cargo"],
