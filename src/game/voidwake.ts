@@ -2261,6 +2261,43 @@ export class Voidwake {
     this.targetId = bestI >= 0 ? cand[bestI].id : null;
   }
 
+  // Category-cycle order for [ / ]. Each press steps to the next category and
+  // locks the nearest entity matching it. Skips categories with no candidates.
+  private _targetCategories: { label: string; match: (e: Entity) => boolean }[] = [
+    { label: "STATION",  match: (e) => e.kind === "station" && e.faction !== "pirate" },
+    { label: "ASTEROID", match: (e) => e.kind === "asteroid" },
+    { label: "HOSTILE",  match: (e) => e.kind === "hostile" || (e.kind === "station" && e.faction === "pirate") },
+    { label: "FRIENDLY", match: (e) => e.kind === "friendly" },
+    { label: "NEUTRAL",  match: (e) => e.kind === "neutral" },
+    { label: "BEACON",   match: (e) => e.kind === "beacon" },
+    { label: "PLANET",   match: (e) => e.kind === "planet" },
+  ];
+  private _targetCatIdx = -1;
+
+  cycleTargetCategory(step: 1 | -1) {
+    const p = this.player; if (!p) return;
+    const n = this._targetCategories.length;
+    // Try each category once; skip ones with no candidates in range.
+    for (let attempt = 0; attempt < n; attempt++) {
+      this._targetCatIdx = ((this._targetCatIdx + step) % n + n) % n;
+      const cat = this._targetCategories[this._targetCatIdx];
+      let bestId = -1, bestD2 = Infinity;
+      for (const e of this.entities) {
+        if (!cat.match(e)) continue;
+        const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bestD2) { bestD2 = d2; bestId = e.id; }
+      }
+      if (bestId >= 0) {
+        this.targetId = bestId;
+        this.pushLog(`Target: ${cat.label} — ${this.entities.find(e => e.id === bestId)?.name ?? "?"}`);
+        return;
+      }
+    }
+    this.pushLog("No targets in any category.");
+  }
+
+
 
   mineTarget() {
     const p = this.player; if (!p) return;
