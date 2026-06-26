@@ -2873,6 +2873,7 @@ export class Voidwake {
       case "quit-confirm": this.renderQuitConfirm(grid); break;
       case "destroyed": this.renderDestroyed(grid); break;
       case "crashed": this.renderCrashed(grid); break;
+      case "codex": this.renderCodex(grid); break;
     }
 
 
