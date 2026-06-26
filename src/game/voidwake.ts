@@ -3512,9 +3512,14 @@ export class Voidwake {
       ship: 4, bullet: 0.5, comet: 2, nebula: 240, beacon: 3,
     };
     // Sort far→near so close objects overdraw distant ones.
-    const projected: { e: Entity; sx: number; sy: number; z: number; r: number }[] = [];
+    // Distance falloff: past 5000u, force single-glyph "dot"; past 10000u, cull.
+    const FAR_DOT = 5000;
+    const FAR_CULL = 10000;
+    const projected: { e: Entity; sx: number; sy: number; z: number; r: number; far: boolean }[] = [];
     for (const e of this.entities) {
       const r = V.sub(e.pos, p.pos);
+      const dist2 = r.x * r.x + r.y * r.y + r.z * r.z;
+      if (dist2 > FAR_CULL * FAR_CULL && e.kind !== "star") continue;
       const x1 = cy * r.x - sy * r.z;
       const z1 = sy * r.x + cy * r.z;
       const y1 = cp * r.y - sp * z1;
@@ -3522,12 +3527,14 @@ export class Voidwake {
       if (z2 <= 1) continue; // behind camera
       const sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
       const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
-      // Apparent radius in grid cells. CELL_H/CELL_W ≈ 1.78 → squash vertically.
+      const far = dist2 > FAR_DOT * FAR_DOT && e.kind !== "star";
       const wr = worldRadius[e.kind] ?? 1;
-      const rCells = (wr / z2) * vw * 0.7;
-      projected.push({ e, sx, sy: sy2, z: z2, r: rCells });
+      // Far entities collapse to a single colored period regardless of true size.
+      const rCells = far ? 0 : (wr / z2) * vw * 0.7;
+      projected.push({ e, sx, sy: sy2, z: z2, r: rCells, far });
     }
     projected.sort((a, b) => b.z - a.z);
+
 
     // Helper: project a world point into the same camera space as entities.
     // Returns null if behind the camera. Used for ship exhaust trail endpoints.
