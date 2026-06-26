@@ -3664,6 +3664,171 @@ export class Voidwake {
       }
     }
 
+    // ---------------------------------------------------------------------
+    // Targeting overlay: brackets when the current target is on-screen, a
+    // chevron edge-pointer + distance readout when it's off-screen. Color
+    // tracks faction so a friendly bracket can't be confused with a hostile.
+    // ---------------------------------------------------------------------
+    const tgt = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    if (tgt) {
+      // Reset bracket easing when the player swaps targets.
+      if (this._bracketTargetId !== tgt.id) {
+        this._bracketTargetId = tgt.id;
+        this._bracketAcquiredAt = performance.now() / 1000;
+      }
+      const bracketCol =
+        tgt.kind === "hostile" ? "#ff5555" :
+        tgt.kind === "friendly" ? "#7CFC00" :
+        tgt.kind === "station" ? (tgt.faction === "pirate" ? "#ff7766" : "#c2c2ff") :
+        tgt.kind === "asteroid" ? "#a6886a" :
+        "#fc6";
+      const tprojIdx = projected.findIndex((q) => q.e.id === tgt.id);
+      const tproj = tprojIdx >= 0 ? projected[tprojIdx] : null;
+      if (tproj) {
+        // On-screen: draw four corner brackets that snap inward over ~4 frames.
+        const age = performance.now() / 1000 - this._bracketAcquiredAt;
+        const ease = Math.min(1, age * 6); // 0→1 over ~0.17s
+        const baseR = Math.max(2, Math.round(tproj.r));
+        // Start wide (baseR + 4) and ease in to (baseR + 1).
+        const rb = Math.round((baseR + 4) - 3 * ease);
+        const bx = tproj.sx, by = tproj.sy;
+        const corners: [number, number, string][] = [
+          [bx - rb,     by - rb,     "┌"],
+          [bx + rb,     by - rb,     "┐"],
+          [bx - rb,     by + rb,     "└"],
+          [bx + rb,     by + rb,     "┘"],
+        ];
+        for (const [cxB, cyB, ch] of corners) {
+          if (cxB > vpLeft && cxB < vpRight && cyB > vpTop && cyB < vpBottom) {
+            g[cyB][cxB] = { ch, color: bracketCol };
+          }
+        }
+        // Distance + name tag above the top-left corner.
+        const d = V.len(V.sub(tgt.pos, p.pos));
+        const tag = `${tgt.name}  ${d.toFixed(0)}u`;
+        const ty = by - rb - 1;
+        if (ty > vpTop) putText(g, Math.max(vpLeft + 1, bx - rb), ty, tag.slice(0, Math.max(0, vpRight - (bx - rb) - 1)), bracketCol, vpRight);
+
+        // Lead indicator: simple constant-bullet-speed first-order intercept.
+        // Only useful for ships (asteroids barely drift). Drawn as a faint '+'.
+        if (tgt.kind === "hostile" || tgt.kind === "friendly" || tgt.kind === "neutral") {
+          const rel = V.sub(tgt.pos, p.pos);
+          const relV = tgt.vel;
+          const bulletS = 260;
+          const dist = V.len(rel);
+          if (dist > 5) {
+            const tLead = dist / bulletS;
+            const leadW = { x: tgt.pos.x + relV.x * tLead, y: tgt.pos.y + relV.y * tLead, z: tgt.pos.z + relV.z * tLead };
+            const lp = projectPoint(leadW.x, leadW.y, leadW.z);
+            if (lp && lp.sx > vpLeft && lp.sx < vpRight && lp.sy > vpTop && lp.sy < vpBottom) {
+              const cell = g[lp.sy][lp.sx];
+              if (cell.ch === " " || cell.ch === "·" || cell.ch === ".") {
+                g[lp.sy][lp.sx] = { ch: "+", color: "#ffaa55" };
+              }
+            }
+          }
+        }
+      } else {
+        // Off-screen edge pointer. Project the relative vector into camera
+        // space, then pick the viewport edge it intersects and an arrow glyph.
+        const rel = V.sub(tgt.pos, p.pos);
+        const x1 = cy * rel.x - sy * rel.z;
+        const z1 = sy * rel.x + cy * rel.z;
+        const y1 = cp * rel.y - sp * z1;
+        const z2 = sp * rel.y + cp * z1;
+        const behind = z2 <= 1;
+        // Use a synthetic projection that radiates outward from center even
+        // when the target is behind, so the arrow always points somewhere.
+        let dx: number, dy: number;
+        if (behind) { dx = -x1; dy = -y1; }
+        else { dx = x1 / Math.max(0.5, z2); dy = y1 / Math.max(0.5, z2); }
+        const cxV = vpLeft + vw / 2, cyV = vpTop + vh / 2;
+        // Scale the direction to the viewport edge.
+        const halfW = vw / 2 - 2, halfH = vh / 2 - 2;
+        const m = Math.max(Math.abs(dx) / halfW, Math.abs(dy) / halfH) || 1;
+        const ex = Math.round(cxV + dx / m);
+        const ey = Math.round(cyV + dy / m);
+        // Pick chevron based on dx/dy octant.
+        let arrow = "●";
+        const ax = Math.abs(dx), ay = Math.abs(dy);
+        if (ax < ay * 0.4) arrow = dy < 0 ? "▲" : "▼";
+        else if (ay < ax * 0.4) arrow = dx < 0 ? "◄" : "►";
+        else if (dx < 0 && dy < 0) arrow = "◤";
+        else if (dx > 0 && dy < 0) arrow = "◥";
+        else if (dx < 0 && dy > 0) arrow = "◣";
+        else arrow = "◢";
+        const exC = Math.max(vpLeft + 1, Math.min(vpRight - 1, ex));
+        const eyC = Math.max(vpTop + 1, Math.min(vpBottom - 1, ey));
+        const dist = V.len(rel);
+        const distStr = dist > 1000 ? `${(dist / 1000).toFixed(1)}k` : `${dist.toFixed(0)}`;
+        const label = behind ? `${arrow} ${tgt.name.slice(0, 10)}  TURN ${distStr}` : `${arrow} ${tgt.name.slice(0, 10)}  ${distStr}`;
+        // Place label hugging the chosen edge — left/right edges put text inside.
+        let lx = exC + 1;
+        if (exC > vpLeft + vw * 0.6) lx = Math.max(vpLeft + 1, exC - label.length - 1);
+        const ly = Math.max(vpTop + 1, Math.min(vpBottom - 1, eyC));
+        g[eyC][exC] = { ch: arrow, color: bracketCol };
+        putText(g, lx, ly, label, bracketCol, vpRight);
+      }
+    } else {
+      this._bracketTargetId = null;
+    }
+
+    // ---------------------------------------------------------------------
+    // Pinned quest tracker — compact panel anchored top-right of viewport.
+    // Mirrors the bottom-bar mission line but stays visible while flying.
+    // ---------------------------------------------------------------------
+    if (this.questPinned && p.mission) {
+      const m = p.mission;
+      const qw = 28;
+      const qx = Math.max(vpLeft + 2, vpRight - qw - 1);
+      const qy = vpTop + 1;
+      putText(g, qx, qy, "[ QUEST ]", "#cf6", vpRight);
+      const desc = m.description.length > qw ? m.description.slice(0, qw - 1) + "…" : m.description;
+      putText(g, qx, qy + 1, desc, "#fff", vpRight);
+      // Progress line:
+      let prog = "";
+      if (m.kind === "deliver" && m.cargoItem) {
+        const have = p.cargo[m.cargoItem] ?? 0;
+        prog = `${have}/${m.cargoQty} ${m.cargoItem}` + (m.done ? "  ✓ DOCK" : "");
+      } else if (m.kind === "destroy" && m.targetId != null) {
+        const tt = this.entities.find((e) => e.id === m.targetId);
+        if (tt && (tt.hull ?? 0) > 0) {
+          const d = V.len(V.sub(tt.pos, p.pos));
+          prog = `${tt.name}  ${d.toFixed(0)}u`;
+        } else prog = "✓ destroyed — DOCK";
+      } else if (m.kind === "scan" && m.targetId != null) {
+        const tt = this.entities.find((e) => e.id === m.targetId);
+        if (tt) {
+          const d = V.len(V.sub(tt.pos, p.pos));
+          prog = m.done ? "✓ scanned — DOCK" : `${tt.name}  ${d.toFixed(0)}u`;
+        }
+      }
+      if (prog) putText(g, qx, qy + 2, prog, m.done ? "#7CFC00" : "#cf6", vpRight);
+      // Draw a small ◇ at the projected objective if on-screen.
+      let objId: number | undefined = m.targetId;
+      if (m.kind === "deliver") {
+        // Nearest civilian station as the implicit objective.
+        let bestS: Entity | null = null; let bestD = Infinity;
+        for (const e of this.entities) {
+          if (e.kind !== "station" || e.faction === "pirate") continue;
+          const d2 = V.len(V.sub(e.pos, p.pos));
+          if (d2 < bestD) { bestD = d2; bestS = e; }
+        }
+        if (bestS) objId = bestS.id;
+      }
+      if (objId != null) {
+        const op = projected.find((q) => q.e.id === objId);
+        if (op && op.sx > vpLeft && op.sx < vpRight && op.sy > vpTop && op.sy < vpBottom) {
+          // Slight offset so it doesn't overlap the body's own glyph.
+          const oy = Math.max(vpTop + 1, op.sy - Math.max(1, Math.round(op.r) + 1));
+          if (g[oy][op.sx].ch === " ") g[oy][op.sx] = { ch: "◇", color: "#cf6" };
+        }
+      }
+    }
+
+
+
+
 
 
     // Crosshair. Color shifts to indicate weapon-range state of whatever's
