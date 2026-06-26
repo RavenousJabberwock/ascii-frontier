@@ -1970,6 +1970,8 @@ export class Voidwake {
 
     // Cycle target
     if (this.input.consume(k.cycleTarget)) this.cycleTarget();
+    if (this.input.consume(k.cycleCatNext)) this.cycleTargetCategory(1);
+    if (this.input.consume(k.cycleCatPrev)) this.cycleTargetCategory(-1);
 
     // Jettison: drop one unit of the heaviest cargo item.
     if (this.input.consume(k.jettison)) {
