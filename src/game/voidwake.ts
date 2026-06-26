@@ -3983,6 +3983,7 @@ export class Voidwake {
       ["X", "supercruise (3x)"],
       ["SPACE", "fire"],
       ["T", "cycle target"],
+      ["[ / ]", "cycle by kind"],
       ["M", "mine target"],
       ["F", "dock / station"],
       ["J", "jettison cargo"],
