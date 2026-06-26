@@ -464,6 +464,8 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   menu: "escape",
   toggleGunner: "g",
   supercruise: "x",      // hold: 3x speed, 3x fuel burn — for long hauls
+  legend: "l",           // open the Codex / Legend overlay
+  pinQuest: "k",         // toggle the persistent quest tracker panel
 };
 
 
@@ -960,7 +962,8 @@ type Screen =
   | "save"
   | "quit-confirm"
   | "destroyed"
-  | "crashed";
+  | "crashed"
+  | "codex";
 
 
 // =============================================================================
@@ -1297,6 +1300,20 @@ export class Voidwake {
   // would leak listeners that keep stale engine refs alive.
   private _abort = new AbortController();
 
+  // --- UI overlays added in the situational-awareness pass ----------------
+  // Pinned quest tracker: when true, render a compact mission panel anchored
+  // to the top-right of the viewport during play. Toggled with K.
+  questPinned = true;
+  // Snap timer for targeting brackets — brackets "tighten in" from a wide
+  // box to a tight one over a few frames when a new target is acquired.
+  private _bracketTargetId: number | null = null;
+  private _bracketAcquiredAt = 0;
+  // Screen we came from when opening the Codex so ESC returns where we were.
+  private _codexReturn: Screen = "title";
+  // Codex page: 0 = symbols, 1 = colors, 2 = keys.
+  private _codexPage = 0;
+
+
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -1606,6 +1623,7 @@ export class Voidwake {
       case "quit-confirm": this.updateQuitConfirm(); break;
       case "destroyed": this.updateDestroyed(); break;
       case "crashed": this.updateCrashed(); break;
+      case "codex": this.updateCodex(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
   }
@@ -1740,13 +1758,14 @@ export class Voidwake {
 
 
   // --- Title --------------------------------------------------------------
-  titleItems = ["New Game", "Load Game", "Options", "Quit"];
+  titleItems = ["New Game", "Load Game", "Legend (Codex)", "Options", "Quit"];
   updateTitle() {
     this.menuNav(this.titleItems.length);
     if (this.input.consume("enter")) {
       const choice = this.titleItems[this.menuCursor];
       if (choice === "New Game") { this.clearTitleNotice(); this.screen = "create-char"; this.menuCursor = 0; }
       else if (choice === "Load Game") { this.clearTitleNotice(); this.screen = "load"; this.menuCursor = 0; }
+      else if (choice === "Legend (Codex)") { this._codexReturn = "title"; this.screen = "codex"; this.menuCursor = 0; }
       else if (choice === "Options") { this.screen = "options"; this.menuCursor = 0; }
       else if (choice === "Quit") this.tryQuit();
     }
@@ -1987,6 +2006,18 @@ export class Voidwake {
       this.pushChatter(tag, p.gunner.enabled ? "Standing by, weapons hot." : "Standing down.", "#fc6");
     }
     void k.mission;
+    // Open the Codex/Legend overlay from flight.
+    if (this.input.consume(k.legend)) {
+      this._codexReturn = "playing";
+      this.screen = "codex";
+      this.menuCursor = 0;
+      return;
+    }
+    // Toggle the pinned quest tracker.
+    if (this.input.consume(k.pinQuest)) {
+      this.questPinned = !this.questPinned;
+      this.pushLog(this.questPinned ? "Quest tracker pinned." : "Quest tracker hidden.");
+    }
 
     // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
     this.updateGunner(dt, fwd);
@@ -2541,7 +2572,7 @@ export class Voidwake {
 
 
   // --- Main menu -----------------------------------------------------------
-  menuItems = ["Resume", "Save Game", "Load Game", "Options", "Quit"];
+  menuItems = ["Resume", "Save Game", "Load Game", "Legend (Codex)", "Options", "Quit"];
   updateMenu() {
     this.menuNav(this.menuItems.length);
     if (this.input.consume("enter")) {
@@ -2549,6 +2580,7 @@ export class Voidwake {
       if (c === "Resume") this.screen = "playing";
       else if (c === "Save Game") { this.screen = "save"; this.menuCursor = 0; }
       else if (c === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
+      else if (c === "Legend (Codex)") { this._codexReturn = "menu"; this.screen = "codex"; this.menuCursor = 0; }
       else if (c === "Options") { this.screen = "options"; this.menuCursor = 0; }
       else if (c === "Quit") this.tryQuit();
     }
@@ -2855,6 +2887,7 @@ export class Voidwake {
       case "quit-confirm": this.renderQuitConfirm(grid); break;
       case "destroyed": this.renderDestroyed(grid); break;
       case "crashed": this.renderCrashed(grid); break;
+      case "codex": this.renderCodex(grid); break;
     }
 
 
@@ -3293,6 +3326,112 @@ export class Voidwake {
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
 
+  // --- Codex / Legend ------------------------------------------------------
+  // Single overlay that documents every glyph, color, and keybind so players
+  // don't have to guess what `%`, a pulsing red bracket, or a magenta `▒` mean.
+  // Pages are flipped with ←/→; ESC closes back to whichever screen opened it.
+  updateCodex() {
+    if (this.input.consume("arrowleft"))  this._codexPage = (this._codexPage + 2) % 3;
+    if (this.input.consume("arrowright")) this._codexPage = (this._codexPage + 1) % 3;
+    if (this.input.consume("enter")) this._codexPage = (this._codexPage + 1) % 3;
+    if (this.input.consume(this.options.keybinds.menu) ||
+        this.input.consume(this.options.keybinds.legend)) {
+      this.screen = this._codexReturn;
+      this.menuCursor = 0;
+    }
+  }
+
+  renderCodex(g: Cell[][]) {
+    const cols = g[0].length;
+    const pages = ["SYMBOLS", "COLORS", "KEYS"];
+    const title = `[ CODEX — ${pages[this._codexPage]} ]   ←/→ pages   ESC close`;
+    putText(g, 4, 1, title, "#7CFC00");
+
+    if (this._codexPage === 0) {
+      // Symbols: pull names from GLYPHS so the legend can never drift.
+      const rows: [string, string, string][] = [
+        ["@", "#7CFC00", "your ship (radar)"],
+        [GLYPHS.player, "#7CFC00", "your ship (cockpit)"],
+        [GLYPHS.star, colorFor("star"), "star — fuel scoop in corona at low throttle"],
+        [GLYPHS.planet, colorFor("planet"), "planet — landmark; collision damage on touch"],
+        [GLYPHS.station, colorFor("station"), "station — dock for repair/refuel/shop (F)"],
+        [GLYPHS.station, "#ff7766", "pirate base — fortified, hostile turrets"],
+        [GLYPHS.asteroid, colorFor("asteroid"), "asteroid — minable ore (M)"],
+        [GLYPHS.friendly, colorFor("friendly"), "friendly ship (Federation)"],
+        [GLYPHS.neutral, colorFor("neutral"), "neutral ship (Guild trader)"],
+        [GLYPHS.hostile, colorFor("hostile"), "hostile ship (Pirate raider)"],
+        [GLYPHS.bullet, colorFor("bullet"), "weapon round in flight"],
+        [GLYPHS.loot, colorFor("loot"), "loot canister — fly through to collect"],
+        [GLYPHS.comet, colorFor("comet"), "comet — fast, harmless decoration"],
+        [GLYPHS.nebula, colorFor("nebula"), "nebula cloud — drains shields, hides ships"],
+        [GLYPHS.beacon, colorFor("beacon"), "distress beacon — payout, or a pirate trap"],
+        ["[ ]", "#ffaa55", "targeting brackets — current target on-screen"],
+        ["◣◢◤◥", "#fc6", "edge pointer — target off-screen (distance shown)"],
+        ["+", "#ffaa55", "lead indicator — fire here to hit a moving target"],
+        ["◇", "#cf6", "mission objective marker"],
+        ["-+-", "#3a6", "reticle — green idle, amber aligned, red in-range"],
+      ];
+      rows.forEach((r, i) => {
+        const y = 4 + i;
+        if (y >= g.length - 2) return;
+        putText(g, 4, y, r[0].padEnd(5), r[1]);
+        putText(g, 10, y, r[2], "#cfd");
+      });
+    } else if (this._codexPage === 1) {
+      const swatches: [string, string][] = [
+        ["#7CFC00", "friendly / system OK / your ship"],
+        ["#ff5555", "hostile / hull critical / in-range lock"],
+        ["#fc6",    "warning / out-of-range lock / gunner"],
+        ["#c2c2ff", "station / civilian infrastructure"],
+        ["#ff7766", "pirate base / forbidden zone"],
+        ["#7ec8ff", "planet / friendly comms"],
+        ["#a6886a", "asteroid / ore / mineable"],
+        ["#ffd866", "star / luminous source"],
+        ["#ffe066", "loot / credits / pickup"],
+        ["#c47afc", "nebula / sensor wash"],
+        ["#ff66cc", "beacon / distress signal"],
+        ["#bff7ff", "comet / supercruise FTL"],
+        ["#888888", "older comms / disabled menu item"],
+        ["#cf6",    "mission tracker / objective"],
+      ];
+      swatches.forEach((s, i) => {
+        const y = 4 + i;
+        if (y >= g.length - 2) return;
+        putText(g, 4, y, "████", s[0]);
+        putText(g, 10, y, s[1], "#cfd");
+      });
+    } else {
+      const kb = this.options.keybinds;
+      const rows: [string, string][] = [
+        [kb.throttleUp.toUpperCase() + " / " + kb.throttleDown.toUpperCase(), "throttle up / down"],
+        [kb.yawLeft.toUpperCase() + " / " + kb.yawRight.toUpperCase(), "yaw left / right"],
+        [kb.pitchUp.toUpperCase() + " / " + kb.pitchDown.toUpperCase(), "pitch up / down"],
+        ["SHIFT",  "afterburner (4× fuel burn, +60% speed)"],
+        [kb.supercruise.toUpperCase(), "supercruise (hold, 3× speed, weapons offline)"],
+        ["SPACE",  "fire weapon"],
+        [kb.cycleTarget.toUpperCase(), "cycle nearest target"],
+        [kb.mine.toUpperCase(), "mine targeted asteroid"],
+        [kb.dock.toUpperCase() + " / " + kb.station.toUpperCase(), "dock at targeted station"],
+        [kb.jettison.toUpperCase(), "jettison heaviest cargo"],
+        [kb.toggleGunner.toUpperCase(), "toggle hired gunner AUTO / STANDBY"],
+        [kb.legend.toUpperCase(), "open this Codex"],
+        [kb.pinQuest.toUpperCase(), "pin / unpin quest tracker"],
+        [kb.pause.toUpperCase(), "pause"],
+        ["ESC",    "main menu / close overlay"],
+      ];
+      rows.forEach((r, i) => {
+        const y = 4 + i;
+        if (y >= g.length - 2) return;
+        putText(g, 4, y, r[0].padEnd(14), "#fff");
+        putText(g, 20, y, r[1], "#cfd");
+      });
+    }
+
+    putText(g, 4, g.length - 2,
+      "Tip: brackets tighten when a new target is acquired; the chevron shows where to turn.", "#888");
+    void cols;
+  }
+
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
     items.forEach((it, i) => {
@@ -3525,6 +3664,171 @@ export class Voidwake {
       }
     }
 
+    // ---------------------------------------------------------------------
+    // Targeting overlay: brackets when the current target is on-screen, a
+    // chevron edge-pointer + distance readout when it's off-screen. Color
+    // tracks faction so a friendly bracket can't be confused with a hostile.
+    // ---------------------------------------------------------------------
+    const tgt = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    if (tgt) {
+      // Reset bracket easing when the player swaps targets.
+      if (this._bracketTargetId !== tgt.id) {
+        this._bracketTargetId = tgt.id;
+        this._bracketAcquiredAt = performance.now() / 1000;
+      }
+      const bracketCol =
+        tgt.kind === "hostile" ? "#ff5555" :
+        tgt.kind === "friendly" ? "#7CFC00" :
+        tgt.kind === "station" ? (tgt.faction === "pirate" ? "#ff7766" : "#c2c2ff") :
+        tgt.kind === "asteroid" ? "#a6886a" :
+        "#fc6";
+      const tprojIdx = projected.findIndex((q) => q.e.id === tgt.id);
+      const tproj = tprojIdx >= 0 ? projected[tprojIdx] : null;
+      if (tproj) {
+        // On-screen: draw four corner brackets that snap inward over ~4 frames.
+        const age = performance.now() / 1000 - this._bracketAcquiredAt;
+        const ease = Math.min(1, age * 6); // 0→1 over ~0.17s
+        const baseR = Math.max(2, Math.round(tproj.r));
+        // Start wide (baseR + 4) and ease in to (baseR + 1).
+        const rb = Math.round((baseR + 4) - 3 * ease);
+        const bx = tproj.sx, by = tproj.sy;
+        const corners: [number, number, string][] = [
+          [bx - rb,     by - rb,     "┌"],
+          [bx + rb,     by - rb,     "┐"],
+          [bx - rb,     by + rb,     "└"],
+          [bx + rb,     by + rb,     "┘"],
+        ];
+        for (const [cxB, cyB, ch] of corners) {
+          if (cxB > vpLeft && cxB < vpRight && cyB > vpTop && cyB < vpBottom) {
+            g[cyB][cxB] = { ch, color: bracketCol };
+          }
+        }
+        // Distance + name tag above the top-left corner.
+        const d = V.len(V.sub(tgt.pos, p.pos));
+        const tag = `${tgt.name}  ${d.toFixed(0)}u`;
+        const ty = by - rb - 1;
+        if (ty > vpTop) putText(g, Math.max(vpLeft + 1, bx - rb), ty, tag.slice(0, Math.max(0, vpRight - (bx - rb) - 1)), bracketCol, vpRight);
+
+        // Lead indicator: simple constant-bullet-speed first-order intercept.
+        // Only useful for ships (asteroids barely drift). Drawn as a faint '+'.
+        if (tgt.kind === "hostile" || tgt.kind === "friendly" || tgt.kind === "neutral") {
+          const rel = V.sub(tgt.pos, p.pos);
+          const relV = tgt.vel;
+          const bulletS = 260;
+          const dist = V.len(rel);
+          if (dist > 5) {
+            const tLead = dist / bulletS;
+            const leadW = { x: tgt.pos.x + relV.x * tLead, y: tgt.pos.y + relV.y * tLead, z: tgt.pos.z + relV.z * tLead };
+            const lp = projectPoint(leadW.x, leadW.y, leadW.z);
+            if (lp && lp.sx > vpLeft && lp.sx < vpRight && lp.sy > vpTop && lp.sy < vpBottom) {
+              const cell = g[lp.sy][lp.sx];
+              if (cell.ch === " " || cell.ch === "·" || cell.ch === ".") {
+                g[lp.sy][lp.sx] = { ch: "+", color: "#ffaa55" };
+              }
+            }
+          }
+        }
+      } else {
+        // Off-screen edge pointer. Project the relative vector into camera
+        // space, then pick the viewport edge it intersects and an arrow glyph.
+        const rel = V.sub(tgt.pos, p.pos);
+        const x1 = cy * rel.x - sy * rel.z;
+        const z1 = sy * rel.x + cy * rel.z;
+        const y1 = cp * rel.y - sp * z1;
+        const z2 = sp * rel.y + cp * z1;
+        const behind = z2 <= 1;
+        // Use a synthetic projection that radiates outward from center even
+        // when the target is behind, so the arrow always points somewhere.
+        let dx: number, dy: number;
+        if (behind) { dx = -x1; dy = -y1; }
+        else { dx = x1 / Math.max(0.5, z2); dy = y1 / Math.max(0.5, z2); }
+        const cxV = vpLeft + vw / 2, cyV = vpTop + vh / 2;
+        // Scale the direction to the viewport edge.
+        const halfW = vw / 2 - 2, halfH = vh / 2 - 2;
+        const m = Math.max(Math.abs(dx) / halfW, Math.abs(dy) / halfH) || 1;
+        const ex = Math.round(cxV + dx / m);
+        const ey = Math.round(cyV + dy / m);
+        // Pick chevron based on dx/dy octant.
+        let arrow = "●";
+        const ax = Math.abs(dx), ay = Math.abs(dy);
+        if (ax < ay * 0.4) arrow = dy < 0 ? "▲" : "▼";
+        else if (ay < ax * 0.4) arrow = dx < 0 ? "◄" : "►";
+        else if (dx < 0 && dy < 0) arrow = "◤";
+        else if (dx > 0 && dy < 0) arrow = "◥";
+        else if (dx < 0 && dy > 0) arrow = "◣";
+        else arrow = "◢";
+        const exC = Math.max(vpLeft + 1, Math.min(vpRight - 1, ex));
+        const eyC = Math.max(vpTop + 1, Math.min(vpBottom - 1, ey));
+        const dist = V.len(rel);
+        const distStr = dist > 1000 ? `${(dist / 1000).toFixed(1)}k` : `${dist.toFixed(0)}`;
+        const label = behind ? `${arrow} ${tgt.name.slice(0, 10)}  TURN ${distStr}` : `${arrow} ${tgt.name.slice(0, 10)}  ${distStr}`;
+        // Place label hugging the chosen edge — left/right edges put text inside.
+        let lx = exC + 1;
+        if (exC > vpLeft + vw * 0.6) lx = Math.max(vpLeft + 1, exC - label.length - 1);
+        const ly = Math.max(vpTop + 1, Math.min(vpBottom - 1, eyC));
+        g[eyC][exC] = { ch: arrow, color: bracketCol };
+        putText(g, lx, ly, label, bracketCol, vpRight);
+      }
+    } else {
+      this._bracketTargetId = null;
+    }
+
+    // ---------------------------------------------------------------------
+    // Pinned quest tracker — compact panel anchored top-right of viewport.
+    // Mirrors the bottom-bar mission line but stays visible while flying.
+    // ---------------------------------------------------------------------
+    if (this.questPinned && p.mission) {
+      const m = p.mission;
+      const qw = 28;
+      const qx = Math.max(vpLeft + 2, vpRight - qw - 1);
+      const qy = vpTop + 1;
+      putText(g, qx, qy, "[ QUEST ]", "#cf6", vpRight);
+      const desc = m.description.length > qw ? m.description.slice(0, qw - 1) + "…" : m.description;
+      putText(g, qx, qy + 1, desc, "#fff", vpRight);
+      // Progress line:
+      let prog = "";
+      if (m.kind === "deliver" && m.cargoItem) {
+        const have = p.cargo[m.cargoItem] ?? 0;
+        prog = `${have}/${m.cargoQty} ${m.cargoItem}` + (m.done ? "  ✓ DOCK" : "");
+      } else if (m.kind === "destroy" && m.targetId != null) {
+        const tt = this.entities.find((e) => e.id === m.targetId);
+        if (tt && (tt.hull ?? 0) > 0) {
+          const d = V.len(V.sub(tt.pos, p.pos));
+          prog = `${tt.name}  ${d.toFixed(0)}u`;
+        } else prog = "✓ destroyed — DOCK";
+      } else if (m.kind === "scan" && m.targetId != null) {
+        const tt = this.entities.find((e) => e.id === m.targetId);
+        if (tt) {
+          const d = V.len(V.sub(tt.pos, p.pos));
+          prog = m.done ? "✓ scanned — DOCK" : `${tt.name}  ${d.toFixed(0)}u`;
+        }
+      }
+      if (prog) putText(g, qx, qy + 2, prog, m.done ? "#7CFC00" : "#cf6", vpRight);
+      // Draw a small ◇ at the projected objective if on-screen.
+      let objId: number | undefined = m.targetId;
+      if (m.kind === "deliver") {
+        // Nearest civilian station as the implicit objective.
+        let bestS: Entity | null = null; let bestD = Infinity;
+        for (const e of this.entities) {
+          if (e.kind !== "station" || e.faction === "pirate") continue;
+          const d2 = V.len(V.sub(e.pos, p.pos));
+          if (d2 < bestD) { bestD = d2; bestS = e; }
+        }
+        if (bestS) objId = bestS.id;
+      }
+      if (objId != null) {
+        const op = projected.find((q) => q.e.id === objId);
+        if (op && op.sx > vpLeft && op.sx < vpRight && op.sy > vpTop && op.sy < vpBottom) {
+          // Slight offset so it doesn't overlap the body's own glyph.
+          const oy = Math.max(vpTop + 1, op.sy - Math.max(1, Math.round(op.r) + 1));
+          if (g[oy][op.sx].ch === " ") g[oy][op.sx] = { ch: "◇", color: "#cf6" };
+        }
+      }
+    }
+
+
+
+
 
 
     // Crosshair. Color shifts to indicate weapon-range state of whatever's
@@ -3701,7 +4005,7 @@ export class Voidwake {
 
     // Keys hint
     const gunnerHint = p.gunner ? `  G ${p.gunner.enabled ? "gunner ON" : "gunner off"}` : "";
-    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  P pause  ESC menu" + gunnerHint, "#666");
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  L legend  K quest  P pause  ESC menu" + gunnerHint, "#666");
 
     // FPS overlay (optional)
     if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
