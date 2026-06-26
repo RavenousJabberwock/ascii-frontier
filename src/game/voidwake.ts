@@ -1607,6 +1607,9 @@ export class Voidwake {
         this.screen = this.player ? "playing" : "title";
       } else if (this.screen === "station") {
         this.screen = "playing";
+      } else if (this.screen === "codex") {
+        this.screen = this._codexReturn;
+        this.menuCursor = 0;
       }
     }
 
