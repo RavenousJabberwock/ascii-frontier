@@ -3958,7 +3958,7 @@ export class Voidwake {
       putText(g, panelX, cy2 + 3, `${t.kind}  d=${d.toFixed(0)}u`, "#9fe");
       if (t.hull !== undefined) putText(g, panelX, cy2 + 4, `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
     } else {
-      putText(g, panelX, cy2 + 2, "press T to cycle", "#888");
+      putText(g, panelX, cy2 + 2, "T cycle  [ ] by kind", "#888");
     }
 
     // Gunner status block — only shown when a gunner is hired.
