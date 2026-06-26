@@ -1623,6 +1623,7 @@ export class Voidwake {
       case "quit-confirm": this.updateQuitConfirm(); break;
       case "destroyed": this.updateDestroyed(); break;
       case "crashed": this.updateCrashed(); break;
+      case "codex": this.updateCodex(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
   }
