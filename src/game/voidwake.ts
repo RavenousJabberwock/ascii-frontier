@@ -1300,6 +1300,20 @@ export class Voidwake {
   // would leak listeners that keep stale engine refs alive.
   private _abort = new AbortController();
 
+  // --- UI overlays added in the situational-awareness pass ----------------
+  // Pinned quest tracker: when true, render a compact mission panel anchored
+  // to the top-right of the viewport during play. Toggled with K.
+  questPinned = true;
+  // Snap timer for targeting brackets — brackets "tighten in" from a wide
+  // box to a tight one over a few frames when a new target is acquired.
+  private _bracketTargetId: number | null = null;
+  private _bracketAcquiredAt = 0;
+  // Screen we came from when opening the Codex so ESC returns where we were.
+  private _codexReturn: Screen = "title";
+  // Codex page: 0 = symbols, 1 = colors, 2 = keys.
+  private _codexPage = 0;
+
+
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
