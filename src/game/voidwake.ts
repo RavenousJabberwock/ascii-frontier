@@ -444,6 +444,12 @@ interface Entity {
   loot?: { credits?: number; ore?: number };
   // Cosmetic: which palette slot ship variants use for chatter line tagging.
   lastChatterAt?: number;
+  // Faction retaliation: when set, this ship is temporarily hostile to the
+  // player until performance.now()/1000 exceeds this value. Cleared by AI.
+  hostileUntil?: number;
+  // Preserved kind so retaliation can revert this ship to friendly/neutral
+  // once the timer expires.
+  peaceKind?: EntityKind;
 }
 
 interface PlayerChar {
