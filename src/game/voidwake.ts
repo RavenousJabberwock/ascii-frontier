@@ -1094,10 +1094,39 @@ function merchantBuyMult(p: PlayerState): number {
   return hasCrew(p, "merchant") ? 0.90 : 1.0;
 }
 function hasCrew(p: PlayerState, role: CrewRole): boolean {
+  if (role === "gunner") return !!p.gunner;
   return !!(p.crew && p.crew.some((c) => c.role === role));
 }
 function getCrew(p: PlayerState, role: CrewRole): CrewMember | undefined {
   return p.crew?.find((c) => c.role === role);
+}
+function crewCount(p: PlayerState): number {
+  return (p.gunner ? 1 : 0) + (p.crew ? p.crew.length : 0);
+}
+
+// Crew hiring fee per role.
+const CREW_ROLE_INFO: Record<CrewRole, { title: string; baseFee: number; blurb: string; color: string }> = {
+  gunner:   { title: "Gunner",   baseFee: 300, blurb: "auto-fires on hostiles, auto-mines rocks", color: "#fc6" },
+  pilot:    { title: "Pilot",    baseFee: 450, blurb: "autopilot to current target (O)",         color: "#8cf" },
+  engineer: { title: "Engineer", baseFee: 500, blurb: "hull regen, faster shield, -20% fuel",     color: "#7CFC00" },
+  merchant: { title: "Merchant", baseFee: 400, blurb: "+15% ore sell, -10% station buy prices",    color: "#ffe066" },
+};
+
+function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
+  const first = GUNNER_FIRST[Math.floor(rng() * GUNNER_FIRST.length)];
+  const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
+  const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
+  const species = SPECIES[Math.floor(rng() * SPECIES.length)];
+  return {
+    role,
+    name: `${first} ${last}`,
+    species, gender,
+    enabled: true,
+    hiredAt: Date.now(),
+    nextBarkAt: 0,
+    cooldown: 0,
+    autopilot: false,
+  };
 }
 
 
