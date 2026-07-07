@@ -389,10 +389,10 @@ const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
 // Ship hull catalog. Add entries to expose new hulls to character creation.
 const SHIP_HULLS = [
-  { id: "scout", name: "Sparrow Scout", hull: 60, shield: 40, cargo: 12, speed: 90 },
-  { id: "trader", name: "Mule Freighter", hull: 110, shield: 60, cargo: 64, speed: 55 },
-  { id: "fighter", name: "Wasp Interceptor", hull: 80, shield: 90, cargo: 8, speed: 110 },
-  { id: "miner", name: "Pickaxe Industrial", hull: 130, shield: 50, cargo: 40, speed: 50 },
+  { id: "scout", name: "Sparrow Scout", hull: 60, shield: 40, cargo: 12, speed: 90, crewSlots: 1 },
+  { id: "trader", name: "Mule Freighter", hull: 110, shield: 60, cargo: 64, speed: 55, crewSlots: 4 },
+  { id: "fighter", name: "Wasp Interceptor", hull: 80, shield: 90, cargo: 8, speed: 110, crewSlots: 2 },
+  { id: "miner", name: "Pickaxe Industrial", hull: 130, shield: 50, cargo: 40, speed: 50, crewSlots: 3 },
 ];
 
 const WEAPONS = [
