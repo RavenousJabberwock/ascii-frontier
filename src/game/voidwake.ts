@@ -4138,7 +4138,7 @@ export class Voidwake {
         [kb.legend.toUpperCase(), "open this Codex"],
         [kb.pinQuest.toUpperCase(), "pin / unpin quest tracker"],
         [kb.questLog.toUpperCase(), "open Quest Log popup"],
-        [kb.autopilot.toUpperCase(), "toggle Pilot autopilot to current target"],
+        [kb.autopilot.toUpperCase(), "toggle Pilot autopilot (mouse steer does NOT disengage)"],
         [kb.pause.toUpperCase(), "pause"],
         ["ESC",    "main menu / close overlay"],
       ];
