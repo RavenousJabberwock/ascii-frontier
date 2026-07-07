@@ -231,6 +231,135 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cargo at max. Time to offload.",
     "No room for more rock. Dock somewhere?",
   ],
+  pilot_idle: [
+    "Steady vector, Cmdr. {weather}.",
+    "Nice ride, this {ship}. Handles better than my last posting.",
+    "{smalltalk}.",
+    "If you want me to take the stick, tag a target and hit O.",
+    "Sector {sector} logged. Clean drift.",
+    "Fuel at {fuel}%. Want me to plot a scoop pass?",
+  ],
+  pilot_greet: [
+    "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
+    "Nav chair's warm — glad to ride the {ship}. O toggles autopilot.",
+    "Flown three of these before. Docking's the easy part.",
+    "Cmdr — I don't crash. Everything else is negotiable.",
+  ],
+  pilot_autopilot_on: [
+    "I've got the stick. Plotting to {target}.",
+    "Course locked on {target} — ETA short.",
+    "Hands off, Cmdr. Bringing us in on {target}.",
+    "Autopilot engaged. Try not to sneeze on the fire button.",
+  ],
+  pilot_autopilot_off: [
+    "Stick's yours, Cmdr.",
+    "Disengaging — you fly better than the manual says anyway.",
+    "Handing back. Watch the pitch.",
+    "Autopilot off. Yell if it gets weird.",
+  ],
+  pilot_docking: [
+    "Matching velocity with {target}. Hold on.",
+    "Bringing us to a stop at {target} — perfect approach.",
+    "Docking pattern locked, {target} beacon has us.",
+  ],
+  pilot_farewell_good: [
+    "Best captain I've flown for. Safe vectors, {cmdr}.",
+    "Cmdr — thanks. I'll spread the word in {sector}.",
+    "Fly the {ship} true. She likes you.",
+  ],
+  pilot_farewell_bad: [
+    "You steer like a drunk asteroid. Out.",
+    "Rather push a barge dirtside than fly for you again.",
+    "Cmdr, you owe me a bar tab and a therapist.",
+  ],
+  engineer_idle: [
+    "Hull's holding. Coupler harmonics look clean.",
+    "{smalltalk}.",
+    "Shield emitter running a hair warm — nothing critical.",
+    "Fuel flow's efficient today. {praise}, Cmdr.",
+    "I could rebuild this reactor blind. Don't test me.",
+    "Reading a soft hum on the port thruster. I'll watch it.",
+  ],
+  engineer_greet: [
+    "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
+    "Cmdr — took a look at your reactor. It'll last. Barely.",
+    "Kit's stowed, tools are hot. Let's not blow up.",
+    "I've patched worse hulls with duct tape and prayer.",
+  ],
+  engineer_repair: [
+    "Patching hull — give me a moment.",
+    "Weld's holding. Hull back to {hull}%.",
+    "Shaved off the worst of the scarring. You're welcome.",
+    "Repair pass done. Try not to undo it, Cmdr.",
+  ],
+  engineer_shields: [
+    "Shields cycling — capacitors happy.",
+    "Boosted the recharge loop. Should feel snappier.",
+    "Shield harmonics locked. That's my magic done.",
+  ],
+  engineer_fuel: [
+    "Trimmed the burn — you're getting more meters per unit now.",
+    "Reactor's sipping instead of guzzling. You're welcome.",
+    "Fuel efficiency's up. Buy me a drink at the next dock.",
+  ],
+  engineer_farewell_good: [
+    "Good ship, good captain. I'll miss the {ship}.",
+    "Cmdr — she's tuned. Don't let the next hack ruin her.",
+    "Safe vectors. Call if the reactor sings weird.",
+  ],
+  engineer_farewell_bad: [
+    "You broke everything I fixed. Twice. I'm out.",
+    "Never seen a hull this abused. Good luck, Cmdr.",
+    "Rather patch a Guild scow than another minute on this bucket.",
+  ],
+  merchant_idle: [
+    "Ore prices in {sector} are moving. Could be a play.",
+    "You've got {credits} credits burning a hole, Cmdr.",
+    "{smalltalk}.",
+    "I hear a refinery near {planet} pays 20% over spot.",
+    "Cargo at {cargo}%. When we dock, let me talk to the buyer.",
+    "Bounty board's fat this cycle. Just saying.",
+  ],
+  merchant_greet: [
+    "Merchant aboard, Cmdr. I'll shave 15% off the buy sheet and pad the sell.",
+    "Cmdr {cmdr} — pleasure. My cousin runs the market in {sector}. Handy.",
+    "Give me a cargo hold and a station, I'll give you profit.",
+    "I read a rumor mill better than most read a manifest.",
+  ],
+  merchant_deal: [
+    "Talked them up 15% on the ore — nice haul, Cmdr.",
+    "Got you a discount on that refit. Don't say I never earn my keep.",
+    "Buyer flinched. We won. {credits}cr looking healthier already.",
+  ],
+  merchant_broke: [
+    "Cmdr, we're broke. Rocks won't sell themselves.",
+    "Empty hold, empty pockets. Let's fix one of those.",
+    "I can't haggle nothing into something. Get us cargo.",
+  ],
+  merchant_farewell_good: [
+    "Made you money, made myself money. Textbook tour.",
+    "Cmdr — I'll invest my cut. Come find me flush in {sector}.",
+    "Solid captain, solid ledger. Fly true.",
+  ],
+  merchant_farewell_bad: [
+    "You wouldn't take a deal if it kissed you. I'm gone.",
+    "Cmdr, next captain, listen to your merchant.",
+    "Rather sell rocks door-to-door than watch you refuse a margin.",
+  ],
+  banter: [
+    "{a}: {b}, you ever going to fix that coupler?  ||  {b}: I fixed yours, {a}. Try locking the door.",
+    "{a}: If we get boarded, {b} goes first.  ||  {b}: I go first because I'm faster, not braver.",
+    "{a}: {coffee} again for dinner?  ||  {b}: Cmdr picked the ration crate. Blame the top of the food chain.",
+    "{a}: I miss {miss}.  ||  {b}: I miss silence. Please.",
+    "{a}: How long you been aboard, {b}?  ||  {b}: Long enough to know when to duck.",
+    "{a}: Bet you five creds we hit rocks before we hit a station.  ||  {b}: Cmdr can hear us, you know.",
+    "{a}: Last ship I flew, the {threat} were nicer than you.  ||  {b}: Last ship you flew is scrap. Coincidence?",
+    "{a}: Cmdr's aim is getting better.  ||  {b}: Or {a} is getting quieter about the misses.",
+    "{a}: If I fix one more coupler I'm putting my name on the hull.  ||  {b}: Please don't.",
+    "{a}: Weather's {weather}.  ||  {b}: Weather is always {weather}. That's space.",
+    "{a}: {praise}, Cmdr.  ||  {b}: Don't inflate the ego. He'll try to dock at a star.",
+    "{a}: Any word on {rumor}?  ||  {b}: Yeah, and it gets worse the closer you look.",
+  ],
 };
 
 interface ChatterCtx {
@@ -238,6 +367,7 @@ interface ChatterCtx {
   hull: string; shield: string; fuel: string; cargo: string;
   credits: string; kills: string; target: string; nearest: string;
   sector: string; ore: string; fac: string; dist: string;
+  a: string; b: string;
 }
 
 function fillTemplate(tpl: string, ctx: ChatterCtx, depth = 0): string {
