@@ -37,6 +37,13 @@ and forwards lifecycle events.
 - `F` dock with targeted station (must be close & slow)
 - `B` buy/sell menu at station
 - `J` accept mission at station
+- `[` / `]` cycle target by category (stations / rocks / hostiles / ...)
+- `G` toggle hired gunner AUTO / STANDBY
+- `O` toggle hired **Pilot autopilot** to current target (full auto: fly, auto-dock stations, hold orbit). Mouse steering is suppressed while engaged and does **not** disengage it — press `O` again to take back manual control. A blinking banner near screen center reminds you it's on.
+- `U` open Quest Log popup
+- `K` pin / unpin quest tracker
+- `L` open Codex (symbols / colors / keys)
+- `P` pause
 - `ESC` main menu (New / Save / Load / Options / Quit)
 
 ## Adding new content

@@ -4138,7 +4138,7 @@ export class Voidwake {
         [kb.legend.toUpperCase(), "open this Codex"],
         [kb.pinQuest.toUpperCase(), "pin / unpin quest tracker"],
         [kb.questLog.toUpperCase(), "open Quest Log popup"],
-        [kb.autopilot.toUpperCase(), "toggle Pilot autopilot to current target"],
+        [kb.autopilot.toUpperCase(), "toggle Pilot autopilot (mouse steer does NOT disengage)"],
         [kb.pause.toUpperCase(), "pause"],
         ["ESC",    "main menu / close overlay"],
       ];
@@ -4775,6 +4775,21 @@ export class Voidwake {
     if (this.input.keys.has(this.options.keybinds.supercruise) && p.ship.fuel > 0) {
       const msg = "» » » SUPERCRUISE — weapons offline « « «";
       putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff", vpRight);
+    }
+
+    // Autopilot banner — large, near center, so mouse-steer players see clearly
+    // that steering is hands-off and how to reclaim manual control. Mouse steer
+    // is intentionally suppressed while autopilot is engaged (see driveAutopilot
+    // gate above) so cursor motion does NOT disengage it — the pilot key does.
+    if (pilotCrew && pilotCrew.autopilot) {
+      const blink = Math.floor(performance.now() / 500) % 2 === 0;
+      const col = blink ? "#8cf" : "#4a8fd6";
+      const okey = (this.options.keybinds.autopilot || "o").toUpperCase();
+      const l1 = "» » »  AUTOPILOT ENGAGED  « « «";
+      const l2 = `Press ${okey} to disengage`;
+      const cy = vpTop + Math.floor(vh / 2) - 3;
+      putText(g, vpLeft + Math.floor(vw / 2 - l1.length / 2), cy,     l1, col, vpRight);
+      putText(g, vpLeft + Math.floor(vw / 2 - l2.length / 2), cy + 1, l2, "#bcd", vpRight);
     }
 
     // Cockpit damage state: when hull < 25%, etch crack patterns along the
