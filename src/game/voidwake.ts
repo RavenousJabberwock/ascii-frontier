@@ -3465,13 +3465,20 @@ export class Voidwake {
       if (i === 0) {
         const ore = p.cargo.ore ?? 0;
         if (ore > 0) {
-          p.credits += ore * stock.orePrice;
+          const price = Math.round(stock.orePrice * merchantSellMult(p));
+          const total = ore * price;
+          p.credits += total;
           p.cargo.ore = 0;
-          this.pushLog(`Sold ${ore} ore for ${ore * stock.orePrice}cr.`);
+          this.pushLog(`Sold ${ore} ore for ${total}cr${hasCrew(p, "merchant") ? " (merchant bonus)" : ""}.`);
+          if (hasCrew(p, "merchant")) {
+            const m = getCrew(p, "merchant")!;
+            this.pushChatter(`Merchant ${m.name.split(" ")[0]}`,
+              pickLine("merchant_deal", this.chatterCtx()), CREW_ROLE_INFO.merchant.color);
+          }
         } else this.pushLog("No ore to sell.");
       } else if (i === 1) {
         const need = p.ship.fuelMax - p.ship.fuel;
-        const cost = Math.ceil(need) * stock.fuelPrice;
+        const cost = Math.ceil(need * stock.fuelPrice * merchantBuyMult(p));
         if (cost === 0) { this.pushLog("Tanks already full."); return; }
         if (p.credits >= cost) { p.credits -= cost; p.ship.fuel = p.ship.fuelMax; this.pushLog(`Refueled (${cost}cr).`); }
         else this.pushLog("Not enough credits.");
@@ -3482,9 +3489,10 @@ export class Voidwake {
     if (this.stationPage === "weapons") {
       const offer = stock.weapons[i];
       if (!offer) return;
+      const price = Math.round(offer.price * merchantBuyMult(p));
       if (p.ship.weaponId === offer.id) { this.pushLog("Already equipped."); return; }
-      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
-      p.credits -= offer.price;
+      if (p.credits < price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= price;
       p.ship.weaponId = offer.id;
       this.pushLog(`Equipped ${WEAPONS.find((w) => w.id === offer.id)!.name}.`);
       return;
@@ -3493,38 +3501,57 @@ export class Voidwake {
     if (this.stationPage === "modules") {
       const offer = stock.modules[i];
       if (!offer) return;
+      const price = Math.round(offer.price * merchantBuyMult(p));
       if (p.ship.modules.includes(offer.id)) { this.pushLog("Already installed."); return; }
-      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
-      p.credits -= offer.price;
+      if (p.credits < price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= price;
       p.ship.modules.push(offer.id);
-      // Apply passive caps immediately so the player sees the change.
       if (offer.id === "cargo-expander") p.ship.cargoMax += 12;
       if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
+      if (offer.id === "crew-quarters") this.pushLog("Crew quarters installed — +1 berth.");
       this.pushLog(`Installed ${offer.name}.`);
       return;
     }
 
     if (this.stationPage === "crew") {
-      if (i !== 0) return;
-      if (p.gunner) {
-        // Tone of the farewell depends on how the tour went: a long-served,
-        // well-paid, well-kept gunner leaves happy; a short, broke, or
-        // bullet-pocked one storms off cursing.
-        const tenureMin = (Date.now() - p.gunner.hiredAt) / 60000;
+      // Row 0 is the header; rows 1..4 are roles; last is Back (handled above).
+      const roleIdx = i - 1;
+      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
+      if (roleIdx < 0 || roleIdx >= roles.length) return;
+      const r = roles[roleIdx];
+      const info = CREW_ROLE_INFO[r];
+      // Dismiss branch
+      if (hasCrew(p, r)) {
+        const c = r === "gunner" ? p.gunner! : getCrew(p, r)!;
+        const tenureMin = (Date.now() - c.hiredAt) / 60000;
         const hullPct = p.ship.hull / p.ship.hullMax;
         const happy = tenureMin > 3 && p.credits > 500 && hullPct > 0.5;
-        const kind: ChatterKind = happy ? "gunner_farewell_good" : "gunner_farewell_bad";
-        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
-          pickLine(kind, this.chatterCtx()), happy ? "#fc6" : "#f88");
-        this.pushLog(`${p.gunner.name} signed off.`);
-        p.gunner = undefined;
-      } else {
-        if (p.credits < stock.gunnerFee) { this.pushLog("Not enough credits."); return; }
-        p.credits -= stock.gunnerFee;
+        const kind: ChatterKind = (r + (happy ? "_farewell_good" : "_farewell_bad")) as ChatterKind;
+        this.pushChatter(`${info.title} ${c.name.split(" ")[0]}`,
+          pickLine(kind, this.chatterCtx()), happy ? info.color : "#f88");
+        this.pushLog(`${c.name} signed off.`);
+        if (r === "gunner") p.gunner = undefined;
+        else p.crew = (p.crew ?? []).filter((x) => x.role !== r);
+        return;
+      }
+      // Hire branch
+      if (crewCount(p) >= effectiveCrewMax(p)) { this.pushLog("No spare berths — install Crew Quarters."); return; }
+      const fee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+      if (p.credits < fee) { this.pushLog("Not enough credits."); return; }
+      p.credits -= fee;
+      if (r === "gunner") {
         p.gunner = generateGunner(Math.random);
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
         this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
           pickLine("gunner_greet", this.chatterCtx()), "#fc6");
+      } else {
+        const c = generateCrewMember(r, Math.random);
+        p.crew = p.crew ?? [];
+        p.crew.push(c);
+        this.pushLog(`Hired ${info.title} ${c.name} (${c.species}).`);
+        const greetKind: ChatterKind = (r + "_greet") as ChatterKind;
+        this.pushChatter(`${info.title} ${c.name.split(" ")[0]}`,
+          pickLine(greetKind, this.chatterCtx()), info.color);
       }
       return;
     }
