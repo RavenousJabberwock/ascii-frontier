@@ -3289,6 +3289,7 @@ export class Voidwake {
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
       `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
+      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Reset Keybinds (current: ${Object.keys(this.options.keybinds).length})`,
       "Back",
     ];
@@ -3312,6 +3313,12 @@ export class Voidwake {
     if (i === 9) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
     if (i === 10) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
     if (i === 11 && (left || right)) this.options.permadeath = !this.options.permadeath;
+    if (i === 12 && (left || right)) {
+      const modes: Options["chatterFreq"][] = ["off", "rare", "normal", "lively"];
+      const idx = modes.indexOf(this.options.chatterFreq ?? "normal");
+      const n = modes.length;
+      this.options.chatterFreq = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
     if (this.input.consume("enter")) {
       if (items[i].startsWith("Reset")) this.options.keybinds = { ...DEFAULT_KEYBINDS };
       if (items[i] === "Back") this.screen = this.player ? "menu" : "title";
