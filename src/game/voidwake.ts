@@ -481,6 +481,22 @@ interface Gunner {
   nextBarkAt: number;         // throttle idle barks
 }
 
+// Multi-role crew. Roles: "gunner" (auto-fire/mine), "pilot" (autopilot to
+// current target), "engineer" (regen hull/shield + fuel efficiency),
+// "merchant" (better market spreads).
+type CrewRole = "gunner" | "pilot" | "engineer" | "merchant";
+interface CrewMember {
+  role: CrewRole;
+  name: string;
+  species: string;
+  gender: string;
+  enabled: boolean;
+  hiredAt: number;
+  nextBarkAt: number;
+  cooldown?: number;    // gunner auto-fire cadence
+  autopilot?: boolean;  // pilot: toggled by O key
+}
+
 interface PlayerState {
   char: PlayerChar;
   ship: PlayerShip;
@@ -493,14 +509,17 @@ interface PlayerState {
   throttle: number;          // 0..1
   cooldown: number;
   mission?: Mission;
+  missions?: Mission[];      // active quest log (mission + secondaries)
   lastSaveAt: number;
   // New since 0.2: optional hired gunner, faction reputation, lifetime kill count.
-  gunner?: Gunner;
+  gunner?: Gunner;           // legacy — migrated into crew[] on load
+  crew?: CrewMember[];       // multi-role hires
+  driftVel?: Vec3;           // preserved velocity when fuel hits zero
   reputation?: Record<string, number>;
   kills?: number;
 }
 
-type MissionKind = "deliver" | "destroy" | "scan";
+type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul";
 interface Mission {
   id: number;
   kind: MissionKind;
