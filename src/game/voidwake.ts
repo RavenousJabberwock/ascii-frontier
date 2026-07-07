@@ -2781,6 +2781,219 @@ export class Voidwake {
     }
   }
 
+  // --- Pilot autopilot ----------------------------------------------------
+  // Full-auto approach to `this.targetId`. Points the nose at the target,
+  // scales throttle by distance so we decelerate on approach, and auto-docks
+  // stations / holds orbit at planets. Disengages on any manual stick input.
+  private _lastAutopilotTag = 0;
+  driveAutopilot(dt: number, p: PlayerState) {
+    const pilot = getCrew(p, "pilot");
+    if (!pilot || !pilot.autopilot) return;
+    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    if (!t) {
+      pilot.autopilot = false;
+      this.pushLog("Autopilot: no target — disengaged.");
+      return;
+    }
+    const rel = V.sub(t.pos, p.pos);
+    const dist = V.len(rel);
+    // Turn toward target: convert rel to yaw/pitch and slew toward it.
+    const targetYaw = Math.atan2(rel.x, rel.z);
+    const targetPitch = Math.atan2(rel.y, Math.hypot(rel.x, rel.z));
+    // Shortest-arc yaw diff
+    let dy = targetYaw - p.heading.yaw;
+    while (dy > Math.PI) dy -= Math.PI * 2;
+    while (dy < -Math.PI) dy += Math.PI * 2;
+    const dp = targetPitch - p.heading.pitch;
+    const slew = 2.0 * dt;
+    p.heading.yaw += Math.max(-slew, Math.min(slew, dy));
+    p.heading.pitch += Math.max(-slew, Math.min(slew, dp));
+    p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch));
+    // Approach-throttle: full when far, ease down on final approach so we
+    // don't cannonball into the dock.
+    let dockR = 180;
+    if (t.kind === "planet") dockR = 60;   // orbit hold radius
+    if (t.kind === "star") dockR = 120;    // corona scoop distance
+    if (t.kind === "asteroid") dockR = 120;
+    if (dist > dockR * 2) p.throttle = Math.min(1, p.throttle + dt * 0.9);
+    else if (dist > dockR) p.throttle = 0.35;
+    else p.throttle = Math.max(0, p.throttle - dt * 1.6);
+    // If close to a friendly station and stopped, auto-dock.
+    const now = performance.now() / 1000;
+    if (t.kind === "station" && t.faction !== "pirate" && dist < 200 && p.throttle < 0.05) {
+      if (now - this._lastAutopilotTag > 3) {
+        this._lastAutopilotTag = now;
+        this.pushChatter(`Pilot ${pilot.name.split(" ")[0]}`,
+          pickLine("pilot_docking", this.chatterCtx(t, { target: t })), CREW_ROLE_INFO.pilot.color);
+      }
+      pilot.autopilot = false;
+      this.tryDock();
+    }
+  }
+
+  private _disengageAutopilot(_why: "stick") {
+    const p = this.player; if (!p) return;
+    const pilot = getCrew(p, "pilot");
+    if (pilot && pilot.autopilot) {
+      pilot.autopilot = false;
+      this.pushChatter(`Pilot ${pilot.name.split(" ")[0]}`,
+        pickLine("pilot_autopilot_off", this.chatterCtx()), CREW_ROLE_INFO.pilot.color);
+    }
+  }
+
+  // Faction retaliation: when the player damages a ship, nearby ships of the
+  // same faction (within 2500u) flip hostile for 90 seconds. Their AI branches
+  // still see them as their original kind; hostileUntil is checked in tickAI
+  // and the bullet-hit loop.
+  applyFactionRetaliation(victim: Entity) {
+    const p = this.player; if (!p) return;
+    const now = performance.now() / 1000;
+    const RANGE = 2500;
+    const RANGE2 = RANGE * RANGE;
+    for (const e of this.entities) {
+      if (e.id === victim.id) continue;
+      if (e.faction !== victim.faction) continue;
+      if (e.kind !== "friendly" && e.kind !== "neutral" && e.kind !== "hostile") continue;
+      const dx = e.pos.x - victim.pos.x, dy = e.pos.y - victim.pos.y, dz = e.pos.z - victim.pos.z;
+      if (dx * dx + dy * dy + dz * dz > RANGE2) continue;
+      // Already hostile stays hostile. Preserve original kind for revert.
+      if (!e.peaceKind && e.kind !== "hostile") e.peaceKind = e.kind;
+      e.hostileUntil = Math.max(e.hostileUntil ?? 0, now + 90);
+    }
+  }
+
+  // Tick down retaliation timers and revert ships that timed out.
+  tickRetaliation() {
+    const now = performance.now() / 1000;
+    for (const e of this.entities) {
+      if (e.hostileUntil && now > e.hostileUntil) {
+        e.hostileUntil = undefined;
+        if (e.peaceKind && e.peaceKind !== e.kind) {
+          e.kind = e.peaceKind;
+        }
+        e.peaceKind = undefined;
+      }
+    }
+  }
+
+  // Crew banter timer + tick (uses "banter" template kind).
+  private _nextBanterAt = 0;
+  tickCrewBanter(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.5 : 1.0;
+    this._nextBanterAt -= dt;
+    if (this._nextBanterAt > 0) return;
+    this._nextBanterAt = (35 + Math.random() * 30) * mul;
+    // Collect crew names (gunner + crew[])
+    const names: { name: string; color: string }[] = [];
+    if (p.gunner) names.push({ name: p.gunner.name.split(" ")[0], color: "#fc6" });
+    if (p.crew) for (const c of p.crew) names.push({ name: c.name.split(" ")[0], color: CREW_ROLE_INFO[c.role].color });
+    if (names.length < 2) return;
+    // Pick two distinct crew.
+    const a = names[Math.floor(Math.random() * names.length)];
+    let b = a; let guard = 5;
+    while (b === a && guard-- > 0) b = names[Math.floor(Math.random() * names.length)];
+    if (b === a) return;
+    const line = pickLine("banter", this.chatterCtx(undefined, { a: a.name, b: b.name }));
+    // Split at "||" marker if present so the two lines land as two chatter entries.
+    const parts = line.split("||").map((s) => s.trim());
+    if (parts.length >= 2) {
+      this.pushChatter(a.name, parts[0].replace(new RegExp(`^${a.name}:\\s*`), ""), a.color);
+      this.pushChatter(b.name, parts[1].replace(new RegExp(`^${b.name}:\\s*`), ""), b.color);
+    } else {
+      this.pushChatter(a.name, line, a.color);
+    }
+  }
+
+  // Occasional per-crew idle bark (pilot/engineer/merchant). Gated by chatterFreq.
+  private _nextCrewIdleAt = 0;
+  tickCrewIdle(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.4 : 1.0;
+    this._nextCrewIdleAt -= dt;
+    if (this._nextCrewIdleAt > 0) return;
+    this._nextCrewIdleAt = (18 + Math.random() * 20) * mul;
+    const roles: CrewRole[] = [];
+    if (p.crew) for (const c of p.crew) roles.push(c.role);
+    if (roles.length === 0) return;
+    const r = roles[Math.floor(Math.random() * roles.length)];
+    const c = getCrew(p, r);
+    if (!c) return;
+    const kind: ChatterKind = (r + "_idle") as ChatterKind;
+    this.pushChatter(`${CREW_ROLE_INFO[r].title} ${c.name.split(" ")[0]}`,
+      pickLine(kind, this.chatterCtx()), CREW_ROLE_INFO[r].color);
+  }
+
+  // Quest log screen — full-screen popup showing active mission + description
+  // + progress + faction reputation. ESC or U closes it.
+  updateQuestLog() {
+    const kb = this.options.keybinds;
+    if (this.input.consume(kb.questLog)) {
+      this.screen = this._codexReturn;
+      this.menuCursor = 0;
+    }
+  }
+
+  renderQuestLog(g: Cell[][]) {
+    const cols = g[0].length;
+    putText(g, 4, 1, "[ QUEST LOG ]   U or ESC close", "#7CFC00");
+    const p = this.player;
+    if (!p) return;
+    const m = p.mission;
+    if (!m) {
+      putText(g, 4, 4, "No active missions. Dock at a station to pick up work.", "#9fe");
+      void cols;
+      return;
+    }
+    putText(g, 4, 4, `Kind:   ${m.kind.toUpperCase()}`, "#fff");
+    putText(g, 4, 5, `Task:   ${m.description}`, "#cf6");
+    putText(g, 4, 6, `Reward: ${m.reward}cr`, "#ffe066");
+    let prog = "in progress";
+    if (m.done) prog = "READY — dock at any station";
+    else if ((m.kind === "deliver" || m.kind === "haul") && m.cargoItem) {
+      const have = p.cargo[m.cargoItem] ?? 0;
+      prog = `${have}/${m.cargoQty} ${m.cargoItem} in hold`;
+    } else if (m.kind === "escort" && m.targetId != null) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      if (t) {
+        const d = V.len(V.sub(t.pos, p.pos));
+        const held = this._escortStayAt ? Math.floor(performance.now() / 1000 - this._escortStayAt) : 0;
+        prog = d < 500 ? `${held}/60 s in range of ${t.name}` : `out of range (d=${d.toFixed(0)}u)`;
+      }
+    } else if (m.targetId != null) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      if (t) {
+        const d = V.len(V.sub(t.pos, p.pos));
+        prog = `${t.name} at ${d.toFixed(0)}u`;
+      }
+    }
+    putText(g, 4, 7, `Status: ${prog}`, m.done ? "#7CFC00" : "#9fe");
+
+    // Reputation summary.
+    const rep = p.reputation ?? {};
+    putText(g, 4, 10, "Reputation:", "#7CFC00");
+    putText(g, 6, 11, `Federation:  ${repLabel(rep.federation ?? 0).padEnd(10)} (${rep.federation ?? 0})`, "#aef");
+    putText(g, 6, 12, `Guild:       ${repLabel(rep.guild ?? 0).padEnd(10)} (${rep.guild ?? 0})`, "#aef");
+    putText(g, 6, 13, `Pirate:      ${repLabel(rep.pirate ?? 0).padEnd(10)} (${rep.pirate ?? 0})`, "#aef");
+
+    // Crew roster summary.
+    putText(g, 4, 15, "Crew:", "#7CFC00");
+    let cy = 16;
+    if (p.gunner) putText(g, 6, cy++, `Gunner    · ${p.gunner.name}  (${p.gunner.species}, ${p.gunner.gender})  [${p.gunner.enabled ? "AUTO" : "STANDBY"}]`, "#fc6");
+    if (p.crew) for (const c of p.crew) {
+      const info = CREW_ROLE_INFO[c.role];
+      const stateTag = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "READY") : "ACTIVE";
+      putText(g, 6, cy++, `${info.title.padEnd(9)} · ${c.name}  (${c.species}, ${c.gender})  [${stateTag}]`, info.color);
+    }
+    if (crewCount(p) === 0) putText(g, 6, cy, "(no hires yet — recruit at stations)", "#888");
+
+    putText(g, 4, g.length - 2, "U or ESC to close", "#888");
+  }
+
   // Sweep loot canisters near the player and absorb their contents.
   // Pickup radius widens if a "loot-magnet" module is installed.
   pickupLoot() {
