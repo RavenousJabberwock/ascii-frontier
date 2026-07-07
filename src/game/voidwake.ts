@@ -1134,7 +1134,8 @@ type Screen =
   | "quit-confirm"
   | "destroyed"
   | "crashed"
-  | "codex";
+  | "codex"
+  | "quest-log";
 
 
 // =============================================================================
