@@ -3415,13 +3415,26 @@ export class Voidwake {
       ];
     }
     if (this.stationPage === "crew") {
-      const hasGunner = !!p.gunner;
-      return [
-        hasGunner
-          ? `Dismiss ${p.gunner!.name}`
-          : `Recruit gunner — ${stock.gunnerFee}cr`,
-        "Back",
-      ];
+      const cap = effectiveCrewMax(p);
+      const cur = crewCount(p);
+      const header = `Berths ${cur}/${cap}  (Crew Quarters module gives +1)`;
+      const rows: string[] = [`~ ${header} ~`];
+      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
+      for (const r of roles) {
+        const info = CREW_ROLE_INFO[r];
+        const fee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+        if (hasCrew(p, r)) {
+          const c = r === "gunner"
+            ? p.gunner!
+            : getCrew(p, r)!;
+          rows.push(`Dismiss ${info.title} ${c.name}`);
+        } else {
+          const gate = cur >= cap ? "  (berths full)" : "";
+          rows.push(`Hire ${info.title} — ${fee}cr — ${info.blurb}${gate}`);
+        }
+      }
+      rows.push("Back");
+      return rows;
     }
     return ["Back"];
   }
