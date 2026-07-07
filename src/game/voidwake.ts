@@ -2475,6 +2475,9 @@ export class Voidwake {
             : 6;
           if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
           else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
+          // Faction retaliation: player-shot ship pings same-faction ships
+          // within 2500u to become hostile for 90 seconds.
+          if (playerShot && isShip) this.applyFactionRetaliation(t);
           if ((t.hull ?? 0) <= 0) {
             const isPirateBase = isStation && t.faction === "pirate";
             // Only credit the player when they pulled the trigger.
