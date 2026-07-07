@@ -1633,7 +1633,7 @@ export class Voidwake {
   // Build the slot dictionary used by the procedural chatter generator.
   // Pulls live state so generated lines reference the player's actual ship,
   // hull%, current target, sector coords, cargo, etc. — not canned text.
-  chatterCtx(speaker?: Entity, opts?: { target?: Entity | null }): ChatterCtx {
+  chatterCtx(speaker?: Entity, opts?: { target?: Entity | null; a?: string; b?: string }): ChatterCtx {
     const p = this.player!;
     const hullPct   = Math.round(100 * (p.ship.hull / p.ship.hullMax));
     const shieldPct = Math.round(100 * (p.ship.shield / Math.max(1, p.ship.shieldMax)));
