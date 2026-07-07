@@ -1672,6 +1672,8 @@ export class Voidwake {
       ore: String(p.cargo.ore ?? 0),
       fac: speaker?.faction ?? "Federation",
       dist: target ? String(Math.round(V.len(V.sub(target.pos, p.pos)))) : "?",
+      a: opts?.a ?? "Crew",
+      b: opts?.b ?? "Crew",
     };
   }
 
