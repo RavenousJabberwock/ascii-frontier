@@ -3898,6 +3898,7 @@ export class Voidwake {
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
       `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
+      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Reset Keybinds`,
       "Back",
     ];
