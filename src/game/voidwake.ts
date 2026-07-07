@@ -2344,6 +2344,28 @@ export class Voidwake {
         ? p.ship.speed * p.throttle * (keys.has(k.boost) ? 1.6 : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
         : V.len(p.driftVel ?? { x: 0, y: 0, z: 0 });
       for (const e of this.entities) {
+        // Also collide vs NPC ships (any faction). Ramming a ship costs both
+        // parties hull; player retaliation applies to same-faction bystanders.
+        const isNpcShip = e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral";
+        if (isNpcShip) {
+          const d2 = V.len(V.sub(e.pos, p.pos));
+          if (d2 < 10 && (e.hull ?? 0) > 0) {
+            const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d2));
+            p.pos = V.add(e.pos, V.scale(n, 10.5));
+            const speedFactor = Math.min(1, currentSpeed / 100);
+            const dmg = Math.min(40, 6 + speedFactor * 40) * this.dmgScale() * dt * 4;
+            if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
+            else p.ship.hull = Math.max(0, p.ship.hull - dmg);
+            // Damage the other ship too, and trigger retaliation.
+            e.hull = Math.max(0, (e.hull ?? 0) - dmg * 0.7);
+            this.applyFactionRetaliation(e);
+            if (p.driftVel) p.driftVel = V.scale(p.driftVel, 0.35);
+            p.throttle = Math.min(p.throttle, 0.2);
+            this.beep(200, 0.06, "sawtooth");
+            if (p.ship.hull <= 0) { this.die(`Rammed ${e.name}`, e.name); return; }
+          }
+          continue;
+        }
         if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
         const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
