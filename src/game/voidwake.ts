@@ -3202,9 +3202,12 @@ export class Voidwake {
   // planets. Cheap timer-gated work, mostly atmospheric.
   tickAmbientChatter(dt: number) {
     const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.4 : 1.0;
     this._nextAmbientChatterAt -= dt;
     if (this._nextAmbientChatterAt > 0) return;
-    this._nextAmbientChatterAt = 8 + Math.random() * 10;
+    this._nextAmbientChatterAt = (8 + Math.random() * 10) * mul;
     // Find a candidate within 1500u, prefer interesting kinds.
     const near = this.entities
       .filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
