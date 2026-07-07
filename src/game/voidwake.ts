@@ -4777,6 +4777,21 @@ export class Voidwake {
       putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + 1, msg, "#bff7ff", vpRight);
     }
 
+    // Autopilot banner — large, near center, so mouse-steer players see clearly
+    // that steering is hands-off and how to reclaim manual control. Mouse steer
+    // is intentionally suppressed while autopilot is engaged (see driveAutopilot
+    // gate above) so cursor motion does NOT disengage it — the pilot key does.
+    if (pilotCrew && pilotCrew.autopilot) {
+      const blink = Math.floor(performance.now() / 500) % 2 === 0;
+      const col = blink ? "#8cf" : "#4a8fd6";
+      const okey = (this.options.keybinds.autopilot || "o").toUpperCase();
+      const l1 = "» » »  AUTOPILOT ENGAGED  « « «";
+      const l2 = `Press ${okey} to disengage`;
+      const cy = vpTop + Math.floor(vh / 2) - 3;
+      putText(g, vpLeft + Math.floor(vw / 2 - l1.length / 2), cy,     l1, col, vpRight);
+      putText(g, vpLeft + Math.floor(vw / 2 - l2.length / 2), cy + 1, l2, "#bcd", vpRight);
+    }
+
     // Cockpit damage state: when hull < 25%, etch crack patterns along the
     // viewport edges and flash a warning. Pure decoration tied to ship health.
     const hullFrac = p.ship.hull / Math.max(1, p.ship.hullMax);
