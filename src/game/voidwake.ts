@@ -3160,6 +3160,7 @@ export class Voidwake {
       case "destroyed": this.renderDestroyed(grid); break;
       case "crashed": this.renderCrashed(grid); break;
       case "codex": this.renderCodex(grid); break;
+      case "quest-log": this.renderQuestLog(grid); break;
     }
 
 
