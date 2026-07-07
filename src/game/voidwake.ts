@@ -826,6 +826,26 @@ const V = {
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
 
+  // Faction retaliation: retaliating ships attack the player like hostiles.
+  const now = performance.now() / 1000;
+  const retaliating = e.hostileUntil != null && now < e.hostileUntil;
+  if (retaliating && (e.kind === "friendly" || e.kind === "neutral")) {
+    const dir = V.sub(player.pos, e.pos);
+    const dist = V.len(dir);
+    if (dist < 1200) {
+      const n = V.norm(dir);
+      e.vel = V.scale(n, 32);
+      e.state = "retaliate";
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      if (dist < 420 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 1.0;
+        ents.push(makeBullet(e, n));
+      }
+      return;
+    }
+  }
+
+
   // Pirate bases: turrets fire at any non-pirate in range, including player.
   if (e.kind === "station") {
     if (e.faction !== "pirate") return;
