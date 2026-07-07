@@ -81,7 +81,14 @@ type ChatterKind =
   | "hostile" | "friendly" | "neutral" | "station" | "planet"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
-  | "gunner_kill" | "gunner_docked" | "gunner_cargofull";
+  | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
+  | "pilot_idle" | "pilot_greet" | "pilot_autopilot_on" | "pilot_autopilot_off"
+  | "pilot_docking" | "pilot_farewell_good" | "pilot_farewell_bad"
+  | "engineer_idle" | "engineer_greet" | "engineer_repair" | "engineer_shields"
+  | "engineer_fuel" | "engineer_farewell_good" | "engineer_farewell_bad"
+  | "merchant_idle" | "merchant_greet" | "merchant_deal" | "merchant_broke"
+  | "merchant_farewell_good" | "merchant_farewell_bad"
+  | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
 const FRAGMENTS: Record<string, string[]> = {
