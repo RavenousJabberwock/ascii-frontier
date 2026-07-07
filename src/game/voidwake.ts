@@ -4663,6 +4663,10 @@ export class Voidwake {
       ["M", "mine target"],
       ["F", "dock / station"],
       ["J", "jettison cargo"],
+      ["O", "autopilot (Pilot)"],
+      ["U", "quest log"],
+      ["L", "codex"],
+      ["K", "pin tracker"],
       ["P", "pause"],
       ["ESC", "menu"],
     ];
