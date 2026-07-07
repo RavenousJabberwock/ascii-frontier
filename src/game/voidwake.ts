@@ -81,7 +81,14 @@ type ChatterKind =
   | "hostile" | "friendly" | "neutral" | "station" | "planet"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
-  | "gunner_kill" | "gunner_docked" | "gunner_cargofull";
+  | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
+  | "pilot_idle" | "pilot_greet" | "pilot_autopilot_on" | "pilot_autopilot_off"
+  | "pilot_docking" | "pilot_farewell_good" | "pilot_farewell_bad"
+  | "engineer_idle" | "engineer_greet" | "engineer_repair" | "engineer_shields"
+  | "engineer_fuel" | "engineer_farewell_good" | "engineer_farewell_bad"
+  | "merchant_idle" | "merchant_greet" | "merchant_deal" | "merchant_broke"
+  | "merchant_farewell_good" | "merchant_farewell_bad"
+  | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
 const FRAGMENTS: Record<string, string[]> = {
@@ -224,6 +231,135 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cargo at max. Time to offload.",
     "No room for more rock. Dock somewhere?",
   ],
+  pilot_idle: [
+    "Steady vector, Cmdr. {weather}.",
+    "Nice ride, this {ship}. Handles better than my last posting.",
+    "{smalltalk}.",
+    "If you want me to take the stick, tag a target and hit O.",
+    "Sector {sector} logged. Clean drift.",
+    "Fuel at {fuel}%. Want me to plot a scoop pass?",
+  ],
+  pilot_greet: [
+    "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
+    "Nav chair's warm — glad to ride the {ship}. O toggles autopilot.",
+    "Flown three of these before. Docking's the easy part.",
+    "Cmdr — I don't crash. Everything else is negotiable.",
+  ],
+  pilot_autopilot_on: [
+    "I've got the stick. Plotting to {target}.",
+    "Course locked on {target} — ETA short.",
+    "Hands off, Cmdr. Bringing us in on {target}.",
+    "Autopilot engaged. Try not to sneeze on the fire button.",
+  ],
+  pilot_autopilot_off: [
+    "Stick's yours, Cmdr.",
+    "Disengaging — you fly better than the manual says anyway.",
+    "Handing back. Watch the pitch.",
+    "Autopilot off. Yell if it gets weird.",
+  ],
+  pilot_docking: [
+    "Matching velocity with {target}. Hold on.",
+    "Bringing us to a stop at {target} — perfect approach.",
+    "Docking pattern locked, {target} beacon has us.",
+  ],
+  pilot_farewell_good: [
+    "Best captain I've flown for. Safe vectors, {cmdr}.",
+    "Cmdr — thanks. I'll spread the word in {sector}.",
+    "Fly the {ship} true. She likes you.",
+  ],
+  pilot_farewell_bad: [
+    "You steer like a drunk asteroid. Out.",
+    "Rather push a barge dirtside than fly for you again.",
+    "Cmdr, you owe me a bar tab and a therapist.",
+  ],
+  engineer_idle: [
+    "Hull's holding. Coupler harmonics look clean.",
+    "{smalltalk}.",
+    "Shield emitter running a hair warm — nothing critical.",
+    "Fuel flow's efficient today. {praise}, Cmdr.",
+    "I could rebuild this reactor blind. Don't test me.",
+    "Reading a soft hum on the port thruster. I'll watch it.",
+  ],
+  engineer_greet: [
+    "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
+    "Cmdr — took a look at your reactor. It'll last. Barely.",
+    "Kit's stowed, tools are hot. Let's not blow up.",
+    "I've patched worse hulls with duct tape and prayer.",
+  ],
+  engineer_repair: [
+    "Patching hull — give me a moment.",
+    "Weld's holding. Hull back to {hull}%.",
+    "Shaved off the worst of the scarring. You're welcome.",
+    "Repair pass done. Try not to undo it, Cmdr.",
+  ],
+  engineer_shields: [
+    "Shields cycling — capacitors happy.",
+    "Boosted the recharge loop. Should feel snappier.",
+    "Shield harmonics locked. That's my magic done.",
+  ],
+  engineer_fuel: [
+    "Trimmed the burn — you're getting more meters per unit now.",
+    "Reactor's sipping instead of guzzling. You're welcome.",
+    "Fuel efficiency's up. Buy me a drink at the next dock.",
+  ],
+  engineer_farewell_good: [
+    "Good ship, good captain. I'll miss the {ship}.",
+    "Cmdr — she's tuned. Don't let the next hack ruin her.",
+    "Safe vectors. Call if the reactor sings weird.",
+  ],
+  engineer_farewell_bad: [
+    "You broke everything I fixed. Twice. I'm out.",
+    "Never seen a hull this abused. Good luck, Cmdr.",
+    "Rather patch a Guild scow than another minute on this bucket.",
+  ],
+  merchant_idle: [
+    "Ore prices in {sector} are moving. Could be a play.",
+    "You've got {credits} credits burning a hole, Cmdr.",
+    "{smalltalk}.",
+    "I hear a refinery near {planet} pays 20% over spot.",
+    "Cargo at {cargo}%. When we dock, let me talk to the buyer.",
+    "Bounty board's fat this cycle. Just saying.",
+  ],
+  merchant_greet: [
+    "Merchant aboard, Cmdr. I'll shave 15% off the buy sheet and pad the sell.",
+    "Cmdr {cmdr} — pleasure. My cousin runs the market in {sector}. Handy.",
+    "Give me a cargo hold and a station, I'll give you profit.",
+    "I read a rumor mill better than most read a manifest.",
+  ],
+  merchant_deal: [
+    "Talked them up 15% on the ore — nice haul, Cmdr.",
+    "Got you a discount on that refit. Don't say I never earn my keep.",
+    "Buyer flinched. We won. {credits}cr looking healthier already.",
+  ],
+  merchant_broke: [
+    "Cmdr, we're broke. Rocks won't sell themselves.",
+    "Empty hold, empty pockets. Let's fix one of those.",
+    "I can't haggle nothing into something. Get us cargo.",
+  ],
+  merchant_farewell_good: [
+    "Made you money, made myself money. Textbook tour.",
+    "Cmdr — I'll invest my cut. Come find me flush in {sector}.",
+    "Solid captain, solid ledger. Fly true.",
+  ],
+  merchant_farewell_bad: [
+    "You wouldn't take a deal if it kissed you. I'm gone.",
+    "Cmdr, next captain, listen to your merchant.",
+    "Rather sell rocks door-to-door than watch you refuse a margin.",
+  ],
+  banter: [
+    "{a}: {b}, you ever going to fix that coupler?  ||  {b}: I fixed yours, {a}. Try locking the door.",
+    "{a}: If we get boarded, {b} goes first.  ||  {b}: I go first because I'm faster, not braver.",
+    "{a}: {coffee} again for dinner?  ||  {b}: Cmdr picked the ration crate. Blame the top of the food chain.",
+    "{a}: I miss {miss}.  ||  {b}: I miss silence. Please.",
+    "{a}: How long you been aboard, {b}?  ||  {b}: Long enough to know when to duck.",
+    "{a}: Bet you five creds we hit rocks before we hit a station.  ||  {b}: Cmdr can hear us, you know.",
+    "{a}: Last ship I flew, the {threat} were nicer than you.  ||  {b}: Last ship you flew is scrap. Coincidence?",
+    "{a}: Cmdr's aim is getting better.  ||  {b}: Or {a} is getting quieter about the misses.",
+    "{a}: If I fix one more coupler I'm putting my name on the hull.  ||  {b}: Please don't.",
+    "{a}: Weather's {weather}.  ||  {b}: Weather is always {weather}. That's space.",
+    "{a}: {praise}, Cmdr.  ||  {b}: Don't inflate the ego. He'll try to dock at a star.",
+    "{a}: Any word on {rumor}?  ||  {b}: Yeah, and it gets worse the closer you look.",
+  ],
 };
 
 interface ChatterCtx {
@@ -231,6 +367,7 @@ interface ChatterCtx {
   hull: string; shield: string; fuel: string; cargo: string;
   credits: string; kills: string; target: string; nearest: string;
   sector: string; ore: string; fac: string; dist: string;
+  a: string; b: string;
 }
 
 function fillTemplate(tpl: string, ctx: ChatterCtx, depth = 0): string {
@@ -252,10 +389,10 @@ const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
 // Ship hull catalog. Add entries to expose new hulls to character creation.
 const SHIP_HULLS = [
-  { id: "scout", name: "Sparrow Scout", hull: 60, shield: 40, cargo: 12, speed: 90 },
-  { id: "trader", name: "Mule Freighter", hull: 110, shield: 60, cargo: 64, speed: 55 },
-  { id: "fighter", name: "Wasp Interceptor", hull: 80, shield: 90, cargo: 8, speed: 110 },
-  { id: "miner", name: "Pickaxe Industrial", hull: 130, shield: 50, cargo: 40, speed: 50 },
+  { id: "scout", name: "Sparrow Scout", hull: 60, shield: 40, cargo: 12, speed: 90, crewSlots: 1 },
+  { id: "trader", name: "Mule Freighter", hull: 110, shield: 60, cargo: 64, speed: 55, crewSlots: 4 },
+  { id: "fighter", name: "Wasp Interceptor", hull: 80, shield: 90, cargo: 8, speed: 110, crewSlots: 2 },
+  { id: "miner", name: "Pickaxe Industrial", hull: 130, shield: 50, cargo: 40, speed: 50, crewSlots: 3 },
 ];
 
 const WEAPONS = [
@@ -307,6 +444,12 @@ interface Entity {
   loot?: { credits?: number; ore?: number };
   // Cosmetic: which palette slot ship variants use for chatter line tagging.
   lastChatterAt?: number;
+  // Faction retaliation: when set, this ship is temporarily hostile to the
+  // player until performance.now()/1000 exceeds this value. Cleared by AI.
+  hostileUntil?: number;
+  // Preserved kind so retaliation can revert this ship to friendly/neutral
+  // once the timer expires.
+  peaceKind?: EntityKind;
 }
 
 interface PlayerChar {
@@ -344,6 +487,22 @@ interface Gunner {
   nextBarkAt: number;         // throttle idle barks
 }
 
+// Multi-role crew. Roles: "gunner" (auto-fire/mine), "pilot" (autopilot to
+// current target), "engineer" (regen hull/shield + fuel efficiency),
+// "merchant" (better market spreads).
+type CrewRole = "gunner" | "pilot" | "engineer" | "merchant";
+interface CrewMember {
+  role: CrewRole;
+  name: string;
+  species: string;
+  gender: string;
+  enabled: boolean;
+  hiredAt: number;
+  nextBarkAt: number;
+  cooldown?: number;    // gunner auto-fire cadence
+  autopilot?: boolean;  // pilot: toggled by O key
+}
+
 interface PlayerState {
   char: PlayerChar;
   ship: PlayerShip;
@@ -356,14 +515,17 @@ interface PlayerState {
   throttle: number;          // 0..1
   cooldown: number;
   mission?: Mission;
+  missions?: Mission[];      // active quest log (mission + secondaries)
   lastSaveAt: number;
   // New since 0.2: optional hired gunner, faction reputation, lifetime kill count.
-  gunner?: Gunner;
+  gunner?: Gunner;           // legacy — migrated into crew[] on load
+  crew?: CrewMember[];       // multi-role hires
+  driftVel?: Vec3;           // preserved velocity when fuel hits zero
   reputation?: Record<string, number>;
   kills?: number;
 }
 
-type MissionKind = "deliver" | "destroy" | "scan";
+type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul";
 interface Mission {
   id: number;
   kind: MissionKind;
@@ -410,6 +572,7 @@ interface Options {
   volumeMusic: number;
   unsavedWarnMinutes: number;
   permadeath: boolean;       // when on, "Load Last Save" is disabled on death
+  chatterFreq: "off" | "rare" | "normal" | "lively";
   keybinds: Record<string, string>;
 }
 
@@ -468,6 +631,8 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   pinQuest: "k",         // toggle the persistent quest tracker panel
   cycleCatPrev: "[",     // target nearest of previous category (station/rock/hostile/...)
   cycleCatNext: "]",     // target nearest of next category
+  autopilot: "o",        // toggle hired Pilot's autopilot to current target
+  questLog: "u",         // open the toggle-able Quest Log popup
 };
 
 
@@ -486,6 +651,7 @@ function defaultOptions(): Options {
     volumeMusic: 0.6,
     unsavedWarnMinutes: 10,
     permadeath: false,
+    chatterFreq: "normal",
 
     keybinds: { ...DEFAULT_KEYBINDS },
   };
@@ -659,6 +825,26 @@ const V = {
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
+
+  // Faction retaliation: retaliating ships attack the player like hostiles.
+  const now = performance.now() / 1000;
+  const retaliating = e.hostileUntil != null && now < e.hostileUntil;
+  if (retaliating && (e.kind === "friendly" || e.kind === "neutral")) {
+    const dir = V.sub(player.pos, e.pos);
+    const dist = V.len(dir);
+    if (dist < 1200) {
+      const n = V.norm(dir);
+      e.vel = V.scale(n, 32);
+      e.state = "retaliate";
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      if (dist < 420 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 1.0;
+        ents.push(makeBullet(e, n));
+      }
+      return;
+    }
+  }
+
 
   // Pirate bases: turrets fire at any non-pirate in range, including player.
   if (e.kind === "station") {
@@ -878,6 +1064,7 @@ const MODULE_CATALOG = [
   { id: "afterburner-od",  name: "Afterburner OD",  price: 650,  desc: "boost +20% (cheap)" },
   { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
   { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
+  { id: "crew-quarters",   name: "Crew Quarters",   price: 1400, desc: "+1 crew slot" },
 ];
 
 function generateStationStock(stationId: number): StationStock {
@@ -909,6 +1096,57 @@ function effectiveCargoMax(p: PlayerState): number {
   const base = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.cargo ?? p.ship.cargoMax;
   const expanders = p.ship.modules.filter((m) => m === "cargo-expander").length;
   return base + expanders * 12;
+}
+
+// Effective crew capacity after hull base + Crew Quarters modules.
+function effectiveCrewMax(p: PlayerState): number {
+  const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId);
+  const base = hull?.crewSlots ?? 1;
+  const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
+  return base + quarters;
+}
+
+// Merchant on-crew? Sell/buy price multipliers applied at station markets.
+function merchantSellMult(p: PlayerState): number {
+  return hasCrew(p, "merchant") ? 1.15 : 1.0;
+}
+function merchantBuyMult(p: PlayerState): number {
+  return hasCrew(p, "merchant") ? 0.90 : 1.0;
+}
+function hasCrew(p: PlayerState, role: CrewRole): boolean {
+  if (role === "gunner") return !!p.gunner;
+  return !!(p.crew && p.crew.some((c) => c.role === role));
+}
+function getCrew(p: PlayerState, role: CrewRole): CrewMember | undefined {
+  return p.crew?.find((c) => c.role === role);
+}
+function crewCount(p: PlayerState): number {
+  return (p.gunner ? 1 : 0) + (p.crew ? p.crew.length : 0);
+}
+
+// Crew hiring fee per role.
+const CREW_ROLE_INFO: Record<CrewRole, { title: string; baseFee: number; blurb: string; color: string }> = {
+  gunner:   { title: "Gunner",   baseFee: 300, blurb: "auto-fires on hostiles, auto-mines rocks", color: "#fc6" },
+  pilot:    { title: "Pilot",    baseFee: 450, blurb: "autopilot to current target (O)",         color: "#8cf" },
+  engineer: { title: "Engineer", baseFee: 500, blurb: "hull regen, faster shield, -20% fuel",     color: "#7CFC00" },
+  merchant: { title: "Merchant", baseFee: 400, blurb: "+15% ore sell, -10% station buy prices",    color: "#ffe066" },
+};
+
+function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
+  const first = GUNNER_FIRST[Math.floor(rng() * GUNNER_FIRST.length)];
+  const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
+  const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
+  const species = SPECIES[Math.floor(rng() * SPECIES.length)];
+  return {
+    role,
+    name: `${first} ${last}`,
+    species, gender,
+    enabled: true,
+    hiredAt: Date.now(),
+    nextBarkAt: 0,
+    cooldown: 0,
+    autopilot: false,
+  };
 }
 
 
@@ -968,7 +1206,8 @@ type Screen =
   | "quit-confirm"
   | "destroyed"
   | "crashed"
-  | "codex";
+  | "codex"
+  | "quest-log";
 
 
 // =============================================================================
@@ -1496,7 +1735,7 @@ export class Voidwake {
   // Build the slot dictionary used by the procedural chatter generator.
   // Pulls live state so generated lines reference the player's actual ship,
   // hull%, current target, sector coords, cargo, etc. — not canned text.
-  chatterCtx(speaker?: Entity, opts?: { target?: Entity | null }): ChatterCtx {
+  chatterCtx(speaker?: Entity, opts?: { target?: Entity | null; a?: string; b?: string }): ChatterCtx {
     const p = this.player!;
     const hullPct   = Math.round(100 * (p.ship.hull / p.ship.hullMax));
     const shieldPct = Math.round(100 * (p.ship.shield / Math.max(1, p.ship.shieldMax)));
@@ -1535,6 +1774,8 @@ export class Voidwake {
       ore: String(p.cargo.ore ?? 0),
       fac: speaker?.faction ?? "Federation",
       dist: target ? String(Math.round(V.len(V.sub(target.pos, p.pos)))) : "?",
+      a: opts?.a ?? "Crew",
+      b: opts?.b ?? "Crew",
     };
   }
 
@@ -1615,6 +1856,9 @@ export class Voidwake {
       } else if (this.screen === "codex") {
         this.screen = this._codexReturn;
         this.menuCursor = 0;
+      } else if (this.screen === "quest-log") {
+        this.screen = this._codexReturn;
+        this.menuCursor = 0;
       }
     }
 
@@ -1632,6 +1876,7 @@ export class Voidwake {
       case "destroyed": this.updateDestroyed(); break;
       case "crashed": this.updateCrashed(); break;
       case "codex": this.updateCodex(); break;
+      case "quest-log": this.updateQuestLog(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
   }
@@ -1879,16 +2124,25 @@ export class Voidwake {
     }
     if (this.paused) return;
 
-    // Throttle / steering
-    if (keys.has(k.throttleUp)) p.throttle = Math.min(1, p.throttle + dt * 0.7);
-    if (keys.has(k.throttleDown)) p.throttle = Math.max(0, p.throttle - dt * 0.7);
-    if (keys.has(k.yawLeft)) p.heading.yaw -= dt * 1.2;
-    if (keys.has(k.yawRight)) p.heading.yaw += dt * 1.2;
-    if (keys.has(k.pitchUp)) p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0);
-    if (keys.has(k.pitchDown)) p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0);
+    // Autopilot (Pilot crew, toggled by O): full auto — approach current
+    // target, match velocity, and auto-dock stations / hold orbit at planets.
+    // Steers by directly writing to yaw/pitch/throttle so the same movement
+    // pipeline below applies (no separate physics).
+    const pilotCrew = getCrew(p, "pilot");
+    const autopilotOn = !!(pilotCrew && pilotCrew.autopilot);
+    if (autopilotOn) this.driveAutopilot(dt, p);
+
+    // Throttle / steering (manual). Autopilot has already written to these
+    // this frame; user keys still override — press anything to take back the stick.
+    if (keys.has(k.throttleUp)) { p.throttle = Math.min(1, p.throttle + dt * 0.7); this._disengageAutopilot("stick"); }
+    if (keys.has(k.throttleDown)) { p.throttle = Math.max(0, p.throttle - dt * 0.7); this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawLeft)) { p.heading.yaw -= dt * 1.2; this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawRight)) { p.heading.yaw += dt * 1.2; this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchUp)) { p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchDown)) { p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
     // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
-    if (this.options.mouseSteer && this.input.mouseInside) {
+    if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn) {
       const sens = this.options.mouseSensitivity;
       const dz = 0.08;
       const mx = this.input.mouseNX;
@@ -1905,20 +2159,40 @@ export class Voidwake {
     // but locks weapons (no fire while super-cruising) so it stays a travel tool.
     const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
     const boostMul = (boosting ? 1.6 : 1.0) * (supercruise ? 3.0 : 1.0);
-    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0);
+    // Engineer perk: -20% fuel burn.
+    const engineerMul = hasCrew(p, "engineer") ? 0.80 : 1.0;
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul;
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
-    const fuelFactor = p.ship.fuel > 0 ? 1.0 : 0.15;
-    const sp = p.ship.speed * p.throttle * boostMul * fuelFactor;
-    p.pos = V.add(p.pos, V.scale(fwd, sp * dt));
+
     if (p.ship.fuel > 0) {
+      // Powered flight: normal thrust. Cache the current velocity so if we
+      // stall out mid-frame we keep drifting instead of snapping to zero.
+      const sp = p.ship.speed * p.throttle * boostMul;
+      const thrustV = V.scale(fwd, sp);
+      p.pos = V.add(p.pos, V.scale(thrustV, dt));
+      p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
       p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
-      if (p.ship.fuel === 0) this.pushLog("⚠ FUEL EXHAUSTED — drift only. Dock to refuel.");
+      if (p.ship.fuel === 0) {
+        this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
+        this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
+      }
+    } else {
+      // Zero fuel: keep last drift velocity. Steering and throttle inputs
+      // don't change trajectory — you're a bullet with your name on it.
+      const dv = p.driftVel ?? { x: 0, y: 0, z: 0 };
+      p.pos = V.add(p.pos, V.scale(dv, dt));
     }
 
     // Shield regen (suppressed while inside a nebula — applied below).
-    p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * 4);
+    // Engineer perk: +75% shield recharge rate.
+    const shieldRegen = hasCrew(p, "engineer") ? 7.0 : 4.0;
+    p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * shieldRegen);
+    // Engineer perk: slow hull regen while throttle is light and not on fire.
+    if (hasCrew(p, "engineer") && p.throttle < 0.35 && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
+      p.ship.hull = Math.min(p.ship.hullMax, p.ship.hull + dt * 0.6);
+    }
 
     // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
     let insideNebula = false;
@@ -2015,11 +2289,30 @@ export class Voidwake {
       const tag = `Gunner ${p.gunner.name.split(" ")[0]}`;
       this.pushChatter(tag, p.gunner.enabled ? "Standing by, weapons hot." : "Standing down.", "#fc6");
     }
-    void k.mission;
+    // Toggle Pilot autopilot to current target (O key).
+    if (this.input.consume(k.autopilot)) {
+      const pilot = getCrew(p, "pilot");
+      if (!pilot) this.pushLog("No pilot hired.");
+      else if (this.targetId == null) this.pushLog("Autopilot needs a target — press T first.");
+      else {
+        pilot.autopilot = !pilot.autopilot;
+        const t = this.entities.find((e) => e.id === this.targetId);
+        this.pushChatter(`Pilot ${pilot.name.split(" ")[0]}`,
+          pickLine(pilot.autopilot ? "pilot_autopilot_on" : "pilot_autopilot_off",
+            this.chatterCtx(undefined, { target: t })), CREW_ROLE_INFO.pilot.color);
+      }
+    }
     // Open the Codex/Legend overlay from flight.
     if (this.input.consume(k.legend)) {
       this._codexReturn = "playing";
       this.screen = "codex";
+      this.menuCursor = 0;
+      return;
+    }
+    // Toggle the Quest Log popup from flight.
+    if (this.input.consume(k.questLog)) {
+      this._codexReturn = "playing";
+      this.screen = "quest-log";
       this.menuCursor = 0;
       return;
     }
@@ -2033,6 +2326,9 @@ export class Voidwake {
     this.updateGunner(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    this.tickCrewIdle(dt);
+    this.tickCrewBanter(dt);
+    this.tickRetaliation();
     this.tickRespawns(dt);
 
     // Autosave on a timer (rotates into the dedicated "autosave" slot).
@@ -2058,14 +2354,42 @@ export class Voidwake {
     }
 
     // Collision damage vs large bodies (planets / stars / stations / rocks).
-    // Stations dock instead of colliding at the dock-range we use elsewhere.
+    // Speed-scaled but forgiving: chip shields at low speeds, big hits at
+    // ramming speed. Stars remain instant death. Stations still dock instead
+    // of colliding at the dock-range we use elsewhere.
     if (!this.options.cheat) {
+      // Approximate current absolute speed (u/s). Uses drift velocity when
+      // fuel is out, otherwise the powered-thrust estimate.
+      const currentSpeed = p.ship.fuel > 0
+        ? p.ship.speed * p.throttle * (keys.has(k.boost) ? 1.6 : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
+        : V.len(p.driftVel ?? { x: 0, y: 0, z: 0 });
       for (const e of this.entities) {
+        // Also collide vs NPC ships (any faction). Ramming a ship costs both
+        // parties hull; player retaliation applies to same-faction bystanders.
+        const isNpcShip = e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral";
+        if (isNpcShip) {
+          const d2 = V.len(V.sub(e.pos, p.pos));
+          if (d2 < 10 && (e.hull ?? 0) > 0) {
+            const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d2));
+            p.pos = V.add(e.pos, V.scale(n, 10.5));
+            const speedFactor = Math.min(1, currentSpeed / 100);
+            const dmg = Math.min(40, 6 + speedFactor * 40) * this.dmgScale() * dt * 4;
+            if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
+            else p.ship.hull = Math.max(0, p.ship.hull - dmg);
+            // Damage the other ship too, and trigger retaliation.
+            e.hull = Math.max(0, (e.hull ?? 0) - dmg * 0.7);
+            this.applyFactionRetaliation(e);
+            if (p.driftVel) p.driftVel = V.scale(p.driftVel, 0.35);
+            p.throttle = Math.min(p.throttle, 0.2);
+            this.beep(200, 0.06, "sawtooth");
+            if (p.ship.hull <= 0) { this.die(`Rammed ${e.name}`, e.name); return; }
+          }
+          continue;
+        }
         if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
         const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
         // Star fuel scoop: a "corona" ring just outside the kill radius.
-        // Drift through at low throttle to refuel for free; shields tick down.
         if (e.kind === "star" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
           p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 18);
           if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 5);
@@ -2077,16 +2401,35 @@ export class Voidwake {
         if (d < radius) {
           const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
+          if (e.kind === "star") {
+            // Instant kill on star contact — no forgiveness.
+            this.die(`Incinerated by star ${e.name}`, e.name);
+            return;
+          }
           if (e.kind === "station") {
+            // Speed-scaled but forgiving bump.
+            const bump = Math.min(20, Math.max(1, currentSpeed * 0.05)) * this.dmgScale() * dt * 4;
+            if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - bump);
+            else p.ship.hull = Math.max(0, p.ship.hull - bump);
             p.throttle = Math.min(p.throttle, 0.1);
+            // Kill drift velocity on station bump.
+            p.driftVel = { x: 0, y: 0, z: 0 };
             this.pushLog(`Bumped ${e.name} — press F to dock.`);
             this.beep(220, 0.06, "square");
             continue;
           }
-          const dmg = (e.kind === "star" ? 120 : 25) * this.dmgScale() * dt * 4;
+          // Planet / asteroid ram: scale damage with speed, cap it so a
+          // single hit is survivable. Killing throttle prevents infinite churn.
+          const speedFactor = Math.min(1, currentSpeed / 100);   // 0..1
+          const base = e.kind === "planet" ? 22 : 10;
+          const cap = e.kind === "planet" ? 55 : 30;
+          const dmg = Math.min(cap, base + speedFactor * cap) * this.dmgScale() * dt * 4;
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
           this.beep(180, 0.05, "triangle");
+          // Bleed off velocity so the ship "grinds" instead of tunneling.
+          if (p.driftVel) p.driftVel = V.scale(p.driftVel, 0.35);
+          p.throttle = Math.min(p.throttle, 0.2);
           if (p.ship.hull <= 0) {
             this.die(`Collision with ${e.kind} ${e.name}`, e.name);
             return;
@@ -2094,6 +2437,7 @@ export class Voidwake {
         }
       }
     }
+
 
 
     // Move entities
@@ -2151,6 +2495,9 @@ export class Voidwake {
             : 6;
           if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
           else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
+          // Faction retaliation: player-shot ship pings same-faction ships
+          // within 2500u to become hostile for 90 seconds.
+          if (playerShot && isShip) this.applyFactionRetaliation(t);
           if ((t.hull ?? 0) <= 0) {
             const isPirateBase = isStation && t.faction === "pirate";
             // Only credit the player when they pulled the trigger.
@@ -2352,17 +2699,37 @@ export class Voidwake {
   }
 
   // --- Missions ------------------------------------------------------------
+  // Seven kinds, chosen weighted-random each hand-in. Each kind pulls a live
+  // entity as its objective where possible so the tracker + world marker have
+  // something real to point at.
   generateMission(): Mission {
     const rng = this.rng;
-    const kinds: MissionKind[] = ["deliver", "destroy", "scan"];
-    const k = kinds[Math.floor(rng() * kinds.length)];
+    const roll = rng();
+    const kinds: MissionKind[] =
+      roll < 0.20 ? ["deliver"] :
+      roll < 0.35 ? ["haul"] :
+      roll < 0.50 ? ["destroy"] :
+      roll < 0.63 ? ["bounty"] :
+      roll < 0.76 ? ["scan"] :
+      roll < 0.88 ? ["escort"] :
+      ["rescue"];
+    const k = kinds[0];
     const id = nextId();
     if (k === "destroy") {
-      const target = this.entities.find((e) => e.kind === "hostile");
+      const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
       return {
         id, kind: k, targetId: target?.id,
         description: `Destroy hostile ${target?.name ?? "raider"}`,
         reward: 250, done: false,
+      };
+    }
+    if (k === "bounty") {
+      // A named high-value pirate — pick one and mark it. Bigger reward.
+      const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
+      return {
+        id, kind: k, targetId: target?.id,
+        description: `Bounty: eliminate ${target?.name ?? "raider"} (bounty board)`,
+        reward: 600, done: false,
       };
     }
     if (k === "scan") {
@@ -2373,12 +2740,38 @@ export class Voidwake {
         reward: 150, done: false,
       };
     }
+    if (k === "escort") {
+      const target = this.entities.find((e) => e.kind === "friendly");
+      return {
+        id, kind: k, targetId: target?.id,
+        description: `Escort ${target?.name ?? "convoy"} — stay within 500u for 60s`,
+        reward: 300, done: false,
+      };
+    }
+    if (k === "rescue") {
+      const target = this.entities.find((e) => e.kind === "beacon");
+      return {
+        id, kind: k, targetId: target?.id,
+        description: `Rescue signal near ${target?.name ?? "beacon"} — visit within 50u`,
+        reward: 220, done: false,
+      };
+    }
+    if (k === "haul") {
+      return {
+        id, kind: "haul", cargoItem: "ore", cargoQty: 15,
+        description: "Haul 15 ore to any civilian station",
+        reward: 520, done: false,
+      };
+    }
     return {
       id, kind: "deliver", cargoItem: "ore", cargoQty: 5,
       description: "Deliver 5 ore to any station",
       reward: 200, done: false,
     };
   }
+
+  // Timers for escort progress (per-mission).
+  private _escortStayAt = 0;
 
   tickMissions() {
     const p = this.player; if (!p || !p.mission) return;
@@ -2388,9 +2781,24 @@ export class Voidwake {
       const t = this.entities.find((e) => e.id === m.targetId);
       if (t && V.len(V.sub(t.pos, p.pos)) < 200) { m.done = true; this.pushLog("Anomaly scanned."); }
     }
-    if (m.kind === "deliver") {
+    if (m.kind === "deliver" || m.kind === "haul") {
       if ((p.cargo[m.cargoItem!] ?? 0) >= (m.cargoQty ?? 0)) m.done = true;
     }
+    if (m.kind === "escort" && m.targetId) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      const now = performance.now() / 1000;
+      if (t && (t.hull ?? 1) > 0 && V.len(V.sub(t.pos, p.pos)) < 500) {
+        if (this._escortStayAt === 0) this._escortStayAt = now;
+        else if (now - this._escortStayAt >= 60) { m.done = true; this.pushLog("Escort complete."); }
+      } else {
+        this._escortStayAt = 0;
+      }
+    }
+    if (m.kind === "rescue" && m.targetId) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      if (t && V.len(V.sub(t.pos, p.pos)) < 50) { m.done = true; this.pushLog("Rescue signal acknowledged."); }
+    }
+    // "bounty" / "destroy" completion is set by the bullet-hit loop.
   }
 
   // --- Gunner autopilot ---------------------------------------------------
@@ -2464,6 +2872,219 @@ export class Voidwake {
       g.nextBarkAt = 12 + Math.random() * 8;
       this.pushChatter(tag, pickLine("gunner_dock", this.chatterCtx(undefined, { target: best })), "#9fe");
     }
+  }
+
+  // --- Pilot autopilot ----------------------------------------------------
+  // Full-auto approach to `this.targetId`. Points the nose at the target,
+  // scales throttle by distance so we decelerate on approach, and auto-docks
+  // stations / holds orbit at planets. Disengages on any manual stick input.
+  private _lastAutopilotTag = 0;
+  driveAutopilot(dt: number, p: PlayerState) {
+    const pilot = getCrew(p, "pilot");
+    if (!pilot || !pilot.autopilot) return;
+    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    if (!t) {
+      pilot.autopilot = false;
+      this.pushLog("Autopilot: no target — disengaged.");
+      return;
+    }
+    const rel = V.sub(t.pos, p.pos);
+    const dist = V.len(rel);
+    // Turn toward target: convert rel to yaw/pitch and slew toward it.
+    const targetYaw = Math.atan2(rel.x, rel.z);
+    const targetPitch = Math.atan2(rel.y, Math.hypot(rel.x, rel.z));
+    // Shortest-arc yaw diff
+    let dy = targetYaw - p.heading.yaw;
+    while (dy > Math.PI) dy -= Math.PI * 2;
+    while (dy < -Math.PI) dy += Math.PI * 2;
+    const dp = targetPitch - p.heading.pitch;
+    const slew = 2.0 * dt;
+    p.heading.yaw += Math.max(-slew, Math.min(slew, dy));
+    p.heading.pitch += Math.max(-slew, Math.min(slew, dp));
+    p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch));
+    // Approach-throttle: full when far, ease down on final approach so we
+    // don't cannonball into the dock.
+    let dockR = 180;
+    if (t.kind === "planet") dockR = 60;   // orbit hold radius
+    if (t.kind === "star") dockR = 120;    // corona scoop distance
+    if (t.kind === "asteroid") dockR = 120;
+    if (dist > dockR * 2) p.throttle = Math.min(1, p.throttle + dt * 0.9);
+    else if (dist > dockR) p.throttle = 0.35;
+    else p.throttle = Math.max(0, p.throttle - dt * 1.6);
+    // If close to a friendly station and stopped, auto-dock.
+    const now = performance.now() / 1000;
+    if (t.kind === "station" && t.faction !== "pirate" && dist < 200 && p.throttle < 0.05) {
+      if (now - this._lastAutopilotTag > 3) {
+        this._lastAutopilotTag = now;
+        this.pushChatter(`Pilot ${pilot.name.split(" ")[0]}`,
+          pickLine("pilot_docking", this.chatterCtx(t, { target: t })), CREW_ROLE_INFO.pilot.color);
+      }
+      pilot.autopilot = false;
+      this.tryDock();
+    }
+  }
+
+  private _disengageAutopilot(_why: "stick") {
+    const p = this.player; if (!p) return;
+    const pilot = getCrew(p, "pilot");
+    if (pilot && pilot.autopilot) {
+      pilot.autopilot = false;
+      this.pushChatter(`Pilot ${pilot.name.split(" ")[0]}`,
+        pickLine("pilot_autopilot_off", this.chatterCtx()), CREW_ROLE_INFO.pilot.color);
+    }
+  }
+
+  // Faction retaliation: when the player damages a ship, nearby ships of the
+  // same faction (within 2500u) flip hostile for 90 seconds. Their AI branches
+  // still see them as their original kind; hostileUntil is checked in tickAI
+  // and the bullet-hit loop.
+  applyFactionRetaliation(victim: Entity) {
+    const p = this.player; if (!p) return;
+    const now = performance.now() / 1000;
+    const RANGE = 2500;
+    const RANGE2 = RANGE * RANGE;
+    for (const e of this.entities) {
+      if (e.id === victim.id) continue;
+      if (e.faction !== victim.faction) continue;
+      if (e.kind !== "friendly" && e.kind !== "neutral" && e.kind !== "hostile") continue;
+      const dx = e.pos.x - victim.pos.x, dy = e.pos.y - victim.pos.y, dz = e.pos.z - victim.pos.z;
+      if (dx * dx + dy * dy + dz * dz > RANGE2) continue;
+      // Already hostile stays hostile. Preserve original kind for revert.
+      if (!e.peaceKind && e.kind !== "hostile") e.peaceKind = e.kind;
+      e.hostileUntil = Math.max(e.hostileUntil ?? 0, now + 90);
+    }
+  }
+
+  // Tick down retaliation timers and revert ships that timed out.
+  tickRetaliation() {
+    const now = performance.now() / 1000;
+    for (const e of this.entities) {
+      if (e.hostileUntil && now > e.hostileUntil) {
+        e.hostileUntil = undefined;
+        if (e.peaceKind && e.peaceKind !== e.kind) {
+          e.kind = e.peaceKind;
+        }
+        e.peaceKind = undefined;
+      }
+    }
+  }
+
+  // Crew banter timer + tick (uses "banter" template kind).
+  private _nextBanterAt = 0;
+  tickCrewBanter(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.5 : 1.0;
+    this._nextBanterAt -= dt;
+    if (this._nextBanterAt > 0) return;
+    this._nextBanterAt = (35 + Math.random() * 30) * mul;
+    // Collect crew names (gunner + crew[])
+    const names: { name: string; color: string }[] = [];
+    if (p.gunner) names.push({ name: p.gunner.name.split(" ")[0], color: "#fc6" });
+    if (p.crew) for (const c of p.crew) names.push({ name: c.name.split(" ")[0], color: CREW_ROLE_INFO[c.role].color });
+    if (names.length < 2) return;
+    // Pick two distinct crew.
+    const a = names[Math.floor(Math.random() * names.length)];
+    let b = a; let guard = 5;
+    while (b === a && guard-- > 0) b = names[Math.floor(Math.random() * names.length)];
+    if (b === a) return;
+    const line = pickLine("banter", this.chatterCtx(undefined, { a: a.name, b: b.name }));
+    // Split at "||" marker if present so the two lines land as two chatter entries.
+    const parts = line.split("||").map((s) => s.trim());
+    if (parts.length >= 2) {
+      this.pushChatter(a.name, parts[0].replace(new RegExp(`^${a.name}:\\s*`), ""), a.color);
+      this.pushChatter(b.name, parts[1].replace(new RegExp(`^${b.name}:\\s*`), ""), b.color);
+    } else {
+      this.pushChatter(a.name, line, a.color);
+    }
+  }
+
+  // Occasional per-crew idle bark (pilot/engineer/merchant). Gated by chatterFreq.
+  private _nextCrewIdleAt = 0;
+  tickCrewIdle(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.4 : 1.0;
+    this._nextCrewIdleAt -= dt;
+    if (this._nextCrewIdleAt > 0) return;
+    this._nextCrewIdleAt = (18 + Math.random() * 20) * mul;
+    const roles: CrewRole[] = [];
+    if (p.crew) for (const c of p.crew) roles.push(c.role);
+    if (roles.length === 0) return;
+    const r = roles[Math.floor(Math.random() * roles.length)];
+    const c = getCrew(p, r);
+    if (!c) return;
+    const kind: ChatterKind = (r + "_idle") as ChatterKind;
+    this.pushChatter(`${CREW_ROLE_INFO[r].title} ${c.name.split(" ")[0]}`,
+      pickLine(kind, this.chatterCtx()), CREW_ROLE_INFO[r].color);
+  }
+
+  // Quest log screen — full-screen popup showing active mission + description
+  // + progress + faction reputation. ESC or U closes it.
+  updateQuestLog() {
+    const kb = this.options.keybinds;
+    if (this.input.consume(kb.questLog)) {
+      this.screen = this._codexReturn;
+      this.menuCursor = 0;
+    }
+  }
+
+  renderQuestLog(g: Cell[][]) {
+    const cols = g[0].length;
+    putText(g, 4, 1, "[ QUEST LOG ]   U or ESC close", "#7CFC00");
+    const p = this.player;
+    if (!p) return;
+    const m = p.mission;
+    if (!m) {
+      putText(g, 4, 4, "No active missions. Dock at a station to pick up work.", "#9fe");
+      void cols;
+      return;
+    }
+    putText(g, 4, 4, `Kind:   ${m.kind.toUpperCase()}`, "#fff");
+    putText(g, 4, 5, `Task:   ${m.description}`, "#cf6");
+    putText(g, 4, 6, `Reward: ${m.reward}cr`, "#ffe066");
+    let prog = "in progress";
+    if (m.done) prog = "READY — dock at any station";
+    else if ((m.kind === "deliver" || m.kind === "haul") && m.cargoItem) {
+      const have = p.cargo[m.cargoItem] ?? 0;
+      prog = `${have}/${m.cargoQty} ${m.cargoItem} in hold`;
+    } else if (m.kind === "escort" && m.targetId != null) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      if (t) {
+        const d = V.len(V.sub(t.pos, p.pos));
+        const held = this._escortStayAt ? Math.floor(performance.now() / 1000 - this._escortStayAt) : 0;
+        prog = d < 500 ? `${held}/60 s in range of ${t.name}` : `out of range (d=${d.toFixed(0)}u)`;
+      }
+    } else if (m.targetId != null) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      if (t) {
+        const d = V.len(V.sub(t.pos, p.pos));
+        prog = `${t.name} at ${d.toFixed(0)}u`;
+      }
+    }
+    putText(g, 4, 7, `Status: ${prog}`, m.done ? "#7CFC00" : "#9fe");
+
+    // Reputation summary.
+    const rep = p.reputation ?? {};
+    putText(g, 4, 10, "Reputation:", "#7CFC00");
+    putText(g, 6, 11, `Federation:  ${repLabel(rep.federation ?? 0).padEnd(10)} (${rep.federation ?? 0})`, "#aef");
+    putText(g, 6, 12, `Guild:       ${repLabel(rep.guild ?? 0).padEnd(10)} (${rep.guild ?? 0})`, "#aef");
+    putText(g, 6, 13, `Pirate:      ${repLabel(rep.pirate ?? 0).padEnd(10)} (${rep.pirate ?? 0})`, "#aef");
+
+    // Crew roster summary.
+    putText(g, 4, 15, "Crew:", "#7CFC00");
+    let cy = 16;
+    if (p.gunner) putText(g, 6, cy++, `Gunner    · ${p.gunner.name}  (${p.gunner.species}, ${p.gunner.gender})  [${p.gunner.enabled ? "AUTO" : "STANDBY"}]`, "#fc6");
+    if (p.crew) for (const c of p.crew) {
+      const info = CREW_ROLE_INFO[c.role];
+      const stateTag = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "READY") : "ACTIVE";
+      putText(g, 6, cy++, `${info.title.padEnd(9)} · ${c.name}  (${c.species}, ${c.gender})  [${stateTag}]`, info.color);
+    }
+    if (crewCount(p) === 0) putText(g, 6, cy, "(no hires yet — recruit at stations)", "#888");
+
+    putText(g, 4, g.length - 2, "U or ESC to close", "#888");
   }
 
   // Sweep loot canisters near the player and absorb their contents.
@@ -2581,9 +3202,12 @@ export class Voidwake {
   // planets. Cheap timer-gated work, mostly atmospheric.
   tickAmbientChatter(dt: number) {
     const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.4 : 1.0;
     this._nextAmbientChatterAt -= dt;
     if (this._nextAmbientChatterAt > 0) return;
-    this._nextAmbientChatterAt = 8 + Math.random() * 10;
+    this._nextAmbientChatterAt = (8 + Math.random() * 10) * mul;
     // Find a candidate within 1500u, prefer interesting kinds.
     const near = this.entities
       .filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
@@ -2668,6 +3292,7 @@ export class Voidwake {
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
       `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
+      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Reset Keybinds (current: ${Object.keys(this.options.keybinds).length})`,
       "Back",
     ];
@@ -2691,6 +3316,12 @@ export class Voidwake {
     if (i === 9) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
     if (i === 10) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
     if (i === 11 && (left || right)) this.options.permadeath = !this.options.permadeath;
+    if (i === 12 && (left || right)) {
+      const modes: Options["chatterFreq"][] = ["off", "rare", "normal", "lively"];
+      const idx = modes.indexOf(this.options.chatterFreq ?? "normal");
+      const n = modes.length;
+      this.options.chatterFreq = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
     if (this.input.consume("enter")) {
       if (items[i].startsWith("Reset")) this.options.keybinds = { ...DEFAULT_KEYBINDS };
       if (items[i] === "Back") this.screen = this.player ? "menu" : "title";
@@ -2784,13 +3415,26 @@ export class Voidwake {
       ];
     }
     if (this.stationPage === "crew") {
-      const hasGunner = !!p.gunner;
-      return [
-        hasGunner
-          ? `Dismiss ${p.gunner!.name}`
-          : `Recruit gunner — ${stock.gunnerFee}cr`,
-        "Back",
-      ];
+      const cap = effectiveCrewMax(p);
+      const cur = crewCount(p);
+      const header = `Berths ${cur}/${cap}  (Crew Quarters module gives +1)`;
+      const rows: string[] = [`~ ${header} ~`];
+      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
+      for (const r of roles) {
+        const info = CREW_ROLE_INFO[r];
+        const fee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+        if (hasCrew(p, r)) {
+          const c = r === "gunner"
+            ? p.gunner!
+            : getCrew(p, r)!;
+          rows.push(`Dismiss ${info.title} ${c.name}`);
+        } else {
+          const gate = cur >= cap ? "  (berths full)" : "";
+          rows.push(`Hire ${info.title} — ${fee}cr — ${info.blurb}${gate}`);
+        }
+      }
+      rows.push("Back");
+      return rows;
     }
     return ["Back"];
   }
@@ -2821,13 +3465,20 @@ export class Voidwake {
       if (i === 0) {
         const ore = p.cargo.ore ?? 0;
         if (ore > 0) {
-          p.credits += ore * stock.orePrice;
+          const price = Math.round(stock.orePrice * merchantSellMult(p));
+          const total = ore * price;
+          p.credits += total;
           p.cargo.ore = 0;
-          this.pushLog(`Sold ${ore} ore for ${ore * stock.orePrice}cr.`);
+          this.pushLog(`Sold ${ore} ore for ${total}cr${hasCrew(p, "merchant") ? " (merchant bonus)" : ""}.`);
+          if (hasCrew(p, "merchant")) {
+            const m = getCrew(p, "merchant")!;
+            this.pushChatter(`Merchant ${m.name.split(" ")[0]}`,
+              pickLine("merchant_deal", this.chatterCtx()), CREW_ROLE_INFO.merchant.color);
+          }
         } else this.pushLog("No ore to sell.");
       } else if (i === 1) {
         const need = p.ship.fuelMax - p.ship.fuel;
-        const cost = Math.ceil(need) * stock.fuelPrice;
+        const cost = Math.ceil(need * stock.fuelPrice * merchantBuyMult(p));
         if (cost === 0) { this.pushLog("Tanks already full."); return; }
         if (p.credits >= cost) { p.credits -= cost; p.ship.fuel = p.ship.fuelMax; this.pushLog(`Refueled (${cost}cr).`); }
         else this.pushLog("Not enough credits.");
@@ -2838,9 +3489,10 @@ export class Voidwake {
     if (this.stationPage === "weapons") {
       const offer = stock.weapons[i];
       if (!offer) return;
+      const price = Math.round(offer.price * merchantBuyMult(p));
       if (p.ship.weaponId === offer.id) { this.pushLog("Already equipped."); return; }
-      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
-      p.credits -= offer.price;
+      if (p.credits < price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= price;
       p.ship.weaponId = offer.id;
       this.pushLog(`Equipped ${WEAPONS.find((w) => w.id === offer.id)!.name}.`);
       return;
@@ -2849,38 +3501,57 @@ export class Voidwake {
     if (this.stationPage === "modules") {
       const offer = stock.modules[i];
       if (!offer) return;
+      const price = Math.round(offer.price * merchantBuyMult(p));
       if (p.ship.modules.includes(offer.id)) { this.pushLog("Already installed."); return; }
-      if (p.credits < offer.price) { this.pushLog("Not enough credits."); return; }
-      p.credits -= offer.price;
+      if (p.credits < price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= price;
       p.ship.modules.push(offer.id);
-      // Apply passive caps immediately so the player sees the change.
       if (offer.id === "cargo-expander") p.ship.cargoMax += 12;
       if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
+      if (offer.id === "crew-quarters") this.pushLog("Crew quarters installed — +1 berth.");
       this.pushLog(`Installed ${offer.name}.`);
       return;
     }
 
     if (this.stationPage === "crew") {
-      if (i !== 0) return;
-      if (p.gunner) {
-        // Tone of the farewell depends on how the tour went: a long-served,
-        // well-paid, well-kept gunner leaves happy; a short, broke, or
-        // bullet-pocked one storms off cursing.
-        const tenureMin = (Date.now() - p.gunner.hiredAt) / 60000;
+      // Row 0 is the header; rows 1..4 are roles; last is Back (handled above).
+      const roleIdx = i - 1;
+      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
+      if (roleIdx < 0 || roleIdx >= roles.length) return;
+      const r = roles[roleIdx];
+      const info = CREW_ROLE_INFO[r];
+      // Dismiss branch
+      if (hasCrew(p, r)) {
+        const c = r === "gunner" ? p.gunner! : getCrew(p, r)!;
+        const tenureMin = (Date.now() - c.hiredAt) / 60000;
         const hullPct = p.ship.hull / p.ship.hullMax;
         const happy = tenureMin > 3 && p.credits > 500 && hullPct > 0.5;
-        const kind: ChatterKind = happy ? "gunner_farewell_good" : "gunner_farewell_bad";
-        this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
-          pickLine(kind, this.chatterCtx()), happy ? "#fc6" : "#f88");
-        this.pushLog(`${p.gunner.name} signed off.`);
-        p.gunner = undefined;
-      } else {
-        if (p.credits < stock.gunnerFee) { this.pushLog("Not enough credits."); return; }
-        p.credits -= stock.gunnerFee;
+        const kind: ChatterKind = (r + (happy ? "_farewell_good" : "_farewell_bad")) as ChatterKind;
+        this.pushChatter(`${info.title} ${c.name.split(" ")[0]}`,
+          pickLine(kind, this.chatterCtx()), happy ? info.color : "#f88");
+        this.pushLog(`${c.name} signed off.`);
+        if (r === "gunner") p.gunner = undefined;
+        else p.crew = (p.crew ?? []).filter((x) => x.role !== r);
+        return;
+      }
+      // Hire branch
+      if (crewCount(p) >= effectiveCrewMax(p)) { this.pushLog("No spare berths — install Crew Quarters."); return; }
+      const fee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+      if (p.credits < fee) { this.pushLog("Not enough credits."); return; }
+      p.credits -= fee;
+      if (r === "gunner") {
         p.gunner = generateGunner(Math.random);
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
         this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
           pickLine("gunner_greet", this.chatterCtx()), "#fc6");
+      } else {
+        const c = generateCrewMember(r, Math.random);
+        p.crew = p.crew ?? [];
+        p.crew.push(c);
+        this.pushLog(`Hired ${info.title} ${c.name} (${c.species}).`);
+        const greetKind: ChatterKind = (r + "_greet") as ChatterKind;
+        this.pushChatter(`${info.title} ${c.name.split(" ")[0]}`,
+          pickLine(greetKind, this.chatterCtx()), info.color);
       }
       return;
     }
@@ -2935,6 +3606,7 @@ export class Voidwake {
       case "destroyed": this.renderDestroyed(grid); break;
       case "crashed": this.renderCrashed(grid); break;
       case "codex": this.renderCodex(grid); break;
+      case "quest-log": this.renderQuestLog(grid); break;
     }
 
 
@@ -3269,6 +3941,7 @@ export class Voidwake {
       `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
       `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
+      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Reset Keybinds`,
       "Back",
     ];
@@ -3464,6 +4137,8 @@ export class Voidwake {
         [kb.toggleGunner.toUpperCase(), "toggle hired gunner AUTO / STANDBY"],
         [kb.legend.toUpperCase(), "open this Codex"],
         [kb.pinQuest.toUpperCase(), "pin / unpin quest tracker"],
+        [kb.questLog.toUpperCase(), "open Quest Log popup"],
+        [kb.autopilot.toUpperCase(), "toggle Pilot autopilot to current target"],
         [kb.pause.toUpperCase(), "pause"],
         ["ESC",    "main menu / close overlay"],
       ];
@@ -3962,14 +4637,25 @@ export class Voidwake {
       putText(g, panelX, cy2 + 2, "T cycle  [ ] by kind", "#888");
     }
 
-    // Gunner status block — only shown when a gunner is hired.
-    if (p.gunner) {
-      const gy0 = cy2 + 6;
-      putText(g, panelX, gy0, "[ GUNNER ]", "#7CFC00");
-      putText(g, panelX, gy0 + 1, `${p.gunner.name}`, "#fff");
-      putText(g, panelX, gy0 + 2, `${p.gunner.species} · ${p.gunner.gender}`, "#9fe");
-      putText(g, panelX, gy0 + 3, p.gunner.enabled ? "AUTO  (G to disable)" : "STANDBY (G to enable)", p.gunner.enabled ? "#fc6" : "#888");
+    // Crew status block — shows gunner + hired crew (pilot/engineer/merchant).
+    if (p.gunner || (p.crew && p.crew.length > 0)) {
+      let gy0 = cy2 + 6;
+      putText(g, panelX, gy0, `[ CREW ${crewCount(p)}/${effectiveCrewMax(p)} ]`, "#7CFC00");
+      gy0++;
+      if (p.gunner) {
+        putText(g, panelX, gy0, `Gun ${p.gunner.name.split(" ")[0]}`, "#fff");
+        putText(g, panelX + 12, gy0, p.gunner.enabled ? "AUTO" : "STANDBY", p.gunner.enabled ? "#fc6" : "#888");
+        gy0++;
+      }
+      if (p.crew) for (const c of p.crew) {
+        const info = CREW_ROLE_INFO[c.role];
+        const tag = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "ready") : "on watch";
+        putText(g, panelX, gy0, `${info.title.slice(0, 3)} ${c.name.split(" ")[0]}`, "#fff");
+        putText(g, panelX + 12, gy0, tag, info.color);
+        gy0++;
+      }
     }
+
 
     // --- Controls reminder, anchored to the bottom of the right panel ------
     // Always visible so new pilots aren't stranded looking for the keymap.
@@ -3988,6 +4674,10 @@ export class Voidwake {
       ["M", "mine target"],
       ["F", "dock / station"],
       ["J", "jettison cargo"],
+      ["O", "autopilot (Pilot)"],
+      ["U", "quest log"],
+      ["L", "codex"],
+      ["K", "pin tracker"],
       ["P", "pause"],
       ["ESC", "menu"],
     ];
@@ -4070,7 +4760,9 @@ export class Voidwake {
 
     // Keys hint
     const gunnerHint = p.gunner ? `  G ${p.gunner.enabled ? "gunner ON" : "gunner off"}` : "";
-    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  M mine  F dock  J jett  L legend  K quest  P pause  ESC menu" + gunnerHint, "#666");
+    const pilotCrew = getCrew(p, "pilot");
+    const autoHint = pilotCrew ? `  O ${pilotCrew.autopilot ? "AUTOPILOT" : "auto off"}` : "";
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  [/] kind  M mine  F dock  J jett  O auto  U log  L legend  K pin  P pause  ESC menu" + gunnerHint + autoHint, "#666");
 
     // FPS overlay (optional)
     if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
