@@ -2104,16 +2104,25 @@ export class Voidwake {
     }
     if (this.paused) return;
 
-    // Throttle / steering
-    if (keys.has(k.throttleUp)) p.throttle = Math.min(1, p.throttle + dt * 0.7);
-    if (keys.has(k.throttleDown)) p.throttle = Math.max(0, p.throttle - dt * 0.7);
-    if (keys.has(k.yawLeft)) p.heading.yaw -= dt * 1.2;
-    if (keys.has(k.yawRight)) p.heading.yaw += dt * 1.2;
-    if (keys.has(k.pitchUp)) p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0);
-    if (keys.has(k.pitchDown)) p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0);
+    // Autopilot (Pilot crew, toggled by O): full auto — approach current
+    // target, match velocity, and auto-dock stations / hold orbit at planets.
+    // Steers by directly writing to yaw/pitch/throttle so the same movement
+    // pipeline below applies (no separate physics).
+    const pilotCrew = getCrew(p, "pilot");
+    const autopilotOn = !!(pilotCrew && pilotCrew.autopilot);
+    if (autopilotOn) this.driveAutopilot(dt, p);
+
+    // Throttle / steering (manual). Autopilot has already written to these
+    // this frame; user keys still override — press anything to take back the stick.
+    if (keys.has(k.throttleUp)) { p.throttle = Math.min(1, p.throttle + dt * 0.7); this._disengageAutopilot("stick"); }
+    if (keys.has(k.throttleDown)) { p.throttle = Math.max(0, p.throttle - dt * 0.7); this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawLeft)) { p.heading.yaw -= dt * 1.2; this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawRight)) { p.heading.yaw += dt * 1.2; this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchUp)) { p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchDown)) { p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
     // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
-    if (this.options.mouseSteer && this.input.mouseInside) {
+    if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn) {
       const sens = this.options.mouseSensitivity;
       const dz = 0.08;
       const mx = this.input.mouseNX;
@@ -2130,20 +2139,40 @@ export class Voidwake {
     // but locks weapons (no fire while super-cruising) so it stays a travel tool.
     const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
     const boostMul = (boosting ? 1.6 : 1.0) * (supercruise ? 3.0 : 1.0);
-    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0);
+    // Engineer perk: -20% fuel burn.
+    const engineerMul = hasCrew(p, "engineer") ? 0.80 : 1.0;
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul;
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
-    const fuelFactor = p.ship.fuel > 0 ? 1.0 : 0.15;
-    const sp = p.ship.speed * p.throttle * boostMul * fuelFactor;
-    p.pos = V.add(p.pos, V.scale(fwd, sp * dt));
+
     if (p.ship.fuel > 0) {
+      // Powered flight: normal thrust. Cache the current velocity so if we
+      // stall out mid-frame we keep drifting instead of snapping to zero.
+      const sp = p.ship.speed * p.throttle * boostMul;
+      const thrustV = V.scale(fwd, sp);
+      p.pos = V.add(p.pos, V.scale(thrustV, dt));
+      p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
       p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
-      if (p.ship.fuel === 0) this.pushLog("⚠ FUEL EXHAUSTED — drift only. Dock to refuel.");
+      if (p.ship.fuel === 0) {
+        this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
+        this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
+      }
+    } else {
+      // Zero fuel: keep last drift velocity. Steering and throttle inputs
+      // don't change trajectory — you're a bullet with your name on it.
+      const dv = p.driftVel ?? { x: 0, y: 0, z: 0 };
+      p.pos = V.add(p.pos, V.scale(dv, dt));
     }
 
     // Shield regen (suppressed while inside a nebula — applied below).
-    p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * 4);
+    // Engineer perk: +75% shield recharge rate.
+    const shieldRegen = hasCrew(p, "engineer") ? 7.0 : 4.0;
+    p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * shieldRegen);
+    // Engineer perk: slow hull regen while throttle is light and not on fire.
+    if (hasCrew(p, "engineer") && p.throttle < 0.35 && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
+      p.ship.hull = Math.min(p.ship.hullMax, p.ship.hull + dt * 0.6);
+    }
 
     // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
     let insideNebula = false;
