@@ -572,6 +572,7 @@ interface Options {
   volumeMusic: number;
   unsavedWarnMinutes: number;
   permadeath: boolean;       // when on, "Load Last Save" is disabled on death
+  chatterFreq: "off" | "rare" | "normal" | "lively";
   keybinds: Record<string, string>;
 }
 
