@@ -2269,11 +2269,30 @@ export class Voidwake {
       const tag = `Gunner ${p.gunner.name.split(" ")[0]}`;
       this.pushChatter(tag, p.gunner.enabled ? "Standing by, weapons hot." : "Standing down.", "#fc6");
     }
-    void k.mission;
+    // Toggle Pilot autopilot to current target (O key).
+    if (this.input.consume(k.autopilot)) {
+      const pilot = getCrew(p, "pilot");
+      if (!pilot) this.pushLog("No pilot hired.");
+      else if (this.targetId == null) this.pushLog("Autopilot needs a target — press T first.");
+      else {
+        pilot.autopilot = !pilot.autopilot;
+        const t = this.entities.find((e) => e.id === this.targetId);
+        this.pushChatter(`Pilot ${pilot.name.split(" ")[0]}`,
+          pickLine(pilot.autopilot ? "pilot_autopilot_on" : "pilot_autopilot_off",
+            this.chatterCtx(undefined, { target: t })), CREW_ROLE_INFO.pilot.color);
+      }
+    }
     // Open the Codex/Legend overlay from flight.
     if (this.input.consume(k.legend)) {
       this._codexReturn = "playing";
       this.screen = "codex";
+      this.menuCursor = 0;
+      return;
+    }
+    // Toggle the Quest Log popup from flight.
+    if (this.input.consume(k.questLog)) {
+      this._codexReturn = "playing";
+      this.screen = "quest-log";
       this.menuCursor = 0;
       return;
     }
@@ -2287,6 +2306,9 @@ export class Voidwake {
     this.updateGunner(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    this.tickCrewIdle(dt);
+    this.tickCrewBanter(dt);
+    this.tickRetaliation();
     this.tickRespawns(dt);
 
     // Autosave on a timer (rotates into the dedicated "autosave" slot).
