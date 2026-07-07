@@ -4637,14 +4637,25 @@ export class Voidwake {
       putText(g, panelX, cy2 + 2, "T cycle  [ ] by kind", "#888");
     }
 
-    // Gunner status block — only shown when a gunner is hired.
-    if (p.gunner) {
-      const gy0 = cy2 + 6;
-      putText(g, panelX, gy0, "[ GUNNER ]", "#7CFC00");
-      putText(g, panelX, gy0 + 1, `${p.gunner.name}`, "#fff");
-      putText(g, panelX, gy0 + 2, `${p.gunner.species} · ${p.gunner.gender}`, "#9fe");
-      putText(g, panelX, gy0 + 3, p.gunner.enabled ? "AUTO  (G to disable)" : "STANDBY (G to enable)", p.gunner.enabled ? "#fc6" : "#888");
+    // Crew status block — shows gunner + hired crew (pilot/engineer/merchant).
+    if (p.gunner || (p.crew && p.crew.length > 0)) {
+      let gy0 = cy2 + 6;
+      putText(g, panelX, gy0, `[ CREW ${crewCount(p)}/${effectiveCrewMax(p)} ]`, "#7CFC00");
+      gy0++;
+      if (p.gunner) {
+        putText(g, panelX, gy0, `Gun ${p.gunner.name.split(" ")[0]}`, "#fff");
+        putText(g, panelX + 12, gy0, p.gunner.enabled ? "AUTO" : "STANDBY", p.gunner.enabled ? "#fc6" : "#888");
+        gy0++;
+      }
+      if (p.crew) for (const c of p.crew) {
+        const info = CREW_ROLE_INFO[c.role];
+        const tag = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "ready") : "on watch";
+        putText(g, panelX, gy0, `${info.title.slice(0, 3)} ${c.name.split(" ")[0]}`, "#fff");
+        putText(g, panelX + 12, gy0, tag, info.color);
+        gy0++;
+      }
     }
+
 
     // --- Controls reminder, anchored to the bottom of the right panel ------
     // Always visible so new pilots aren't stranded looking for the keymap.
