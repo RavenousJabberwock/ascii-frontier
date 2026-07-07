@@ -2334,14 +2334,20 @@ export class Voidwake {
     }
 
     // Collision damage vs large bodies (planets / stars / stations / rocks).
-    // Stations dock instead of colliding at the dock-range we use elsewhere.
+    // Speed-scaled but forgiving: chip shields at low speeds, big hits at
+    // ramming speed. Stars remain instant death. Stations still dock instead
+    // of colliding at the dock-range we use elsewhere.
     if (!this.options.cheat) {
+      // Approximate current absolute speed (u/s). Uses drift velocity when
+      // fuel is out, otherwise the powered-thrust estimate.
+      const currentSpeed = p.ship.fuel > 0
+        ? p.ship.speed * p.throttle * (keys.has(k.boost) ? 1.6 : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
+        : V.len(p.driftVel ?? { x: 0, y: 0, z: 0 });
       for (const e of this.entities) {
         if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
         const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
         // Star fuel scoop: a "corona" ring just outside the kill radius.
-        // Drift through at low throttle to refuel for free; shields tick down.
         if (e.kind === "star" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
           p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 18);
           if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 5);
@@ -2353,16 +2359,35 @@ export class Voidwake {
         if (d < radius) {
           const n = V.scale(V.sub(p.pos, e.pos), 1 / Math.max(0.0001, d));
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
+          if (e.kind === "star") {
+            // Instant kill on star contact — no forgiveness.
+            this.die(`Incinerated by star ${e.name}`, e.name);
+            return;
+          }
           if (e.kind === "station") {
+            // Speed-scaled but forgiving bump.
+            const bump = Math.min(20, Math.max(1, currentSpeed * 0.05)) * this.dmgScale() * dt * 4;
+            if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - bump);
+            else p.ship.hull = Math.max(0, p.ship.hull - bump);
             p.throttle = Math.min(p.throttle, 0.1);
+            // Kill drift velocity on station bump.
+            p.driftVel = { x: 0, y: 0, z: 0 };
             this.pushLog(`Bumped ${e.name} — press F to dock.`);
             this.beep(220, 0.06, "square");
             continue;
           }
-          const dmg = (e.kind === "star" ? 120 : 25) * this.dmgScale() * dt * 4;
+          // Planet / asteroid ram: scale damage with speed, cap it so a
+          // single hit is survivable. Killing throttle prevents infinite churn.
+          const speedFactor = Math.min(1, currentSpeed / 100);   // 0..1
+          const base = e.kind === "planet" ? 22 : 10;
+          const cap = e.kind === "planet" ? 55 : 30;
+          const dmg = Math.min(cap, base + speedFactor * cap) * this.dmgScale() * dt * 4;
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
           this.beep(180, 0.05, "triangle");
+          // Bleed off velocity so the ship "grinds" instead of tunneling.
+          if (p.driftVel) p.driftVel = V.scale(p.driftVel, 0.35);
+          p.throttle = Math.min(p.throttle, 0.2);
           if (p.ship.hull <= 0) {
             this.die(`Collision with ${e.kind} ${e.name}`, e.name);
             return;
@@ -2370,6 +2395,7 @@ export class Voidwake {
         }
       }
     }
+
 
 
     // Move entities
