@@ -631,6 +631,8 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   pinQuest: "k",         // toggle the persistent quest tracker panel
   cycleCatPrev: "[",     // target nearest of previous category (station/rock/hostile/...)
   cycleCatNext: "]",     // target nearest of next category
+  autopilot: "o",        // toggle hired Pilot's autopilot to current target
+  questLog: "u",         // open the toggle-able Quest Log popup
 };
 
 
@@ -649,6 +651,7 @@ function defaultOptions(): Options {
     volumeMusic: 0.6,
     unsavedWarnMinutes: 10,
     permadeath: false,
+    chatterFreq: "normal",
 
     keybinds: { ...DEFAULT_KEYBINDS },
   };
