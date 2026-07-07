@@ -1836,6 +1836,9 @@ export class Voidwake {
       } else if (this.screen === "codex") {
         this.screen = this._codexReturn;
         this.menuCursor = 0;
+      } else if (this.screen === "quest-log") {
+        this.screen = this._codexReturn;
+        this.menuCursor = 0;
       }
     }
 
@@ -1853,6 +1856,7 @@ export class Voidwake {
       case "destroyed": this.updateDestroyed(); break;
       case "crashed": this.updateCrashed(); break;
       case "codex": this.updateCodex(); break;
+      case "quest-log": this.updateQuestLog(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
   }
