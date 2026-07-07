@@ -2577,17 +2577,37 @@ export class Voidwake {
   }
 
   // --- Missions ------------------------------------------------------------
+  // Seven kinds, chosen weighted-random each hand-in. Each kind pulls a live
+  // entity as its objective where possible so the tracker + world marker have
+  // something real to point at.
   generateMission(): Mission {
     const rng = this.rng;
-    const kinds: MissionKind[] = ["deliver", "destroy", "scan"];
-    const k = kinds[Math.floor(rng() * kinds.length)];
+    const roll = rng();
+    const kinds: MissionKind[] =
+      roll < 0.20 ? ["deliver"] :
+      roll < 0.35 ? ["haul"] :
+      roll < 0.50 ? ["destroy"] :
+      roll < 0.63 ? ["bounty"] :
+      roll < 0.76 ? ["scan"] :
+      roll < 0.88 ? ["escort"] :
+      ["rescue"];
+    const k = kinds[0];
     const id = nextId();
     if (k === "destroy") {
-      const target = this.entities.find((e) => e.kind === "hostile");
+      const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
       return {
         id, kind: k, targetId: target?.id,
         description: `Destroy hostile ${target?.name ?? "raider"}`,
         reward: 250, done: false,
+      };
+    }
+    if (k === "bounty") {
+      // A named high-value pirate — pick one and mark it. Bigger reward.
+      const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
+      return {
+        id, kind: k, targetId: target?.id,
+        description: `Bounty: eliminate ${target?.name ?? "raider"} (bounty board)`,
+        reward: 600, done: false,
       };
     }
     if (k === "scan") {
@@ -2598,12 +2618,38 @@ export class Voidwake {
         reward: 150, done: false,
       };
     }
+    if (k === "escort") {
+      const target = this.entities.find((e) => e.kind === "friendly");
+      return {
+        id, kind: k, targetId: target?.id,
+        description: `Escort ${target?.name ?? "convoy"} — stay within 500u for 60s`,
+        reward: 300, done: false,
+      };
+    }
+    if (k === "rescue") {
+      const target = this.entities.find((e) => e.kind === "beacon");
+      return {
+        id, kind: k, targetId: target?.id,
+        description: `Rescue signal near ${target?.name ?? "beacon"} — visit within 50u`,
+        reward: 220, done: false,
+      };
+    }
+    if (k === "haul") {
+      return {
+        id, kind: "haul", cargoItem: "ore", cargoQty: 15,
+        description: "Haul 15 ore to any civilian station",
+        reward: 520, done: false,
+      };
+    }
     return {
       id, kind: "deliver", cargoItem: "ore", cargoQty: 5,
       description: "Deliver 5 ore to any station",
       reward: 200, done: false,
     };
   }
+
+  // Timers for escort progress (per-mission).
+  private _escortStayAt = 0;
 
   tickMissions() {
     const p = this.player; if (!p || !p.mission) return;
@@ -2613,9 +2659,24 @@ export class Voidwake {
       const t = this.entities.find((e) => e.id === m.targetId);
       if (t && V.len(V.sub(t.pos, p.pos)) < 200) { m.done = true; this.pushLog("Anomaly scanned."); }
     }
-    if (m.kind === "deliver") {
+    if (m.kind === "deliver" || m.kind === "haul") {
       if ((p.cargo[m.cargoItem!] ?? 0) >= (m.cargoQty ?? 0)) m.done = true;
     }
+    if (m.kind === "escort" && m.targetId) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      const now = performance.now() / 1000;
+      if (t && (t.hull ?? 1) > 0 && V.len(V.sub(t.pos, p.pos)) < 500) {
+        if (this._escortStayAt === 0) this._escortStayAt = now;
+        else if (now - this._escortStayAt >= 60) { m.done = true; this.pushLog("Escort complete."); }
+      } else {
+        this._escortStayAt = 0;
+      }
+    }
+    if (m.kind === "rescue" && m.targetId) {
+      const t = this.entities.find((e) => e.id === m.targetId);
+      if (t && V.len(V.sub(t.pos, p.pos)) < 50) { m.done = true; this.pushLog("Rescue signal acknowledged."); }
+    }
+    // "bounty" / "destroy" completion is set by the bullet-hit loop.
   }
 
   // --- Gunner autopilot ---------------------------------------------------
