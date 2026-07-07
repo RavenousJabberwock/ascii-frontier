@@ -1044,6 +1044,7 @@ const MODULE_CATALOG = [
   { id: "afterburner-od",  name: "Afterburner OD",  price: 650,  desc: "boost +20% (cheap)" },
   { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
   { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
+  { id: "crew-quarters",   name: "Crew Quarters",   price: 1400, desc: "+1 crew slot" },
 ];
 
 function generateStationStock(stationId: number): StationStock {
@@ -1075,6 +1076,28 @@ function effectiveCargoMax(p: PlayerState): number {
   const base = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.cargo ?? p.ship.cargoMax;
   const expanders = p.ship.modules.filter((m) => m === "cargo-expander").length;
   return base + expanders * 12;
+}
+
+// Effective crew capacity after hull base + Crew Quarters modules.
+function effectiveCrewMax(p: PlayerState): number {
+  const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId);
+  const base = hull?.crewSlots ?? 1;
+  const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
+  return base + quarters;
+}
+
+// Merchant on-crew? Sell/buy price multipliers applied at station markets.
+function merchantSellMult(p: PlayerState): number {
+  return hasCrew(p, "merchant") ? 1.15 : 1.0;
+}
+function merchantBuyMult(p: PlayerState): number {
+  return hasCrew(p, "merchant") ? 0.90 : 1.0;
+}
+function hasCrew(p: PlayerState, role: CrewRole): boolean {
+  return !!(p.crew && p.crew.some((c) => c.role === role));
+}
+function getCrew(p: PlayerState, role: CrewRole): CrewMember | undefined {
+  return p.crew?.find((c) => c.role === role);
 }
 
 
