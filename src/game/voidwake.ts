@@ -664,7 +664,7 @@ function defaultOptions(): Options {
 // cube. Coordinates are in arbitrary units; the cockpit radar is sized to a
 // fixed range so distant entities just appear faint.
 // =============================================================================
-const WORLD_RADIUS = 9000;
+const WORLD_RADIUS = 18000;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
@@ -685,29 +685,28 @@ function nameFrom(rng: () => number, prefix: string): string {
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
-// World scale + entity counts. Universe is intentionally vast — most entities
-// will be far from the player at any time, and the renderer fades anything
-// past 5k to a single colored period and culls past 10k. If you tweak these,
-// also revisit station/planet spawn caps in maybeSpawnFromBodies() so the
-// world doesn't drift past 2x baseline.
+// World scale + entity counts. The universe radius was doubled (from 9k to
+// 18k) to give a genuinely vast frontier. Renderer still fades anything past
+// 5k to a colored period and culls past 10k, so most bodies will be distant
+// pinpricks until you cruise toward them. Populations scaled up to match.
 const WORLD = {
   starRadius: 0,
-  planetRadius: 9000,
-  asteroidRadius: 7500,
-  stationRadius: 8500,
-  shipRadius: 9500,
-  cometRadius: 10500,
-  nebulaRadius: 9000,
-  beaconRadius: 9000,
-  baseRadius: 9500,
-  planets: 18,
-  asteroids: 240,
-  stations: 9,
-  ships: 70,
-  comets: 12,
-  nebulae: 12,
-  beacons: 9,
-  pirateBases: 5,
+  planetRadius: 18000,
+  asteroidRadius: 15000,
+  stationRadius: 17000,
+  shipRadius: 19000,
+  cometRadius: 21000,
+  nebulaRadius: 18000,
+  beaconRadius: 18000,
+  baseRadius: 19000,
+  planets: 42,
+  asteroids: 520,
+  stations: 20,
+  ships: 150,
+  comets: 28,
+  nebulae: 26,
+  beacons: 20,
+  pirateBases: 11,
 };
 
 
