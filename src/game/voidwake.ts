@@ -4457,10 +4457,12 @@ export class Voidwake {
 
       // Star glow halo — a faint outer ring outside the solid disc so the
       // central star reads as a luminous source rather than a flat blob.
+      // Halo color tracks the stellar class so blue giants shed blue light
+      // and red dwarves smoulder red rather than every star haloing amber.
       if (e.kind === "star") {
-        const haloR = 1.45;
+        const haloR = 1.55;
         const haloChars = ["+", "·", "."];
-        const haloCol = "#5a4823";
+        const haloCol = stellarClassOf(e).halo;
         const hrx = Math.max(2, Math.round(rx * haloR));
         const hry = Math.max(1, Math.round(ry * haloR));
         for (let dy = -hry; dy <= hry; dy++) {
@@ -4471,10 +4473,45 @@ export class Voidwake {
             const gx = sx + dx, gy = sy2 + dy;
             if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
             if (g[gy][gx].ch !== " ") continue;
-            const t = Math.min(2, Math.floor((d2 - 1.0) / 0.15));
+            const t = Math.min(2, Math.floor((d2 - 1.0) / 0.20));
             g[gy][gx] = { ch: haloChars[t], color: haloCol, glow: true };
           }
         }
+      }
+
+      // Nebulae: irregular colored gas cloud. Value-noise threshold gives it a
+      // ragged outline (never a clean disc), three-tone palette layers a
+      // bright core / mid / faint edge so it reads as volumetric. Blends with
+      // (does not overwrite) whatever's already been painted underneath.
+      if (e.kind === "nebula") {
+        const pal = nebulaPalette(e);
+        const gly = NEBULA_GLYPHS;
+        // Nebula spans are large — the raw rCells can exceed 100+ cells. Keep
+        // it that way; the noise threshold makes most cells transparent.
+        const nrx = Math.max(3, Math.round(rCells));
+        const nry = Math.max(2, Math.round(rCells * (CELL_W / CELL_H)));
+        for (let dy = -nry; dy <= nry; dy++) {
+          for (let dx = -nrx; dx <= nrx; dx++) {
+            const nx = dx / nrx, ny = dy / nry;
+            const d2 = nx * nx + ny * ny;
+            if (d2 > 1.15) continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            // Irregular density: combine two noise scales so both large
+            // wisps and fine fringe detail exist.
+            const n = nebulaNoise(e.id, dx, dy) * 0.6
+                    + nebulaNoise(e.id + 1, Math.floor(dx / 3), Math.floor(dy / 3)) * 0.4;
+            const density = n * (1 - d2 * 0.85);
+            if (density < 0.28) continue;
+            // Do not obliterate stars / ships / planets already drawn.
+            if (g[gy][gx].ch !== " ") continue;
+            const shade = density > 0.55 ? 0 : density > 0.4 ? 1 : 2;
+            const ch = gly[Math.floor(hash01(e.id * 17 + dx * 31 + dy * 7) * gly.length)];
+            g[gy][gx] = { ch, color: pal[shade], glow: shade === 0 };
+          }
+        }
+        // Skip the default filled-sphere path for nebulas.
+        continue;
       }
 
       for (let dy = -ry; dy <= ry; dy++) {
@@ -4498,6 +4535,7 @@ export class Voidwake {
           g[gy][gx] = { ch, color, glow: e.kind === "star" };
         }
       }
+
 
       // Label big objects centered just below the sprite.
       if (rCells >= 3 && e.name) {
