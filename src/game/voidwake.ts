@@ -3743,6 +3743,7 @@ export class Voidwake {
       this.options = blob.options;
       this.screen = "playing";
       this.pushLog(`Loaded ${c}.`);
+      this.syncRadio();
     }
   }
 
