@@ -1628,6 +1628,15 @@ export class Voidwake {
   private _fpsFrames = 0;
   // Audio: small WebAudio context for cheap beeps (hit / death / dock).
   audio: AudioContext | null = null;
+  // Radio player state — either an HTMLAudioElement (for streams / custom
+  // URL) or a chiptune sequencer running against the shared AudioContext.
+  private radioAudio: HTMLAudioElement | null = null;
+  private radioActiveId: string | null = null;      // last successfully started preset
+  private radioChipTimer: number | null = null;     // window.setInterval id
+  private radioChipGain: GainNode | null = null;
+  private radioChipStep = 0;
+  private radioChipSeed = 1;
+  private radioMasterGain: GainNode | null = null;  // master music bus
 
   // Starfield: world-space points that parallax around the player to give a
   // visceral sense of velocity and heading. Lazily seeded on first render.
