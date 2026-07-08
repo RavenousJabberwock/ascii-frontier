@@ -671,6 +671,8 @@ function defaultOptions(): Options {
     unsavedWarnMinutes: 10,
     permadeath: false,
     chatterFreq: "normal",
+    radioMode: "off",
+    radioCustomUrl: "",
 
     keybinds: { ...DEFAULT_KEYBINDS },
   };
