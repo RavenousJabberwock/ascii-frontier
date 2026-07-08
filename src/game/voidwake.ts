@@ -2307,6 +2307,7 @@ export class Voidwake {
         this.options = blob.options;
         this.screen = "playing";
         this.pushLog(`Restored from ${saves[0].slot}.`);
+        this.syncRadio();
         return;
       }
       // Return to Main Menu
