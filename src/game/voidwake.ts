@@ -1923,7 +1923,7 @@ export class Voidwake {
     this.screen = "destroyed";
     this.destroyedAt = performance.now() / 1000;
     this.menuCursor = 0;
-    this.beep(120, 0.6, "sawtooth");
+    this.sfx("boom");
   }
 
   // Capture a runtime error from the loop / global handlers and freeze on
@@ -2593,7 +2593,7 @@ export class Voidwake {
         p.cargo[name] = (p.cargo[name] ?? 0) - 1;
         if (p.cargo[name] <= 0) delete p.cargo[name];
         this.pushLog(`Jettisoned 1 ${name}.`);
-        this.beep(320, 0.05);
+        this.sfx("jettison");
       } else {
         this.pushLog("Cargo hold is empty.");
       }
@@ -2611,7 +2611,7 @@ export class Voidwake {
         faction: "player", ownerId: -1, ttl: 2,
         ttlAt: performance.now() / 1000 + 2,
       });
-      this.beep(880, 0.04, "square");
+      this.sfx("laser");
     }
 
 
@@ -2902,8 +2902,7 @@ export class Voidwake {
     const nowS = performance.now() / 1000;
     if (this.prevShield > 0 && p.ship.shield <= 0) {
       this.shieldFlashUntil = nowS + 0.45;
-      this.beep(160, 0.18, "sawtooth");
-      this.beep(110, 0.22, "triangle");
+      this.sfx("hit");
     }
     this.prevShield = p.ship.shield;
     const hullPct = p.ship.hull / p.ship.hullMax;
@@ -2911,12 +2910,12 @@ export class Voidwake {
       // Faster, more urgent alarm as hull drops; 10% → 0.6s, 30% → 1.6s
       const period = 0.6 + Math.max(0, (hullPct - 0.10)) * 5.0;
       this.nextHullAlarmAt = nowS + period;
-      this.beep(720, 0.07, "square"); this.beep(540, 0.07, "square");
+      this.sfx("alarm");
     }
     const fuelPct = p.ship.fuel / p.ship.fuelMax;
     if (fuelPct > 0 && fuelPct < 0.15 && nowS >= this.nextFuelAlarmAt) {
       this.nextFuelAlarmAt = nowS + 2.2;
-      this.beep(420, 0.12, "triangle");
+      this.sfx("alarm");
     }
 
     // Auto-save warn
@@ -3021,7 +3020,7 @@ export class Voidwake {
     p.ship.hull = p.ship.hullMax;
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
-    this.beep(660, 0.08, "sine"); this.beep(990, 0.08, "sine");
+    this.sfx("dock");
     if (p.gunner) {
       this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
         pickLine("gunner_docked", this.chatterCtx(t)), "#fc6");
