@@ -3616,6 +3616,10 @@ export class Voidwake {
 
   // --- Options -------------------------------------------------------------
   updateOptions() {
+    const radioPreset = RADIO_PRESETS.find((r) => r.id === this.options.radioMode) ?? RADIO_PRESETS[0];
+    const radioUrlLabel = this.options.radioMode === "custom"
+      ? (this.options.radioCustomUrl ? this.options.radioCustomUrl.slice(0, 40) : "(press ENTER to set)")
+      : "—";
     const items = [
       `Difficulty: ${this.options.difficulty}`,
       `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
@@ -3630,6 +3634,8 @@ export class Voidwake {
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
       `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
       `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
+      `Radio: ${radioPreset.label}`,
+      `Radio URL: ${radioUrlLabel}`,
       `Reset Keybinds (current: ${Object.keys(this.options.keybinds).length})`,
       "Back",
     ];
@@ -3648,9 +3654,9 @@ export class Voidwake {
     if (i === 4) this.options.mouseSensitivity = Math.max(0.1, Math.min(3, this.options.mouseSensitivity + (right ? 0.1 : left ? -0.1 : 0)));
     if (i === 5 && (left || right)) this.options.showFps = !this.options.showFps;
     if (i === 6 && (left || right)) this.options.autosave = !this.options.autosave;
-    if (i === 7) this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 8) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : left ? -0.05 : 0));
-    if (i === 9) this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : left ? -0.05 : 0));
+    if (i === 7 && (left || right)) { this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : -0.05)); this.syncRadio(); }
+    if (i === 8 && (left || right)) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : -0.05));
+    if (i === 9 && (left || right)) { this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : -0.05)); this.syncRadio(); }
     if (i === 10) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
     if (i === 11 && (left || right)) this.options.permadeath = !this.options.permadeath;
     if (i === 12 && (left || right)) {
@@ -3659,11 +3665,35 @@ export class Voidwake {
       const n = modes.length;
       this.options.chatterFreq = modes[(idx + (right ? 1 : -1) + n) % n];
     }
+    if (i === 13 && (left || right)) {
+      const idx = Math.max(0, RADIO_PRESETS.findIndex((r) => r.id === this.options.radioMode));
+      const n = RADIO_PRESETS.length;
+      this.options.radioMode = RADIO_PRESETS[(idx + (right ? 1 : -1) + n) % n].id;
+      this.syncRadio();
+    }
     if (this.input.consume("enter")) {
-      if (items[i].startsWith("Reset")) this.options.keybinds = { ...DEFAULT_KEYBINDS };
-      if (items[i] === "Back") this.screen = this.player ? "menu" : "title";
+      if (i === 14) {
+        // Prompt for a custom stream URL. window.prompt is fine here — this
+        // is a game options screen, not a hot path.
+        const cur = this.options.radioCustomUrl ?? "";
+        const next = typeof window !== "undefined" && typeof window.prompt === "function"
+          ? window.prompt("Radio stream URL (mp3 / ogg / m3u):", cur)
+          : cur;
+        if (next != null) {
+          this.options.radioCustomUrl = next.trim();
+          if (this.options.radioCustomUrl && this.options.radioMode !== "custom") {
+            this.options.radioMode = "custom";
+          }
+          this.syncRadio();
+        }
+      } else if (items[i].startsWith("Reset")) {
+        this.options.keybinds = { ...DEFAULT_KEYBINDS };
+      } else if (items[i] === "Back") {
+        this.screen = this.player ? "menu" : "title";
+      }
     }
   }
+
 
 
 
