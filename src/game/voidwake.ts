@@ -4309,6 +4309,8 @@ export class Voidwake {
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
       `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
       `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
+      `Radio: ${(RADIO_PRESETS.find((r) => r.id === this.options.radioMode) ?? RADIO_PRESETS[0]).label}`,
+      `Radio URL: ${this.options.radioMode === "custom" ? (this.options.radioCustomUrl || "(press ENTER to set)").slice(0, 40) : "—"}`,
       `Reset Keybinds`,
       "Back",
     ];
