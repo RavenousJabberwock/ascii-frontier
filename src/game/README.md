@@ -46,6 +46,38 @@ and forwards lifecycle events.
 - `P` pause
 - `ESC` main menu (New / Save / Load / Options / Quit)
 
+## Universe
+
+The play area is a cube roughly 36k units across (radius 18k). Anything past
+5k from your ship renders as a single colored period; past 10k it's culled
+entirely — so the deep sky is a moving field of pinpricks that only resolve
+into stars, planets, stations, and traffic as you cruise toward them.
+
+Stars are drawn by spectral class — blue supergiants, red giants, sun-like
+yellows, orange dwarves, red dwarves, white dwarves — each with a matching
+color, size, and halo. Planets pull from a broader palette (oceans, deserts,
+gas giants, ice worlds, molten worlds, storm giants). Nebulae come in eight
+color families (violet, rose, green, blue, amber, cyan, crimson, lilac),
+render with irregular noise-driven outlines, drain shields, and garble the
+COMMS panel while you're inside one.
+
+Weapon shots, engine exhausts, comets, and distant suns all glow.
+
+## Radio
+
+Options ▸ Radio picks the in-game music source:
+
+- **Off** — no music.
+- **Chiptune • Drift / Frontier / Arcade Runner / Nebula Cradle** —
+  procedurally generated 8-bit tunes; no assets, works offline.
+- **SomaFM • Deep Space One / Space Station / Mission Control / DEF CON** —
+  free space-themed internet streams.
+- **Custom URL** — plug in your own stream (`Options ▸ Radio URL`, press
+  ENTER to enter one).
+
+Music volume is the existing `Music Volume` slider; changes take effect
+immediately.
+
 ## Adding new content
 
 - **New ship hull**: append to `SHIP_HULLS` in `voidwake.ts`.
