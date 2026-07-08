@@ -1257,7 +1257,12 @@ function saveGame(slot: string, blob: SaveBlob): { ok: true } | { ok: false; rea
 function loadGame(slot: string): SaveBlob | null {
   const raw = localStorage.getItem(SAVE_PREFIX + slot);
   if (!raw) return null;
-  try { return JSON.parse(raw) as SaveBlob; } catch { return null; }
+  try {
+    const blob = JSON.parse(raw) as SaveBlob;
+    // Backfill any new option fields for saves created before they existed.
+    blob.options = { ...defaultOptions(), ...(blob.options ?? {}) } as Options;
+    return blob;
+  } catch { return null; }
 }
 function listSaves(): { slot: string; savedAt: number }[] {
   const out: { slot: string; savedAt: number }[] = [];
