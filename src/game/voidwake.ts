@@ -1943,22 +1943,234 @@ export class Voidwake {
     this.menuCursor = 0;
   }
 
-  // Tiny WebAudio beep (no asset dependency). Used for hit/death/dock cues.
-  beep(freq = 440, dur = 0.08, type: OscillatorType = "square") {
+  // WebAudio: lazily open the context on first use (autoplay-policy safe).
+  private ensureAudio(): AudioContext | null {
     try {
-      if (!this.audio) this.audio = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      if (!this.audio) {
+        this.audio = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      }
       const ctx = this.audio;
       if (ctx.state === "suspended") void ctx.resume();
+      return ctx;
+    } catch { return null; }
+  }
+
+  // Punchier 16-bit-style blip. Layers a pitch-glided oscillator with a short
+  // noise "chip" burst so we get the crunch of a NES/GB era sound chip
+  // instead of a pure sine tone. Keeps the original `beep(freq,dur,type)`
+  // signature so existing call sites still work.
+  beep(freq = 440, dur = 0.08, type: OscillatorType = "square", opts?: { glide?: number; noise?: number; detune?: number }) {
+    const ctx = this.ensureAudio();
+    if (!ctx) return;
+    try {
+      const t0 = ctx.currentTime;
+      const vol = this.options.volumeMaster * this.options.volumeSfx * 0.18;
+      if (vol <= 0.0001) return;
+
+      // Main oscillator: pitch glide gives the "zap" character.
       const o = ctx.createOscillator();
       const g = ctx.createGain();
-      const vol = this.options.volumeMaster * this.options.volumeSfx * 0.15;
-      o.type = type; o.frequency.value = freq;
-      g.gain.value = vol;
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      const glide = opts?.glide ?? 0;
+      if (glide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * Math.exp(glide)), t0 + dur);
+      if (opts?.detune) o.detune.value = opts.detune;
+      g.gain.setValueAtTime(vol, t0);
+      // Fast attack / punchy body / exp decay — signature 8/16-bit envelope.
+      g.gain.exponentialRampToValueAtTime(vol * 0.5, t0 + dur * 0.4);
+      g.gain.exponentialRampToValueAtTime(0.0002, t0 + dur);
       o.connect(g).connect(ctx.destination);
-      o.start();
-      o.stop(ctx.currentTime + dur);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+
+      // Optional noise chip layered on top — great for hits and explosions.
+      const noiseAmt = opts?.noise ?? 0;
+      if (noiseAmt > 0) {
+        const nDur = dur * 0.6;
+        const sr = ctx.sampleRate;
+        const buf = ctx.createBuffer(1, Math.max(1, Math.floor(sr * nDur)), sr);
+        const data = buf.getChannelData(0);
+        // Sample-and-hold quantized noise reads more retro than white noise.
+        let hold = 0;
+        for (let i = 0; i < data.length; i++) {
+          if ((i & 7) === 0) hold = Math.random() * 2 - 1;
+          data[i] = hold;
+        }
+        const n = ctx.createBufferSource();
+        n.buffer = buf;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(vol * noiseAmt, t0);
+        ng.gain.exponentialRampToValueAtTime(0.0002, t0 + nDur);
+        n.connect(ng).connect(ctx.destination);
+        n.start(t0);
+        n.stop(t0 + nDur + 0.02);
+      }
     } catch { /* audio unavailable; non-fatal */ }
+  }
+
+  // Named 16-bit SFX. Each is a tuned combination of beep() + noise so the
+  // event has a recognizable character instead of just "another chirp".
+  sfx(name: "laser" | "hit" | "explode" | "dock" | "click" | "alarm" | "mining" | "chime" | "jettison" | "boom") {
+    switch (name) {
+      case "laser":
+        // Downward-glided square with a tick of noise — classic pew.
+        this.beep(1200, 0.09, "square",   { glide: -1.6, noise: 0.15 });
+        this.beep( 600, 0.05, "triangle", { glide: -0.6 });
+        break;
+      case "hit":
+        this.beep(360, 0.07, "square", { glide: -0.8, noise: 0.55, detune: 25 });
+        break;
+      case "explode":
+        this.beep(180, 0.35, "sawtooth", { glide: -1.4, noise: 1.0 });
+        this.beep( 90, 0.30, "triangle", { glide: -0.8, noise: 0.6 });
+        break;
+      case "boom":
+        this.beep(120, 0.6, "sawtooth", { glide: -1.2, noise: 0.9 });
+        this.beep( 70, 0.5, "triangle", { glide: -0.6, noise: 0.5 });
+        break;
+      case "dock":
+        this.beep(660, 0.09, "square");
+        setTimeout(() => this.beep(990, 0.12, "square"), 90);
+        setTimeout(() => this.beep(1320, 0.14, "triangle"), 200);
+        break;
+      case "chime":
+        this.beep(880, 0.14, "triangle");
+        setTimeout(() => this.beep(1175, 0.14, "triangle"), 110);
+        setTimeout(() => this.beep(1568, 0.20, "triangle"), 220);
+        break;
+      case "mining":
+        this.beep(240, 0.10, "sawtooth", { glide: 0.4, noise: 0.35 });
+        break;
+      case "click":
+        this.beep(1400, 0.03, "square", { noise: 0.2 });
+        break;
+      case "alarm":
+        this.beep(700, 0.12, "square", { glide: -0.5 });
+        setTimeout(() => this.beep(500, 0.14, "square", { glide: -0.5 }), 130);
+        break;
+      case "jettison":
+        this.beep(340, 0.07, "triangle", { glide: -0.9, noise: 0.3 });
+        break;
+    }
+  }
+
+  // ---- Radio (in-game music) -----------------------------------------------
+  // Reads Options.radioMode / radioCustomUrl and drives either an
+  // HTMLAudioElement (streams / custom URL) or a WebAudio chiptune sequencer.
+  // Call syncRadio() any time volume, mode, or URL changes.
+  syncRadio(): void {
+    const opt = this.options;
+    const vol = Math.max(0, Math.min(1, opt.volumeMaster * opt.volumeMusic));
+    // Update volume on live sources first — cheap path when only volume moved.
+    if (this.radioAudio) this.radioAudio.volume = vol;
+    if (this.radioMasterGain) this.radioMasterGain.gain.value = vol * 0.4;
+
+    // If the requested preset changed, stop what's playing and start the new.
+    if (opt.radioMode === this.radioActiveId) return;
+    this.stopRadio();
+    const preset = RADIO_PRESETS.find((p) => p.id === opt.radioMode);
+    if (!preset || preset.kind === "off") { this.radioActiveId = "off"; return; }
+
+    if (preset.kind === "chiptune") {
+      const ctx = this.ensureAudio();
+      if (!ctx) return;
+      this.radioChipSeed = preset.seed ?? 1;
+      this.radioChipStep = 0;
+      const master = ctx.createGain();
+      master.gain.value = vol * 0.4;
+      master.connect(ctx.destination);
+      this.radioMasterGain = master;
+      this.radioChipGain = master;
+      const bpm = 108;
+      const stepMs = (60_000 / bpm) / 4; // 16th notes
+      this.radioChipTimer = window.setInterval(() => this.chiptuneStep(), stepMs);
+      this.radioActiveId = preset.id;
+    } else {
+      // Stream or custom URL.
+      const url = preset.kind === "custom" ? opt.radioCustomUrl.trim() : (preset.url ?? "");
+      if (!url) { this.radioActiveId = null; return; }
+      try {
+        const a = new Audio(url);
+        a.crossOrigin = "anonymous";
+        a.volume = vol;
+        a.autoplay = true;
+        a.loop = false;
+        a.addEventListener("error", () => this.pushChatter("Radio", "signal lost.", "#c47afc"));
+        void a.play().catch(() => this.pushChatter("Radio", "unable to tune in (autoplay blocked?).", "#c47afc"));
+        this.radioAudio = a;
+        this.radioActiveId = preset.id;
+      } catch { this.radioActiveId = null; }
+    }
+  }
+
+  stopRadio(): void {
+    if (this.radioAudio) {
+      try { this.radioAudio.pause(); this.radioAudio.src = ""; } catch { /* ignore */ }
+      this.radioAudio = null;
+    }
+    if (this.radioChipTimer != null) { clearInterval(this.radioChipTimer); this.radioChipTimer = null; }
+    if (this.radioMasterGain) { try { this.radioMasterGain.disconnect(); } catch { /* ignore */ } this.radioMasterGain = null; }
+    this.radioChipGain = null;
+    this.radioActiveId = null;
+  }
+
+  // Chiptune sequencer step: emits one 16th-note tick. Uses a per-preset
+  // seeded pattern of pitches over a pentatonic scale + a bass note every
+  // downbeat. Enough personality to feel composed without any external data.
+  private chiptuneStep(): void {
+    const ctx = this.audio;
+    const bus = this.radioChipGain;
+    if (!ctx || !bus) return;
+    const step = this.radioChipStep++;
+    const seed = this.radioChipSeed;
+    // Minor pentatonic in A (Hz): A3, C4, D4, E4, G4, A4, C5, D5, E5, G5.
+    const scale = [220, 262, 294, 330, 392, 440, 523, 587, 659, 784];
+    const barPos = step % 16;
+    const barIdx = Math.floor(step / 16);
+    const t0 = ctx.currentTime;
+
+    // Lead melody every 2nd step, avoiding 16th 12 (breath) for variety.
+    if (barPos % 2 === 0 && barPos !== 12) {
+      const h = hash01(seed * 131 + barIdx * 7 + barPos);
+      const note = scale[Math.floor(h * scale.length)];
+      const dur = 0.22;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "square";
+      o.frequency.value = note;
+      g.gain.setValueAtTime(0.28, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.connect(g).connect(bus);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    }
+    // Bass on every quarter note.
+    if (barPos % 4 === 0) {
+      const roots = [110, 98, 130.81, 87.31]; // A2, G2, C3, F2 (loose iv-VII-I-VI feel)
+      const root = roots[Math.floor(hash01(seed * 17 + barIdx) * roots.length)];
+      const dur = 0.34;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.value = root;
+      g.gain.setValueAtTime(0.55, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.connect(g).connect(bus);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    }
+    // Hi-hat noise on the off-beats.
+    if (barPos % 4 === 2) {
+      const sr = ctx.sampleRate;
+      const dur = 0.06;
+      const buf = ctx.createBuffer(1, Math.floor(sr * dur), sr);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      const n = ctx.createBufferSource();
+      n.buffer = buf;
+      const ng = ctx.createGain();
+      ng.gain.value = 0.18;
+      n.connect(ng).connect(bus);
+      n.start(t0); n.stop(t0 + dur);
+    }
   }
 
 
