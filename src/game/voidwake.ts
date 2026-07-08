@@ -4882,16 +4882,33 @@ export class Voidwake {
     // Newest line on top, dimmed by age so old lines fade visually.
     const commsX = 28;
     const commsY = rTop + 7;
-    putText(g, commsX, commsY, "[ COMMS ]", "#7CFC00");
+    const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula === true;
+    const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
+    putText(g, commsX, commsY, commsTitle, inNeb ? "#c47afc" : "#7CFC00");
     const nowS = performance.now() / 1000;
     const commsW = Math.max(20, (cols - 52) - commsX - 2);
     for (let i = 0; i < Math.min(4, this.chatter.length); i++) {
       const c = this.chatter[i];
       const age = nowS - c.t;
       const dim = age > 20 ? "#555" : age > 8 ? "#888" : c.color;
-      const line = `«${c.who}» ${c.msg}`;
+      let line = `«${c.who}» ${c.msg}`;
+      // Nebula interference: replace ~25% of chars with static so comms
+      // read as garbled from inside a cloud.
+      if (inNeb) {
+        const junk = ["#", "%", "▒", "░", "▓", "*", "~", ".", "?"];
+        const rSeed = Math.floor(nowS * 3) + i * 37;
+        let out = "";
+        for (let k = 0; k < line.length; k++) {
+          const ch = line[k];
+          if (ch === " ") { out += ch; continue; }
+          if (hash01(rSeed + k) < 0.28) out += junk[Math.floor(hash01(rSeed * 13 + k) * junk.length)];
+          else out += ch;
+        }
+        line = out;
+      }
       putText(g, commsX, commsY + 1 + i, line.slice(0, commsW), dim);
     }
+
 
     // Log (mission / system events; separate from chatter).
     let ly = rTop;
