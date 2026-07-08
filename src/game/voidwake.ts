@@ -4335,10 +4335,14 @@ export class Voidwake {
       // sprites, trails, halos, and labels. Cheap, low-clutter long-range scope.
       if (far) {
         if (sx > vpLeft && sx < vpRight && sy2 > vpTop && sy2 < vpBottom) {
-          if (g[sy2][sx].ch === " ") g[sy2][sx] = { ch: ".", color: tint.fill };
+          if (g[sy2][sx].ch === " ") {
+            const glowFar = e.kind === "star" || e.kind === "comet" || e.kind === "bullet";
+            g[sy2][sx] = { ch: ".", color: tint.fill, glow: glowFar };
+          }
         }
         continue;
       }
+
 
       // --- Ships (hostile / friendly / neutral): silhouette + exhaust ------
       if (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") {
