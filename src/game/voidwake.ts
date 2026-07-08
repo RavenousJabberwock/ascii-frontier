@@ -5018,8 +5018,8 @@ export class Voidwake {
     }
 
     // Nebula fog overlay — softens viewport with scattered dim glyphs.
-    const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula;
-    if (inNeb) {
+    const inNeb2 = (this as unknown as { _inNebula?: boolean })._inNebula;
+    if (inNeb2) {
       for (let i = 0; i < 30; i++) {
         const x = vpLeft + 1 + Math.floor(Math.random() * (vw - 2));
         const y = vpTop + 1 + Math.floor(Math.random() * (vh - 2));
