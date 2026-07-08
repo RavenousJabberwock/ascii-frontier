@@ -715,8 +715,13 @@ function generateUniverse(seed: number): Entity[] {
   const rng = mulberry32(seed);
   const out: Entity[] = [];
 
-  // Central star
+  // Central star + a handful of distant scattered suns so the deep sky
+  // shows a variety of stellar classes (red giants, blue supergiants, white
+  // dwarves, etc — see stellarClassOf()).
   out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sol"), pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
+  for (let i = 0; i < 14; i++) {
+    out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sun"), pos: randPos(rng, WORLD_RADIUS * 0.95), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
+  }
 
   // Planets
   for (let i = 0; i < WORLD.planets; i++) {
