@@ -4407,9 +4407,11 @@ export class Voidwake {
       // --- Distant non-ship body: single glyph -----------------------------
       if (rCells < 1.2) {
         if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
-        g[sy2][sx] = { ch: glyph, color: tint.fill, glow: e.kind === "star" };
+        const glowBody = e.kind === "star" || e.kind === "bullet" || e.kind === "comet";
+        g[sy2][sx] = { ch: glyph, color: tint.fill, glow: glowBody };
         continue;
       }
+
 
       // --- Close non-ship body: textured filled sprite ---------------------
       const rx = Math.max(1, Math.round(rCells));
