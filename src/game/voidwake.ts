@@ -2241,6 +2241,7 @@ export class Voidwake {
             this.crashError = null; this.crashStack = null;
             this.screen = "playing";
             this.pushLog(`Recovered from crash via ${saves[0].slot}.`);
+            this.syncRadio();
             return;
           }
         }
