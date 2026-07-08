@@ -1362,14 +1362,102 @@ function hash01(n: number): number {
 
 // Per-kind palettes — picked by entity id so each planet / station / sun
 // reads as its own distinct body instead of a uniform sphere of the same hue.
-const PLANET_FILLS  = ["#7ec8ff", "#9fd29b", "#d9a06a", "#c98aff", "#ffd28a", "#7fe3d1"];
-const PLANET_EDGES  = ["#3d6d9b", "#5a8a5a", "#8b6038", "#7a4eb0", "#a98a48", "#3d8a82"];
-const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0"];
+const PLANET_FILLS  = [
+  "#7ec8ff", // ocean world
+  "#9fd29b", // temperate green
+  "#d9a06a", // desert / sand
+  "#c98aff", // exotic violet
+  "#ffd28a", // gas giant cream
+  "#7fe3d1", // ice / methane
+  "#ff8a5a", // molten / lava
+  "#c8ffe4", // frozen aqua
+  "#b0b0c0", // rocky grey
+  "#8a5a3a", // rust
+  "#ffb3c8", // pink cloud gas giant
+  "#5a86c9", // stormy jovian
+];
+const PLANET_EDGES  = [
+  "#3d6d9b", "#5a8a5a", "#8b6038", "#7a4eb0", "#a98a48", "#3d8a82",
+  "#a04520", "#6a9aa2", "#606070", "#4a3020", "#a4536a", "#2b4a78",
+];
+const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0", "8", "%", "&"];
 const STATION_FILLS = ["#c2c2ff", "#a8ffd0", "#ffc8a0", "#cfe8ff"];
 const STATION_TEX   = ["#", "H", "X", "=", "8"];
-const STAR_FILLS    = ["#ffd866", "#ffb27a", "#fff0a0", "#ff9966"];
 const ASTEROID_FILLS= ["#a6886a", "#8a7656", "#b89a78", "#7a6650"];
 const ASTEROID_TEX  = ["%", "*", "#", ":", "."];
+
+// Stellar classification: color / edge / relative size for each spectral
+// class. Deterministic per-entity via hash01(id), so the same seed keeps the
+// same sky. Sizes are multipliers on the base star sprite radius (40 units).
+type StellarClass = {
+  name: string;   // e.g. "O", "M", "RG", "WD"
+  color: string;
+  edge: string;
+  halo: string;
+  sizeMul: number;
+  glyph: string;  // preferred fill glyph
+};
+const STELLAR_CLASSES: StellarClass[] = [
+  // Blue supergiant (rare, huge, brilliant blue-white)
+  { name: "O",  color: "#a8c8ff", edge: "#3050a0", halo: "#2a3f7a", sizeMul: 2.6, glyph: "*" },
+  // Blue giant
+  { name: "B",  color: "#c8dbff", edge: "#4060b0", halo: "#25355e", sizeMul: 1.6, glyph: "*" },
+  // White main-sequence / white giant
+  { name: "A",  color: "#ffffff", edge: "#8a8ac0", halo: "#4a4a6a", sizeMul: 1.1, glyph: "*" },
+  // Yellow-white
+  { name: "F",  color: "#fff2c8", edge: "#a08a5a", halo: "#5a4a28", sizeMul: 1.0, glyph: "*" },
+  // Yellow like our Sun
+  { name: "G",  color: "#ffd866", edge: "#a06a20", halo: "#5a4823", sizeMul: 1.0, glyph: "*" },
+  // Orange dwarf
+  { name: "K",  color: "#ff9a4a", edge: "#8a4010", halo: "#4a2308", sizeMul: 0.75, glyph: "*" },
+  // Red giant (large, cool, deep orange-red)
+  { name: "RG", color: "#ff6a3a", edge: "#a02010", halo: "#5a1808", sizeMul: 2.2, glyph: "*" },
+  // Red supergiant (rare, colossal)
+  { name: "RSG",color: "#ff4a2a", edge: "#8a0000", halo: "#4a0000", sizeMul: 3.4, glyph: "*" },
+  // Red dwarf (tiny, dim, deep red)
+  { name: "M",  color: "#d84040", edge: "#5a1010", halo: "#2a0808", sizeMul: 0.45, glyph: "*" },
+  // White dwarf (tiny, brilliant white-blue)
+  { name: "WD", color: "#e8f2ff", edge: "#6a80a0", halo: "#3a4a6a", sizeMul: 0.28, glyph: "•" },
+];
+// Weighted picker — main-sequence stars are more common than giants.
+const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8];
+const _stellarWSum = STELLAR_WEIGHTS.reduce((a, b) => a + b, 0);
+function stellarClassOf(e: Entity): StellarClass {
+  const h = hash01(e.id * 977 + 31);
+  let r = h * _stellarWSum;
+  for (let i = 0; i < STELLAR_CLASSES.length; i++) {
+    r -= STELLAR_WEIGHTS[i];
+    if (r <= 0) return STELLAR_CLASSES[i];
+  }
+  return STELLAR_CLASSES[4]; // G-class fallback
+}
+
+// Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
+// [core, mid, edge] so the noise-driven fill can layer three glyph shades.
+const NEBULA_PALETTES: [string, string, string][] = [
+  ["#e6b8ff", "#c47afc", "#5a2a8a"], // classic violet
+  ["#ffb0d4", "#ff5a9a", "#8a1a4a"], // rose / pink emission
+  ["#7affc4", "#2ac48a", "#0a5a3a"], // green / OIII
+  ["#8ac8ff", "#3a7ad4", "#0a2a5a"], // deep blue reflection
+  ["#ffd4a0", "#e08a3a", "#6a3010"], // amber dust cloud
+  ["#ffe6ff", "#c88aff", "#4a2a7a"], // pale lilac wisp
+  ["#a0ffff", "#3adcdc", "#0a5a5a"], // cyan / turquoise
+  ["#ff8a5a", "#c43a20", "#5a1005"], // crimson / supernova remnant
+];
+const NEBULA_GLYPHS = ["▒", "▓", "░", "▒", "%", "&", "*", "~"];
+function nebulaPalette(e: Entity): [string, string, string] {
+  return NEBULA_PALETTES[Math.floor(hash01(e.id * 613 + 7) * NEBULA_PALETTES.length)];
+}
+// Cheap 2D value-noise on integer grid cells, seeded per-entity. Used for
+// nebula shape so each cloud has its own irregular outline instead of a
+// perfect disc.
+function nebulaNoise(id: number, gx: number, gy: number): number {
+  const a = hash01(id * 9301 + gx * 131 + gy * 7919);
+  const b = hash01(id * 9301 + (gx + 1) * 131 + gy * 7919);
+  const c = hash01(id * 9301 + gx * 131 + (gy + 1) * 7919);
+  const d = hash01(id * 9301 + (gx + 1) * 131 + (gy + 1) * 7919);
+  return (a + b + c + d) * 0.25;
+}
 
 function tintFor(e: Entity): { fill: string; edge: string } {
   const h = hash01(e.id);
@@ -1384,12 +1472,16 @@ function tintFor(e: Entity): { fill: string; edge: string } {
       return { fill: STATION_FILLS[i], edge: "#8a8ad0" };
     }
     case "star": {
-      const i = Math.floor(h * STAR_FILLS.length);
-      return { fill: STAR_FILLS[i], edge: "#7a5a20" };
+      const sc = stellarClassOf(e);
+      return { fill: sc.color, edge: sc.edge };
     }
     case "asteroid": {
       const i = Math.floor(h * ASTEROID_FILLS.length);
       return { fill: ASTEROID_FILLS[i], edge: "#5a4838" };
+    }
+    case "nebula": {
+      const p = nebulaPalette(e);
+      return { fill: p[0], edge: p[1] };
     }
     default:
       return { fill: colorFor(e.kind), edge: colorFor(e.kind) };
