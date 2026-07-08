@@ -4371,7 +4371,7 @@ export class Voidwake {
             if (wp.sx <= vpLeft || wp.sx >= vpRight || wp.sy <= vpTop || wp.sy >= vpBottom) continue;
             const cell = g[wp.sy][wp.sx];
             if (cell.ch !== " " && cell.ch !== "." && cell.ch !== "·") continue;
-            g[wp.sy][wp.sx] = { ch: trailCh[i - 1], color: palette[i - 1] };
+            g[wp.sy][wp.sx] = { ch: trailCh[i - 1], color: palette[i - 1], glow: i <= 2 };
           }
         }
 
