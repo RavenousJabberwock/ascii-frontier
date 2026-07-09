@@ -2908,7 +2908,7 @@ export class Voidwake {
     // Fire (locked while super-cruising — the FTL field destabilizes shots).
     p.cooldown -= dt;
     const _scState = (this as unknown as { _supercruise?: boolean })._supercruise;
-    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0 && !_scState) {
+    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0 && !_scState && !this._empActive) {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
       p.cooldown = w.cooldown;
       this.entities.push({
