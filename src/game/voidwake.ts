@@ -166,6 +166,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Sector {sector} feels off. Could be nothing.",
     "Kill count's {kills}, Cmdr. You're getting sharp.",
     "Strange stars this sector. {weather}.",
+    "Guns are warm and I'm bored. Bad combination.",
+    "You ever notice pulsars keep time better than my last chrono?",
+    "If we see a †, that's a derelict. Free money, no shooting.",
+    "Black holes on the scope. Give them a wide berth, {cmdr}.",
+    "That {ship} handles nicer than the last three I've been on.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
