@@ -428,7 +428,8 @@ type EntityKind =
   | "ufo"
   | "thargoid"
   | "wormhole"
-  | "dyson";
+  | "dyson"
+  | "derelict";
 
 interface Vec3 { x: number; y: number; z: number }
 
