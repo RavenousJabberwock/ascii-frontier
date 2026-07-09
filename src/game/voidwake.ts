@@ -2988,8 +2988,8 @@ export class Voidwake {
 
 
 
-    // Move entities
-    const now = performance.now() / 1000;
+    // Move entities (reuse `now` from earlier this frame)
+
     for (const e of this.entities) {
       if (e.kind !== "bullet") tickAI(e, dt, p, this.entities, this.rng);
       e.pos = V.add(e.pos, V.scale(e.vel, dt));
