@@ -5972,6 +5972,11 @@ export class Voidwake {
     if (this.paused) {
       const msg = "‖ PAUSED — press P to resume";
       putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + Math.floor(vh / 2) - 1, msg, "#ffcc33");
+      const t = Math.floor(this._sessionTime ?? 0);
+      const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = t % 60;
+      const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+      const stamp = `session ${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+      putText(g, vpLeft + Math.floor(vw / 2 - stamp.length / 2), vpTop + Math.floor(vh / 2) + 1, stamp, "#7a8a9a");
     }
 
     this.tickMissions();
