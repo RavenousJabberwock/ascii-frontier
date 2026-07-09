@@ -813,6 +813,8 @@ function generateUniverse(seed: number): Entity[] {
     const roll = rng();
     const kind: EntityKind = roll < 0.4 ? "friendly" : roll < 0.75 ? "neutral" : "hostile";
     const fac = kind === "friendly" ? "federation" : kind === "neutral" ? "guild" : "pirate";
+    // ~35% of ships get a named pilot callsign so the world has recurring faces.
+    const named = rng() < 0.35;
     out.push({
       id: nextId(), kind, name: nameFrom(rng, kind === "hostile" ? "Raider" : "Ship"),
       pos: randPos(rng, WORLD.shipRadius),
@@ -820,6 +822,24 @@ function generateUniverse(seed: number): Entity[] {
       faction: factions.includes(fac) ? fac : "guild",
       hull: kind === "hostile" ? 50 : 40, shield: 30,
       state: "wander", cooldown: 0, weaponId: "pulse",
+      pilotName: named ? pilotNameFor(rng, kind) : undefined,
+    });
+  }
+
+  // Derelict ships: static, silent wrecks scattered across the frontier.
+  // Fly within 40u to salvage credits + ore. No AI, no weapons — just loot
+  // and a bit of environmental storytelling.
+  for (let i = 0; i < 12; i++) {
+    out.push({
+      id: nextId(), kind: "derelict",
+      name: nameFrom(rng, rng() < 0.5 ? "Wreck" : "Hulk"),
+      pos: randPos(rng, WORLD_RADIUS * 0.9),
+      vel: { x: (rng() - 0.5) * 1.5, y: (rng() - 0.5) * 1.5, z: (rng() - 0.5) * 1.5 },
+      faction: "wreck",
+      loot: {
+        credits: 80 + Math.floor(rng() * 220),
+        ore: 3 + Math.floor(rng() * 12),
+      },
     });
   }
 
