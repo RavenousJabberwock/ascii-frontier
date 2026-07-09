@@ -4621,7 +4621,7 @@ export class Voidwake {
     putText(g, 4, 3, "←/→ adjust   ↑/↓ field   ENTER continue", "#888");
     const c = this.charDraft;
     const rows = [
-      `name:    ${c.name}_`,
+      `name:    Cmdr ${c.name}_`,
       `gender:  ${c.gender}`,
       `species: ${c.species}`,
       `height:  ${c.height} cm`,
