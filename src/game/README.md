@@ -100,6 +100,19 @@ Every so often the frontier throws something strange at you:
 
 Weapon shots, engine exhausts, comets, and distant suns all glow.
 
+## Damage feedback
+
+Shields collapsing tint the screen cyan-white for a beat; taking any hull
+damage tints it red for a beat. Both fade cleanly and are suppressed for
+players with `prefers-reduced-motion` enabled.
+
+## Character creation
+
+The name field is prefixed with `Cmdr` in the display — just type your
+name (e.g. `Nosaj`) and the HUD will render it as `Cmdr Nosaj`. Case is
+preserved, and an accidentally typed leading `Cmdr ` is stripped so you
+won't end up with `Cmdr Cmdr Nosaj`.
+
 ## Radio
 
 Options ▸ Radio picks the in-game music source:
