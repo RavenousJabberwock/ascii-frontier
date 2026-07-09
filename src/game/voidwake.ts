@@ -1486,6 +1486,7 @@ function colorFor(kind: EntityKind): string {
     case "thargoid": return "#a0ff3a";
     case "wormhole": return "#c8a0ff";
     case "dyson": return "#ffe6a0";
+    case "derelict": return "#c0d0d8";
   }
 }
 
