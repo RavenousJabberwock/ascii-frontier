@@ -4809,7 +4809,7 @@ export class Voidwake {
       ];
       rows.forEach((r, i) => {
         const y = 4 + i;
-        if (y >= g.length - 2) return;
+        if (y >= g.length - 4) return;
         putText(g, 4, y, r[0].padEnd(5), r[1]);
         putText(g, 10, y, r[2], "#cfd");
       });
