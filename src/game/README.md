@@ -130,6 +130,10 @@ appear stacked below the top of the viewport:
 - **CARGO HOLD FULL** — amber, prompts to sell or `J` jettison.
 - **SCOOPING FUEL** — pulses amber while skimming a star corona.
 
+Pressing `P` freezes the world and shows a session stat line under the
+pause banner: elapsed play time (`hh:mm:ss`), current credits, kill count,
+and total cargo units.
+
 ## Damage feedback
 
 Shields collapsing tint the screen cyan-white for a beat; taking any hull
