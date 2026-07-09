@@ -57,9 +57,28 @@ Stars are drawn by spectral class — blue supergiants, red giants, sun-like
 yellows, orange dwarves, red dwarves, white dwarves — each with a matching
 color, size, and halo. Planets pull from a broader palette (oceans, deserts,
 gas giants, ice worlds, molten worlds, storm giants). Nebulae come in eight
-color families (violet, rose, green, blue, amber, cyan, crimson, lilac),
-render with irregular noise-driven outlines, drain shields, and garble the
-COMMS panel while you're inside one.
+color families, render with irregular noise-driven outlines, drain shields,
+and garble the COMMS panel while you're inside one.
+
+## Rare phenomena
+
+Every so often the frontier throws something strange at you:
+
+- **UFOs (`◉`)** — cyan-green wanderers. Get close and one will pace your
+  ship, observe for a few seconds, then boost away at absurd speed.
+- **Unknown Contacts (`Ѫ` — "Thargoid-like")** — extremely rare. When one
+  triggers it warps in beside you, projects an EMP field that zeros throttle,
+  autopilot, and weapons for ~10 seconds, transmits gibberish on comms, then
+  leaves. Your controls return the moment it departs.
+- **Traversable wormholes (`Ø`)** — paired rifts. Fly within 60u of one and
+  you emerge next to its sibling somewhere across the universe.
+- **Dyson swarm (`◇`)** — a ring of collector platforms encircling one lucky
+  star. Cosmetic (for now); a genuine wonder to stumble across.
+- **Jetsam** — jettisoned cargo canisters. Your own `X` drops leave a
+  recoverable canister behind you, and derelict jetsam fields drift into
+  scanner range from time to time.
+- **Alien transmissions** — untranslatable glyph strings appear on the COMMS
+  feed, more often near nebulae or during a Thargoid encounter.
 
 Weapon shots, engine exhausts, comets, and distant suns all glow.
 

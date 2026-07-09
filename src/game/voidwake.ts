@@ -67,6 +67,10 @@ const GLYPHS: Record<string, string> = {
   comet: "~",
   nebula: "▒",
   beacon: "!",
+  ufo: "◉",
+  thargoid: "Ѫ",
+  wormhole: "Ø",
+  dyson: "◇",
 };
 
 // ---- Flavor data: names + procedural chatter generator -------------------
@@ -418,7 +422,11 @@ type EntityKind =
   | "loot"
   | "comet"
   | "nebula"
-  | "beacon";
+  | "beacon"
+  | "ufo"
+  | "thargoid"
+  | "wormhole"
+  | "dyson";
 
 interface Vec3 { x: number; y: number; z: number }
 
@@ -825,6 +833,73 @@ function generateUniverse(seed: number): Entity[] {
     });
   }
 
+  // ---- Rare phenomena --------------------------------------------------
+  // UFOs: a handful of enigmatic wanderers. They ignore factions and drift
+  // between random survey points; if the player gets close they linger
+  // ("observe") briefly then boost away.
+  for (let i = 0; i < 4; i++) {
+    out.push({
+      id: nextId(), kind: "ufo", name: nameFrom(rng, "UAP"),
+      pos: randPos(rng, WORLD_RADIUS),
+      vel: { x: (rng() - 0.5) * 8, y: (rng() - 0.5) * 8, z: (rng() - 0.5) * 8 },
+      faction: "alien",
+      state: "wander",
+    });
+  }
+  // Thargoid-like observers: extremely rare, dormant deep in the void.
+  // When triggered they warp near the player, EMP everything, watch, and
+  // depart. See engine tick for the encounter state machine.
+  for (let i = 0; i < 2; i++) {
+    out.push({
+      id: nextId(), kind: "thargoid", name: "Unknown Contact",
+      pos: randPos(rng, WORLD_RADIUS * 0.9),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien",
+      state: "dormant",
+      cooldown: 30 + rng() * 90, // seconds until it *might* consider triggering
+    });
+  }
+  // Traversable wormhole pairs. Each pair shares a `targetId` pointing at
+  // its sibling; flying within 60u teleports the player to the sibling.
+  for (let i = 0; i < 2; i++) {
+    const a: Entity = {
+      id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
+      pos: randPos(rng, WORLD_RADIUS * 0.85),
+      vel: { x: 0, y: 0, z: 0 }, faction: "nature",
+    };
+    const b: Entity = {
+      id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
+      pos: randPos(rng, WORLD_RADIUS * 0.85),
+      vel: { x: 0, y: 0, z: 0 }, faction: "nature",
+    };
+    a.targetId = b.id; b.targetId = a.id;
+    out.push(a, b);
+  }
+  // Dyson swarm: pick a G/K/F star and lace a ring of "◇" collectors
+  // around it. Purely cosmetic — no AI, no interaction beyond awe.
+  const dysonHosts = out.filter((e) => e.kind === "star" && e.id !== 1);
+  if (dysonHosts.length) {
+    const host = dysonHosts[Math.floor(rng() * dysonHosts.length)];
+    const ringR = 220;
+    const nSwarm = 18;
+    // Random ring tilt.
+    const tiltX = (rng() - 0.5) * 0.6;
+    const tiltZ = (rng() - 0.5) * 0.6;
+    for (let i = 0; i < nSwarm; i++) {
+      const a = (i / nSwarm) * Math.PI * 2;
+      const dx = Math.cos(a) * ringR;
+      const dz = Math.sin(a) * ringR;
+      const dy = Math.sin(a) * ringR * tiltX + Math.cos(a) * ringR * tiltZ;
+      out.push({
+        id: nextId(), kind: "dyson", name: `${host.name} Swarm`,
+        pos: { x: host.pos.x + dx, y: host.pos.y + dy, z: host.pos.z + dz },
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "alien",
+        ownerId: host.id,
+      });
+    }
+  }
+
   return out;
 }
 
@@ -849,7 +924,7 @@ const V = {
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
-  if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon") return;
+  if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson") return;
 
   // Faction retaliation: retaliating ships attack the player like hostiles.
   const now = performance.now() / 1000;
@@ -1371,6 +1446,10 @@ function colorFor(kind: EntityKind): string {
     case "comet": return "#bff7ff";
     case "nebula": return "#c47afc";
     case "beacon": return "#ff66cc";
+    case "ufo": return "#9effd2";
+    case "thargoid": return "#a0ff3a";
+    case "wormhole": return "#c8a0ff";
+    case "dyson": return "#ffe6a0";
   }
 }
 
@@ -1627,6 +1706,12 @@ export class Voidwake {
   private _nextCivSpawnAt = 25;
   private _nextPirateSpawnAt = 18;
   private _nextPlanetSpawnAt = 60;
+  // Rare phenomena (UFO / Thargoid / wormhole / alien comms) scheduler state.
+  _empUntil = 0;                    // performance.now()/1000 while Thargoid field is active
+  _wormholeCooldown = 0;            // seconds; blocks re-entry after a jump
+  _nextRareAt = 45;                 // seconds until next surprise spawn near player
+  _nextAlienAt = 60;                // seconds until next alien transmission
+  _empActive = false;               // set each frame from _empUntil, checked in fire block
   // Simple FPS counter (toggleable in Options).
   fps = 0;
   private _fpsAcc = 0;
@@ -1862,6 +1947,97 @@ export class Voidwake {
     this.chatter.unshift({ t: performance.now() / 1000, who, msg, color });
     if (this.chatter.length > 6) this.chatter.pop();
   }
+
+  // Eerie alien transmission generator — glyph-mixed strings that read as
+  // untranslatable telemetry. Purely cosmetic; a few templates seeded with
+  // occasional real-word fragments to imply almost-meaning.
+  alienGibberish(): string {
+    const glyphs = "◊∆∇≡Θξζψχφ▲▼◄►◇◈☌☍♁♆⌬⏃⏂⌘※∴∵";
+    const phon = ["xa", "vok", "th", "ith", "ael", "orr", "nn", "ryx", "uun", "gha", "shk", "'", "-"];
+    const words: string[] = [];
+    const nW = 2 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < nW; i++) {
+      const parts = 2 + Math.floor(Math.random() * 3);
+      let w = "";
+      for (let j = 0; j < parts; j++) w += phon[Math.floor(Math.random() * phon.length)];
+      words.push(w);
+    }
+    // Sprinkle glyph clusters.
+    const g1 = glyphs[Math.floor(Math.random() * glyphs.length)];
+    const g2 = glyphs[Math.floor(Math.random() * glyphs.length)];
+    const templates = [
+      `${g1}${g2} ${words.join(" ")} ${g2}`,
+      `... ${words.slice(0, 2).join(" ")} ${g1} ${words.slice(2).join(" ")} ...`,
+      `${words.join(".")} — ${g1}${g2}${g1}`,
+      `[${g1}] ${words.join(" ")} [${g2}]`,
+      `${g1} we ${g2} return — ${words[0]} ${g1}`,
+    ];
+    return templates[Math.floor(Math.random() * templates.length)];
+  }
+
+  // Occasional surprise: pick one rare phenomenon and spawn it near the
+  // player. Extends the sense that the frontier is alive without cluttering
+  // the persistent world. Suppressed while docked.
+  spawnRarePhenomenon(p: PlayerState, _now: number) {
+    if (this.dockedStationId != null) return;
+    const roll = Math.random();
+    // 40% jetsam drift, 30% wandering UFO, 15% derelict distress, 10% alien
+    // transmission only, 5% Thargoid arrival.
+    const off = () => ({
+      x: (Math.random() - 0.5) * 900,
+      y: (Math.random() - 0.5) * 300,
+      z: (Math.random() - 0.5) * 900,
+    });
+    if (roll < 0.40) {
+      // Jetsam field: 1-4 loot canisters drifting together.
+      const n = 1 + Math.floor(Math.random() * 4);
+      const base = V.add(p.pos, off());
+      const kinds = ["ore", "supplies", "salvage", "medkit", "black-box"];
+      const label = kinds[Math.floor(Math.random() * kinds.length)];
+      for (let i = 0; i < n; i++) {
+        this.entities.push({
+          id: nextId(), kind: "loot", name: label,
+          pos: V.add(base, { x: (Math.random() - 0.5) * 60, y: (Math.random() - 0.5) * 30, z: (Math.random() - 0.5) * 60 }),
+          vel: { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 4, z: (Math.random() - 0.5) * 4 },
+          faction: "wreck",
+          ttlAt: performance.now() / 1000 + 240,
+          loot: { credits: 30 + Math.floor(Math.random() * 90), ore: Math.floor(Math.random() * 6) },
+        });
+      }
+      this.pushChatter("Sensors", `Drifting ${label} canisters on scope — fly through to collect.`, "#ffe066");
+    } else if (roll < 0.70) {
+      // Spawn a wandering UFO within visual range.
+      this.entities.push({
+        id: nextId(), kind: "ufo", name: nameFrom(this.rng, "UAP"),
+        pos: V.add(p.pos, off()),
+        vel: { x: (Math.random() - 0.5) * 12, y: (Math.random() - 0.5) * 12, z: (Math.random() - 0.5) * 12 },
+        faction: "alien", state: "wander",
+      });
+      this.pushChatter("Sensors", "Unidentified aerial phenomenon on long-range scope.", "#9effd2");
+    } else if (roll < 0.85) {
+      // A derelict distress beacon nearby (may be a trap — same rules).
+      const trap = Math.random() < 0.35;
+      this.entities.push({
+        id: nextId(), kind: "beacon",
+        name: trap ? "Distress (?)" : "Distress",
+        pos: V.add(p.pos, off()),
+        vel: { x: 0, y: 0, z: 0 }, faction: "wreck",
+        state: trap ? "trap" : "rescue",
+        loot: { credits: 140 + Math.floor(Math.random() * 220) },
+      });
+      this.pushChatter("Comms", "...mayday...position...any vessel...", "#ff66cc");
+    } else if (roll < 0.95) {
+      // Just an eerie transmission — no entity.
+      this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+    } else {
+      // Thargoid encounter: wake the first dormant one and force it to
+      // trigger this frame. Skipped if none exist.
+      const thg = this.entities.find((e) => e.kind === "thargoid" && e.state === "dormant");
+      if (thg) thg.cooldown = 0.01;
+      this.pushChatter("Sensors", "Unknown signature approaching. Very fast.", "#a0ff3a");
+    }
+  }
+
 
   // Build the slot dictionary used by the procedural chatter generator.
   // Pulls live state so generated lines reference the player's actual ship,
@@ -2540,6 +2716,7 @@ export class Voidwake {
     }
 
     // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
+    const now = performance.now() / 1000;
     let insideNebula = false;
     for (const e of this.entities) {
       if (e.kind === "nebula") {
@@ -2578,13 +2755,136 @@ export class Voidwake {
           // Consume the beacon either way.
           e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
         }
+      } else if (e.kind === "ufo") {
+        // Observe-then-flee. Close approach turns them curious.
+        const dv = V.sub(p.pos, e.pos);
+        const d = V.len(dv);
+        e.cooldown = (e.cooldown ?? 0) - dt;
+        if (e.state === "wander") {
+          if (d < 900) {
+            e.state = "observe";
+            e.cooldown = 6 + Math.random() * 4;
+            this.pushChatter("Sensors", "Unidentified contact holding station off our bow.", "#9effd2");
+            this.sfx("chime");
+          } else if ((e.cooldown ?? 0) <= 0) {
+            e.cooldown = 3 + Math.random() * 6;
+            e.vel = { x: (Math.random() - 0.5) * 14, y: (Math.random() - 0.5) * 14, z: (Math.random() - 0.5) * 14 };
+          }
+        } else if (e.state === "observe") {
+          // Pace the player.
+          const desired = V.scale(V.norm(dv), 0);
+          const drift = V.scale(V.sub(p.pos, e.pos), 0);
+          e.vel = V.add(desired, drift);
+          // Match player velocity roughly.
+          const pv = p.driftVel ?? { x: 0, y: 0, z: 0 };
+          e.vel = V.scale(pv, 0.8);
+          if ((e.cooldown ?? 0) <= 0) {
+            // Boost away perpendicular to player.
+            const away = V.norm({ x: -dv.x + (Math.random() - 0.5) * 200, y: -dv.y, z: -dv.z + (Math.random() - 0.5) * 200 });
+            e.vel = V.scale(away, 220); // impulse departure
+            e.state = "depart";
+            e.cooldown = 2.0;
+            this.pushChatter("Sensors", "Contact accelerating — beyond scanner ceiling.", "#9effd2");
+          }
+        } else if (e.state === "depart") {
+          if ((e.cooldown ?? 0) <= 0) {
+            // Teleport far away and reset.
+            e.pos = randPos(Math.random, WORLD_RADIUS);
+            e.vel = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 };
+            e.state = "wander";
+            e.cooldown = 20 + Math.random() * 60;
+          }
+        }
+      } else if (e.kind === "thargoid") {
+        // Rare EMP encounter. State: dormant -> approach -> emp -> leave.
+        const dv = V.sub(p.pos, e.pos);
+        const d = V.len(dv);
+        e.cooldown = (e.cooldown ?? 0) - dt;
+        if (e.state === "dormant") {
+          // Tick down; when it hits zero AND player isn't docked, warp near.
+          if ((e.cooldown ?? 0) <= 0 && this.dockedStationId == null) {
+            // Warp to just off the player's port bow.
+            const off = { x: (Math.random() - 0.5) * 600, y: (Math.random() - 0.5) * 200, z: (Math.random() - 0.5) * 600 };
+            e.pos = V.add(p.pos, off);
+            e.state = "emp";
+            e.cooldown = 9 + Math.random() * 4;
+            // Engage EMP on the player.
+            this._empUntil = now + (e.cooldown ?? 8);
+            this.pushLog("⚠ SYSTEMS FAULT — unknown field enveloping the ship.");
+            this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+            this.sfx("alarm");
+          }
+        } else if (e.state === "emp") {
+          // Hold station near player; keep EMP active.
+          this._empUntil = Math.max(this._empUntil ?? 0, now + 0.25);
+          // Ambient garbled comms.
+          if (Math.random() < 0.02) this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+          // Slow drift so it appears alive.
+          e.vel = V.scale({ x: Math.sin(now * 0.6), y: Math.cos(now * 0.4), z: Math.sin(now * 0.5) }, 4);
+          if ((e.cooldown ?? 0) <= 0) {
+            e.state = "leave";
+            e.cooldown = 1.2;
+            this.pushChatter("Sensors", "Field collapsing — controls returning.", "#9effd2");
+          }
+        } else if (e.state === "leave") {
+          // Streak away and re-arm dormant timer.
+          const away = V.norm({ x: -dv.x, y: -dv.y, z: -dv.z });
+          e.vel = V.scale(away, 400);
+          if ((e.cooldown ?? 0) <= 0) {
+            e.pos = randPos(Math.random, WORLD_RADIUS * 0.95);
+            e.vel = { x: 0, y: 0, z: 0 };
+            e.state = "dormant";
+            e.cooldown = 240 + Math.random() * 360; // 4-10 minutes
+          }
+        }
+      } else if (e.kind === "wormhole") {
+        // Traversable: fly close, warp to sibling. Guard against instant
+        // bounce-back via _wormholeCooldown.
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 60 && (this._wormholeCooldown ?? 0) <= 0) {
+          const sib = this.entities.find((x) => x.id === e.targetId && x.kind === "wormhole");
+          if (sib) {
+            p.pos = V.add(sib.pos, { x: 80, y: 0, z: 80 });
+            p.driftVel = { x: 0, y: 0, z: 0 };
+            p.throttle = 0;
+            this._wormholeCooldown = 3.0;
+            this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
+            this.pushChatter("Navigator", "Reality just... folded. We're somewhere else.", "#c8a0ff");
+            this.sfx("dock");
+          }
+        }
       }
     }
+    if (this._wormholeCooldown) this._wormholeCooldown = Math.max(0, this._wormholeCooldown - dt);
     if (insideNebula && Math.random() < 0.01) this.pushChatter("Sensors", "Nebula wash — shields degrading.", "#c47afc");
     // Save flag for renderer (dim starfield, fog overlay).
     (this as unknown as { _inNebula: boolean })._inNebula = insideNebula;
     // Block fire while super-cruising (preserved in fire block below via flag).
     (this as unknown as { _supercruise: boolean })._supercruise = supercruise;
+
+    // --- EMP: if a Thargoid field is active, disable ship systems -----------
+    const empActive = (this._empUntil ?? 0) > now;
+    if (empActive) {
+      p.throttle = 0;
+      p.driftVel = V.scale(p.driftVel ?? { x: 0, y: 0, z: 0 }, 0.85);
+      // Disable autopilot & block fire further down via _empActive flag.
+      if (pilotCrew) pilotCrew.autopilot = false;
+    }
+    (this as unknown as { _empActive: boolean })._empActive = empActive;
+
+    // --- Rare event scheduler: occasional surprises near the player --------
+    this._nextRareAt = (this._nextRareAt ?? 45) - dt;
+    if (this._nextRareAt <= 0) {
+      this._nextRareAt = 90 + Math.random() * 180; // 1.5-4.5 minutes
+      this.spawnRarePhenomenon(p, now);
+    }
+    // Alien transmissions: eerie static, more likely inside nebulae or during EMP.
+    this._nextAlienAt = (this._nextAlienAt ?? 60) - dt;
+    if (this._nextAlienAt <= 0) {
+      this._nextAlienAt = (insideNebula || empActive ? 25 : 90) + Math.random() * 120;
+      this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+    }
+
 
 
     // Cycle target
@@ -2599,6 +2899,16 @@ export class Voidwake {
         const [name] = items[0];
         p.cargo[name] = (p.cargo[name] ?? 0) - 1;
         if (p.cargo[name] <= 0) delete p.cargo[name];
+        // Spawn a recoverable canister slightly behind the ship.
+        const back = V.scale(headingToVec(p.heading.yaw, p.heading.pitch), -25);
+        this.entities.push({
+          id: nextId(), kind: "loot", name,
+          pos: V.add(p.pos, back),
+          vel: V.scale(p.driftVel ?? { x: 0, y: 0, z: 0 }, 0.5),
+          faction: "player",
+          ttlAt: performance.now() / 1000 + 300,
+          loot: { ore: name === "ore" ? 1 : 0 },
+        });
         this.pushLog(`Jettisoned 1 ${name}.`);
         this.sfx("jettison");
       } else {
@@ -2609,7 +2919,7 @@ export class Voidwake {
     // Fire (locked while super-cruising — the FTL field destabilizes shots).
     p.cooldown -= dt;
     const _scState = (this as unknown as { _supercruise?: boolean })._supercruise;
-    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0 && !_scState) {
+    if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0 && !_scState && !this._empActive) {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
       p.cooldown = w.cooldown;
       this.entities.push({
@@ -2785,8 +3095,8 @@ export class Voidwake {
 
 
 
-    // Move entities
-    const now = performance.now() / 1000;
+    // Move entities (reuse `now` from earlier this frame)
+
     for (const e of this.entities) {
       if (e.kind !== "bullet") tickAI(e, dt, p, this.entities, this.rng);
       e.pos = V.add(e.pos, V.scale(e.vel, dt));
@@ -4462,6 +4772,10 @@ export class Voidwake {
         [GLYPHS.comet, colorFor("comet"), "comet — fast, harmless decoration"],
         [GLYPHS.nebula, colorFor("nebula"), "nebula cloud — drains shields, hides ships"],
         [GLYPHS.beacon, colorFor("beacon"), "distress beacon — payout, or a pirate trap"],
+        [GLYPHS.ufo, colorFor("ufo"), "UFO — enigmatic wanderer, observes then flees"],
+        [GLYPHS.thargoid, colorFor("thargoid"), "unknown contact — EMPs your ship, then departs"],
+        [GLYPHS.wormhole, colorFor("wormhole"), "wormhole — fly through to warp to its paired rift"],
+        [GLYPHS.dyson, colorFor("dyson"), "Dyson swarm — collector ring around a star"],
         ["[ ]", "#ffaa55", "targeting brackets — current target on-screen"],
         ["◣◢◤◥", "#fc6", "edge pointer — target off-screen (distance shown)"],
         ["+", "#ffaa55", "lead indicator — fire here to hit a moving target"],
@@ -4563,6 +4877,7 @@ export class Voidwake {
     const worldRadius: Record<string, number> = {
       star: 40, planet: 30, station: 18, asteroid: 8,
       ship: 4, bullet: 0.5, comet: 2, nebula: 240, beacon: 3,
+      ufo: 5, thargoid: 9, wormhole: 22, dyson: 4,
     };
     // Sort far→near so close objects overdraw distant ones.
     // Distance falloff: past 5000u, force single-glyph "dot"; past 10000u, cull.
