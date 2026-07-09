@@ -1898,6 +1898,13 @@ export class Voidwake {
   private _codexPage = 0;
   // Bounds of the clickable source-code link drawn at the bottom of the Codex.
   private _codexLinkRect: { x: number; y: number; w: number; h: number } | null = null;
+  // Fuel-scoop chatter throttle. When set, we're actively scooping a star;
+  // reused by the HUD to render a "SCOOPING" badge.
+  private _scoopingUntil = 0;
+  // Screen-shake state: renderer offsets the grid draw pass by up to this
+  // many pixels when performance.now()/1000 < _shakeUntil.
+  private _shakeUntil = 0;
+  private _shakeMag = 0;
 
 
 
@@ -2801,16 +2808,36 @@ export class Voidwake {
     }
 
 
-    // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
+    // Mouse steering: cursor offset from the *viewport* center (where the
+    // reticle / ship's forward vector points) pulls yaw/pitch. Historically
+    // we normalized against the entire canvas, so the reticle sat left of the
+    // mouse's neutral zone because the right-hand HUD panel eats ~28 cols.
+    // Remapping around the viewport keeps the crosshair under the cursor.
     if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn) {
       const sens = this.options.mouseSensitivity;
       const dz = 0.08;
-      const mx = this.input.mouseNX;
-      const my = this.input.mouseNY;
+      const cols = Math.max(40, Math.floor(this.canvas.width / CELL_W));
+      const rows = Math.max(20, Math.floor(this.canvas.height / CELL_H));
+      const vpLeftPx = 1 * CELL_W;
+      const vpRightPx = (cols - 28) * CELL_W;
+      const vpTopPx = 1 * CELL_H;
+      const vpBottomPx = (rows - 9) * CELL_H;
+      const vpW = Math.max(1, vpRightPx - vpLeftPx);
+      const vpH = Math.max(1, vpBottomPx - vpTopPx);
+      // fit() sets canvas.width to CSS clientWidth, so mouseCX (CSS px) is
+      // already in canvas pixel units — no DPR compensation required.
+      const cxPx = this.input.mouseCX;
+      const cyPx = this.input.mouseCY;
+      const mx = ((cxPx - vpLeftPx) / vpW) * 2 - 1;
+      const my = ((cyPx - vpTopPx) / vpH) * 2 - 1;
       const ax = Math.abs(mx) > dz ? (mx - Math.sign(mx) * dz) : 0;
       const ay = Math.abs(my) > dz ? (my - Math.sign(my) * dz) : 0;
-      p.heading.yaw += ax * dt * 1.4 * sens;
-      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ay * dt * 1.1 * sens));
+      // Clamp to keep the effective steering rate the same when the cursor
+      // strays into the HUD panel (mx/my can exceed 1 there).
+      const cax = Math.max(-1, Math.min(1, ax));
+      const cay = Math.max(-1, Math.min(1, ay));
+      p.heading.yaw += cax * dt * 1.4 * sens;
+      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + cay * dt * 1.1 * sens));
     }
 
     // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
@@ -2858,7 +2885,32 @@ export class Voidwake {
     const now = performance.now() / 1000;
     let insideNebula = false;
     for (const e of this.entities) {
-      if (e.kind === "nebula") {
+      if (e.kind === "star") {
+        // --- Fuel scooping: skim a star's corona at safe range for free fuel.
+        // Sweet spot scales with the star's apparent size (bigger stars scoop
+        // from further out). Too close = burn (nebula-style shield/hull etch).
+        const sc = stellarClassOf(e);
+        const scoopR = 260 * sc.sizeMul;
+        const burnR = 90 * sc.sizeMul;
+        // Black holes and pulsars aren't safe to scoop from — their gravity /
+        // radiation handlers own that band; skip the fuel bonus entirely.
+        const scoopable = sc.name !== "BH" && sc.name !== "PSR";
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (scoopable && d < scoopR && d > burnR && p.ship.fuel < p.ship.fuelMax) {
+          // ~6 fuel/sec at the sweet spot (d ≈ burnR), tapering to zero at scoopR.
+          const t01 = 1 - (d - burnR) / Math.max(1, scoopR - burnR);
+          const rate = 6.0 * Math.max(0, Math.min(1, t01));
+          p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + rate * dt);
+          if (!this._scoopingUntil || now > this._scoopingUntil) {
+            this.pushChatter("Engineer", `Scooping ${sc.name} corona — refuelling.`, "#fc6");
+          }
+          this._scoopingUntil = now + 2.0;
+        } else if (scoopable && d < burnR && !this.options.cheat) {
+          // Inside the burn radius: shield/hull etch until the pilot pulls out.
+          if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 6);
+          else p.ship.hull = Math.max(0, p.ship.hull - dt * 3);
+        }
+      } else if (e.kind === "nebula") {
         const d = V.len(V.sub(e.pos, p.pos));
         if (d < 280) {
           insideNebula = true;
@@ -3396,6 +3448,11 @@ export class Voidwake {
     // Red hull-hit flash: any hull drop this tick tints the screen red briefly.
     if (this.prevHull > 0 && p.ship.hull < this.prevHull) {
       this.hullFlashUntil = nowS + 0.35;
+      // Screen-shake: proportional to the size of the hit, capped so a wave
+      // of small pulse hits doesn't rattle the screen apart.
+      const dmg = this.prevHull - p.ship.hull;
+      this._shakeUntil = nowS + Math.min(0.35, 0.10 + dmg * 0.015);
+      this._shakeMag = Math.min(6, 1.5 + dmg * 0.4);
     }
     this.prevShield = p.ship.shield;
     this.prevHull = p.ship.hull;
@@ -4473,6 +4530,17 @@ export class Voidwake {
     }
 
 
+    // Screen-shake offset: while `_shakeUntil` is in the future, jitter the
+    // grid draw pass by a couple of pixels. Suppressed under reduced-motion.
+    const shakeNow = performance.now() / 1000;
+    let shakeDX = 0, shakeDY = 0;
+    if (!this._reducedMotion && this.screen === "playing" && shakeNow < this._shakeUntil) {
+      const remain = this._shakeUntil - shakeNow;
+      const mag = this._shakeMag * Math.min(1, remain / 0.25);
+      shakeDX = (Math.random() * 2 - 1) * mag;
+      shakeDY = (Math.random() * 2 - 1) * mag;
+    }
+
     // Paint grid. Cells with `glow` get a CSS-style canvas shadow that bleeds
     // their color outward — used for stars and other "luminous" glyphs.
     const fontStr = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
@@ -4494,7 +4562,7 @@ export class Voidwake {
           lastShadow = 0;
         }
         if (c.color !== lastFill) { ctx.fillStyle = c.color; lastFill = c.color; }
-        ctx.fillText(c.ch, x * CELL_W, y * CELL_H);
+        ctx.fillText(c.ch, x * CELL_W + shakeDX, y * CELL_H + shakeDY);
       }
     }
     if (lastShadow !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
@@ -5470,6 +5538,54 @@ export class Voidwake {
     } else {
       this._bracketTargetId = null;
     }
+
+    // Reticle — a faint crosshair at the viewport center marks where the
+    // guns actually point and where mouse-steering pulls toward. Drawn last
+    // over the world so it stays legible against stars/debris but under the
+    // status banners.
+    {
+      const rcx = vpLeft + Math.floor(vw / 2);
+      const rcy = vpTop + Math.floor(vh / 2);
+      const marks: [number, number, string][] = [
+        [rcx - 2, rcy, "-"],
+        [rcx + 2, rcy, "-"],
+        [rcx, rcy - 1, "|"],
+        [rcx, rcy + 1, "|"],
+        [rcx, rcy, "+"],
+      ];
+      for (const [mx, my, ch] of marks) {
+        if (mx <= vpLeft || mx >= vpRight || my <= vpTop || my >= vpBottom) continue;
+        const cell = g[my][mx];
+        if (cell.ch === " " || cell.ch === "·" || cell.ch === ".") {
+          g[my][mx] = { ch, color: "#3a5a3a" };
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Persistent status banners — centered near the top of the viewport so
+    // the pilot sees them without looking away from the reticle. Each banner
+    // has its own trigger; a stack of up to three can appear at once.
+    // ---------------------------------------------------------------------
+    const banners: [string, string, boolean][] = []; // [text, color, blink]
+    const bNow = performance.now() / 1000;
+    const bBlink = Math.floor(bNow * 2) % 2 === 0;
+    const hullFracB = p.ship.hull / p.ship.hullMax;
+    if (hullFracB > 0 && hullFracB < 0.30) {
+      banners.push([`⚠ LOW HULL ${Math.round(hullFracB * 100)}% — DOCK TO REPAIR`, bBlink ? "#ff5555" : "#661111", true]);
+    }
+    if (cargoTotal(p) >= p.ship.cargoMax) {
+      banners.push(["◈ CARGO HOLD FULL — sell at station or jettison (J)", "#ffcc55", false]);
+    }
+    if (this._scoopingUntil > bNow) {
+      banners.push(["◎ SCOOPING FUEL", bBlink ? "#ffd066" : "#a07020", false]);
+    }
+    banners.forEach((row, i) => {
+      const [text, color] = row;
+      const bx = Math.max(vpLeft + 2, vpLeft + Math.floor(vw / 2) - Math.floor(text.length / 2));
+      const by = vpTop + 2 + i;
+      putText(g, bx, by, text, color, vpRight);
+    });
 
     // ---------------------------------------------------------------------
     // Pinned quest tracker — compact panel anchored top-right of viewport.
