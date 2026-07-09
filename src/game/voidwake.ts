@@ -4704,8 +4704,15 @@ export class Voidwake {
       putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
     this.renderTitleNotice(g, Math.min(g.length - 6, menuTop + this.titleItems.length * 2 + 1));
+    // Rotating tip line, one every ~5s, below the menu but above the footer.
+    const tips = TITLE_TIPS;
+    const tipIdx = Math.floor(performance.now() / 5000) % tips.length;
+    const tip = "TIP · " + tips[tipIdx];
+    const tipY = Math.min(g.length - 3, menuTop + this.titleItems.length * 2 + 5);
+    putText(g, Math.max(2, Math.floor((cols - tip.length) / 2)), tipY, tip, "#6aa");
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
+
 
   renderTitleNotice(g: Cell[][], preferredY: number) {
     if (!this.titleNotice) return;
