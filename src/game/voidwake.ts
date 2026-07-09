@@ -72,6 +72,7 @@ const GLYPHS: Record<string, string> = {
   thargoid: "Ѫ",
   wormhole: "Ø",
   dyson: "◇",
+  derelict: "†",
 };
 
 // ---- Flavor data: names + procedural chatter generator -------------------
