@@ -1379,6 +1379,10 @@ function colorFor(kind: EntityKind): string {
     case "comet": return "#bff7ff";
     case "nebula": return "#c47afc";
     case "beacon": return "#ff66cc";
+    case "ufo": return "#9effd2";
+    case "thargoid": return "#a0ff3a";
+    case "wormhole": return "#c8a0ff";
+    case "dyson": return "#ffe6a0";
   }
 }
 
