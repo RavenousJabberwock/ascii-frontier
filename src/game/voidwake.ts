@@ -422,7 +422,11 @@ type EntityKind =
   | "loot"
   | "comet"
   | "nebula"
-  | "beacon";
+  | "beacon"
+  | "ufo"
+  | "thargoid"
+  | "wormhole"
+  | "dyson";
 
 interface Vec3 { x: number; y: number; z: number }
 
