@@ -5540,6 +5540,31 @@ export class Voidwake {
     }
 
     // ---------------------------------------------------------------------
+    // Persistent status banners — centered near the top of the viewport so
+    // the pilot sees them without looking away from the reticle. Each banner
+    // has its own trigger; a stack of up to three can appear at once.
+    // ---------------------------------------------------------------------
+    const banners: [string, string, boolean][] = []; // [text, color, blink]
+    const bNow = performance.now() / 1000;
+    const bBlink = Math.floor(bNow * 2) % 2 === 0;
+    const hullFrac = p.ship.hull / p.ship.hullMax;
+    if (hullFrac > 0 && hullFrac < 0.30) {
+      banners.push([`⚠ LOW HULL ${Math.round(hullFrac * 100)}% — DOCK TO REPAIR`, bBlink ? "#ff5555" : "#661111", true]);
+    }
+    if (cargoTotal(p) >= p.ship.cargoMax) {
+      banners.push(["◈ CARGO HOLD FULL — sell at station or jettison (J)", "#ffcc55", false]);
+    }
+    if (this._scoopingUntil > bNow) {
+      banners.push(["◎ SCOOPING FUEL", bBlink ? "#ffd066" : "#a07020", false]);
+    }
+    banners.forEach((row, i) => {
+      const [text, color] = row;
+      const bx = Math.max(vpLeft + 2, vpLeft + Math.floor(vw / 2) - Math.floor(text.length / 2));
+      const by = vpTop + 2 + i;
+      putText(g, bx, by, text, color, vpRight);
+    });
+
+    // ---------------------------------------------------------------------
     // Pinned quest tracker — compact panel anchored top-right of viewport.
     // Mirrors the bottom-bar mission line but stays visible while flying.
     // ---------------------------------------------------------------------
