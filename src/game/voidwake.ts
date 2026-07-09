@@ -2619,6 +2619,7 @@ export class Voidwake {
     }
 
     // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
+    const now = performance.now() / 1000;
     let insideNebula = false;
     for (const e of this.entities) {
       if (e.kind === "nebula") {
