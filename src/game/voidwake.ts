@@ -1978,7 +1978,7 @@ export class Voidwake {
   // player. Extends the sense that the frontier is alive without cluttering
   // the persistent world. Suppressed while docked.
   spawnRarePhenomenon(p: PlayerState, _now: number) {
-    if (this._docked) return;
+    if (this.dockedStationId != null) return;
     const roll = Math.random();
     // 40% jetsam drift, 30% wandering UFO, 15% derelict distress, 10% alien
     // transmission only, 5% Thargoid arrival.
