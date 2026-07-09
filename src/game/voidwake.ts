@@ -1258,6 +1258,13 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
 class Input {
   keys = new Set<string>();
   pressed = new Set<string>();
+  // Case-preserving per-frame text input buffer. Populated in keydown with the
+  // raw e.key (single characters or the sentinel "\b" for Backspace) so text
+  // fields keep the user's capitalization instead of the lowercased routing
+  // key used for gameplay input.
+  textBuffer: string[] = [];
+  // Accumulated mouse wheel deltaY for the frame. Positive = scroll down.
+  wheelDelta = 0;
   // Mouse position in normalized canvas coords (-1..1, center is 0,0).
   // mouseInside is true while the cursor hovers the canvas.
   mouseNX = 0;
@@ -1274,6 +1281,9 @@ class Input {
       const k = e.key.toLowerCase();
       if (!this.keys.has(k)) this.pressed.add(k);
       this.keys.add(k);
+      // Case-preserving text capture for name fields etc.
+      if (e.key === "Backspace") this.textBuffer.push("\b");
+      else if (e.key.length === 1) this.textBuffer.push(e.key);
       if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
     }, opts);
     el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()), opts);
@@ -1294,14 +1304,24 @@ class Input {
       this.mouseCY = e.clientY - r.top;
       this.mouseClicked = true;
     }, opts);
+    el.addEventListener("wheel", (e) => {
+      this.wheelDelta += e.deltaY;
+      e.preventDefault();
+    }, { ...(opts ?? {}), passive: false } as AddEventListenerOptions);
   }
   consume(k: string) {
     const had = this.pressed.has(k);
     this.pressed.delete(k);
     return had;
   }
-  endFrame() { this.pressed.clear(); this.mouseClicked = false; }
+  endFrame() {
+    this.pressed.clear();
+    this.mouseClicked = false;
+    this.textBuffer.length = 0;
+    this.wheelDelta = 0;
+  }
 }
+
 
 
 // =============================================================================
@@ -1765,7 +1785,9 @@ export class Voidwake {
   private _hidden = false;
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
+  private prevHull = -1;            // tracks hull from previous tick to detect any damage
   private shieldFlashUntil = 0;     // wall-time (s) until the shield-loss flash decays
+  private hullFlashUntil = 0;       // wall-time (s) until the red hull-hit flash decays
   private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
   private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
   private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
@@ -2601,16 +2623,21 @@ export class Voidwake {
     }
   }
 
-  // Capture printable keys into the player name
+  // Capture printable keys into the player name (case-preserving).
+  // Uses Input.textBuffer so shift+letter keeps its capitalization; also strips
+  // an accidentally-typed leading "Cmdr " since the HUD prepends that title
+  // itself (would otherwise render "Cmdr Cmdr Nosaj").
   handleNameInput() {
-    // crude live capture
-    for (const k of Array.from(this.input.pressed)) {
-      if (k === "backspace") this.charDraft.name = this.charDraft.name.slice(0, -1);
-      else if (k.length === 1 && /[\w \-.]/.test(k) && this.charDraft.name.length < 24) {
+    for (const k of this.input.textBuffer) {
+      if (k === "\b") this.charDraft.name = this.charDraft.name.slice(0, -1);
+      else if (/^[\w \-.]$/.test(k) && this.charDraft.name.length < 24) {
         this.charDraft.name += k;
       }
     }
+    // Strip any leading "cmdr " (any case) the user typed by habit.
+    this.charDraft.name = this.charDraft.name.replace(/^\s*cmdr\.?\s+/i, "");
   }
+
 
   // --- Ship creation -------------------------------------------------------
   updateShipCreate() {
@@ -2677,6 +2704,14 @@ export class Voidwake {
     if (keys.has(k.yawRight)) { p.heading.yaw += dt * 1.2; this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchUp)) { p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchDown)) { p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
+
+    // Mouse wheel throttle: each notch nudges throttle by ~5%.
+    if (this.input.wheelDelta !== 0) {
+      const step = -this.input.wheelDelta * 0.001; // scroll up = throttle up
+      p.throttle = Math.max(0, Math.min(1, p.throttle + step));
+      this._disengageAutopilot("stick");
+    }
+
 
     // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
     if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn) {
@@ -3237,7 +3272,12 @@ export class Voidwake {
       this.shieldFlashUntil = nowS + 0.45;
       this.sfx("hit");
     }
+    // Red hull-hit flash: any hull drop this tick tints the screen red briefly.
+    if (this.prevHull > 0 && p.ship.hull < this.prevHull) {
+      this.hullFlashUntil = nowS + 0.35;
+    }
     this.prevShield = p.ship.shield;
+    this.prevHull = p.ship.hull;
     const hullPct = p.ship.hull / p.ship.hullMax;
     if (hullPct > 0 && hullPct < 0.30 && nowS >= this.nextHullAlarmAt) {
       // Faster, more urgent alarm as hull drops; 10% → 0.6s, 30% → 1.6s
@@ -4348,6 +4388,13 @@ export class Voidwake {
         ctx.fillStyle = `rgba(170, 220, 255, ${a.toFixed(3)})`;
         ctx.fillRect(0, 0, w, h);
       }
+      // Red hull-hit tint — any hull damage this tick, decays over ~0.35s.
+      const hullRemain = this.hullFlashUntil - tNow;
+      if (hullRemain > 0) {
+        const a = Math.min(0.4, hullRemain / 0.35 * 0.4);
+        ctx.fillStyle = `rgba(255, 60, 60, ${a.toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      }
     }
   }
 
@@ -4596,7 +4643,7 @@ export class Voidwake {
     putText(g, 4, 3, "←/→ adjust   ↑/↓ field   ENTER continue", "#888");
     const c = this.charDraft;
     const rows = [
-      `name:    ${c.name}_`,
+      `name:    Cmdr ${c.name}_`,
       `gender:  ${c.gender}`,
       `species: ${c.species}`,
       `height:  ${c.height} cm`,
