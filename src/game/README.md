@@ -73,10 +73,21 @@ into stars, planets, stations, and traffic as you cruise toward them.
 
 Stars are drawn by spectral class — blue supergiants, red giants, sun-like
 yellows, orange dwarves, red dwarves, white dwarves — each with a matching
-color, size, and halo. Planets pull from a broader palette (oceans, deserts,
-gas giants, ice worlds, molten worlds, storm giants). Nebulae come in eight
-color families, render with irregular noise-driven outlines, drain shields,
-and garble the COMMS panel while you're inside one.
+color, size, and halo. Two exotic classes round out the sky: **pulsars
+(`PSR`)** are tiny neutron stars whose fill visibly blinks at ~1 Hz, and
+**black holes (`BH`)** are dark cores rimmed by a red-orange accretion
+glow that bend your course with real inverse-square gravity when you fly
+close. Cross the event horizon and you die instantly. Planets pull from a
+broader palette (oceans, deserts, gas giants, ice worlds, molten worlds,
+storm giants). Nebulae come in eight color families, render with irregular
+noise-driven outlines, drain shields, and garble the COMMS panel while
+you're inside one.
+
+Roughly a third of civilian and pirate ships fly under a **named pilot
+callsign** — hostiles get `Ace / Reaver / Fang / …`, friendlies get
+`Cmdr / Lt. / Capt.`, neutrals get `Trader / Freerunner / …`. The current
+target's pilot, when present, is shown as `pilot: …` in the cockpit
+target panel.
 
 ## Rare phenomena
 
@@ -92,6 +103,9 @@ Every so often the frontier throws something strange at you:
   you emerge next to its sibling somewhere across the universe.
 - **Dyson swarm (`◇`)** — a ring of collector platforms encircling one lucky
   star. Cosmetic (for now); a genuine wonder to stumble across.
+- **Derelict wrecks (`†`)** — silent, drifting hulks. Fly within 40u to
+  salvage credits + ore. No trap, no fight — just loot and a bit of
+  environmental storytelling. Cycle to them with `[` / `]` (DERELICT).
 - **Jetsam** — jettisoned cargo canisters. Your own `X` drops leave a
   recoverable canister behind you, and derelict jetsam fields drift into
   scanner range from time to time.

@@ -72,6 +72,7 @@ const GLYPHS: Record<string, string> = {
   thargoid: "Ѫ",
   wormhole: "Ø",
   dyson: "◇",
+  derelict: "†",
 };
 
 // ---- Flavor data: names + procedural chatter generator -------------------
@@ -165,6 +166,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Sector {sector} feels off. Could be nothing.",
     "Kill count's {kills}, Cmdr. You're getting sharp.",
     "Strange stars this sector. {weather}.",
+    "Guns are warm and I'm bored. Bad combination.",
+    "You ever notice pulsars keep time better than my last chrono?",
+    "If we see a †, that's a derelict. Free money, no shooting.",
+    "Black holes on the scope. Give them a wide berth, {cmdr}.",
+    "That {ship} handles nicer than the last three I've been on.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
@@ -243,6 +249,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "If you want me to take the stick, tag a target and hit O.",
     "Sector {sector} logged. Clean drift.",
     "Fuel at {fuel}%. Want me to plot a scoop pass?",
+    "Scope shows a black hole nearby. I'll route around it, Cmdr.",
+    "Picked up a derelict on the fringe. Worth a swing if we've got hold room.",
+    "That pulsar's ticking like a metronome. Kind of soothing, actually.",
+    "Wormhole on the plot — cheapest jump you'll ever fly.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
@@ -390,6 +400,23 @@ function pickLine(kind: ChatterKind, ctx: ChatterCtx): string {
   return fillTemplate(arr[Math.floor(Math.random() * arr.length)], ctx);
 }
 
+// Rotating tips shown on the title screen. Kept short so the line fits in
+// even a narrow terminal; the renderer swaps one every ~5 seconds.
+const TITLE_TIPS = [
+  "Mouse wheel controls throttle. Scroll up = faster.",
+  "Fly close to a star (not a black hole) with low throttle to scoop fuel.",
+  "Hire a Pilot at any station — press O to autopilot to your target.",
+  "Press L for the Codex — every glyph and color is documented.",
+  "Distress beacons pay well… but ~35% are pirate traps.",
+  "Wormholes (Ø) come in pairs. Drop into one, come out at its sibling.",
+  "Derelict wrecks (†) are free salvage. No trap, no fight.",
+  "Black holes bend your course before they eat you. Watch the drift.",
+  "Pulsars (PSR) blink because they spin. Cosmetic — but pretty.",
+  "Options ▸ Radio picks in-game music, including your own stream URL.",
+  "Cargo full? Dock and sell before you mine another rock.",
+  "Save often. Permadeath is opt-in for a reason.",
+];
+
 const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
 // Ship hull catalog. Add entries to expose new hulls to character creation.
@@ -427,7 +454,8 @@ type EntityKind =
   | "ufo"
   | "thargoid"
   | "wormhole"
-  | "dyson";
+  | "dyson"
+  | "derelict";
 
 interface Vec3 { x: number; y: number; z: number }
 
@@ -453,6 +481,10 @@ interface Entity {
   loot?: { credits?: number; ore?: number };
   // Cosmetic: which palette slot ship variants use for chatter line tagging.
   lastChatterAt?: number;
+  // Named NPC pilot (optional). Ships with a callsign show it in the target
+  // panel and in kill logs — "Raider Sting-14" alone is faceless, "Ace Vex
+  // Mara" gives the world named recurring adversaries.
+  pilotName?: string;
   // Faction retaliation: when set, this ship is temporarily hostile to the
   // player until performance.now()/1000 exceeds this value. Cleared by AI.
   hostileUntil?: number;
@@ -712,6 +744,23 @@ function nameFrom(rng: () => number, prefix: string): string {
   return n.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Callsign pool for named NPC pilots. Kept small so the same faces recur —
+// the point is that "Ace Vex Mara" is someone you might meet twice.
+const PILOT_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Niri","Otho","Pell","Quill","Sable","Yara","Cass","Juno","Ren","Ilo","Boro","Etta"];
+const PILOT_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne","Kade","Osk","Vell","Brant"];
+const PILOT_TITLE_HOSTILE  = ["Ace","Reaver","Fang","Slag","Ghost","Iron","Blackwake"];
+const PILOT_TITLE_FRIENDLY = ["Cmdr","Lt.","Capt.","Wing"];
+const PILOT_TITLE_NEUTRAL  = ["Trader","Freerunner","Skiff","Longhaul"];
+function pilotNameFor(rng: () => number, kind: EntityKind): string {
+  const first = PILOT_FIRST[Math.floor(rng() * PILOT_FIRST.length)];
+  const last  = PILOT_LAST[Math.floor(rng() * PILOT_LAST.length)];
+  const pool  = kind === "hostile" ? PILOT_TITLE_HOSTILE
+              : kind === "friendly" ? PILOT_TITLE_FRIENDLY
+              : PILOT_TITLE_NEUTRAL;
+  const title = pool[Math.floor(rng() * pool.length)];
+  return `${title} ${first} ${last}`;
+}
+
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
@@ -790,6 +839,8 @@ function generateUniverse(seed: number): Entity[] {
     const roll = rng();
     const kind: EntityKind = roll < 0.4 ? "friendly" : roll < 0.75 ? "neutral" : "hostile";
     const fac = kind === "friendly" ? "federation" : kind === "neutral" ? "guild" : "pirate";
+    // ~35% of ships get a named pilot callsign so the world has recurring faces.
+    const named = rng() < 0.35;
     out.push({
       id: nextId(), kind, name: nameFrom(rng, kind === "hostile" ? "Raider" : "Ship"),
       pos: randPos(rng, WORLD.shipRadius),
@@ -797,6 +848,24 @@ function generateUniverse(seed: number): Entity[] {
       faction: factions.includes(fac) ? fac : "guild",
       hull: kind === "hostile" ? 50 : 40, shield: 30,
       state: "wander", cooldown: 0, weaponId: "pulse",
+      pilotName: named ? pilotNameFor(rng, kind) : undefined,
+    });
+  }
+
+  // Derelict ships: static, silent wrecks scattered across the frontier.
+  // Fly within 40u to salvage credits + ore. No AI, no weapons — just loot
+  // and a bit of environmental storytelling.
+  for (let i = 0; i < 12; i++) {
+    out.push({
+      id: nextId(), kind: "derelict",
+      name: nameFrom(rng, rng() < 0.5 ? "Wreck" : "Hulk"),
+      pos: randPos(rng, WORLD_RADIUS * 0.9),
+      vel: { x: (rng() - 0.5) * 1.5, y: (rng() - 0.5) * 1.5, z: (rng() - 0.5) * 1.5 },
+      faction: "wreck",
+      loot: {
+        credits: 80 + Math.floor(rng() * 220),
+        ore: 3 + Math.floor(rng() * 12),
+      },
     });
   }
 
@@ -925,7 +994,7 @@ const V = {
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
-  if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson") return;
+  if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson" || e.kind === "derelict") return;
 
   // Faction retaliation: retaliating ships attack the player like hostiles.
   const now = performance.now() / 1000;
@@ -1484,6 +1553,7 @@ function colorFor(kind: EntityKind): string {
     case "thargoid": return "#a0ff3a";
     case "wormhole": return "#c8a0ff";
     case "dyson": return "#ffe6a0";
+    case "derelict": return "#c0d0d8";
   }
 }
 
@@ -1557,9 +1627,16 @@ const STELLAR_CLASSES: StellarClass[] = [
   { name: "M",  color: "#d84040", edge: "#5a1010", halo: "#2a0808", sizeMul: 0.45, glyph: "*" },
   // White dwarf (tiny, brilliant white-blue)
   { name: "WD", color: "#e8f2ff", edge: "#6a80a0", halo: "#3a4a6a", sizeMul: 0.28, glyph: "•" },
+  // Pulsar — tiny, rapidly rotating neutron star. Fill flickers in render
+  // via stellarFillOf() so it visibly blinks against the sky.
+  { name: "PSR", color: "#bfd8ff", edge: "#3a4a80", halo: "#101a3a", sizeMul: 0.22, glyph: "•" },
+  // Black hole — dark core with a thin red-orange accretion glow.
+  // Gravity pulls the player in close-approach; see BH handler in updatePlaying.
+  { name: "BH", color: "#1a0a10", edge: "#ff6a20", halo: "#5a1a08", sizeMul: 0.9, glyph: "◉" },
 ];
 // Weighted picker — main-sequence stars are more common than giants.
-const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8];
+// New entries (PSR, BH) are appended at the end and use very small weights.
+const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1];
 const _stellarWSum = STELLAR_WEIGHTS.reduce((a, b) => a + b, 0);
 function stellarClassOf(e: Entity): StellarClass {
   const h = hash01(e.id * 977 + 31);
@@ -1612,7 +1689,18 @@ function tintFor(e: Entity): { fill: string; edge: string } {
     }
     case "star": {
       const sc = stellarClassOf(e);
+      // Pulsars flicker: period ~0.6s, phase offset per-id. Off-beat drops
+      // fill to the halo color so the star reads as blinking.
+      if (sc.name === "PSR") {
+        const phase = hash01(e.id * 1301) * Math.PI * 2;
+        const t = performance.now() / 1000;
+        const on = Math.sin(t * 10 + phase) > 0.2;
+        return { fill: on ? sc.color : sc.halo, edge: sc.edge };
+      }
       return { fill: sc.color, edge: sc.edge };
+    }
+    case "derelict": {
+      return { fill: "#c0d0d8", edge: "#5a6870" };
     }
     case "asteroid": {
       const i = Math.floor(h * ASTEROID_FILLS.length);
@@ -2806,6 +2894,25 @@ export class Voidwake {
           // Consume the beacon either way.
           e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
         }
+      } else if (e.kind === "derelict") {
+        // Silent salvage: fly within 40u to collect credits + ore. No trap.
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 40) {
+          const cr = e.loot?.credits ?? 0;
+          const ore = e.loot?.ore ?? 0;
+          p.credits += cr;
+          if (ore && cargoTotal(p) < p.ship.cargoMax) {
+            const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
+            p.cargo.ore = (p.cargo.ore ?? 0) + take;
+            this.pushLog(`Salvaged ${e.name}: +${cr}cr +${take} ore.`);
+          } else {
+            this.pushLog(`Salvaged ${e.name}: +${cr}cr (hold full — ore left behind).`);
+          }
+          this.pushChatter("Sensors", `Derelict logged. ${e.name} was a ghost.`, "#c0d0d8");
+          this.sfx("chime");
+          // Convert to expiring loot so it disappears next tick.
+          e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
+        }
       } else if (e.kind === "ufo") {
         // Observe-then-flee. Close approach turns them curious.
         const dv = V.sub(p.pos, e.pos);
@@ -3095,8 +3202,21 @@ export class Voidwake {
         if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
         const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
+        // Black hole gravity: a strong inverse-square pull whenever the player
+        // is inside ~800u of a BH-class star. Adds a real "watch your speed"
+        // hazard to the sky. Killed on contact via the star radius check below.
+        if (e.kind === "star" && stellarClassOf(e).name === "BH" && d < 800 && d > radius) {
+          const n = V.scale(V.sub(e.pos, p.pos), 1 / d);
+          // Pull scales with 1/d, capped so the frame step stays sane.
+          const pull = Math.min(80, 4000 / Math.max(20, d));
+          const dv = V.scale(n, pull * dt);
+          p.driftVel = V.add(p.driftVel ?? { x: 0, y: 0, z: 0 }, dv);
+          p.pos = V.add(p.pos, V.scale(n, pull * dt * 0.5));
+          if (d < 200 && Math.random() < 0.05) this.pushLog("⚠ Gravitational shear rising — pull away!");
+        }
         // Star fuel scoop: a "corona" ring just outside the kill radius.
-        if (e.kind === "star" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
+        // Skipped for black holes (no photosphere to scoop from).
+        if (e.kind === "star" && stellarClassOf(e).name !== "BH" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
           p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 18);
           if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 5);
           else p.ship.hull = Math.max(0, p.ship.hull - dt * 2);
@@ -3109,7 +3229,8 @@ export class Voidwake {
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
           if (e.kind === "star") {
             // Instant kill on star contact — no forgiveness.
-            this.die(`Incinerated by star ${e.name}`, e.name);
+            const isBH = stellarClassOf(e).name === "BH";
+            this.die(isBH ? `Crossed the event horizon of ${e.name}` : `Incinerated by star ${e.name}`, e.name);
             return;
           }
           if (e.kind === "station") {
@@ -3330,6 +3451,7 @@ export class Voidwake {
     { label: "NEUTRAL",  match: (e) => e.kind === "neutral" },
     { label: "BEACON",   match: (e) => e.kind === "beacon" },
     { label: "PLANET",   match: (e) => e.kind === "planet" },
+    { label: "DERELICT", match: (e) => e.kind === "derelict" },
   ];
   private _targetCatIdx = -1;
 
@@ -4609,8 +4731,15 @@ export class Voidwake {
       putText(g, Math.floor((cols - 16) / 2), menuTop + i * 2, label, sel ? "#fff" : "#9fe");
     });
     this.renderTitleNotice(g, Math.min(g.length - 6, menuTop + this.titleItems.length * 2 + 1));
+    // Rotating tip line, one every ~5s, below the menu but above the footer.
+    const tips = TITLE_TIPS;
+    const tipIdx = Math.floor(performance.now() / 5000) % tips.length;
+    const tip = "TIP · " + tips[tipIdx];
+    const tipY = Math.min(g.length - 3, menuTop + this.titleItems.length * 2 + 5);
+    putText(g, Math.max(2, Math.floor((cols - tip.length) / 2)), tipY, tip, "#6aa");
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
   }
+
 
   renderTitleNotice(g: Cell[][], preferredY: number) {
     if (!this.titleNotice) return;
@@ -4848,6 +4977,9 @@ export class Voidwake {
         [GLYPHS.thargoid, colorFor("thargoid"), "unknown contact — EMPs your ship, then departs"],
         [GLYPHS.wormhole, colorFor("wormhole"), "wormhole — fly through to warp to its paired rift"],
         [GLYPHS.dyson, colorFor("dyson"), "Dyson swarm — collector ring around a star"],
+        [GLYPHS.derelict, colorFor("derelict"), "derelict wreck — fly within 40u to salvage"],
+        ["◉", "#1a0a10", "black hole — bends your course, kills on contact"],
+        ["•", "#bfd8ff", "pulsar — tiny neutron star, blinks visibly"],
         ["[ ]", "#ffaa55", "targeting brackets — current target on-screen"],
         ["◣◢◤◥", "#fc6", "edge pointer — target off-screen (distance shown)"],
         ["+", "#ffaa55", "lead indicator — fire here to hit a moving target"],
@@ -4966,7 +5098,7 @@ export class Voidwake {
     const worldRadius: Record<string, number> = {
       star: 40, planet: 30, station: 18, asteroid: 8,
       ship: 4, bullet: 0.5, comet: 2, nebula: 240, beacon: 3,
-      ufo: 5, thargoid: 9, wormhole: 22, dyson: 4,
+      ufo: 5, thargoid: 9, wormhole: 22, dyson: 4, derelict: 6,
     };
     // Sort far→near so close objects overdraw distant ones.
     // Distance falloff: past 5000u, force single-glyph "dot"; past 10000u, cull.
@@ -5459,7 +5591,8 @@ export class Voidwake {
       const d = V.len(V.sub(t.pos, p.pos));
       putText(g, panelX, cy2 + 2, `${t.name}`, "#fff");
       putText(g, panelX, cy2 + 3, `${t.kind}  d=${d.toFixed(0)}u`, "#9fe");
-      if (t.hull !== undefined) putText(g, panelX, cy2 + 4, `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
+      if (t.pilotName) putText(g, panelX, cy2 + 4, `pilot: ${t.pilotName}`, "#ffd680");
+      if (t.hull !== undefined) putText(g, panelX, cy2 + (t.pilotName ? 5 : 4), `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
     } else {
       putText(g, panelX, cy2 + 2, "T cycle  [ ] by kind", "#888");
     }
