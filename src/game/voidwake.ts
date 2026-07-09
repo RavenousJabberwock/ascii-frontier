@@ -718,6 +718,23 @@ function nameFrom(rng: () => number, prefix: string): string {
   return n.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Callsign pool for named NPC pilots. Kept small so the same faces recur —
+// the point is that "Ace Vex Mara" is someone you might meet twice.
+const PILOT_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Niri","Otho","Pell","Quill","Sable","Yara","Cass","Juno","Ren","Ilo","Boro","Etta"];
+const PILOT_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne","Kade","Osk","Vell","Brant"];
+const PILOT_TITLE_HOSTILE  = ["Ace","Reaver","Fang","Slag","Ghost","Iron","Blackwake"];
+const PILOT_TITLE_FRIENDLY = ["Cmdr","Lt.","Capt.","Wing"];
+const PILOT_TITLE_NEUTRAL  = ["Trader","Freerunner","Skiff","Longhaul"];
+function pilotNameFor(rng: () => number, kind: EntityKind): string {
+  const first = PILOT_FIRST[Math.floor(rng() * PILOT_FIRST.length)];
+  const last  = PILOT_LAST[Math.floor(rng() * PILOT_LAST.length)];
+  const pool  = kind === "hostile" ? PILOT_TITLE_HOSTILE
+              : kind === "friendly" ? PILOT_TITLE_FRIENDLY
+              : PILOT_TITLE_NEUTRAL;
+  const title = pool[Math.floor(rng() * pool.length)];
+  return `${title} ${first} ${last}`;
+}
+
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
