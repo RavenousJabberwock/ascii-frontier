@@ -3087,9 +3087,12 @@ export class Voidwake {
     (this as unknown as { _empActive: boolean })._empActive = empActive;
 
     // --- Rare event scheduler: occasional surprises near the player --------
-    this._nextRareAt = (this._nextRareAt ?? 45) - dt;
+    this._sessionTime = (this._sessionTime ?? 0) + dt;
+    this._nextRareAt = (this._nextRareAt ?? 1800) - dt;
     if (this._nextRareAt <= 0) {
-      this._nextRareAt = 90 + Math.random() * 180; // 1.5-4.5 minutes
+      // 1–2 hours between surprises. They should feel like postcards from the
+      // deep, not a scheduled event calendar.
+      this._nextRareAt = 3600 + Math.random() * 3600;
       this.spawnRarePhenomenon(p, now);
     }
     // Alien transmissions: eerie static, more likely inside nebulae or during EMP.
