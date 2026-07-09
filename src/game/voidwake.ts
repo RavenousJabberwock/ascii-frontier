@@ -3157,8 +3157,21 @@ export class Voidwake {
         if (e.kind !== "planet" && e.kind !== "star" && e.kind !== "asteroid" && e.kind !== "station") continue;
         const radius = e.kind === "star" ? 40 : e.kind === "planet" ? 30 : e.kind === "station" ? 18 : 10;
         const d = V.len(V.sub(e.pos, p.pos));
+        // Black hole gravity: a strong inverse-square pull whenever the player
+        // is inside ~800u of a BH-class star. Adds a real "watch your speed"
+        // hazard to the sky. Killed on contact via the star radius check below.
+        if (e.kind === "star" && stellarClassOf(e).name === "BH" && d < 800 && d > radius) {
+          const n = V.scale(V.sub(e.pos, p.pos), 1 / d);
+          // Pull scales with 1/d, capped so the frame step stays sane.
+          const pull = Math.min(80, 4000 / Math.max(20, d));
+          const dv = V.scale(n, pull * dt);
+          p.driftVel = V.add(p.driftVel ?? { x: 0, y: 0, z: 0 }, dv);
+          p.pos = V.add(p.pos, V.scale(n, pull * dt * 0.5));
+          if (d < 200 && Math.random() < 0.05) this.pushLog("⚠ Gravitational shear rising — pull away!");
+        }
         // Star fuel scoop: a "corona" ring just outside the kill radius.
-        if (e.kind === "star" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
+        // Skipped for black holes (no photosphere to scoop from).
+        if (e.kind === "star" && stellarClassOf(e).name !== "BH" && d > radius && d < radius * 2.0 && p.throttle < 0.35) {
           p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 18);
           if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 5);
           else p.ship.hull = Math.max(0, p.ship.hull - dt * 2);
