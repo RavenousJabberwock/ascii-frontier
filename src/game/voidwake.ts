@@ -1831,8 +1831,12 @@ export class Voidwake {
   // Rare phenomena (UFO / Thargoid / wormhole / alien comms) scheduler state.
   _empUntil = 0;                    // performance.now()/1000 while Thargoid field is active
   _wormholeCooldown = 0;            // seconds; blocks re-entry after a jump
-  _nextRareAt = 45;                 // seconds until next surprise spawn near player
+  // Rare surprises are meant to be genuinely rare — first hit ~30 min into a
+  // session, then once every 1–2 hours of play. Alien static is more ambient
+  // (a few minutes between whispers, faster inside nebulae / EMP fields).
+  _nextRareAt = 1800;               // seconds until next surprise spawn near player
   _nextAlienAt = 60;                // seconds until next alien transmission
+  _sessionTime = 0;                 // seconds since engine start (for HUD readouts)
   _empActive = false;               // set each frame from _empUntil, checked in fire block
   // Simple FPS counter (toggleable in Options).
   fps = 0;
