@@ -1786,6 +1786,8 @@ export class Voidwake {
   private _codexReturn: Screen = "title";
   // Codex page: 0 = symbols, 1 = colors, 2 = keys.
   private _codexPage = 0;
+  // Bounds of the clickable source-code link drawn at the bottom of the Codex.
+  private _codexLinkRect: { x: number; y: number; w: number; h: number } | null = null;
 
 
 
