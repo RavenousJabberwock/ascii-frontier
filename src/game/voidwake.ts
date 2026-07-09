@@ -2868,6 +2868,25 @@ export class Voidwake {
           // Consume the beacon either way.
           e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
         }
+      } else if (e.kind === "derelict") {
+        // Silent salvage: fly within 40u to collect credits + ore. No trap.
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 40) {
+          const cr = e.loot?.credits ?? 0;
+          const ore = e.loot?.ore ?? 0;
+          p.credits += cr;
+          if (ore && cargoTotal(p) < p.ship.cargoMax) {
+            const take = Math.min(ore, p.ship.cargoMax - cargoTotal(p));
+            p.cargo.ore = (p.cargo.ore ?? 0) + take;
+            this.pushLog(`Salvaged ${e.name}: +${cr}cr +${take} ore.`);
+          } else {
+            this.pushLog(`Salvaged ${e.name}: +${cr}cr (hold full — ore left behind).`);
+          }
+          this.pushChatter("Sensors", `Derelict logged. ${e.name} was a ghost.`, "#c0d0d8");
+          this.sfx("chime");
+          // Convert to expiring loot so it disappears next tick.
+          e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
+        }
       } else if (e.kind === "ufo") {
         // Observe-then-flee. Close approach turns them curious.
         const dv = V.sub(p.pos, e.pos);
