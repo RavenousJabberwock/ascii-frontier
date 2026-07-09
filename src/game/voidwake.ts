@@ -5554,7 +5554,8 @@ export class Voidwake {
       const d = V.len(V.sub(t.pos, p.pos));
       putText(g, panelX, cy2 + 2, `${t.name}`, "#fff");
       putText(g, panelX, cy2 + 3, `${t.kind}  d=${d.toFixed(0)}u`, "#9fe");
-      if (t.hull !== undefined) putText(g, panelX, cy2 + 4, `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
+      if (t.pilotName) putText(g, panelX, cy2 + 4, `pilot: ${t.pilotName}`, "#ffd680");
+      if (t.hull !== undefined) putText(g, panelX, cy2 + (t.pilotName ? 5 : 4), `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
     } else {
       putText(g, panelX, cy2 + 2, "T cycle  [ ] by kind", "#888");
     }
