@@ -157,6 +157,31 @@ seconds.
 
 ---
 
+## Playing offline
+
+A fully self-contained offline build is included in the repository and can be
+regenerated at any time:
+
+```bash
+bun run build:offline
+```
+
+This produces `dist-offline/ascii-frontier-offline.html` — a single HTML file
+with no server, no build step, and no internet required. Open it directly in
+any modern browser to play.
+
+> **Tip:** Some browsers block `localStorage` when opening a file from disk,
+> which prevents saves from persisting. If that happens, serve the file
+> locally:
+>
+> ```bash
+> python3 -m http.server 8000
+> ```
+>
+> Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
+
+---
+
 ## License
 
 MIT — do what you want; attribution appreciated.
