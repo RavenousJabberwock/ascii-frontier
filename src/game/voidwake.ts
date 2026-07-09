@@ -4388,6 +4388,13 @@ export class Voidwake {
         ctx.fillStyle = `rgba(170, 220, 255, ${a.toFixed(3)})`;
         ctx.fillRect(0, 0, w, h);
       }
+      // Red hull-hit tint — any hull damage this tick, decays over ~0.35s.
+      const hullRemain = this.hullFlashUntil - tNow;
+      if (hullRemain > 0) {
+        const a = Math.min(0.4, hullRemain / 0.35 * 0.4);
+        ctx.fillStyle = `rgba(255, 60, 60, ${a.toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      }
     }
   }
 
