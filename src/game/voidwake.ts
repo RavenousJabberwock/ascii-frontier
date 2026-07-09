@@ -391,6 +391,23 @@ function pickLine(kind: ChatterKind, ctx: ChatterCtx): string {
   return fillTemplate(arr[Math.floor(Math.random() * arr.length)], ctx);
 }
 
+// Rotating tips shown on the title screen. Kept short so the line fits in
+// even a narrow terminal; the renderer swaps one every ~5 seconds.
+const TITLE_TIPS = [
+  "Mouse wheel controls throttle. Scroll up = faster.",
+  "Fly close to a star (not a black hole) with low throttle to scoop fuel.",
+  "Hire a Pilot at any station — press O to autopilot to your target.",
+  "Press L for the Codex — every glyph and color is documented.",
+  "Distress beacons pay well… but ~35% are pirate traps.",
+  "Wormholes (Ø) come in pairs. Drop into one, come out at its sibling.",
+  "Derelict wrecks (†) are free salvage. No trap, no fight.",
+  "Black holes bend your course before they eat you. Watch the drift.",
+  "Pulsars (PSR) blink because they spin. Cosmetic — but pretty.",
+  "Options ▸ Radio picks in-game music, including your own stream URL.",
+  "Cargo full? Dock and sell before you mine another rock.",
+  "Save often. Permadeath is opt-in for a reason.",
+];
+
 const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
 
 // Ship hull catalog. Add entries to expose new hulls to character creation.
