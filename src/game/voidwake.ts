@@ -5539,6 +5539,29 @@ export class Voidwake {
       this._bracketTargetId = null;
     }
 
+    // Reticle — a faint crosshair at the viewport center marks where the
+    // guns actually point and where mouse-steering pulls toward. Drawn last
+    // over the world so it stays legible against stars/debris but under the
+    // status banners.
+    {
+      const rcx = vpLeft + Math.floor(vw / 2);
+      const rcy = vpTop + Math.floor(vh / 2);
+      const marks: [number, number, string][] = [
+        [rcx - 2, rcy, "-"],
+        [rcx + 2, rcy, "-"],
+        [rcx, rcy - 1, "|"],
+        [rcx, rcy + 1, "|"],
+        [rcx, rcy, "+"],
+      ];
+      for (const [mx, my, ch] of marks) {
+        if (mx <= vpLeft || mx >= vpRight || my <= vpTop || my >= vpBottom) continue;
+        const cell = g[my][mx];
+        if (cell.ch === " " || cell.ch === "·" || cell.ch === ".") {
+          g[my][mx] = { ch, color: "#3a5a3a" };
+        }
+      }
+    }
+
     // ---------------------------------------------------------------------
     // Persistent status banners — centered near the top of the viewport so
     // the pilot sees them without looking away from the reticle. Each banner
