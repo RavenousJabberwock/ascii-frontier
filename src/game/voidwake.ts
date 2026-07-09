@@ -249,6 +249,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "If you want me to take the stick, tag a target and hit O.",
     "Sector {sector} logged. Clean drift.",
     "Fuel at {fuel}%. Want me to plot a scoop pass?",
+    "Scope shows a black hole nearby. I'll route around it, Cmdr.",
+    "Picked up a derelict on the fringe. Worth a swing if we've got hold room.",
+    "That pulsar's ticking like a metronome. Kind of soothing, actually.",
+    "Wormhole on the plot — cheapest jump you'll ever fly.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
