@@ -2657,13 +2657,136 @@ export class Voidwake {
           // Consume the beacon either way.
           e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
         }
+      } else if (e.kind === "ufo") {
+        // Observe-then-flee. Close approach turns them curious.
+        const dv = V.sub(p.pos, e.pos);
+        const d = V.len(dv);
+        e.cooldown = (e.cooldown ?? 0) - dt;
+        if (e.state === "wander") {
+          if (d < 900) {
+            e.state = "observe";
+            e.cooldown = 6 + Math.random() * 4;
+            this.pushChatter("Sensors", "Unidentified contact holding station off our bow.", "#9effd2");
+            this.sfx("chime");
+          } else if ((e.cooldown ?? 0) <= 0) {
+            e.cooldown = 3 + Math.random() * 6;
+            e.vel = { x: (Math.random() - 0.5) * 14, y: (Math.random() - 0.5) * 14, z: (Math.random() - 0.5) * 14 };
+          }
+        } else if (e.state === "observe") {
+          // Pace the player.
+          const desired = V.scale(V.norm(dv), 0);
+          const drift = V.scale(V.sub(p.pos, e.pos), 0);
+          e.vel = V.add(desired, drift);
+          // Match player velocity roughly.
+          const pv = p.driftVel ?? { x: 0, y: 0, z: 0 };
+          e.vel = V.scale(pv, 0.8);
+          if ((e.cooldown ?? 0) <= 0) {
+            // Boost away perpendicular to player.
+            const away = V.norm({ x: -dv.x + (Math.random() - 0.5) * 200, y: -dv.y, z: -dv.z + (Math.random() - 0.5) * 200 });
+            e.vel = V.scale(away, 220); // impulse departure
+            e.state = "depart";
+            e.cooldown = 2.0;
+            this.pushChatter("Sensors", "Contact accelerating — beyond scanner ceiling.", "#9effd2");
+          }
+        } else if (e.state === "depart") {
+          if ((e.cooldown ?? 0) <= 0) {
+            // Teleport far away and reset.
+            e.pos = randPos(Math.random, WORLD_RADIUS);
+            e.vel = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 };
+            e.state = "wander";
+            e.cooldown = 20 + Math.random() * 60;
+          }
+        }
+      } else if (e.kind === "thargoid") {
+        // Rare EMP encounter. State: dormant -> approach -> emp -> leave.
+        const dv = V.sub(p.pos, e.pos);
+        const d = V.len(dv);
+        e.cooldown = (e.cooldown ?? 0) - dt;
+        if (e.state === "dormant") {
+          // Tick down; when it hits zero AND player isn't docked, warp near.
+          if ((e.cooldown ?? 0) <= 0 && !this._docked) {
+            // Warp to just off the player's port bow.
+            const off = { x: (Math.random() - 0.5) * 600, y: (Math.random() - 0.5) * 200, z: (Math.random() - 0.5) * 600 };
+            e.pos = V.add(p.pos, off);
+            e.state = "emp";
+            e.cooldown = 9 + Math.random() * 4;
+            // Engage EMP on the player.
+            this._empUntil = now + (e.cooldown ?? 8);
+            this.pushLog("⚠ SYSTEMS FAULT — unknown field enveloping the ship.");
+            this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+            this.sfx("alarm");
+          }
+        } else if (e.state === "emp") {
+          // Hold station near player; keep EMP active.
+          this._empUntil = Math.max(this._empUntil ?? 0, now + 0.25);
+          // Ambient garbled comms.
+          if (Math.random() < 0.02) this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+          // Slow drift so it appears alive.
+          e.vel = V.scale({ x: Math.sin(now * 0.6), y: Math.cos(now * 0.4), z: Math.sin(now * 0.5) }, 4);
+          if ((e.cooldown ?? 0) <= 0) {
+            e.state = "leave";
+            e.cooldown = 1.2;
+            this.pushChatter("Sensors", "Field collapsing — controls returning.", "#9effd2");
+          }
+        } else if (e.state === "leave") {
+          // Streak away and re-arm dormant timer.
+          const away = V.norm({ x: -dv.x, y: -dv.y, z: -dv.z });
+          e.vel = V.scale(away, 400);
+          if ((e.cooldown ?? 0) <= 0) {
+            e.pos = randPos(Math.random, WORLD_RADIUS * 0.95);
+            e.vel = { x: 0, y: 0, z: 0 };
+            e.state = "dormant";
+            e.cooldown = 240 + Math.random() * 360; // 4-10 minutes
+          }
+        }
+      } else if (e.kind === "wormhole") {
+        // Traversable: fly close, warp to sibling. Guard against instant
+        // bounce-back via _wormholeCooldown.
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 60 && (this._wormholeCooldown ?? 0) <= 0) {
+          const sib = this.entities.find((x) => x.id === e.targetId && x.kind === "wormhole");
+          if (sib) {
+            p.pos = V.add(sib.pos, { x: 80, y: 0, z: 80 });
+            p.driftVel = { x: 0, y: 0, z: 0 };
+            p.throttle = 0;
+            this._wormholeCooldown = 3.0;
+            this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
+            this.pushChatter("Navigator", "Reality just... folded. We're somewhere else.", "#c8a0ff");
+            this.sfx("dock");
+          }
+        }
       }
     }
+    if (this._wormholeCooldown) this._wormholeCooldown = Math.max(0, this._wormholeCooldown - dt);
     if (insideNebula && Math.random() < 0.01) this.pushChatter("Sensors", "Nebula wash — shields degrading.", "#c47afc");
     // Save flag for renderer (dim starfield, fog overlay).
     (this as unknown as { _inNebula: boolean })._inNebula = insideNebula;
     // Block fire while super-cruising (preserved in fire block below via flag).
     (this as unknown as { _supercruise: boolean })._supercruise = supercruise;
+
+    // --- EMP: if a Thargoid field is active, disable ship systems -----------
+    const empActive = (this._empUntil ?? 0) > now;
+    if (empActive) {
+      p.throttle = 0;
+      p.driftVel = V.scale(p.driftVel ?? { x: 0, y: 0, z: 0 }, 0.85);
+      // Disable autopilot & block fire further down via _empActive flag.
+      if (pilotCrew) pilotCrew.autopilot = false;
+    }
+    (this as unknown as { _empActive: boolean })._empActive = empActive;
+
+    // --- Rare event scheduler: occasional surprises near the player --------
+    this._nextRareAt = (this._nextRareAt ?? 45) - dt;
+    if (this._nextRareAt <= 0) {
+      this._nextRareAt = 90 + Math.random() * 180; // 1.5-4.5 minutes
+      this.spawnRarePhenomenon(p, now);
+    }
+    // Alien transmissions: eerie static, more likely inside nebulae or during EMP.
+    this._nextAlienAt = (this._nextAlienAt ?? 60) - dt;
+    if (this._nextAlienAt <= 0) {
+      this._nextAlienAt = (insideNebula || empActive ? 25 : 90) + Math.random() * 120;
+      this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+    }
+
 
 
     // Cycle target
