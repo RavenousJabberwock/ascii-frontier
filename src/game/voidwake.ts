@@ -1831,8 +1831,12 @@ export class Voidwake {
   // Rare phenomena (UFO / Thargoid / wormhole / alien comms) scheduler state.
   _empUntil = 0;                    // performance.now()/1000 while Thargoid field is active
   _wormholeCooldown = 0;            // seconds; blocks re-entry after a jump
-  _nextRareAt = 45;                 // seconds until next surprise spawn near player
+  // Rare surprises are meant to be genuinely rare — first hit ~30 min into a
+  // session, then once every 1–2 hours of play. Alien static is more ambient
+  // (a few minutes between whispers, faster inside nebulae / EMP fields).
+  _nextRareAt = 1800;               // seconds until next surprise spawn near player
   _nextAlienAt = 60;                // seconds until next alien transmission
+  _sessionTime = 0;                 // seconds since engine start (for HUD readouts)
   _empActive = false;               // set each frame from _empUntil, checked in fire block
   // Simple FPS counter (toggleable in Options).
   fps = 0;
@@ -3083,9 +3087,12 @@ export class Voidwake {
     (this as unknown as { _empActive: boolean })._empActive = empActive;
 
     // --- Rare event scheduler: occasional surprises near the player --------
-    this._nextRareAt = (this._nextRareAt ?? 45) - dt;
+    this._sessionTime = (this._sessionTime ?? 0) + dt;
+    this._nextRareAt = (this._nextRareAt ?? 1800) - dt;
     if (this._nextRareAt <= 0) {
-      this._nextRareAt = 90 + Math.random() * 180; // 1.5-4.5 minutes
+      // 1–2 hours between surprises. They should feel like postcards from the
+      // deep, not a scheduled event calendar.
+      this._nextRareAt = 3600 + Math.random() * 3600;
       this.spawnRarePhenomenon(p, now);
     }
     // Alien transmissions: eerie static, more likely inside nebulae or during EMP.
@@ -5965,6 +5972,17 @@ export class Voidwake {
     if (this.paused) {
       const msg = "‖ PAUSED — press P to resume";
       putText(g, vpLeft + Math.floor(vw / 2 - msg.length / 2), vpTop + Math.floor(vh / 2) - 1, msg, "#ffcc33");
+      const t = Math.floor(this._sessionTime ?? 0);
+      const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = t % 60;
+      const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+      const stamp = `session ${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+      putText(g, vpLeft + Math.floor(vw / 2 - stamp.length / 2), vpTop + Math.floor(vh / 2) + 1, stamp, "#7a8a9a");
+      const p2 = this.player;
+      if (p2) {
+        const cargoQty = Object.values(p2.cargo ?? {}).reduce((a: number, c) => a + (Number(c) || 0), 0);
+        const stats = `${p2.credits | 0} cr · ${p2.kills ?? 0} kills · ${cargoQty} cargo`;
+        putText(g, vpLeft + Math.floor(vw / 2 - stats.length / 2), vpTop + Math.floor(vh / 2) + 2, stats, "#5a6a7a");
+      }
     }
 
     this.tickMissions();
