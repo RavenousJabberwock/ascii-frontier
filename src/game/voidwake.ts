@@ -2621,16 +2621,21 @@ export class Voidwake {
     }
   }
 
-  // Capture printable keys into the player name
+  // Capture printable keys into the player name (case-preserving).
+  // Uses Input.textBuffer so shift+letter keeps its capitalization; also strips
+  // an accidentally-typed leading "Cmdr " since the HUD prepends that title
+  // itself (would otherwise render "Cmdr Cmdr Nosaj").
   handleNameInput() {
-    // crude live capture
-    for (const k of Array.from(this.input.pressed)) {
-      if (k === "backspace") this.charDraft.name = this.charDraft.name.slice(0, -1);
-      else if (k.length === 1 && /[\w \-.]/.test(k) && this.charDraft.name.length < 24) {
+    for (const k of this.input.textBuffer) {
+      if (k === "\b") this.charDraft.name = this.charDraft.name.slice(0, -1);
+      else if (/^[\w \-.]$/.test(k) && this.charDraft.name.length < 24) {
         this.charDraft.name += k;
       }
     }
+    // Strip any leading "cmdr " (any case) the user typed by habit.
+    this.charDraft.name = this.charDraft.name.replace(/^\s*cmdr\.?\s+/i, "");
   }
+
 
   // --- Ship creation -------------------------------------------------------
   updateShipCreate() {
