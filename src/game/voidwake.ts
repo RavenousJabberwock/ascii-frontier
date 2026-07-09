@@ -2801,16 +2801,36 @@ export class Voidwake {
     }
 
 
-    // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
+    // Mouse steering: cursor offset from the *viewport* center (where the
+    // reticle / ship's forward vector points) pulls yaw/pitch. Historically
+    // we normalized against the entire canvas, so the reticle sat left of the
+    // mouse's neutral zone because the right-hand HUD panel eats ~28 cols.
+    // Remapping around the viewport keeps the crosshair under the cursor.
     if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn) {
       const sens = this.options.mouseSensitivity;
       const dz = 0.08;
-      const mx = this.input.mouseNX;
-      const my = this.input.mouseNY;
+      const cols = Math.max(40, Math.floor(this.canvas.width / CELL_W));
+      const rows = Math.max(20, Math.floor(this.canvas.height / CELL_H));
+      const vpLeftPx = 1 * CELL_W;
+      const vpRightPx = (cols - 28) * CELL_W;
+      const vpTopPx = 1 * CELL_H;
+      const vpBottomPx = (rows - 9) * CELL_H;
+      const vpW = Math.max(1, vpRightPx - vpLeftPx);
+      const vpH = Math.max(1, vpBottomPx - vpTopPx);
+      // Rescale by DPR — canvas.width is in device px but mouseCX is CSS px.
+      const dpr = this.canvas.width / Math.max(1, this.canvas.clientWidth || this.canvas.width);
+      const cxPx = this.input.mouseCX * dpr;
+      const cyPx = this.input.mouseCY * dpr;
+      const mx = ((cxPx - vpLeftPx) / vpW) * 2 - 1;
+      const my = ((cyPx - vpTopPx) / vpH) * 2 - 1;
       const ax = Math.abs(mx) > dz ? (mx - Math.sign(mx) * dz) : 0;
       const ay = Math.abs(my) > dz ? (my - Math.sign(my) * dz) : 0;
-      p.heading.yaw += ax * dt * 1.4 * sens;
-      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ay * dt * 1.1 * sens));
+      // Clamp to keep the effective steering rate the same when the cursor
+      // strays into the HUD panel (mx/my can exceed 1 there).
+      const cax = Math.max(-1, Math.min(1, ax));
+      const cay = Math.max(-1, Math.min(1, ay));
+      p.heading.yaw += cax * dt * 1.4 * sens;
+      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + cay * dt * 1.1 * sens));
     }
 
     // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
