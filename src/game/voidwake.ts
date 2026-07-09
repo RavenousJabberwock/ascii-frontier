@@ -4832,7 +4832,7 @@ export class Voidwake {
       ];
       swatches.forEach((s, i) => {
         const y = 4 + i;
-        if (y >= g.length - 2) return;
+        if (y >= g.length - 4) return;
         putText(g, 4, y, "████", s[0]);
         putText(g, 10, y, s[1], "#cfd");
       });
