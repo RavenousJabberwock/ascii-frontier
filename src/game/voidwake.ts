@@ -4866,6 +4866,23 @@ export class Voidwake {
       });
     }
 
+    // Clickable source-code link. The bounding box is stored so updateCodex()
+    // can detect clicks and open the repository in a new tab.
+    const linkText = `Source code: ${SOURCE_URL.replace(/^https:\/\//, "")}`;
+    const linkX = 4;
+    const linkY = g.length - 4;
+    this._codexLinkRect = { x: linkX, y: linkY, w: linkText.length, h: 1 };
+    putText(g, linkX, linkY, linkText, "#7ec8ff");
+
+    // Show a pointer cursor when the mouse is over the link.
+    const gx = this.input.mouseCX / CELL_W;
+    const gy = this.input.mouseCY / CELL_H;
+    const r = this._codexLinkRect;
+    this.canvas.style.cursor =
+      this.input.mouseInside && gx >= r.x && gx < r.x + r.w && gy >= r.y && gy < r.y + r.h
+        ? "pointer"
+        : "default";
+
     putText(g, 4, g.length - 2,
       "Tip: brackets tighten when a new target is acquired; the chevron shows where to turn.", "#888");
     void cols;
