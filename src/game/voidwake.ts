@@ -3184,7 +3184,8 @@ export class Voidwake {
           p.pos = V.add(e.pos, V.scale(n, radius + 0.5));
           if (e.kind === "star") {
             // Instant kill on star contact — no forgiveness.
-            this.die(`Incinerated by star ${e.name}`, e.name);
+            const isBH = stellarClassOf(e).name === "BH";
+            this.die(isBH ? `Crossed the event horizon of ${e.name}` : `Incinerated by star ${e.name}`, e.name);
             return;
           }
           if (e.kind === "station") {
