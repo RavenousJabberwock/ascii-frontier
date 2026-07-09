@@ -2703,6 +2703,14 @@ export class Voidwake {
     if (keys.has(k.pitchUp)) { p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchDown)) { p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
+    // Mouse wheel throttle: each notch nudges throttle by ~5%.
+    if (this.input.wheelDelta !== 0) {
+      const step = -this.input.wheelDelta * 0.001; // scroll up = throttle up
+      p.throttle = Math.max(0, Math.min(1, p.throttle + step));
+      this._disengageAutopilot("stick");
+    }
+
+
     // Mouse steering: cursor offset from canvas center pulls yaw/pitch.
     if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn) {
       const sens = this.options.mouseSensitivity;
