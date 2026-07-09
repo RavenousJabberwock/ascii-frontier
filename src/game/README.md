@@ -114,11 +114,33 @@ Every so often the frontier throws something strange at you:
 
 Weapon shots, engine exhausts, comets, and distant suns all glow.
 
+## HUD banners & reticle
+
+A faint `+` crosshair marks the viewport center — that's where the guns
+point, and where mouse-steer now pulls the cursor toward (previously the
+neutral point was the canvas center, which sat left of the reticle because
+the right-hand HUD panel eats ~28 columns). Persistent status banners
+appear stacked below the top of the viewport:
+
+- **LOW HULL** — blinking red under 30%.
+- **CARGO HOLD FULL** — amber, prompts to sell or `J` jettison.
+- **SCOOPING FUEL** — pulses amber while skimming a star corona.
+
 ## Damage feedback
 
 Shields collapsing tint the screen cyan-white for a beat; taking any hull
-damage tints it red for a beat. Both fade cleanly and are suppressed for
-players with `prefers-reduced-motion` enabled.
+damage tints it red *and* jolts the grid a couple of pixels — bigger hits
+shake harder. Both effects fade cleanly and are suppressed for players
+with `prefers-reduced-motion` enabled.
+
+## Fuel scooping
+
+Fly close (but not too close) to a star and your Engineer will scoop the
+corona for free fuel. The sweet spot scales with the star's apparent
+size — big blue giants scoop from further out than red dwarves. Get too
+close and the corona starts etching your shields and then your hull.
+Black holes and pulsars are *not* safe to scoop from.
+
 
 ## Character creation
 
