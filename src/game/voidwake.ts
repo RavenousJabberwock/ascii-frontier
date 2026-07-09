@@ -2817,10 +2817,10 @@ export class Voidwake {
       const vpBottomPx = (rows - 9) * CELL_H;
       const vpW = Math.max(1, vpRightPx - vpLeftPx);
       const vpH = Math.max(1, vpBottomPx - vpTopPx);
-      // Rescale by DPR — canvas.width is in device px but mouseCX is CSS px.
-      const dpr = this.canvas.width / Math.max(1, this.canvas.clientWidth || this.canvas.width);
-      const cxPx = this.input.mouseCX * dpr;
-      const cyPx = this.input.mouseCY * dpr;
+      // fit() sets canvas.width to CSS clientWidth, so mouseCX (CSS px) is
+      // already in canvas pixel units — no DPR compensation required.
+      const cxPx = this.input.mouseCX;
+      const cyPx = this.input.mouseCY;
       const mx = ((cxPx - vpLeftPx) / vpW) * 2 - 1;
       const my = ((cyPx - vpTopPx) / vpH) * 2 - 1;
       const ax = Math.abs(mx) > dz ? (mx - Math.sign(mx) * dz) : 0;
