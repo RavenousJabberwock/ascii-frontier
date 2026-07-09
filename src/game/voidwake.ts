@@ -4562,7 +4562,7 @@ export class Voidwake {
           lastShadow = 0;
         }
         if (c.color !== lastFill) { ctx.fillStyle = c.color; lastFill = c.color; }
-        ctx.fillText(c.ch, x * CELL_W, y * CELL_H);
+        ctx.fillText(c.ch, x * CELL_W + shakeDX, y * CELL_H + shakeDY);
       }
     }
     if (lastShadow !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
