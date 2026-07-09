@@ -1263,6 +1263,11 @@ class Input {
   mouseNX = 0;
   mouseNY = 0;
   mouseInside = false;
+  // Most recent mouse position in CSS pixels relative to the canvas top-left,
+  // plus a one-shot click flag consumed by UI screens (e.g. Codex hyperlinks).
+  mouseCX = 0;
+  mouseCY = 0;
+  mouseClicked = false;
   attach(el: HTMLElement, signal?: AbortSignal) {
     const opts = signal ? { signal } : undefined;
     el.addEventListener("keydown", (e) => {
@@ -1275,19 +1280,27 @@ class Input {
     el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; }, opts);
     el.addEventListener("mousemove", (e) => {
       const r = (el as HTMLCanvasElement).getBoundingClientRect();
-      this.mouseNX = ((e.clientX - r.left) / r.width) * 2 - 1;
-      this.mouseNY = ((e.clientY - r.top) / r.height) * 2 - 1;
+      this.mouseCX = e.clientX - r.left;
+      this.mouseCY = e.clientY - r.top;
+      this.mouseNX = (this.mouseCX / r.width) * 2 - 1;
+      this.mouseNY = (this.mouseCY / r.height) * 2 - 1;
       this.mouseInside = true;
     }, opts);
     el.addEventListener("mouseleave", () => { this.mouseInside = false; }, opts);
     el.addEventListener("mouseenter", () => { this.mouseInside = true; }, opts);
+    el.addEventListener("click", (e) => {
+      const r = (el as HTMLCanvasElement).getBoundingClientRect();
+      this.mouseCX = e.clientX - r.left;
+      this.mouseCY = e.clientY - r.top;
+      this.mouseClicked = true;
+    }, opts);
   }
   consume(k: string) {
     const had = this.pressed.has(k);
     this.pressed.delete(k);
     return had;
   }
-  endFrame() { this.pressed.clear(); }
+  endFrame() { this.pressed.clear(); this.mouseClicked = false; }
 }
 
 
