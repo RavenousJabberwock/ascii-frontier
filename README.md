@@ -9,6 +9,7 @@ Built with [TanStack Start](https://tanstack.com/start) + React 19 + Vite 7
 and styled with Tailwind v4.
 
 Play it live at https://ascii-frontier.lovable.app/
+
 Play the "offline" version (i.e. you can just download the page) here: https://ravenousjabberwock.github.io/ascii-frontier/
 
 Q: Wait, why isn't it on github.lo like the rest of your stuff?
