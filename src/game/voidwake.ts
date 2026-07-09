@@ -455,6 +455,10 @@ interface Entity {
   loot?: { credits?: number; ore?: number };
   // Cosmetic: which palette slot ship variants use for chatter line tagging.
   lastChatterAt?: number;
+  // Named NPC pilot (optional). Ships with a callsign show it in the target
+  // panel and in kill logs — "Raider Sting-14" alone is faceless, "Ace Vex
+  // Mara" gives the world named recurring adversaries.
+  pilotName?: string;
   // Faction retaliation: when set, this ship is temporarily hostile to the
   // player until performance.now()/1000 exceeds this value. Cleared by AI.
   hostileUntil?: number;
