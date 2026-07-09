@@ -5979,7 +5979,8 @@ export class Voidwake {
       putText(g, vpLeft + Math.floor(vw / 2 - stamp.length / 2), vpTop + Math.floor(vh / 2) + 1, stamp, "#7a8a9a");
       const p2 = this.player;
       if (p2) {
-        const stats = `${p2.credits | 0} cr · ${p2.kills ?? 0} kills · ${(p2.cargo ?? []).reduce((a, c) => a + (c.qty ?? 0), 0)} cargo`;
+        const cargoQty = Object.values(p2.cargo ?? {}).reduce((a: number, c) => a + (Number(c) || 0), 0);
+        const stats = `${p2.credits | 0} cr · ${p2.kills ?? 0} kills · ${cargoQty} cargo`;
         putText(g, vpLeft + Math.floor(vw / 2 - stats.length / 2), vpTop + Math.floor(vh / 2) + 2, stats, "#5a6a7a");
       }
     }
