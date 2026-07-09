@@ -3451,6 +3451,7 @@ export class Voidwake {
     { label: "NEUTRAL",  match: (e) => e.kind === "neutral" },
     { label: "BEACON",   match: (e) => e.kind === "beacon" },
     { label: "PLANET",   match: (e) => e.kind === "planet" },
+    { label: "DERELICT", match: (e) => e.kind === "derelict" },
   ];
   private _targetCatIdx = -1;
 
