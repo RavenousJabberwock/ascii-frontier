@@ -5547,9 +5547,9 @@ export class Voidwake {
     const banners: [string, string, boolean][] = []; // [text, color, blink]
     const bNow = performance.now() / 1000;
     const bBlink = Math.floor(bNow * 2) % 2 === 0;
-    const hullFrac = p.ship.hull / p.ship.hullMax;
-    if (hullFrac > 0 && hullFrac < 0.30) {
-      banners.push([`⚠ LOW HULL ${Math.round(hullFrac * 100)}% — DOCK TO REPAIR`, bBlink ? "#ff5555" : "#661111", true]);
+    const hullFracB = p.ship.hull / p.ship.hullMax;
+    if (hullFracB > 0 && hullFracB < 0.30) {
+      banners.push([`⚠ LOW HULL ${Math.round(hullFracB * 100)}% — DOCK TO REPAIR`, bBlink ? "#ff5555" : "#661111", true]);
     }
     if (cargoTotal(p) >= p.ship.cargoMax) {
       banners.push(["◈ CARGO HOLD FULL — sell at station or jettison (J)", "#ffcc55", false]);
