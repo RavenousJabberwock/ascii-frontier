@@ -1258,6 +1258,13 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
 class Input {
   keys = new Set<string>();
   pressed = new Set<string>();
+  // Case-preserving per-frame text input buffer. Populated in keydown with the
+  // raw e.key (single characters or the sentinel "\b" for Backspace) so text
+  // fields keep the user's capitalization instead of the lowercased routing
+  // key used for gameplay input.
+  textBuffer: string[] = [];
+  // Accumulated mouse wheel deltaY for the frame. Positive = scroll down.
+  wheelDelta = 0;
   // Mouse position in normalized canvas coords (-1..1, center is 0,0).
   // mouseInside is true while the cursor hovers the canvas.
   mouseNX = 0;
@@ -1274,6 +1281,9 @@ class Input {
       const k = e.key.toLowerCase();
       if (!this.keys.has(k)) this.pressed.add(k);
       this.keys.add(k);
+      // Case-preserving text capture for name fields etc.
+      if (e.key === "Backspace") this.textBuffer.push("\b");
+      else if (e.key.length === 1) this.textBuffer.push(e.key);
       if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
     }, opts);
     el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()), opts);
@@ -1294,14 +1304,24 @@ class Input {
       this.mouseCY = e.clientY - r.top;
       this.mouseClicked = true;
     }, opts);
+    el.addEventListener("wheel", (e) => {
+      this.wheelDelta += e.deltaY;
+      e.preventDefault();
+    }, { ...(opts ?? {}), passive: false } as AddEventListenerOptions);
   }
   consume(k: string) {
     const had = this.pressed.has(k);
     this.pressed.delete(k);
     return had;
   }
-  endFrame() { this.pressed.clear(); this.mouseClicked = false; }
+  endFrame() {
+    this.pressed.clear();
+    this.mouseClicked = false;
+    this.textBuffer.length = 0;
+    this.wheelDelta = 0;
+  }
 }
+
 
 
 // =============================================================================
