@@ -1706,6 +1706,12 @@ export class Voidwake {
   private _nextCivSpawnAt = 25;
   private _nextPirateSpawnAt = 18;
   private _nextPlanetSpawnAt = 60;
+  // Rare phenomena (UFO / Thargoid / wormhole / alien comms) scheduler state.
+  _empUntil = 0;                    // performance.now()/1000 while Thargoid field is active
+  _wormholeCooldown = 0;            // seconds; blocks re-entry after a jump
+  _nextRareAt = 45;                 // seconds until next surprise spawn near player
+  _nextAlienAt = 60;                // seconds until next alien transmission
+  _docked = false;                  // true while at a station (suppresses rare events)
   // Simple FPS counter (toggleable in Options).
   fps = 0;
   private _fpsAcc = 0;
