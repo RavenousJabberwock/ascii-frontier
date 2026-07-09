@@ -46,7 +46,7 @@ Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
 
 ## How to play
 
-- `W/S` throttle up/down
+- `W/S` throttle up/down (or **scroll the mouse wheel** — up = faster, down = slower)
 - `A/D` yaw left/right
 - `Q/E` pitch up/down
 - `Space` fire weapons
