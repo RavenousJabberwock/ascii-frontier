@@ -833,6 +833,73 @@ function generateUniverse(seed: number): Entity[] {
     });
   }
 
+  // ---- Rare phenomena --------------------------------------------------
+  // UFOs: a handful of enigmatic wanderers. They ignore factions and drift
+  // between random survey points; if the player gets close they linger
+  // ("observe") briefly then boost away.
+  for (let i = 0; i < 4; i++) {
+    out.push({
+      id: nextId(), kind: "ufo", name: nameFrom(rng, "UAP"),
+      pos: randPos(rng, WORLD_RADIUS),
+      vel: { x: (rng() - 0.5) * 8, y: (rng() - 0.5) * 8, z: (rng() - 0.5) * 8 },
+      faction: "alien",
+      state: "wander",
+    });
+  }
+  // Thargoid-like observers: extremely rare, dormant deep in the void.
+  // When triggered they warp near the player, EMP everything, watch, and
+  // depart. See engine tick for the encounter state machine.
+  for (let i = 0; i < 2; i++) {
+    out.push({
+      id: nextId(), kind: "thargoid", name: "Unknown Contact",
+      pos: randPos(rng, WORLD_RADIUS * 0.9),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien",
+      state: "dormant",
+      cooldown: 30 + rng() * 90, // seconds until it *might* consider triggering
+    });
+  }
+  // Traversable wormhole pairs. Each pair shares a `targetId` pointing at
+  // its sibling; flying within 60u teleports the player to the sibling.
+  for (let i = 0; i < 2; i++) {
+    const a: Entity = {
+      id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
+      pos: randPos(rng, WORLD_RADIUS * 0.85),
+      vel: { x: 0, y: 0, z: 0 }, faction: "nature",
+    };
+    const b: Entity = {
+      id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
+      pos: randPos(rng, WORLD_RADIUS * 0.85),
+      vel: { x: 0, y: 0, z: 0 }, faction: "nature",
+    };
+    a.targetId = b.id; b.targetId = a.id;
+    out.push(a, b);
+  }
+  // Dyson swarm: pick a G/K/F star and lace a ring of "◇" collectors
+  // around it. Purely cosmetic — no AI, no interaction beyond awe.
+  const dysonHosts = out.filter((e) => e.kind === "star" && e.id !== 1);
+  if (dysonHosts.length) {
+    const host = dysonHosts[Math.floor(rng() * dysonHosts.length)];
+    const ringR = 220;
+    const nSwarm = 18;
+    // Random ring tilt.
+    const tiltX = (rng() - 0.5) * 0.6;
+    const tiltZ = (rng() - 0.5) * 0.6;
+    for (let i = 0; i < nSwarm; i++) {
+      const a = (i / nSwarm) * Math.PI * 2;
+      const dx = Math.cos(a) * ringR;
+      const dz = Math.sin(a) * ringR;
+      const dy = Math.sin(a) * ringR * tiltX + Math.cos(a) * ringR * tiltZ;
+      out.push({
+        id: nextId(), kind: "dyson", name: `${host.name} Swarm`,
+        pos: { x: host.pos.x + dx, y: host.pos.y + dy, z: host.pos.z + dz },
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "alien",
+        ownerId: host.id,
+      });
+    }
+  }
+
   return out;
 }
 
