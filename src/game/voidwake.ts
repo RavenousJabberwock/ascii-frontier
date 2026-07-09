@@ -4762,6 +4762,15 @@ export class Voidwake {
       this.screen = this._codexReturn;
       this.menuCursor = 0;
     }
+    // Clickable source-code link at the bottom of the Codex.
+    if (this.input.mouseClicked && this._codexLinkRect) {
+      const gx = this.input.mouseCX / CELL_W;
+      const gy = this.input.mouseCY / CELL_H;
+      const r = this._codexLinkRect;
+      if (gx >= r.x && gx < r.x + r.w && gy >= r.y && gy < r.y + r.h) {
+        window.open(SOURCE_URL, "_blank", "noopener,noreferrer");
+      }
+    }
   }
 
   renderCodex(g: Cell[][]) {
