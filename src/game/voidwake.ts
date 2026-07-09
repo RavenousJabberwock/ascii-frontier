@@ -67,6 +67,10 @@ const GLYPHS: Record<string, string> = {
   comet: "~",
   nebula: "▒",
   beacon: "!",
+  ufo: "◉",
+  thargoid: "Ѫ",
+  wormhole: "Ø",
+  dyson: "◇",
 };
 
 // ---- Flavor data: names + procedural chatter generator -------------------
