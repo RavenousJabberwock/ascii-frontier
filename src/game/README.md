@@ -91,7 +91,10 @@ target panel.
 
 ## Rare phenomena
 
-Every so often the frontier throws something strange at you:
+Every so often — genuinely rarely — the frontier throws something strange
+at you. The scheduler waits ~30 minutes into a session for the first
+surprise, then rolls once every 1–2 hours of play. They're meant to feel
+like postcards from the deep, not a rotating event calendar:
 
 - **UFOs (`◉`)** — cyan-green wanderers. Get close and one will pace your
   ship, observe for a few seconds, then boost away at absurd speed.
@@ -110,7 +113,8 @@ Every so often the frontier throws something strange at you:
   recoverable canister behind you, and derelict jetsam fields drift into
   scanner range from time to time.
 - **Alien transmissions** — untranslatable glyph strings appear on the COMMS
-  feed, more often near nebulae or during a Thargoid encounter.
+  feed (ambient, not on the rare-event timer — more often near nebulae or
+  during a Thargoid encounter).
 
 Weapon shots, engine exhausts, comets, and distant suns all glow.
 
