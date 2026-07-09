@@ -1785,7 +1785,9 @@ export class Voidwake {
   private _hidden = false;
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
+  private prevHull = -1;            // tracks hull from previous tick to detect any damage
   private shieldFlashUntil = 0;     // wall-time (s) until the shield-loss flash decays
+  private hullFlashUntil = 0;       // wall-time (s) until the red hull-hit flash decays
   private nextHullAlarmAt = 0;      // periodic low-hull alarm beep timer
   private nextFuelAlarmAt = 0;      // periodic low-fuel alarm beep timer
   private prevGunnerKills = 0;      // to detect gunner-assisted kills for chatter
