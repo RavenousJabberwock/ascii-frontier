@@ -1948,6 +1948,97 @@ export class Voidwake {
     if (this.chatter.length > 6) this.chatter.pop();
   }
 
+  // Eerie alien transmission generator — glyph-mixed strings that read as
+  // untranslatable telemetry. Purely cosmetic; a few templates seeded with
+  // occasional real-word fragments to imply almost-meaning.
+  alienGibberish(): string {
+    const glyphs = "◊∆∇≡Θξζψχφ▲▼◄►◇◈☌☍♁♆⌬⏃⏂⌘※∴∵";
+    const phon = ["xa", "vok", "th", "ith", "ael", "orr", "nn", "ryx", "uun", "gha", "shk", "'", "-"];
+    const words: string[] = [];
+    const nW = 2 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < nW; i++) {
+      const parts = 2 + Math.floor(Math.random() * 3);
+      let w = "";
+      for (let j = 0; j < parts; j++) w += phon[Math.floor(Math.random() * phon.length)];
+      words.push(w);
+    }
+    // Sprinkle glyph clusters.
+    const g1 = glyphs[Math.floor(Math.random() * glyphs.length)];
+    const g2 = glyphs[Math.floor(Math.random() * glyphs.length)];
+    const templates = [
+      `${g1}${g2} ${words.join(" ")} ${g2}`,
+      `... ${words.slice(0, 2).join(" ")} ${g1} ${words.slice(2).join(" ")} ...`,
+      `${words.join(".")} — ${g1}${g2}${g1}`,
+      `[${g1}] ${words.join(" ")} [${g2}]`,
+      `${g1} we ${g2} return — ${words[0]} ${g1}`,
+    ];
+    return templates[Math.floor(Math.random() * templates.length)];
+  }
+
+  // Occasional surprise: pick one rare phenomenon and spawn it near the
+  // player. Extends the sense that the frontier is alive without cluttering
+  // the persistent world. Suppressed while docked.
+  spawnRarePhenomenon(p: PlayerState, _now: number) {
+    if (this._docked) return;
+    const roll = Math.random();
+    // 40% jetsam drift, 30% wandering UFO, 15% derelict distress, 10% alien
+    // transmission only, 5% Thargoid arrival.
+    const off = () => ({
+      x: (Math.random() - 0.5) * 900,
+      y: (Math.random() - 0.5) * 300,
+      z: (Math.random() - 0.5) * 900,
+    });
+    if (roll < 0.40) {
+      // Jetsam field: 1-4 loot canisters drifting together.
+      const n = 1 + Math.floor(Math.random() * 4);
+      const base = V.add(p.pos, off());
+      const kinds = ["ore", "supplies", "salvage", "medkit", "black-box"];
+      const label = kinds[Math.floor(Math.random() * kinds.length)];
+      for (let i = 0; i < n; i++) {
+        this.entities.push({
+          id: nextId(), kind: "loot", name: label,
+          pos: V.add(base, { x: (Math.random() - 0.5) * 60, y: (Math.random() - 0.5) * 30, z: (Math.random() - 0.5) * 60 }),
+          vel: { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 4, z: (Math.random() - 0.5) * 4 },
+          faction: "wreck",
+          ttlAt: performance.now() / 1000 + 240,
+          loot: { credits: 30 + Math.floor(Math.random() * 90), ore: Math.floor(Math.random() * 6) },
+        });
+      }
+      this.pushChatter("Sensors", `Drifting ${label} canisters on scope — fly through to collect.`, "#ffe066");
+    } else if (roll < 0.70) {
+      // Spawn a wandering UFO within visual range.
+      this.entities.push({
+        id: nextId(), kind: "ufo", name: nameFrom(this.rng, "UAP"),
+        pos: V.add(p.pos, off()),
+        vel: { x: (Math.random() - 0.5) * 12, y: (Math.random() - 0.5) * 12, z: (Math.random() - 0.5) * 12 },
+        faction: "alien", state: "wander",
+      });
+      this.pushChatter("Sensors", "Unidentified aerial phenomenon on long-range scope.", "#9effd2");
+    } else if (roll < 0.85) {
+      // A derelict distress beacon nearby (may be a trap — same rules).
+      const trap = Math.random() < 0.35;
+      this.entities.push({
+        id: nextId(), kind: "beacon",
+        name: trap ? "Distress (?)" : "Distress",
+        pos: V.add(p.pos, off()),
+        vel: { x: 0, y: 0, z: 0 }, faction: "wreck",
+        state: trap ? "trap" : "rescue",
+        loot: { credits: 140 + Math.floor(Math.random() * 220) },
+      });
+      this.pushChatter("Comms", "...mayday...position...any vessel...", "#ff66cc");
+    } else if (roll < 0.95) {
+      // Just an eerie transmission — no entity.
+      this.pushChatter("???", this.alienGibberish(), "#a0ff3a");
+    } else {
+      // Thargoid encounter: wake the first dormant one and force it to
+      // trigger this frame. Skipped if none exist.
+      const thg = this.entities.find((e) => e.kind === "thargoid" && e.state === "dormant");
+      if (thg) thg.cooldown = 0.01;
+      this.pushChatter("Sensors", "Unknown signature approaching. Very fast.", "#a0ff3a");
+    }
+  }
+
+
   // Build the slot dictionary used by the procedural chatter generator.
   // Pulls live state so generated lines reference the player's actual ship,
   // hull%, current target, sector coords, cargo, etc. — not canned text.
