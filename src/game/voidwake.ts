@@ -3272,7 +3272,12 @@ export class Voidwake {
       this.shieldFlashUntil = nowS + 0.45;
       this.sfx("hit");
     }
+    // Red hull-hit flash: any hull drop this tick tints the screen red briefly.
+    if (this.prevHull > 0 && p.ship.hull < this.prevHull) {
+      this.hullFlashUntil = nowS + 0.35;
+    }
     this.prevShield = p.ship.shield;
+    this.prevHull = p.ship.hull;
     const hullPct = p.ship.hull / p.ship.hullMax;
     if (hullPct > 0 && hullPct < 0.30 && nowS >= this.nextHullAlarmAt) {
       // Faster, more urgent alarm as hull drops; 10% → 0.6s, 30% → 1.6s
