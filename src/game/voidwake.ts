@@ -2899,6 +2899,16 @@ export class Voidwake {
         const [name] = items[0];
         p.cargo[name] = (p.cargo[name] ?? 0) - 1;
         if (p.cargo[name] <= 0) delete p.cargo[name];
+        // Spawn a recoverable canister slightly behind the ship.
+        const back = V.scale(headingToVec(p.heading.yaw, p.heading.pitch), -25);
+        this.entities.push({
+          id: nextId(), kind: "loot", name,
+          pos: V.add(p.pos, back),
+          vel: V.scale(p.driftVel ?? { x: 0, y: 0, z: 0 }, 0.5),
+          faction: "player",
+          ttlAt: performance.now() / 1000 + 300,
+          loot: { ore: name === "ore" ? 1 : 0 },
+        });
         this.pushLog(`Jettisoned 1 ${name}.`);
         this.sfx("jettison");
       } else {
