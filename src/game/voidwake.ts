@@ -1564,9 +1564,16 @@ const STELLAR_CLASSES: StellarClass[] = [
   { name: "M",  color: "#d84040", edge: "#5a1010", halo: "#2a0808", sizeMul: 0.45, glyph: "*" },
   // White dwarf (tiny, brilliant white-blue)
   { name: "WD", color: "#e8f2ff", edge: "#6a80a0", halo: "#3a4a6a", sizeMul: 0.28, glyph: "•" },
+  // Pulsar — tiny, rapidly rotating neutron star. Fill flickers in render
+  // via stellarFillOf() so it visibly blinks against the sky.
+  { name: "PSR", color: "#bfd8ff", edge: "#3a4a80", halo: "#101a3a", sizeMul: 0.22, glyph: "•" },
+  // Black hole — dark core with a thin red-orange accretion glow.
+  // Gravity pulls the player in close-approach; see BH handler in updatePlaying.
+  { name: "BH", color: "#1a0a10", edge: "#ff6a20", halo: "#5a1a08", sizeMul: 0.9, glyph: "◉" },
 ];
 // Weighted picker — main-sequence stars are more common than giants.
-const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8];
+// New entries (PSR, BH) are appended at the end and use very small weights.
+const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1];
 const _stellarWSum = STELLAR_WEIGHTS.reduce((a, b) => a + b, 0);
 function stellarClassOf(e: Entity): StellarClass {
   const h = hash01(e.id * 977 + 31);
