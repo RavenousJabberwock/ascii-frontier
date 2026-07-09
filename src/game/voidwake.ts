@@ -1626,7 +1626,18 @@ function tintFor(e: Entity): { fill: string; edge: string } {
     }
     case "star": {
       const sc = stellarClassOf(e);
+      // Pulsars flicker: period ~0.6s, phase offset per-id. Off-beat drops
+      // fill to the halo color so the star reads as blinking.
+      if (sc.name === "PSR") {
+        const phase = hash01(e.id * 1301) * Math.PI * 2;
+        const t = performance.now() / 1000;
+        const on = Math.sin(t * 10 + phase) > 0.2;
+        return { fill: on ? sc.color : sc.halo, edge: sc.edge };
+      }
       return { fill: sc.color, edge: sc.edge };
+    }
+    case "derelict": {
+      return { fill: "#c0d0d8", edge: "#5a6870" };
     }
     case "asteroid": {
       const i = Math.floor(h * ASTEROID_FILLS.length);
