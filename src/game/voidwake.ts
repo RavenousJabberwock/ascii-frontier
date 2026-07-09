@@ -51,6 +51,7 @@ const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
 const VERSION = "0.1.0";
+const SOURCE_URL = "https://github.com/RavenousJabberwock/ascii-frontier";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
 const GLYPHS: Record<string, string> = {
@@ -1262,6 +1263,11 @@ class Input {
   mouseNX = 0;
   mouseNY = 0;
   mouseInside = false;
+  // Most recent mouse position in CSS pixels relative to the canvas top-left,
+  // plus a one-shot click flag consumed by UI screens (e.g. Codex hyperlinks).
+  mouseCX = 0;
+  mouseCY = 0;
+  mouseClicked = false;
   attach(el: HTMLElement, signal?: AbortSignal) {
     const opts = signal ? { signal } : undefined;
     el.addEventListener("keydown", (e) => {
@@ -1274,19 +1280,27 @@ class Input {
     el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; }, opts);
     el.addEventListener("mousemove", (e) => {
       const r = (el as HTMLCanvasElement).getBoundingClientRect();
-      this.mouseNX = ((e.clientX - r.left) / r.width) * 2 - 1;
-      this.mouseNY = ((e.clientY - r.top) / r.height) * 2 - 1;
+      this.mouseCX = e.clientX - r.left;
+      this.mouseCY = e.clientY - r.top;
+      this.mouseNX = (this.mouseCX / r.width) * 2 - 1;
+      this.mouseNY = (this.mouseCY / r.height) * 2 - 1;
       this.mouseInside = true;
     }, opts);
     el.addEventListener("mouseleave", () => { this.mouseInside = false; }, opts);
     el.addEventListener("mouseenter", () => { this.mouseInside = true; }, opts);
+    el.addEventListener("click", (e) => {
+      const r = (el as HTMLCanvasElement).getBoundingClientRect();
+      this.mouseCX = e.clientX - r.left;
+      this.mouseCY = e.clientY - r.top;
+      this.mouseClicked = true;
+    }, opts);
   }
   consume(k: string) {
     const had = this.pressed.has(k);
     this.pressed.delete(k);
     return had;
   }
-  endFrame() { this.pressed.clear(); }
+  endFrame() { this.pressed.clear(); this.mouseClicked = false; }
 }
 
 
@@ -1772,6 +1786,8 @@ export class Voidwake {
   private _codexReturn: Screen = "title";
   // Codex page: 0 = symbols, 1 = colors, 2 = keys.
   private _codexPage = 0;
+  // Bounds of the clickable source-code link drawn at the bottom of the Codex.
+  private _codexLinkRect: { x: number; y: number; w: number; h: number } | null = null;
 
 
 
@@ -4746,6 +4762,15 @@ export class Voidwake {
       this.screen = this._codexReturn;
       this.menuCursor = 0;
     }
+    // Clickable source-code link at the bottom of the Codex.
+    if (this.input.mouseClicked && this._codexLinkRect) {
+      const gx = this.input.mouseCX / CELL_W;
+      const gy = this.input.mouseCY / CELL_H;
+      const r = this._codexLinkRect;
+      if (gx >= r.x && gx < r.x + r.w && gy >= r.y && gy < r.y + r.h) {
+        window.open(SOURCE_URL, "_blank", "noopener,noreferrer");
+      }
+    }
   }
 
   renderCodex(g: Cell[][]) {
@@ -4784,7 +4809,7 @@ export class Voidwake {
       ];
       rows.forEach((r, i) => {
         const y = 4 + i;
-        if (y >= g.length - 2) return;
+        if (y >= g.length - 4) return;
         putText(g, 4, y, r[0].padEnd(5), r[1]);
         putText(g, 10, y, r[2], "#cfd");
       });
@@ -4807,7 +4832,7 @@ export class Voidwake {
       ];
       swatches.forEach((s, i) => {
         const y = 4 + i;
-        if (y >= g.length - 2) return;
+        if (y >= g.length - 4) return;
         putText(g, 4, y, "████", s[0]);
         putText(g, 10, y, s[1], "#cfd");
       });
@@ -4835,11 +4860,28 @@ export class Voidwake {
       ];
       rows.forEach((r, i) => {
         const y = 4 + i;
-        if (y >= g.length - 2) return;
+        if (y >= g.length - 4) return;
         putText(g, 4, y, r[0].padEnd(14), "#fff");
         putText(g, 20, y, r[1], "#cfd");
       });
     }
+
+    // Clickable source-code link. The bounding box is stored so updateCodex()
+    // can detect clicks and open the repository in a new tab.
+    const linkText = `Source code: ${SOURCE_URL.replace(/^https:\/\//, "")}`;
+    const linkX = 4;
+    const linkY = g.length - 4;
+    this._codexLinkRect = { x: linkX, y: linkY, w: linkText.length, h: 1 };
+    putText(g, linkX, linkY, linkText, "#7ec8ff");
+
+    // Show a pointer cursor when the mouse is over the link.
+    const gx = this.input.mouseCX / CELL_W;
+    const gy = this.input.mouseCY / CELL_H;
+    const r = this._codexLinkRect;
+    this.canvas.style.cursor =
+      this.input.mouseInside && gx >= r.x && gx < r.x + r.w && gy >= r.y && gy < r.y + r.h
+        ? "pointer"
+        : "default";
 
     putText(g, 4, g.length - 2,
       "Tip: brackets tighten when a new target is acquired; the chevron shows where to turn.", "#888");
