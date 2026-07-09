@@ -3448,6 +3448,11 @@ export class Voidwake {
     // Red hull-hit flash: any hull drop this tick tints the screen red briefly.
     if (this.prevHull > 0 && p.ship.hull < this.prevHull) {
       this.hullFlashUntil = nowS + 0.35;
+      // Screen-shake: proportional to the size of the hit, capped so a wave
+      // of small pulse hits doesn't rattle the screen apart.
+      const dmg = this.prevHull - p.ship.hull;
+      this._shakeUntil = nowS + Math.min(0.35, 0.10 + dmg * 0.015);
+      this._shakeMag = Math.min(6, 1.5 + dmg * 0.4);
     }
     this.prevShield = p.ship.shield;
     this.prevHull = p.ship.hull;
