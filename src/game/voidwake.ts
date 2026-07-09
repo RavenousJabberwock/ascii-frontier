@@ -2801,7 +2801,7 @@ export class Voidwake {
         e.cooldown = (e.cooldown ?? 0) - dt;
         if (e.state === "dormant") {
           // Tick down; when it hits zero AND player isn't docked, warp near.
-          if ((e.cooldown ?? 0) <= 0 && !this._docked) {
+          if ((e.cooldown ?? 0) <= 0 && this.dockedStationId == null) {
             // Warp to just off the player's port bow.
             const off = { x: (Math.random() - 0.5) * 600, y: (Math.random() - 0.5) * 200, z: (Math.random() - 0.5) * 600 };
             e.pos = V.add(p.pos, off);
