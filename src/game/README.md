@@ -26,6 +26,24 @@ voidwake.ts
 The React wrapper `src/components/VoidwakeGame.tsx` only mounts the canvas
 and forwards lifecycle events.
 
+## Offline build
+
+The engine can be bundled into a single HTML file that works without a server
+or internet connection. From the project root run:
+
+```bash
+bun run build:offline
+```
+
+Open `dist-offline/ascii-frontier-offline.html` in any modern browser. If
+your browser blocks `localStorage` for file:// URLs, serve the folder locally:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
+
 ## How to play
 
 - `W/S` throttle up/down
