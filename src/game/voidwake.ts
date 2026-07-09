@@ -4530,6 +4530,17 @@ export class Voidwake {
     }
 
 
+    // Screen-shake offset: while `_shakeUntil` is in the future, jitter the
+    // grid draw pass by a couple of pixels. Suppressed under reduced-motion.
+    const shakeNow = performance.now() / 1000;
+    let shakeDX = 0, shakeDY = 0;
+    if (!this._reducedMotion && this.screen === "playing" && shakeNow < this._shakeUntil) {
+      const remain = this._shakeUntil - shakeNow;
+      const mag = this._shakeMag * Math.min(1, remain / 0.25);
+      shakeDX = (Math.random() * 2 - 1) * mag;
+      shakeDY = (Math.random() * 2 - 1) * mag;
+    }
+
     // Paint grid. Cells with `glow` get a CSS-style canvas shadow that bleeds
     // their color outward — used for stars and other "luminous" glyphs.
     const fontStr = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
