@@ -1898,6 +1898,13 @@ export class Voidwake {
   private _codexPage = 0;
   // Bounds of the clickable source-code link drawn at the bottom of the Codex.
   private _codexLinkRect: { x: number; y: number; w: number; h: number } | null = null;
+  // Fuel-scoop chatter throttle. When set, we're actively scooping a star;
+  // reused by the HUD to render a "SCOOPING" badge.
+  private _scoopingUntil = 0;
+  // Screen-shake state: renderer offsets the grid draw pass by up to this
+  // many pixels when performance.now()/1000 < _shakeUntil.
+  private _shakeUntil = 0;
+  private _shakeMag = 0;
 
 
 
