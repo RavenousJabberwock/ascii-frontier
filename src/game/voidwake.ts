@@ -2878,7 +2878,32 @@ export class Voidwake {
     const now = performance.now() / 1000;
     let insideNebula = false;
     for (const e of this.entities) {
-      if (e.kind === "nebula") {
+      if (e.kind === "star") {
+        // --- Fuel scooping: skim a star's corona at safe range for free fuel.
+        // Sweet spot scales with the star's apparent size (bigger stars scoop
+        // from further out). Too close = burn (nebula-style shield/hull etch).
+        const sc = stellarClassOf(e);
+        const scoopR = 260 * sc.sizeMul;
+        const burnR = 90 * sc.sizeMul;
+        // Black holes and pulsars aren't safe to scoop from — their gravity /
+        // radiation handlers own that band; skip the fuel bonus entirely.
+        const scoopable = sc.name !== "BH" && sc.name !== "PSR";
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (scoopable && d < scoopR && d > burnR && p.ship.fuel < p.ship.fuelMax) {
+          // ~6 fuel/sec at the sweet spot (d ≈ burnR), tapering to zero at scoopR.
+          const t01 = 1 - (d - burnR) / Math.max(1, scoopR - burnR);
+          const rate = 6.0 * Math.max(0, Math.min(1, t01));
+          p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + rate * dt);
+          if (!this._scoopingUntil || now > this._scoopingUntil) {
+            this.pushChatter("Engineer", `Scooping ${sc.name} corona — refuelling.`, "#fc6");
+          }
+          this._scoopingUntil = now + 2.0;
+        } else if (scoopable && d < burnR && !this.options.cheat) {
+          // Inside the burn radius: shield/hull etch until the pilot pulls out.
+          if (p.ship.shield > 0) p.ship.shield = Math.max(0, p.ship.shield - dt * 6);
+          else p.ship.hull = Math.max(0, p.ship.hull - dt * 3);
+        }
+      } else if (e.kind === "nebula") {
         const d = V.len(V.sub(e.pos, p.pos));
         if (d < 280) {
           insideNebula = true;
