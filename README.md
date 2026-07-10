@@ -5,18 +5,23 @@ Pilot a procedurally-generated starship through a procedural universe: trade
 cargo between stations, mine asteroids, fight raiders, accept missions, and
 level up — all rendered as glyphs on an HTML5 `<canvas>`.
 
+*Important note:* This is a personal hobby project vibe-coded (i.e. mostly AI
+writing code at my direction, co-authoring at best) and isn't a commercial
+product. I don't have a patreon, ko-fi, or other source of income that helps pay
+me, nor do I have non-AI assistance at this time. As such:
+* I may take feature *suggestions*, but not feature *requests*.
+* Updates happen irregularly, if they happen at all.
+* It's a hobby project, not a product.
+* Most (not quite all, but close!) of the code is AI-written.
+* If you find a bug, please find or suggest a solution also. 
+
 Built with [TanStack Start](https://tanstack.com/start) + React 19 + Vite 7
 and styled with Tailwind v4.
 
-Play it live at https://ascii-frontier.lovable.app/
+Play the latest build live at https://ascii-frontier.lovable.app/ <br />*Please use this if you're on mobile or want smoother animation, as it lets the server do some of the "heavy lifting".*
 
-Play the "offline" version (i.e. you can just download the page) here: https://ravenousjabberwock.github.io/ascii-frontier/
+Play the "offline" version (i.e. you can just download the page) here: https://ravenousjabberwock.github.io/ascii-frontier/ <br />*Use this version if you have a good-enough experience and just want the single-file download.*
 
-Q: Wait, why isn't it on github.lo like the rest of your stuff?
-
-A: This is a TanStack Start app, which is built for SSR (server-side rendering) and serverless functions. GitHub Pages only serves static files — it can't run the server code that TanStack Start needs. So a standard github.io deploy won't work without restructuring the build.
-
-Update: There's now two versions. The lovable.app version is the "full" and the offline version skips the tanstack stuff. It works fine.
 ---
 
 ## Quick start
