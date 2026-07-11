@@ -2139,6 +2139,20 @@ export class Voidwake {
   private _shakeUntil = 0;
   private _shakeMag = 0;
 
+  // --- Alternative input state -------------------------------------------
+  // Populated each frame by update() from the gamepad + touch pollers. Analog
+  // stick output is applied in updatePlaying so it can coexist with keyboard.
+  private _touchStick: { yaw: number; pitch: number; throttle: number } = { yaw: 0, pitch: 0, throttle: -1 };
+  // Cached "does this device have a coarse pointer" (phones, tablets, Steam
+  // Deck touchscreen) so the "auto" touch mode enables itself sensibly.
+  private _coarsePointer = false;
+  _touchControlsActive(): boolean {
+    const m = this.options.touchControls;
+    if (m === "off") return false;
+    if (m === "on") return true;
+    return this._coarsePointer || this.input.touchAvailable;
+  }
+
 
 
   constructor(canvas: HTMLCanvasElement) {
