@@ -6570,8 +6570,12 @@ export class Voidwake {
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
     const p = this.player; if (!p) return;
-    // Border
-    putText(g, x, y, "[ RADAR ]", "#7CFC00");
+    // Radar range in world units. Same value drives both the culling test
+    // below and the scale label rendered under the frame — keep in sync.
+    const radarRange = 1500;
+    // Border + title. Range readout tucked in the title bar so the sweep
+    // area stays uncluttered; players kept asking "what's the scale?"
+    putText(g, x, y, `[ RADAR  ${radarRange}u ]`, "#7CFC00");
     for (let yy = 0; yy <= h; yy++) {
       g[y + yy][x].ch = "│"; g[y + yy][x + w].ch = "│";
       g[y + yy][x].color = g[y + yy][x + w].color = "#234";
@@ -6583,7 +6587,6 @@ export class Voidwake {
     const cx = x + Math.floor(w / 2), cy = y + Math.floor(h / 2);
     g[cy][cx] = { ch: "@", color: "#7CFC00" };
 
-    const radarRange = 1500;
     const cyY = Math.cos(p.heading.yaw), syY = Math.sin(p.heading.yaw);
     for (const e of this.entities) {
       if (e.kind === "bullet") continue;
