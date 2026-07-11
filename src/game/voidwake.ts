@@ -3091,7 +3091,7 @@ export class Voidwake {
       if (choice === "New Game") { this.clearTitleNotice(); this.screen = "create-char"; this.menuCursor = 0; }
       else if (choice === "Load Game") { this.clearTitleNotice(); this.screen = "load"; this.menuCursor = 0; }
       else if (choice === "Legend (Codex)") { this._codexReturn = "title"; this.screen = "codex"; this.menuCursor = 0; }
-      else if (choice === "Options") { this.screen = "options"; this.menuCursor = 0; }
+      else if (choice === "Options") { this.screen = "options"; this.optionsSection = "root"; this.menuCursor = 0; }
       else if (choice === "Quit") this.tryQuit();
     }
   }
@@ -4636,7 +4636,7 @@ export class Voidwake {
       else if (c === "Save Game") { this.screen = "save"; this.menuCursor = 0; }
       else if (c === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
       else if (c === "Legend (Codex)") { this._codexReturn = "menu"; this.screen = "codex"; this.menuCursor = 0; }
-      else if (c === "Options") { this.screen = "options"; this.menuCursor = 0; }
+      else if (c === "Options") { this.screen = "options"; this.optionsSection = "root"; this.menuCursor = 0; }
       else if (c === "Quit") this.tryQuit();
     }
   }
