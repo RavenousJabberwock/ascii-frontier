@@ -3747,11 +3747,16 @@ export class Voidwake {
           if (playerShot && isShip) this.applyFactionRetaliation(t);
           if ((t.hull ?? 0) <= 0) {
             const isPirateBase = isStation && t.faction === "pirate";
+            const isBoss = !!t.boss && !isStation;
             // Only credit the player when they pulled the trigger.
             if (playerShot) {
-              this.pushLog(isPirateBase ? `★ Pirate base ${t.name} obliterated!` : `Destroyed ${t.name}.`);
-              awardXP(p, isPirateBase ? 250 : 25);
-              p.credits += isPirateBase ? 1500 : 50;
+              this.pushLog(
+                isPirateBase ? `★ Pirate base ${t.name} obliterated!` :
+                isBoss ? `★ Bounty claimed: ${t.name} — dead. +${400}cr bonus.` :
+                `Destroyed ${t.name}.`
+              );
+              awardXP(p, isPirateBase ? 250 : isBoss ? 90 : 25);
+              p.credits += isPirateBase ? 1500 : isBoss ? 450 : 50;
               p.kills = (p.kills ?? 0) + 1;
               // Gunner reacts to the kill (when active and not over-talking).
               if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0 && Math.random() < 0.7) {
@@ -3762,23 +3767,29 @@ export class Voidwake {
               if (isPirateBase) {
                 adjustRep(p, "federation", 12); adjustRep(p, "guild", 8); adjustRep(p, "pirate", -15);
               } else if (t.faction === "pirate") {
-                adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
+                // Bosses swing rep harder — killing a named captain is a real signal.
+                const mul = isBoss ? 3 : 1;
+                adjustRep(p, "federation", 2 * mul); adjustRep(p, "guild", 1 * mul); adjustRep(p, "pirate", -3 * mul);
               } else if (t.faction === "federation") {
                 adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
               } else if (t.faction === "guild") {
                 adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
               }
-              // Loot canister
-              if (Math.random() < (isPirateBase ? 1.0 : 0.85)) {
+              // Loot canister. Bosses always drop and drop a fatter cache.
+              if (Math.random() < (isPirateBase ? 1.0 : isBoss ? 1.0 : 0.85)) {
                 this.entities.push({
-                  id: nextId(), kind: "loot", name: isPirateBase ? "cache" : "canister",
+                  id: nextId(), kind: "loot", name: isPirateBase ? "cache" : isBoss ? "captain's cache" : "canister",
                   pos: { ...t.pos },
                   vel: V.scale(t.vel, 0.25),
                   faction: "wreck",
-                  ttlAt: performance.now() / 1000 + (isPirateBase ? 120 : 45),
+                  ttlAt: performance.now() / 1000 + (isPirateBase ? 120 : isBoss ? 90 : 45),
                   loot: {
-                    credits: isPirateBase ? 600 + Math.floor(Math.random() * 800) : 20 + Math.floor(Math.random() * 80),
-                    ore: isPirateBase ? 10 + Math.floor(Math.random() * 15) : Math.floor(Math.random() * 4),
+                    credits: isPirateBase ? 600 + Math.floor(Math.random() * 800)
+                           : isBoss       ? 300 + Math.floor(Math.random() * 400)
+                                          : 20 + Math.floor(Math.random() * 80),
+                    ore:     isPirateBase ? 10 + Math.floor(Math.random() * 15)
+                           : isBoss       ? 4  + Math.floor(Math.random() * 8)
+                                          : Math.floor(Math.random() * 4),
                   },
                 });
               }
