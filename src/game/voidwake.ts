@@ -3190,7 +3190,13 @@ export class Voidwake {
       const thrustV = V.scale(fwd, sp);
       p.pos = V.add(p.pos, V.scale(thrustV, dt));
       p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
-      p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
+      // Cheat Mode = full god mode: burn no fuel, top the tank off in case
+      // something else drained it before the toggle was flipped.
+      if (this.options.cheat) {
+        p.ship.fuel = p.ship.fuelMax;
+      } else {
+        p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
+      }
       if (p.ship.fuel === 0) {
         this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
         this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
