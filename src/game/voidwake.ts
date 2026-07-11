@@ -1559,9 +1559,10 @@ class Input {
     this.textBuffer.length = 0;
     this.wheelDelta = 0;
     // Persistent held sets (_gpHeld, _touchHeld) survive across frames.
-    // buttonRects and menuItemRects are rebuilt every render.
-    this.buttonRects.length = 0;
-    this.menuItemRects.length = 0;
+    // buttonRects and menuItemRects are rebuilt every render — but we do NOT
+    // clear them here. Touch pointerdown events fire between frames, and if
+    // the rects were empty during that gap the hit-test would miss and taps
+    // would silently drop. The renderers reset their own rect list on entry.
   }
 
   // Synthesize a "key held" from a controller/touch source. Idempotent:
