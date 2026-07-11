@@ -5520,32 +5520,47 @@ export class Voidwake {
 
   renderMenu(g: Cell[][]) { this.renderListMenu(g, "MAIN MENU", this.menuItems); }
   renderOptions(g: Cell[][]) {
-    const items = [
-      `Difficulty: ${this.options.difficulty}`,
-      `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
-      `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
-      `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
-      `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
-      `Show FPS: ${this.options.showFps ? "ON" : "OFF"}`,
-      `Autosave: ${this.options.autosave ? "ON" : "OFF"}`,
-      `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
-      `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
-      `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
-      `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
-      `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
-      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
-      `Radio: ${(RADIO_PRESETS.find((r) => r.id === this.options.radioMode) ?? RADIO_PRESETS[0]).label}`,
-      `Radio URL: ${this.options.radioMode === "custom" ? (this.options.radioCustomUrl || "(press ENTER to set)").slice(0, 40) : "—"}`,
-      `Gamepad: ${this.options.gamepad.toUpperCase()}${this.input.gamepadConnected ? "  •connected" : ""}`,
-      `Gamepad Deadzone: ${this.options.gamepadDeadzone.toFixed(2)}`,
-      `Touch Controls: ${this.options.touchControls.toUpperCase()}`,
-      `Reset Keybinds`,
-      "Back",
-    ];
-
-
-    this.renderListMenu(g, "OPTIONS", items);
-    putText(g, 4, g.length - 2, "←/→ change   ↑/↓ field   ENTER confirm", "#888");
+    // Render whichever Options subsection is active. The rebind capture
+    // overlays a "press any key" prompt without hiding the underlying list.
+    let title = "OPTIONS";
+    let items: string[];
+    let hint = "↑/↓ select   ENTER open   ESC back";
+    switch (this.optionsSection) {
+      case "root":
+        items = this.optionsRootItems.slice();
+        break;
+      case "gameplay":
+        title = "OPTIONS ▸ GAMEPLAY";
+        items = this.optionsGameplayItems();
+        hint = "←/→ change   ↑/↓ field   ESC back";
+        break;
+      case "audio":
+        title = "OPTIONS ▸ AUDIO";
+        items = this.optionsAudioItems();
+        hint = "←/→ change   ↑/↓ field   ENTER edit URL   ESC back";
+        break;
+      case "controls":
+        title = "OPTIONS ▸ CONTROLS";
+        items = this.optionsControlsItems();
+        hint = "←/→ change   ↑/↓ field   ENTER open keybinds   ESC back";
+        break;
+      case "keybinds":
+        title = "OPTIONS ▸ CONTROLS ▸ KEYBINDS";
+        items = this.optionsKeybindsItems();
+        hint = "↑/↓ select   ENTER rebind   ESC back";
+        break;
+    }
+    this.renderListMenu(g, title, items);
+    // Extra hint sits one row above renderListMenu's footer so the two
+    // strings don't clip into each other (this was the "ENTER confirmwipe"
+    // artifact — options hint + list-menu footer overwriting the same row).
+    putText(g, 4, g.length - 3, hint, "#888");
+    if (this._rebindAction) {
+      const label = KEYBIND_ACTIONS.find((a) => a.id === this._rebindAction)?.label ?? this._rebindAction;
+      const cols = g[0].length;
+      const msg = `Press any key to bind [${label}]  —  ESC to cancel`;
+      putText(g, Math.max(2, Math.floor((cols - msg.length) / 2)), Math.floor(g.length / 2), msg, "#7CFC00");
+    }
   }
   renderSave(g: Cell[][]) { this.renderListMenu(g, "SAVE GAME", ["slot-1", "slot-2", "slot-3", "Back"]); }
   renderLoad(g: Cell[][]) {
