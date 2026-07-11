@@ -527,7 +527,7 @@ interface Gunner {
   enabled: boolean;           // toggled by G key
   hiredAt: number;            // ms timestamp, mostly cosmetic
   cooldown: number;           // independent fire cadence
-  share: number;              // 0..1 — fraction of credits skimmed at docks
+  wage: number;               // flat credits paid to this crewmember every dock
   nextBarkAt: number;         // throttle idle barks
 }
 
