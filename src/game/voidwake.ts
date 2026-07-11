@@ -1337,6 +1337,9 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
   const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
   const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
   const species = SPECIES[Math.floor(rng() * SPECIES.length)];
+  // Role-tuned wages: pilots/engineers are pricier specialists than a
+  // merchant clerk. Flat cr per dock — see tryDock() wage deduction.
+  const wage = role === "pilot" ? 60 : role === "engineer" ? 55 : role === "merchant" ? 40 : 40;
   return {
     role,
     name: `${first} ${last}`,
@@ -1346,6 +1349,7 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
     nextBarkAt: 0,
     cooldown: 0,
     autopilot: false,
+    wage,
   };
 }
 
