@@ -1695,7 +1695,7 @@ class Input {
       if (ax >  dz) { want.add(kb.yawRight); want.add("arrowright"); }
       if (ay < -dz) { want.add(kb.pitchUp); want.add("arrowup"); }
       if (ay >  dz) { want.add(kb.pitchDown); want.add("arrowdown"); }
-      // Right stick — reserved for aim in future; also nudges throttle.
+      // Right stick Y nudges throttle (up = faster, down = slower).
       const rY = pad.axes[3] ?? 0;
       if (rY < -dz) want.add(kb.throttleUp);
       if (rY >  dz) want.add(kb.throttleDown);
