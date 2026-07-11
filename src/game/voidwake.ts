@@ -4439,7 +4439,20 @@ export class Voidwake {
       this._nextPirateSpawnAt = 22 + Math.random() * 20;
       if (ships < SHIP_CAP && pirateBases.length) {
         const src = pirateBases[Math.floor(Math.random() * pirateBases.length)];
-        spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
+        // 5% chance this raider is a named captain: distinct callsign,
+        // +50% hull, and pays out a bounty on kill (see kill handler).
+        const isBoss = Math.random() < 0.05;
+        const rname = isBoss ? pirateBossNameFor(Math.random) : nameFrom(this.rng, "Raider");
+        const rhull = isBoss ? 75 : 50;
+        spawnNear(src.pos, "hostile", "pirate", rname, rhull);
+        if (isBoss) {
+          // spawnNear pushed the ship last; tag it.
+          const spawned = this.entities[this.entities.length - 1];
+          spawned.boss = true;
+          spawned.pilotName = rname;
+          spawned.shield = 60;
+          this.pushLog(`⚠ Notorious pirate captain in-system: ${rname}.`);
+        }
       }
     }
     if (this._nextPlanetSpawnAt <= 0) {
