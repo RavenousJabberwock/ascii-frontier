@@ -720,6 +720,9 @@ function defaultOptions(): Options {
     radioCustomUrl: "",
 
     keybinds: { ...DEFAULT_KEYBINDS },
+    gamepad: "auto",
+    gamepadDeadzone: 0.18,
+    touchControls: "auto",
   };
 }
 
