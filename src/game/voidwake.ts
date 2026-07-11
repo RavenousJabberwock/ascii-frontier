@@ -545,6 +545,7 @@ interface CrewMember {
   nextBarkAt: number;
   cooldown?: number;    // gunner auto-fire cadence
   autopilot?: boolean;  // pilot: toggled by O key
+  wage?: number;        // flat credits paid every dock — see tryDock()
 }
 
 interface PlayerState {
