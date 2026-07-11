@@ -1265,6 +1265,10 @@ const MODULE_CATALOG = [
   { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
   { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
   { id: "crew-quarters",   name: "Crew Quarters",   price: 1400, desc: "+1 crew slot" },
+  // Sensor Array: passive radar-range boost. Stacks additively with the
+  // small crew bonuses granted by an on-board Pilot / Engineer (see
+  // effectiveRadarRange). Single install — dupes blocked in buyModule().
+  { id: "sensor-array",    name: "Sensor Array",    price: 950,  desc: "+600u radar range" },
 ];
 
 function generateStationStock(stationId: number): StationStock {
