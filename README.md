@@ -135,6 +135,12 @@ The save shape is versioned (`VERSION` constant). When you make a
 backwards-incompatible change, bump `VERSION` and add a migration step in
 the Save/Load section.
 
+> **Dev note:** In-memory saves survive HMR remounts during `bun run dev`
+> (the engine is re-instantiated but `localStorage` is intact). They do **not**
+> survive a `VERSION` bump — an older blob will be rejected on load, so
+> export a `.json` from the menu first if you want to keep a session across
+> a schema change.
+
 ---
 
 ## Engineering notes
