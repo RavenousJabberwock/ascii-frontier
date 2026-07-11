@@ -5065,7 +5065,14 @@ export class Voidwake {
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
-      else if (c === "Undock")  { this.screen = "playing"; this.dockedStationId = null; }
+      else if (c === "Undock")  {
+        // Play a short "clamps disengaging" beat by suppressing tryDock for
+        // 0.6s. Prevents the docking screen from bouncing right back if the
+        // player mashes F.
+        this._dockCooldownUntil = performance.now() / 1000 + 0.6;
+        this.pushLog("Clamps disengaging…");
+        this.screen = "playing"; this.dockedStationId = null;
+      }
       return;
     }
 
