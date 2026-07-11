@@ -4057,6 +4057,10 @@ export class Voidwake {
   dockedStationId: number | null = null;
 
   tryDock() {
+    // Short cooldown after an undock so an accidental double-tap of F doesn't
+    // instantly re-dock. Silent — we don't spam the log if the player just
+    // pressed the button one frame too early.
+    if (performance.now() / 1000 < this._dockCooldownUntil) return;
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
     if (!t || t.kind !== "station") { this.pushLog("Target a station with T."); return; }
