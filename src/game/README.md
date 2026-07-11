@@ -64,6 +64,54 @@ Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
 - `P` pause
 - `ESC` main menu (New / Save / Load / Options / Quit)
 
+## Controller support (gamepad)
+
+Any browser-visible controller with a **standard mapping** works out of the box
+— Xbox / DualShock / DualSense / 8BitDo / Steam Deck / Backbone / most
+generic USB pads. The layout is:
+
+| Button | Action |
+|---|---|
+| Left stick | yaw / pitch |
+| Right stick Y | throttle up/down |
+| D-pad | throttle up/down + target cycle prev/next (also arrow keys in menus) |
+| A / Cross | fire (also ENTER in menus) |
+| B / Circle | menu / back (ESC) |
+| X / Square | mine |
+| Y / Triangle | dock |
+| LB / L1 | previous target category |
+| RB / R1 | next target category |
+| LT / L2 | boost (afterburner) |
+| RT / R2 | fire |
+| Back / Select / Share | open Codex |
+| Start / Options | pause |
+| L3 (click LS) | toggle gunner |
+| R3 (click RS) | toggle autopilot |
+
+Configure it under **Options ▸ Gamepad** (`auto` / `on` / `off`) and
+**Options ▸ Gamepad Deadzone** (0–0.5). "auto" enables the pad the moment
+one is plugged in. Because the controller maps through your keybinds, any
+key you rebind is remapped for the pad too.
+
+## Touch controls (tablet / phone / handheld)
+
+`Options ▸ Touch Controls` (`auto` / `on` / `off`) enables an on-screen
+overlay:
+
+- **Virtual stick** — bottom-left. Tap anywhere in the lower-left, then drag
+  in the direction you want to yaw / pitch. Release to re-center.
+- **Throttle strip** — thin column on the far left. Drag up for more speed,
+  down for less. It sets the throttle absolutely, so you can "cruise-lock"
+  by lifting your finger.
+- **Button pad** — cluster of labeled squares in the lower-right: `FIRE`,
+  `MINE`, `DOCK`, `TGT`, `[` / `]`, `BOOST`, `JETT`, `AUTO`, `GUN`, `CDX`,
+  `PAUS`, `MENU`.
+
+"auto" turns the overlay on for coarse-pointer devices (phones, tablets,
+Steam Deck touchscreen) and off for desktops. In menus, dragging the stick
+also drives the ↑/↓/←/→ cursor, and tapping `FIRE` acts as ENTER — so the
+whole game can be played thumbs-only.
+
 ## Universe
 
 The play area is a cube roughly 36k units across (radius 18k). Anything past
