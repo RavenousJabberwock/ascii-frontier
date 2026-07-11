@@ -1446,11 +1446,25 @@ class Input {
       }
       return null;
     };
+    const hitMenuItem = (x: number, y: number): number => {
+      for (const m of this.menuItemRects) {
+        if (x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h) return m.index;
+      }
+      return -1;
+    };
     el.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
       this.touchAvailable = true;
       const { x, y, w, h } = localXY(e);
       try { (el as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
+      // Menu screens: capture the whole gesture (tap or horizontal swipe) —
+      // do not start the flight stick or throttle strip.
+      if (this.menuActive && this._menuPtrId == null) {
+        this._menuPtrId = e.pointerId;
+        this._menuStart = { x, y, t: performance.now(), idx: hitMenuItem(x, y) };
+        e.preventDefault();
+        return;
+      }
       // Priority: buttons first (small explicit zones), then throttle slider,
       // then stick (large left-half fallback).
       const btn = hitButton(x, y);
@@ -1488,10 +1502,30 @@ class Input {
       } else if (e.pointerId === this._throttlePtrId) {
         this.throttleValue = Math.max(0, Math.min(1, 1 - (y - h * 0.15) / (h * 0.7)));
         e.preventDefault();
+      } else if (e.pointerId === this._menuPtrId) {
+        // Track only — decision is made on pointerup.
+        e.preventDefault();
       }
     }, opts);
     const endPointer = (e: PointerEvent) => {
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      if (e.pointerId === this._menuPtrId) {
+        const { x, y } = localXY(e);
+        const s = this._menuStart;
+        const dx = x - s.x, dy = y - s.y;
+        const dist = Math.hypot(dx, dy);
+        const dt = performance.now() - s.t;
+        // Horizontal swipe: forward (→) = ENTER, back (←) = ESCAPE.
+        // Threshold: ≥ 40px of horizontal travel, dominant over vertical,
+        // and within 800ms. Otherwise treat as a tap if it landed on an item.
+        if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 800) {
+          this.pressed.add(dx > 0 ? "enter" : "escape");
+        } else if (dist < 18 && s.idx >= 0) {
+          this.menuTapIndex = s.idx;
+        }
+        this._menuPtrId = null;
+        return;
+      }
       if (e.pointerId === this._stickPtrId) {
         this._stickPtrId = null; this.stickActive = false;
       }
