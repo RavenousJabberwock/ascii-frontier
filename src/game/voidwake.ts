@@ -1513,15 +1513,20 @@ class Input {
         const { x, y } = localXY(e);
         const s = this._menuStart;
         const dx = x - s.x, dy = y - s.y;
-        const dist = Math.hypot(dx, dy);
+        const adx = Math.abs(dx), ady = Math.abs(dy);
         const dt = performance.now() - s.t;
         // Horizontal swipe: forward (→) = ENTER, back (←) = ESCAPE.
-        // Threshold: ≥ 40px of horizontal travel, dominant over vertical,
-        // and within 800ms. Otherwise treat as a tap if it landed on an item.
-        if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 800) {
+        // Requires ≥ 80px of horizontal travel, clearly dominant over vertical
+        // (2×), and completed within 600ms — otherwise treat as a tap.
+        if (adx >= 80 && adx > ady * 2 && dt < 600) {
           this.pressed.add(dx > 0 ? "enter" : "escape");
-        } else if (dist < 18 && s.idx >= 0) {
-          this.menuTapIndex = s.idx;
+        } else {
+          // Tap: use the pointerup position against the current rects (fresh
+          // as of the last render). Fall back to the pointerdown hit-test if
+          // the finger drifted off the row. Generous 40px slop.
+          const upIdx = hitMenuItem(x, y);
+          const idx = upIdx >= 0 ? upIdx : s.idx;
+          if (idx >= 0 && Math.hypot(dx, dy) < 40) this.menuTapIndex = idx;
         }
         this._menuPtrId = null;
         return;
@@ -1559,9 +1564,10 @@ class Input {
     this.textBuffer.length = 0;
     this.wheelDelta = 0;
     // Persistent held sets (_gpHeld, _touchHeld) survive across frames.
-    // buttonRects and menuItemRects are rebuilt every render.
-    this.buttonRects.length = 0;
-    this.menuItemRects.length = 0;
+    // buttonRects and menuItemRects are rebuilt every render — but we do NOT
+    // clear them here. Touch pointerdown events fire between frames, and if
+    // the rects were empty during that gap the hit-test would miss and taps
+    // would silently drop. The renderers reset their own rect list on entry.
   }
 
   // Synthesize a "key held" from a controller/touch source. Idempotent:
@@ -5496,6 +5502,8 @@ export class Voidwake {
     const cols = g[0].length;
     // Touch: whole screen is a menu-gesture surface (tap items, swipe ←/→).
     this.input.menuActive = true;
+    // Rebuild hit-boxes fresh each frame (see Input.endFrame() comment).
+    this.input.menuItemRects.length = 0;
     items.forEach((it, i) => {
       const sel = i === this.menuCursor;
       const row = 5 + i * 2;
@@ -6362,6 +6370,8 @@ export class Voidwake {
     const cols = g[0].length;
     const rows = g.length;
     const cw = CELL_W, ch = CELL_H;
+    // Rebuild hit-boxes fresh each frame (see Input.endFrame() comment).
+    this.input.buttonRects.length = 0;
     // Virtual stick: bottom-left circle indicator (rendered by dot glyphs).
     const stickCx = 6, stickCy = rows - 5;
     const stickR = 3;
