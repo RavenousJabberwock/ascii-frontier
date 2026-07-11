@@ -1695,7 +1695,7 @@ class Input {
       if (ax >  dz) { want.add(kb.yawRight); want.add("arrowright"); }
       if (ay < -dz) { want.add(kb.pitchUp); want.add("arrowup"); }
       if (ay >  dz) { want.add(kb.pitchDown); want.add("arrowdown"); }
-      // Right stick — reserved for aim in future; also nudges throttle.
+      // Right stick Y nudges throttle (up = faster, down = slower).
       const rY = pad.axes[3] ?? 0;
       if (rY < -dz) want.add(kb.throttleUp);
       if (rY >  dz) want.add(kb.throttleDown);
@@ -2004,14 +2004,23 @@ const STELLAR_CLASSES: StellarClass[] = [
 // New entries (PSR, BH) are appended at the end and use very small weights.
 const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1];
 const _stellarWSum = STELLAR_WEIGHTS.reduce((a, b) => a + b, 0);
+// Stellar class for a star entity. Called from several hot paths per frame
+// (culling, halo tinting, corona scoop math), so results are memoized per
+// entity in a WeakMap — the class is deterministic from `e.id`, so caching
+// on the object reference is safe and avoids re-running the weighted roll.
+const _stellarClassCache = new WeakMap<Entity, StellarClass>();
 function stellarClassOf(e: Entity): StellarClass {
+  const cached = _stellarClassCache.get(e);
+  if (cached) return cached;
   const h = hash01(e.id * 977 + 31);
   let r = h * _stellarWSum;
+  let out: StellarClass = STELLAR_CLASSES[4]; // G-class fallback
   for (let i = 0; i < STELLAR_CLASSES.length; i++) {
     r -= STELLAR_WEIGHTS[i];
-    if (r <= 0) return STELLAR_CLASSES[i];
+    if (r <= 0) { out = STELLAR_CLASSES[i]; break; }
   }
-  return STELLAR_CLASSES[4]; // G-class fallback
+  _stellarClassCache.set(e, out);
+  return out;
 }
 
 // Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
@@ -2183,6 +2192,14 @@ export class Voidwake {
   // and show the error here so the user isn't silently kicked to the menu.
   crashError: string | null = null;
   crashStack: string | null = null;
+  // performance.now()/1000 of the last "reactor cold" fuel-zero chatter so we
+  // don't spam it every frame while fuel is pinned at 0 (also filters the
+  // once-per-toggle edge when Cheat Mode is flicked on/off right at empty).
+  private _lastFuelWarnAt = 0;
+  // Undock clamp cooldown — after leaving a station we suppress `tryDock`
+  // for a short beat so an accidental double-tap of F doesn't immediately
+  // re-open the station screen.
+  private _dockCooldownUntil = 0;
   // Autosave bookkeeping. We rotate into the dedicated "autosave" slot every
   // `autosaveInterval` seconds while in flight.
   autosaveTimer = 0;
@@ -3309,9 +3326,20 @@ export class Voidwake {
       } else {
         p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
       }
+      // Fuel-zero notice is throttled — without a guard the branch fires on
+      // every frame that fuel is pinned at 0 (including the one-frame window
+      // where Cheat Mode is toggled right as the tank drains), spamming the
+      // COMMS feed.
       if (p.ship.fuel === 0) {
-        this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
-        this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
+        const nowS = performance.now() / 1000;
+        if (nowS - this._lastFuelWarnAt > 15) {
+          this._lastFuelWarnAt = nowS;
+          this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
+          this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
+        }
+      } else if (p.ship.fuel > 1) {
+        // Re-arm so a fresh emptying after refuel prints the warning again.
+        this._lastFuelWarnAt = 0;
       }
     } else {
       // Zero fuel: keep last drift velocity. Steering and throttle inputs
@@ -4011,6 +4039,17 @@ export class Voidwake {
     p.cargo.ore = (p.cargo.ore ?? 0) + 1;
     awardXP(p, 2);
     this.pushLog("Mined 1 ore.");
+    // Rare: ~1-in-50 chance the fragment is an "encoded relic" — pays a
+    // one-shot credit bonus and a chunk of XP. Kept as an immediate payout
+    // (rather than a new cargo item) so it stays a one-line surprise instead
+    // of requiring market plumbing.
+    if (Math.random() < 0.02) {
+      const bonus = 30 + Math.floor(Math.random() * 61); // 30..90cr
+      p.credits += bonus;
+      awardXP(p, 12);
+      this.pushLog(`✦ Encoded relic recovered — +${bonus}cr`);
+      this.pushChatter("Sensors", "Anomalous inscription in that ore. Datacore paid out.", "#c4f");
+    }
   }
 
   // Currently-docked station id, or null while flying. Drives the station
@@ -4018,6 +4057,10 @@ export class Voidwake {
   dockedStationId: number | null = null;
 
   tryDock() {
+    // Short cooldown after an undock so an accidental double-tap of F doesn't
+    // instantly re-dock. Silent — we don't spam the log if the player just
+    // pressed the button one frame too early.
+    if (performance.now() / 1000 < this._dockCooldownUntil) return;
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
     if (!t || t.kind !== "station") { this.pushLog("Target a station with T."); return; }
@@ -4233,6 +4276,15 @@ export class Voidwake {
       best.ore!--;
       p.cargo.ore = (p.cargo.ore ?? 0) + 1;
       awardXP(p, 1);
+      // Gunner-mined rocks roll the same 1-in-50 relic chance as manual
+      // mining — see mineTarget() for the rationale.
+      if (Math.random() < 0.02) {
+        const bonus = 30 + Math.floor(Math.random() * 61);
+        p.credits += bonus;
+        awardXP(p, 12);
+        this.pushLog(`✦ Encoded relic recovered — +${bonus}cr`);
+        this.pushChatter(tag, "Anomalous inscription in that fragment. Datacore paid out.", "#c4f");
+      }
       if (g.nextBarkAt <= 0) {
         g.nextBarkAt = 4 + Math.random() * 3;
         this.pushChatter(tag, pickLine("gunner_mine", this.chatterCtx(undefined, { target: best })), "#ffd066");
@@ -5013,7 +5065,14 @@ export class Voidwake {
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
-      else if (c === "Undock")  { this.screen = "playing"; this.dockedStationId = null; }
+      else if (c === "Undock")  {
+        // Play a short "clamps disengaging" beat by suppressing tryDock for
+        // 0.6s. Prevents the docking screen from bouncing right back if the
+        // player mashes F.
+        this._dockCooldownUntil = performance.now() / 1000 + 0.6;
+        this.pushLog("Clamps disengaging…");
+        this.screen = "playing"; this.dockedStationId = null;
+      }
       return;
     }
 
