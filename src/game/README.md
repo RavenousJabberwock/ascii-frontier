@@ -173,6 +173,9 @@ like postcards from the deep, not a rotating event calendar:
 - **Jetsam** — jettisoned cargo canisters. Your own `X` drops leave a
   recoverable canister behind you, and derelict jetsam fields drift into
   scanner range from time to time.
+- **Encoded relics** — roughly 1-in-50 mined fragments turn out to be an
+  ancient encoded datacore. Instant payout (~30–90cr + XP), no cargo slot
+  consumed. Applies to manual mining and gunner auto-mining alike.
 - **Alien transmissions** — untranslatable glyph strings appear on the COMMS
   feed (ambient, not on the rare-event timer — more often near nebulae or
   during a Thargoid encounter).
