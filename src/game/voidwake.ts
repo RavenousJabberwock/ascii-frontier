@@ -6594,9 +6594,11 @@ export class Voidwake {
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
     const p = this.player; if (!p) return;
-    // Radar range in world units. Same value drives both the culling test
-    // below and the scale label rendered under the frame — keep in sync.
-    const radarRange = 1500;
+    // Radar range in world units. Crew (Pilot/Engineer) and the Sensor
+    // Array module extend it — see effectiveRadarRange. Same value drives
+    // both the culling test below and the scale label rendered in the
+    // title bar so they never disagree.
+    const radarRange = effectiveRadarRange(p);
     // Border + title. Range readout tucked in the title bar so the sweep
     // area stays uncluttered; players kept asking "what's the scale?"
     putText(g, x, y, `[ RADAR  ${radarRange}u ]`, "#7CFC00");
