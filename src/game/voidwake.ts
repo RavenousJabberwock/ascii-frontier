@@ -6363,6 +6363,8 @@ export class Voidwake {
     const cols = g[0].length;
     const rows = g.length;
     const cw = CELL_W, ch = CELL_H;
+    // Rebuild hit-boxes fresh each frame (see Input.endFrame() comment).
+    this.input.buttonRects.length = 0;
     // Virtual stick: bottom-left circle indicator (rendered by dot glyphs).
     const stickCx = 6, stickCy = rows - 5;
     const stickR = 3;
