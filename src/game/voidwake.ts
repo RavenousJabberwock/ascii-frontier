@@ -5491,12 +5491,25 @@ export class Voidwake {
 
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
+    const cols = g[0].length;
+    // Touch: whole screen is a menu-gesture surface (tap items, swipe ←/→).
+    this.input.menuActive = true;
     items.forEach((it, i) => {
       const sel = i === this.menuCursor;
-      putText(g, 6, 5 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      const row = 5 + i * 2;
+      putText(g, 6, row, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      // Register hit-box spanning most of the row so a fat-fingered tap
+      // still lands. Full row height, from left margin to right margin.
+      this.input.menuItemRects.push({
+        index: i,
+        x: 2 * CELL_W,
+        y: (row - 0.4) * CELL_H,
+        w: (cols - 4) * CELL_W,
+        h: CELL_H * 1.8,
+      });
     });
     if (this.titleNotice) this.renderTitleNotice(g, 5 + items.length * 2 + 2);
-    putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm   ESC back", "#888");
+    putText(g, 4, g.length - 2, "↑/↓ or tap   ENTER / swipe →   ESC / swipe ←", "#888");
   }
 
   // Playing: cockpit + world ------------------------------------------------
