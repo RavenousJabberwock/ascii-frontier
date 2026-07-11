@@ -88,14 +88,15 @@ generic USB pads. The layout is:
 | L3 (click LS) | toggle gunner |
 | R3 (click RS) | toggle autopilot |
 
-Configure it under **Options ▸ Gamepad** (`auto` / `on` / `off`) and
-**Options ▸ Gamepad Deadzone** (0–0.5). "auto" enables the pad the moment
-one is plugged in. Because the controller maps through your keybinds, any
-key you rebind is remapped for the pad too.
+Configure it under **Options ▸ Controls ▸ Gamepad** (`auto` / `on` / `off`)
+and **Options ▸ Controls ▸ Gamepad Deadzone** (0–0.5). "auto" enables the pad
+the moment one is plugged in. Because the controller maps through your
+keybinds, any key you rebind under **Options ▸ Controls ▸ Configure Keybinds…**
+is remapped for the pad too.
 
 ## Touch controls (tablet / phone / handheld)
 
-`Options ▸ Touch Controls` (`auto` / `on` / `off`) enables an on-screen
+`Options ▸ Controls ▸ Touch Controls` (`auto` / `on` / `off`) enables an on-screen
 overlay:
 
 - **Virtual stick** — bottom-left. Tap anywhere in the lower-left, then drag
