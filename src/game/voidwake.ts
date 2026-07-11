@@ -3059,6 +3059,22 @@ export class Voidwake {
     if (keys.has(k.pitchUp)) { p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchDown)) { p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
+    // Virtual touch stick: analog yaw/pitch scaled by same rates as keyboard.
+    // Applies alongside keys so the pilot can hold "boost" on a button while
+    // steering with the stick. Also drops the mouse-steer path this frame so
+    // the two don't fight each other.
+    const ts = this._touchStick;
+    if ((ts.yaw !== 0 || ts.pitch !== 0) && !autopilotOn) {
+      p.heading.yaw += ts.yaw * dt * 1.4;
+      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ts.pitch * dt * 1.1));
+      this._disengageAutopilot("stick");
+    }
+    // Touch throttle slider — direct absolute value, not relative.
+    if (ts.throttle >= 0 && !autopilotOn) {
+      p.throttle = ts.throttle;
+      this._disengageAutopilot("stick");
+    }
+
     // Mouse wheel throttle: each notch nudges throttle by ~5%.
     if (this.input.wheelDelta !== 0) {
       const step = -this.input.wheelDelta * 0.001; // scroll up = throttle up
@@ -3072,7 +3088,8 @@ export class Voidwake {
     // we normalized against the entire canvas, so the reticle sat left of the
     // mouse's neutral zone because the right-hand HUD panel eats ~28 cols.
     // Remapping around the viewport keeps the crosshair under the cursor.
-    if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn) {
+    // Suppressed while a touch stick is active so the two don't fight.
+    if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn && !this.input.stickActive) {
       const sens = this.options.mouseSensitivity;
       const dz = 0.08;
       const cols = Math.max(40, Math.floor(this.canvas.width / CELL_W));
