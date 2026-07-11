@@ -60,6 +60,11 @@ the canvas to give it focus before pressing keys.
 Mouse-steer can be toggled in **Options**. A control reminder is rendered in
 the lower-right HUD pane.
 
+**Gamepad** (Xbox / DualShock / Steam Deck / 8BitDo / any standard-mapped
+pad) and **touch controls** (phones, tablets, handheld touchscreens) are
+both supported — see `src/game/README.md` for the full button map, or toggle
+them under **Options ▸ Gamepad** and **Options ▸ Touch Controls**.
+
 ---
 
 ## Project structure
