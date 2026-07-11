@@ -4039,6 +4039,17 @@ export class Voidwake {
     p.cargo.ore = (p.cargo.ore ?? 0) + 1;
     awardXP(p, 2);
     this.pushLog("Mined 1 ore.");
+    // Rare: ~1-in-50 chance the fragment is an "encoded relic" — pays a
+    // one-shot credit bonus and a chunk of XP. Kept as an immediate payout
+    // (rather than a new cargo item) so it stays a one-line surprise instead
+    // of requiring market plumbing.
+    if (Math.random() < 0.02) {
+      const bonus = 30 + Math.floor(Math.random() * 61); // 30..90cr
+      p.credits += bonus;
+      awardXP(p, 12);
+      this.pushLog(`✦ Encoded relic recovered — +${bonus}cr`);
+      this.pushChatter("Sensors", "Anomalous inscription in that ore. Datacore paid out.", "#c4f");
+    }
   }
 
   // Currently-docked station id, or null while flying. Drives the station
