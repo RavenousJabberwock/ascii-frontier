@@ -5185,6 +5185,9 @@ export class Voidwake {
       `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Radio: ${(RADIO_PRESETS.find((r) => r.id === this.options.radioMode) ?? RADIO_PRESETS[0]).label}`,
       `Radio URL: ${this.options.radioMode === "custom" ? (this.options.radioCustomUrl || "(press ENTER to set)").slice(0, 40) : "—"}`,
+      `Gamepad: ${this.options.gamepad.toUpperCase()}${this.input.gamepadConnected ? "  •connected" : ""}`,
+      `Gamepad Deadzone: ${this.options.gamepadDeadzone.toFixed(2)}`,
+      `Touch Controls: ${this.options.touchControls.toUpperCase()}`,
       `Reset Keybinds`,
       "Back",
     ];
