@@ -926,16 +926,24 @@ function generateUniverse(seed: number): Entity[] {
   // Thargoid-like observers: extremely rare, dormant deep in the void.
   // When triggered they warp near the player, EMP everything, watch, and
   // depart. See engine tick for the encounter state machine.
-  for (let i = 0; i < 2; i++) {
-    out.push({
-      id: nextId(), kind: "thargoid", name: "Unknown Contact",
-      pos: randPos(rng, WORLD_RADIUS * 0.9),
-      vel: { x: 0, y: 0, z: 0 },
-      faction: "alien",
-      state: "dormant",
-      cooldown: 30 + rng() * 90, // seconds until it *might* consider triggering
-    });
-  }
+  //
+  // Cadence: one instance only. The initial dormant cooldown is 60-120
+  // minutes, matching the "special event every hour or two" target. The
+  // encounter itself is disruptive (~10s of no controls), so anything
+  // faster than that gets annoying fast. Post-encounter reset uses the
+  // same window — see the `leave` state in the tick.
+  //
+  // Previous bug: this loop spawned TWO thargoids with 30-120s initial
+  // cooldowns, so effective time-to-first-EMP was 15-60 seconds — the
+  // "why is this happening every couple minutes" report.
+  out.push({
+    id: nextId(), kind: "thargoid", name: "Unknown Contact",
+    pos: randPos(rng, WORLD_RADIUS * 0.9),
+    vel: { x: 0, y: 0, z: 0 },
+    faction: "alien",
+    state: "dormant",
+    cooldown: 3600 + rng() * 3600, // 60-120 minutes until it *might* consider triggering
+  });
   // Traversable wormhole pairs. Each pair shares a `targetId` pointing at
   // its sibling; flying within 60u teleports the player to the sibling.
   for (let i = 0; i < 2; i++) {
