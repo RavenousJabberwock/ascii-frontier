@@ -5496,7 +5496,7 @@ export class Voidwake {
         ["•", "#bfd8ff", "pulsar — tiny neutron star, blinks visibly"],
         ["[ ]", "#ffaa55", "targeting brackets — current target on-screen"],
         ["◣◢◤◥", "#fc6", "edge pointer — target off-screen (distance shown)"],
-        ["+", "#ffaa55", "lead indicator — fire here to hit a moving target"],
+        ["+", "#ffaa55", "lead indicator — fire when it turns green ✚ (on the reticle)"],
         ["◇", "#cf6", "mission objective marker"],
         ["-+-", "#3a6", "reticle — green idle, amber aligned, red in-range"],
       ];
