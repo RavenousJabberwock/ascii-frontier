@@ -63,7 +63,9 @@ the lower-right HUD pane.
 **Gamepad** (Xbox / DualShock / Steam Deck / 8BitDo / any standard-mapped
 pad) and **touch controls** (phones, tablets, handheld touchscreens) are
 both supported — see `src/game/README.md` for the full button map, or toggle
-them under **Options ▸ Gamepad** and **Options ▸ Touch Controls**.
+them under **Options ▸ Controls ▸ Gamepad** and **Options ▸ Controls ▸ Touch
+Controls**. Every keybind can be reassigned from **Options ▸ Controls ▸
+Configure Keybinds…**.
 
 ---
 

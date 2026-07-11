@@ -412,7 +412,7 @@ const TITLE_TIPS = [
   "Derelict wrecks (†) are free salvage. No trap, no fight.",
   "Black holes bend your course before they eat you. Watch the drift.",
   "Pulsars (PSR) blink because they spin. Cosmetic — but pretty.",
-  "Options ▸ Radio picks in-game music, including your own stream URL.",
+  "Options ▸ Audio ▸ Radio picks in-game music, including your own stream URL.",
   "Cargo full? Dock and sell before you mine another rock.",
   "Save often. Permadeath is opt-in for a reason.",
 ];
@@ -702,6 +702,45 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   autopilot: "o",        // toggle hired Pilot's autopilot to current target
   questLog: "u",         // open the toggle-able Quest Log popup
 };
+
+// User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
+// Order here is the order shown; the id must match a key in DEFAULT_KEYBINDS.
+// `mission` is intentionally omitted — it aliases `questLog` and only the
+// latter is actually consumed by the input handlers.
+const KEYBIND_ACTIONS: { id: string; label: string }[] = [
+  { id: "throttleUp",   label: "Throttle Up" },
+  { id: "throttleDown", label: "Throttle Down" },
+  { id: "yawLeft",      label: "Yaw Left" },
+  { id: "yawRight",     label: "Yaw Right" },
+  { id: "pitchUp",      label: "Pitch Up" },
+  { id: "pitchDown",    label: "Pitch Down" },
+  { id: "fire",         label: "Fire" },
+  { id: "mine",         label: "Mine" },
+  { id: "cycleTarget",  label: "Cycle Target" },
+  { id: "cycleCatPrev", label: "Prev Target Category" },
+  { id: "cycleCatNext", label: "Next Target Category" },
+  { id: "dock",         label: "Dock" },
+  { id: "station",      label: "Station Menu" },
+  { id: "boost",        label: "Boost" },
+  { id: "jettison",     label: "Jettison Cargo" },
+  { id: "supercruise",  label: "Supercruise (hold)" },
+  { id: "toggleGunner", label: "Toggle Gunner" },
+  { id: "autopilot",    label: "Autopilot Toggle" },
+  { id: "pinQuest",     label: "Pin Quest Tracker" },
+  { id: "questLog",     label: "Quest Log" },
+  { id: "legend",       label: "Codex / Legend" },
+  { id: "pause",        label: "Pause" },
+  { id: "menu",         label: "Main Menu / Back" },
+];
+
+// Human-readable label for a raw key value stored in Options.keybinds.
+// Keys are stored lowercased (or " " for space, "escape" for ESC, etc.).
+function keyLabel(k: string): string {
+  if (k === " ") return "SPACE";
+  if (k === "\b") return "BKSP";
+  if (k.length === 1) return k.toUpperCase();
+  return k.toUpperCase();
+}
 
 
 function defaultOptions(): Options {
@@ -2098,6 +2137,13 @@ export class Voidwake {
 
   // Menu transient state
   menuCursor = 0;
+  // Options screen has been split into a small hub with three subsections
+  // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
+  // "root" is the hub itself.
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" = "root";
+  // While non-null, the Keybinds screen is capturing the next pressed key
+  // as the new binding for this action id (a key in Options.keybinds).
+  private _rebindAction: string | null = null;
   charDraft: PlayerChar = {
     name: "Cmdr Vex", gender: "Unspecified",
     height: 175, weight: 72, skin: "amber", eyes: "green", species: "Human",
@@ -2858,7 +2904,22 @@ export class Voidwake {
     // Global: ESC toggles main menu while playing
     if (this.input.consume(kb.menu)) {
       if (this.screen === "playing") { this.prevPlayScreen = this.screen; this.screen = "menu"; this.menuCursor = 0; }
-      else if (this.screen === "menu" || this.screen === "options" || this.screen === "load" || this.screen === "save" || this.screen === "quit-confirm") {
+      else if (this.screen === "options") {
+        // Rebind capture uses its own ESC handler; skip so we don't leave
+        // the screen mid-rebind.
+        if (this._rebindAction) {
+          this._rebindAction = null;
+        } else if (this.optionsSection !== "root") {
+          // Bounce a subsection back to the Options hub. Keybinds goes back
+          // to Controls (its parent), not straight to root.
+          if (this.optionsSection === "keybinds") this.optionsSection = "controls";
+          else this.optionsSection = "root";
+          this.menuCursor = 0;
+        } else {
+          this.screen = this.player ? "playing" : "title";
+        }
+      }
+      else if (this.screen === "menu" || this.screen === "load" || this.screen === "save" || this.screen === "quit-confirm") {
         this.screen = this.player ? "playing" : "title";
       } else if (this.screen === "station") {
         this.screen = "playing";
@@ -3030,7 +3091,7 @@ export class Voidwake {
       if (choice === "New Game") { this.clearTitleNotice(); this.screen = "create-char"; this.menuCursor = 0; }
       else if (choice === "Load Game") { this.clearTitleNotice(); this.screen = "load"; this.menuCursor = 0; }
       else if (choice === "Legend (Codex)") { this._codexReturn = "title"; this.screen = "codex"; this.menuCursor = 0; }
-      else if (choice === "Options") { this.screen = "options"; this.menuCursor = 0; }
+      else if (choice === "Options") { this.screen = "options"; this.optionsSection = "root"; this.menuCursor = 0; }
       else if (choice === "Quit") this.tryQuit();
     }
   }
@@ -4575,7 +4636,7 @@ export class Voidwake {
       else if (c === "Save Game") { this.screen = "save"; this.menuCursor = 0; }
       else if (c === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
       else if (c === "Legend (Codex)") { this._codexReturn = "menu"; this.screen = "codex"; this.menuCursor = 0; }
-      else if (c === "Options") { this.screen = "options"; this.menuCursor = 0; }
+      else if (c === "Options") { this.screen = "options"; this.optionsSection = "root"; this.menuCursor = 0; }
       else if (c === "Quit") this.tryQuit();
     }
   }
@@ -4601,33 +4662,58 @@ export class Voidwake {
   }
 
   // --- Options -------------------------------------------------------------
+  // The Options screen is a small hub: a root list picks between three
+  // subsections (Gameplay / Audio / Controls). Controls itself exposes a
+  // Keybinds sub-page that lets the player rebind every action.
+  //
+  // Sub-page routing lives in a single `optionsSection` field on the class
+  // so the ESC handler (in the global input loop) can bounce a subsection
+  // back to root without needing to know which page is active.
   updateOptions() {
-    const radioPreset = RADIO_PRESETS.find((r) => r.id === this.options.radioMode) ?? RADIO_PRESETS[0];
-    const radioUrlLabel = this.options.radioMode === "custom"
-      ? (this.options.radioCustomUrl ? this.options.radioCustomUrl.slice(0, 40) : "(press ENTER to set)")
-      : "—";
-    const items = [
-      `Difficulty: ${this.options.difficulty}`,
-      `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
-      `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
-      `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
-      `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
-      `Show FPS: ${this.options.showFps ? "ON" : "OFF"}`,
-      `Autosave: ${this.options.autosave ? "ON" : "OFF"}`,
-      `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
-      `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
-      `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
-      `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
-      `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
-      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
-      `Radio: ${radioPreset.label}`,
-      `Radio URL: ${radioUrlLabel}`,
-      `Gamepad: ${this.options.gamepad.toUpperCase()}${this.input.gamepadConnected ? "  •connected" : ""}`,
-      `Gamepad Deadzone: ${this.options.gamepadDeadzone.toFixed(2)}`,
-      `Touch Controls: ${this.options.touchControls.toUpperCase()}`,
-      `Reset Keybinds (current: ${Object.keys(this.options.keybinds).length})`,
-      "Back",
-    ];
+    // Rebind capture takes priority — swallow all input until a key lands
+    // or ESC cancels. (The global ESC handler in update() only fires when
+    // _rebindAction is null; see the guard there.)
+    if (this._rebindAction) {
+      // ESC cancels rebind. We check both consume + the raw key so the
+      // player can also click "Cancel" via the touch swipe-left gesture.
+      if (this.input.consume("escape")) { this._rebindAction = null; return; }
+      // Pick the first fresh press that isn't a modifier / navigation key.
+      const skip = new Set(["shift", "control", "alt", "meta", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
+      for (const k of this.input.pressed) {
+        if (skip.has(k)) continue;
+        this.options.keybinds[this._rebindAction] = k;
+        this._rebindAction = null;
+        break;
+      }
+      // Drain enter so the same press that opened rebind doesn't confirm
+      // something on the next frame.
+      this.input.consume("enter");
+      return;
+    }
+
+    if (this.optionsSection === "root")     { this.updateOptionsRoot();     return; }
+    if (this.optionsSection === "gameplay") { this.updateOptionsGameplay(); return; }
+    if (this.optionsSection === "audio")    { this.updateOptionsAudio();    return; }
+    if (this.optionsSection === "controls") { this.updateOptionsControls(); return; }
+    if (this.optionsSection === "keybinds") { this.updateOptionsKeybinds(); return; }
+  }
+
+  // Root Options hub: three category entries + Back.
+  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Back"];
+  private updateOptionsRoot() {
+    this.menuNav(this.optionsRootItems.length);
+    if (!this.input.consume("enter")) return;
+    const c = this.optionsRootItems[this.menuCursor];
+    if (c === "Gameplay") { this.optionsSection = "gameplay"; this.menuCursor = 0; }
+    else if (c === "Audio")    { this.optionsSection = "audio";    this.menuCursor = 0; }
+    else if (c === "Controls") { this.optionsSection = "controls"; this.menuCursor = 0; }
+    else if (c === "Back")     { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
+  }
+
+  // --- Options ▸ Gameplay --------------------------------------------------
+  // Difficulty, peaceful, cheat, autosave, unsaved warning, permadeath, crew chatter.
+  private updateOptionsGameplay() {
+    const items = this.optionsGameplayItems();
     this.menuNav(items.length);
     const left = this.input.consume("arrowleft");
     const right = this.input.consume("arrowright");
@@ -4639,45 +4725,52 @@ export class Voidwake {
     }
     if (i === 1 && (left || right)) this.options.peaceful = !this.options.peaceful;
     if (i === 2 && (left || right)) this.options.cheat = !this.options.cheat;
-    if (i === 3 && (left || right)) this.options.mouseSteer = !this.options.mouseSteer;
-    if (i === 4) this.options.mouseSensitivity = Math.max(0.1, Math.min(3, this.options.mouseSensitivity + (right ? 0.1 : left ? -0.1 : 0)));
-    if (i === 5 && (left || right)) this.options.showFps = !this.options.showFps;
-    if (i === 6 && (left || right)) this.options.autosave = !this.options.autosave;
-    if (i === 7 && (left || right)) { this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : -0.05)); this.syncRadio(); }
-    if (i === 8 && (left || right)) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : -0.05));
-    if (i === 9 && (left || right)) { this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : -0.05)); this.syncRadio(); }
-    if (i === 10) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
-    if (i === 11 && (left || right)) this.options.permadeath = !this.options.permadeath;
-    if (i === 12 && (left || right)) {
+    if (i === 3 && (left || right)) this.options.autosave = !this.options.autosave;
+    if (i === 4) this.options.unsavedWarnMinutes = Math.max(1, this.options.unsavedWarnMinutes + (right ? 1 : left ? -1 : 0));
+    if (i === 5 && (left || right)) this.options.permadeath = !this.options.permadeath;
+    if (i === 6 && (left || right)) {
       const modes: Options["chatterFreq"][] = ["off", "rare", "normal", "lively"];
       const idx = modes.indexOf(this.options.chatterFreq ?? "normal");
       const n = modes.length;
       this.options.chatterFreq = modes[(idx + (right ? 1 : -1) + n) % n];
     }
-    if (i === 13 && (left || right)) {
+    if (this.input.consume("enter") && items[i] === "Back") {
+      this.optionsSection = "root"; this.menuCursor = 0;
+    }
+  }
+  private optionsGameplayItems(): string[] {
+    return [
+      `Difficulty: ${this.options.difficulty}`,
+      `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
+      `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
+      `Autosave: ${this.options.autosave ? "ON" : "OFF"}`,
+      `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
+      `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
+      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
+      "Back",
+    ];
+  }
+
+  // --- Options ▸ Audio -----------------------------------------------------
+  // Master / SFX / Music volumes, radio preset, radio custom URL.
+  private updateOptionsAudio() {
+    const items = this.optionsAudioItems();
+    this.menuNav(items.length);
+    const left = this.input.consume("arrowleft");
+    const right = this.input.consume("arrowright");
+    const i = this.menuCursor;
+    if (i === 0 && (left || right)) { this.options.volumeMaster = clamp01(this.options.volumeMaster + (right ? 0.05 : -0.05)); this.syncRadio(); }
+    if (i === 1 && (left || right)) this.options.volumeSfx = clamp01(this.options.volumeSfx + (right ? 0.05 : -0.05));
+    if (i === 2 && (left || right)) { this.options.volumeMusic = clamp01(this.options.volumeMusic + (right ? 0.05 : -0.05)); this.syncRadio(); }
+    if (i === 3 && (left || right)) {
       const idx = Math.max(0, RADIO_PRESETS.findIndex((r) => r.id === this.options.radioMode));
       const n = RADIO_PRESETS.length;
       this.options.radioMode = RADIO_PRESETS[(idx + (right ? 1 : -1) + n) % n].id;
       this.syncRadio();
     }
-    // i === 14 is Radio URL (handled in the ENTER block below).
-    if (i === 15 && (left || right)) {
-      const modes: Options["gamepad"][] = ["off", "auto", "on"];
-      const idx = modes.indexOf(this.options.gamepad);
-      const n = modes.length;
-      this.options.gamepad = modes[(idx + (right ? 1 : -1) + n) % n];
-    }
-    if (i === 16) this.options.gamepadDeadzone = Math.max(0, Math.min(0.5, this.options.gamepadDeadzone + (right ? 0.02 : left ? -0.02 : 0)));
-    if (i === 17 && (left || right)) {
-      const modes: Options["touchControls"][] = ["off", "auto", "on"];
-      const idx = modes.indexOf(this.options.touchControls);
-      const n = modes.length;
-      this.options.touchControls = modes[(idx + (right ? 1 : -1) + n) % n];
-    }
+    // i === 4 (Radio URL) is entered via ENTER below.
     if (this.input.consume("enter")) {
-      if (i === 14) {
-        // Prompt for a custom stream URL. window.prompt is fine here — this
-        // is a game options screen, not a hot path.
+      if (i === 4) {
         const cur = this.options.radioCustomUrl ?? "";
         const next = typeof window !== "undefined" && typeof window.prompt === "function"
           ? window.prompt("Radio stream URL (mp3 / ogg / m3u):", cur)
@@ -4689,13 +4782,107 @@ export class Voidwake {
           }
           this.syncRadio();
         }
-      } else if (items[i].startsWith("Reset")) {
-        this.options.keybinds = { ...DEFAULT_KEYBINDS };
       } else if (items[i] === "Back") {
-        this.screen = this.player ? "menu" : "title";
+        this.optionsSection = "root"; this.menuCursor = 0;
       }
     }
   }
+  private optionsAudioItems(): string[] {
+    const radioPreset = RADIO_PRESETS.find((r) => r.id === this.options.radioMode) ?? RADIO_PRESETS[0];
+    const radioUrlLabel = this.options.radioMode === "custom"
+      ? (this.options.radioCustomUrl ? this.options.radioCustomUrl.slice(0, 40) : "(press ENTER to set)")
+      : "—";
+    return [
+      `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
+      `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
+      `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
+      `Radio: ${radioPreset.label}`,
+      `Radio URL: ${radioUrlLabel}`,
+      "Back",
+    ];
+  }
+
+  // --- Options ▸ Controls --------------------------------------------------
+  // Mouse steer, mouse sensitivity, gamepad, gamepad deadzone, touch controls,
+  // and an entry that opens the Keybinds sub-page (which also owns the
+  // "Reset Keybinds" action so it stays grouped with the bindings themselves).
+  private updateOptionsControls() {
+    const items = this.optionsControlsItems();
+    this.menuNav(items.length);
+    const left = this.input.consume("arrowleft");
+    const right = this.input.consume("arrowright");
+    const i = this.menuCursor;
+    if (i === 0 && (left || right)) this.options.mouseSteer = !this.options.mouseSteer;
+    if (i === 1) this.options.mouseSensitivity = Math.max(0.1, Math.min(3, this.options.mouseSensitivity + (right ? 0.1 : left ? -0.1 : 0)));
+    if (i === 2 && (left || right)) {
+      const modes: Options["gamepad"][] = ["off", "auto", "on"];
+      const idx = modes.indexOf(this.options.gamepad);
+      const n = modes.length;
+      this.options.gamepad = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
+    if (i === 3) this.options.gamepadDeadzone = Math.max(0, Math.min(0.5, this.options.gamepadDeadzone + (right ? 0.02 : left ? -0.02 : 0)));
+    if (i === 4 && (left || right)) {
+      const modes: Options["touchControls"][] = ["off", "auto", "on"];
+      const idx = modes.indexOf(this.options.touchControls);
+      const n = modes.length;
+      this.options.touchControls = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
+    if (i === 5 && (left || right)) this.options.showFps = !this.options.showFps;
+    if (this.input.consume("enter")) {
+      if (items[i].startsWith("Configure Keybinds")) {
+        this.optionsSection = "keybinds"; this.menuCursor = 0;
+      } else if (items[i] === "Back") {
+        this.optionsSection = "root"; this.menuCursor = 0;
+      }
+    }
+  }
+  private optionsControlsItems(): string[] {
+    return [
+      `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
+      `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
+      `Gamepad: ${this.options.gamepad.toUpperCase()}${this.input.gamepadConnected ? "  •connected" : ""}`,
+      `Gamepad Deadzone: ${this.options.gamepadDeadzone.toFixed(2)}`,
+      `Touch Controls: ${this.options.touchControls.toUpperCase()}`,
+      `Show FPS: ${this.options.showFps ? "ON" : "OFF"}`,
+      `Configure Keybinds…`,
+      "Back",
+    ];
+  }
+
+  // --- Options ▸ Controls ▸ Keybinds --------------------------------------
+  // One row per action in KEYBIND_ACTIONS, plus "Reset Keybinds" and "Back".
+  // ENTER on an action row arms _rebindAction; the next non-modifier keypress
+  // becomes the new binding (see updateOptions() top-of-function guard).
+  private updateOptionsKeybinds() {
+    const items = this.optionsKeybindsItems();
+    this.menuNav(items.length);
+    if (!this.input.consume("enter")) return;
+    const i = this.menuCursor;
+    if (items[i] === "Back") { this.optionsSection = "controls"; this.menuCursor = 0; return; }
+    if (items[i].startsWith("Reset Keybinds")) {
+      this.options.keybinds = { ...DEFAULT_KEYBINDS };
+      return;
+    }
+    // Action rows come first, in KEYBIND_ACTIONS order.
+    if (i < KEYBIND_ACTIONS.length) {
+      this._rebindAction = KEYBIND_ACTIONS[i].id;
+      // Drain the fresh-press set so the ENTER that opened rebind isn't
+      // captured as the new binding on this same frame.
+      this.input.pressed.clear();
+    }
+  }
+  private optionsKeybindsItems(): string[] {
+    const kb = this.options.keybinds;
+    const rows = KEYBIND_ACTIONS.map((a) => {
+      const cur = kb[a.id] ?? DEFAULT_KEYBINDS[a.id] ?? "?";
+      return `${a.label}: ${keyLabel(cur)}`;
+    });
+    rows.push("Reset Keybinds to Defaults");
+    rows.push("Back");
+    return rows;
+  }
+
+
 
 
 
@@ -5333,32 +5520,47 @@ export class Voidwake {
 
   renderMenu(g: Cell[][]) { this.renderListMenu(g, "MAIN MENU", this.menuItems); }
   renderOptions(g: Cell[][]) {
-    const items = [
-      `Difficulty: ${this.options.difficulty}`,
-      `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
-      `Cheat Mode: ${this.options.cheat ? "ON" : "OFF"}`,
-      `Mouse Steer: ${this.options.mouseSteer ? "ON" : "OFF"}`,
-      `Mouse Sensitivity: ${this.options.mouseSensitivity.toFixed(2)}`,
-      `Show FPS: ${this.options.showFps ? "ON" : "OFF"}`,
-      `Autosave: ${this.options.autosave ? "ON" : "OFF"}`,
-      `Master Volume: ${(this.options.volumeMaster * 100).toFixed(0)}%`,
-      `SFX Volume: ${(this.options.volumeSfx * 100).toFixed(0)}%`,
-      `Music Volume: ${(this.options.volumeMusic * 100).toFixed(0)}%`,
-      `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
-      `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
-      `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
-      `Radio: ${(RADIO_PRESETS.find((r) => r.id === this.options.radioMode) ?? RADIO_PRESETS[0]).label}`,
-      `Radio URL: ${this.options.radioMode === "custom" ? (this.options.radioCustomUrl || "(press ENTER to set)").slice(0, 40) : "—"}`,
-      `Gamepad: ${this.options.gamepad.toUpperCase()}${this.input.gamepadConnected ? "  •connected" : ""}`,
-      `Gamepad Deadzone: ${this.options.gamepadDeadzone.toFixed(2)}`,
-      `Touch Controls: ${this.options.touchControls.toUpperCase()}`,
-      `Reset Keybinds`,
-      "Back",
-    ];
-
-
-    this.renderListMenu(g, "OPTIONS", items);
-    putText(g, 4, g.length - 2, "←/→ change   ↑/↓ field   ENTER confirm", "#888");
+    // Render whichever Options subsection is active. The rebind capture
+    // overlays a "press any key" prompt without hiding the underlying list.
+    let title = "OPTIONS";
+    let items: string[];
+    let hint = "↑/↓ select   ENTER open   ESC back";
+    switch (this.optionsSection) {
+      case "root":
+        items = this.optionsRootItems.slice();
+        break;
+      case "gameplay":
+        title = "OPTIONS ▸ GAMEPLAY";
+        items = this.optionsGameplayItems();
+        hint = "←/→ change   ↑/↓ field   ESC back";
+        break;
+      case "audio":
+        title = "OPTIONS ▸ AUDIO";
+        items = this.optionsAudioItems();
+        hint = "←/→ change   ↑/↓ field   ENTER edit URL   ESC back";
+        break;
+      case "controls":
+        title = "OPTIONS ▸ CONTROLS";
+        items = this.optionsControlsItems();
+        hint = "←/→ change   ↑/↓ field   ENTER open keybinds   ESC back";
+        break;
+      case "keybinds":
+        title = "OPTIONS ▸ CONTROLS ▸ KEYBINDS";
+        items = this.optionsKeybindsItems();
+        hint = "↑/↓ select   ENTER rebind   ESC back";
+        break;
+    }
+    this.renderListMenu(g, title, items);
+    // Extra hint sits one row above renderListMenu's footer so the two
+    // strings don't clip into each other (this was the "ENTER confirmwipe"
+    // artifact — options hint + list-menu footer overwriting the same row).
+    putText(g, 4, g.length - 3, hint, "#888");
+    if (this._rebindAction) {
+      const label = KEYBIND_ACTIONS.find((a) => a.id === this._rebindAction)?.label ?? this._rebindAction;
+      const cols = g[0].length;
+      const msg = `Press any key to bind [${label}]  —  ESC to cancel`;
+      putText(g, Math.max(2, Math.floor((cols - msg.length) / 2)), Math.floor(g.length / 2), msg, "#7CFC00");
+    }
   }
   renderSave(g: Cell[][]) { this.renderListMenu(g, "SAVE GAME", ["slot-1", "slot-2", "slot-3", "Back"]); }
   renderLoad(g: Cell[][]) {

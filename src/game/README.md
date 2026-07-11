@@ -17,7 +17,7 @@ voidwake.ts
 ├─ AI                   simple state machines (friendly/neutral/hostile/station)
 ├─ Player Systems       combat, mining, trading, missions, progression
 ├─ Input                keyboard handling
-├─ Menu                 ESC menu, character creation, ship customization, options
+├─ Menu                 ESC menu, character creation, ship customization, options (Gameplay / Audio / Controls + Keybinds sub-page)
 ├─ Save / Load          unencrypted JSON via localStorage + download/upload
 ├─ Render               ASCII grid renderer + cockpit HUD + 3D radar
 └─ Loop                 fixed-timestep update + render
@@ -88,14 +88,15 @@ generic USB pads. The layout is:
 | L3 (click LS) | toggle gunner |
 | R3 (click RS) | toggle autopilot |
 
-Configure it under **Options ▸ Gamepad** (`auto` / `on` / `off`) and
-**Options ▸ Gamepad Deadzone** (0–0.5). "auto" enables the pad the moment
-one is plugged in. Because the controller maps through your keybinds, any
-key you rebind is remapped for the pad too.
+Configure it under **Options ▸ Controls ▸ Gamepad** (`auto` / `on` / `off`)
+and **Options ▸ Controls ▸ Gamepad Deadzone** (0–0.5). "auto" enables the pad
+the moment one is plugged in. Because the controller maps through your
+keybinds, any key you rebind under **Options ▸ Controls ▸ Configure Keybinds…**
+is remapped for the pad too.
 
 ## Touch controls (tablet / phone / handheld)
 
-`Options ▸ Touch Controls` (`auto` / `on` / `off`) enables an on-screen
+`Options ▸ Controls ▸ Touch Controls` (`auto` / `on` / `off`) enables an on-screen
 overlay:
 
 - **Virtual stick** — bottom-left. Tap anywhere in the lower-left, then drag
@@ -217,20 +218,37 @@ name (e.g. `Nosaj`) and the HUD will render it as `Cmdr Nosaj`. Case is
 preserved, and an accidentally typed leading `Cmdr ` is stripped so you
 won't end up with `Cmdr Cmdr Nosaj`.
 
+## Options menu
+
+The **ESC ▸ Options** screen is organized into three subsections plus a
+Keybinds sub-page:
+
+- **Gameplay** — Difficulty, Peaceful Mode, Cheat Mode, Autosave, Unsaved
+  Warn, Permadeath, Crew Chatter.
+- **Audio** — Master / SFX / Music volume, Radio preset, Radio URL.
+- **Controls** — Mouse Steer, Mouse Sensitivity, Gamepad, Gamepad Deadzone,
+  Touch Controls, Show FPS, and **Configure Keybinds…** which opens a full
+  rebind screen. On the Keybinds screen, ENTER on any action arms rebind
+  capture — press the new key (ESC cancels). "Reset Keybinds to Defaults"
+  lives at the bottom of that same page.
+
+ESC in a subsection returns to the Options hub; ESC on the hub returns to
+the main menu.
+
 ## Radio
 
-Options ▸ Radio picks the in-game music source:
+**Options ▸ Audio ▸ Radio** picks the in-game music source:
 
 - **Off** — no music.
 - **Chiptune • Drift / Frontier / Arcade Runner / Nebula Cradle** —
   procedurally generated 8-bit tunes; no assets, works offline.
 - **SomaFM • Deep Space One / Space Station / Mission Control / DEF CON** —
   free space-themed internet streams.
-- **Custom URL** — plug in your own stream (`Options ▸ Radio URL`, press
-  ENTER to enter one).
+- **Custom URL** — plug in your own stream (**Options ▸ Audio ▸ Radio URL**,
+  press ENTER to enter one).
 
-Music volume is the existing `Music Volume` slider; changes take effect
-immediately.
+Music volume is the `Music Volume` slider one row above; changes take
+effect immediately.
 
 ## Crew & wages
 
