@@ -2730,6 +2730,13 @@ export class Voidwake {
     const screenBefore = this.screen;
     const noticeAtBefore = this.titleNoticeAt;
     const kb = this.options.keybinds;
+    // Alternative input polling — gamepad + touch synthesize key presses so
+    // the rest of the game (menus + flight) needs no special-casing. Both
+    // resolve to keyboard bindings, so remapping keys remaps controllers too.
+    const gpOn = this.options.gamepad !== "off";
+    this.input.pollGamepad(kb, this.options.gamepadDeadzone, gpOn);
+    const touchOn = this._touchControlsActive();
+    this._touchStick = this.input.pollTouch(kb, touchOn);
     this.recordFlight(`updating ${this.screen}`);
     // Global: ESC toggles main menu while playing
     if (this.input.consume(kb.menu)) {
