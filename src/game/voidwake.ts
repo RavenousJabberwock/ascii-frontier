@@ -5827,7 +5827,15 @@ export class Voidwake {
         "#fc6";
       const tprojIdx = projected.findIndex((q) => q.e.id === tgt.id);
       const tproj = tprojIdx >= 0 ? projected[tprojIdx] : null;
-      if (tproj) {
+      // "On-screen" means projected AND the sprite center is inside the
+      // viewport with a little margin. If it projects off the viewport we
+      // fall through to the edge-pointer branch — otherwise brackets get
+      // silently clipped and the player sees no indicator at all.
+      const onScreen =
+        !!tproj &&
+        tproj.sx > vpLeft + 1 && tproj.sx < vpRight - 1 &&
+        tproj.sy > vpTop + 1 && tproj.sy < vpBottom - 1;
+      if (tproj && onScreen) {
         // On-screen: draw four corner brackets that snap inward over ~4 frames.
         const age = performance.now() / 1000 - this._bracketAcquiredAt;
         const ease = Math.min(1, age * 6); // 0→1 over ~0.17s
@@ -5872,22 +5880,42 @@ export class Voidwake {
           }
         }
       } else {
-        // Off-screen edge pointer. Project the relative vector into camera
-        // space, then pick the viewport edge it intersects and an arrow glyph.
+        // Off-screen edge pointer. Rotate the relative vector into camera
+        // space (same transform as projectPoint), then pick a viewport edge
+        // from its direction and choose a chevron glyph.
         const rel = V.sub(tgt.pos, p.pos);
         const x1 = cy * rel.x - sy * rel.z;
         const z1 = sy * rel.x + cy * rel.z;
         const y1 = cp * rel.y - sp * z1;
         const z2 = sp * rel.y + cp * z1;
         const behind = z2 <= 1;
-        // Use a synthetic projection that radiates outward from center even
-        // when the target is behind, so the arrow always points somewhere.
+        // Direction on the ASCII screen plane. Screen +y = down (matches
+        // projectPoint), so dy sign matches sprite placement.
         let dx: number, dy: number;
-        if (behind) { dx = -x1; dy = -y1; }
-        else { dx = x1 / Math.max(0.5, z2); dy = y1 / Math.max(0.5, z2); }
+        if (behind) {
+          // Radiate outward: target is behind, so the on-screen arrow points
+          // toward the edge the player must swing past to bring it into view.
+          // Invert the camera-space x/y so left-behind reads as left-edge.
+          dx = -x1;
+          dy = -y1;
+          // Degenerate case: target directly behind → x1≈y1≈0. Point straight
+          // down as a "flip 180" hint instead of collapsing to center.
+          if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) {
+            dx = 0;
+            dy = 1;
+          }
+        } else {
+          // In front but off-screen: divide by z2 so this matches projectPoint's
+          // sx/sy mapping exactly — the arrow points at where the sprite would
+          // have been drawn, just clamped to the viewport rectangle.
+          const zSafe = Math.max(0.5, z2);
+          dx = x1 / zSafe;
+          dy = y1 / zSafe;
+        }
         const cxV = vpLeft + vw / 2, cyV = vpTop + vh / 2;
-        // Scale the direction to the viewport edge.
-        const halfW = vw / 2 - 2, halfH = vh / 2 - 2;
+        // Scale the direction to the viewport edge (uniform ray-to-rect).
+        const halfW = Math.max(1, vw / 2 - 2);
+        const halfH = Math.max(1, vh / 2 - 2);
         const m = Math.max(Math.abs(dx) / halfW, Math.abs(dy) / halfH) || 1;
         const ex = Math.round(cxV + dx / m);
         const ey = Math.round(cyV + dy / m);
@@ -5905,7 +5933,7 @@ export class Voidwake {
         const dist = V.len(rel);
         const distStr = dist > 1000 ? `${(dist / 1000).toFixed(1)}k` : `${dist.toFixed(0)}`;
         const label = behind ? `${arrow} ${tgt.name.slice(0, 10)}  TURN ${distStr}` : `${arrow} ${tgt.name.slice(0, 10)}  ${distStr}`;
-        // Place label hugging the chosen edge — left/right edges put text inside.
+        // Place label hugging the chosen edge — right side puts text inside.
         let lx = exC + 1;
         if (exC > vpLeft + vw * 0.6) lx = Math.max(vpLeft + 1, exC - label.length - 1);
         const ly = Math.max(vpTop + 1, Math.min(vpBottom - 1, eyC));
