@@ -232,6 +232,22 @@ Options ▸ Radio picks the in-game music source:
 Music volume is the existing `Music Volume` slider; changes take effect
 immediately.
 
+## Crew & wages
+
+Hired crew and your gunner draw a flat wage every time you dock: pilot 60cr,
+engineer 55cr, merchant/gunner 30–40cr. Cheat Mode skips the payroll. If you
+can't cover the full bill you pay whatever's on hand and the crew grumbles
+in the COMMS feed — the shortfall is currently just cosmetic, but hooks are
+in place for a real morale system later.
+
+## Notorious pirate captains
+
+Roughly 5% of respawned raiders are named captains (Warlord / Blackwake /
+Ironmaw …). They have +50% hull and shield, pay out a ~450cr bounty plus
+extra XP on kill, drop a fatter "captain's cache" canister, and shift
+faction reputation ~3× as hard as a rank-and-file pirate. A one-line
+sensor alert announces them when they spawn.
+
 ## Adding new content
 
 - **New ship hull**: append to `SHIP_HULLS` in `voidwake.ts`.
