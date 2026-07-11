@@ -2192,6 +2192,14 @@ export class Voidwake {
   // and show the error here so the user isn't silently kicked to the menu.
   crashError: string | null = null;
   crashStack: string | null = null;
+  // performance.now()/1000 of the last "reactor cold" fuel-zero chatter so we
+  // don't spam it every frame while fuel is pinned at 0 (also filters the
+  // once-per-toggle edge when Cheat Mode is flicked on/off right at empty).
+  private _lastFuelWarnAt = 0;
+  // Undock clamp cooldown — after leaving a station we suppress `tryDock`
+  // for a short beat so an accidental double-tap of F doesn't immediately
+  // re-open the station screen.
+  private _dockCooldownUntil = 0;
   // Autosave bookkeeping. We rotate into the dedicated "autosave" slot every
   // `autosaveInterval` seconds while in flight.
   autosaveTimer = 0;
