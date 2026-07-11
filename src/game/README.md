@@ -112,6 +112,16 @@ Steam Deck touchscreen) and off for desktops. In menus, dragging the stick
 also drives the ↑/↓/←/→ cursor, and tapping `FIRE` acts as ENTER — so the
 whole game can be played thumbs-only.
 
+On any list-style menu (main menu, options, save/load, quit-confirm, …) the
+touch surface is repurposed:
+
+- **Tap a menu entry** to move the cursor to it and confirm in one gesture.
+- **Swipe right (→)** to confirm the current selection (same as ENTER).
+- **Swipe left (←)** to go back (same as ESC).
+
+The virtual stick and buttons don't render on menu screens, so a stray drag
+won't accidentally start flying the ship.
+
 ## Universe
 
 The play area is a cube roughly 36k units across (radius 18k). Anything past
