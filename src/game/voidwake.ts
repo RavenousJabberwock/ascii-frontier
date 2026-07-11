@@ -2098,6 +2098,13 @@ export class Voidwake {
 
   // Menu transient state
   menuCursor = 0;
+  // Options screen has been split into a small hub with three subsections
+  // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
+  // "root" is the hub itself.
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" = "root";
+  // While non-null, the Keybinds screen is capturing the next pressed key
+  // as the new binding for this action id (a key in Options.keybinds).
+  private _rebindAction: string | null = null;
   charDraft: PlayerChar = {
     name: "Cmdr Vex", gender: "Unspecified",
     height: 175, weight: 72, skin: "amber", eyes: "green", species: "Human",
