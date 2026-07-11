@@ -1265,6 +1265,10 @@ const MODULE_CATALOG = [
   { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
   { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
   { id: "crew-quarters",   name: "Crew Quarters",   price: 1400, desc: "+1 crew slot" },
+  // Sensor Array: passive radar-range boost. Stacks additively with the
+  // small crew bonuses granted by an on-board Pilot / Engineer (see
+  // effectiveRadarRange). Single install — dupes blocked in buyModule().
+  { id: "sensor-array",    name: "Sensor Array",    price: 950,  desc: "+600u radar range" },
 ];
 
 function generateStationStock(stationId: number): StationStock {
@@ -1304,6 +1308,19 @@ function effectiveCrewMax(p: PlayerState): number {
   const base = hull?.crewSlots ?? 1;
   const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
   return base + quarters;
+}
+
+// Effective radar range in world units. Base 1500u, +150u each for an
+// on-crew Pilot (sharp eyes on the nav plot) and Engineer (better sensor
+// tuning), and +600u for a Sensor Array module. Kept as a pure function
+// so renderRadar's culling test and the on-screen "RADAR ####u" label
+// always agree.
+function effectiveRadarRange(p: PlayerState): number {
+  let r = 1500;
+  if (hasCrew(p, "pilot")) r += 150;
+  if (hasCrew(p, "engineer")) r += 150;
+  if (p.ship.modules.includes("sensor-array")) r += 600;
+  return r;
 }
 
 // Merchant on-crew? Sell/buy price multipliers applied at station markets.
@@ -6577,9 +6594,11 @@ export class Voidwake {
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
     const p = this.player; if (!p) return;
-    // Radar range in world units. Same value drives both the culling test
-    // below and the scale label rendered under the frame — keep in sync.
-    const radarRange = 1500;
+    // Radar range in world units. Crew (Pilot/Engineer) and the Sensor
+    // Array module extend it — see effectiveRadarRange. Same value drives
+    // both the culling test below and the scale label rendered in the
+    // title bar so they never disagree.
+    const radarRange = effectiveRadarRange(p);
     // Border + title. Range readout tucked in the title bar so the sweep
     // area stays uncluttered; players kept asking "what's the scale?"
     putText(g, x, y, `[ RADAR  ${radarRange}u ]`, "#7CFC00");
