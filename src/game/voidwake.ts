@@ -703,6 +703,45 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   questLog: "u",         // open the toggle-able Quest Log popup
 };
 
+// User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
+// Order here is the order shown; the id must match a key in DEFAULT_KEYBINDS.
+// `mission` is intentionally omitted — it aliases `questLog` and only the
+// latter is actually consumed by the input handlers.
+const KEYBIND_ACTIONS: { id: string; label: string }[] = [
+  { id: "throttleUp",   label: "Throttle Up" },
+  { id: "throttleDown", label: "Throttle Down" },
+  { id: "yawLeft",      label: "Yaw Left" },
+  { id: "yawRight",     label: "Yaw Right" },
+  { id: "pitchUp",      label: "Pitch Up" },
+  { id: "pitchDown",    label: "Pitch Down" },
+  { id: "fire",         label: "Fire" },
+  { id: "mine",         label: "Mine" },
+  { id: "cycleTarget",  label: "Cycle Target" },
+  { id: "cycleCatPrev", label: "Prev Target Category" },
+  { id: "cycleCatNext", label: "Next Target Category" },
+  { id: "dock",         label: "Dock" },
+  { id: "station",      label: "Station Menu" },
+  { id: "boost",        label: "Boost" },
+  { id: "jettison",     label: "Jettison Cargo" },
+  { id: "supercruise",  label: "Supercruise (hold)" },
+  { id: "toggleGunner", label: "Toggle Gunner" },
+  { id: "autopilot",    label: "Autopilot Toggle" },
+  { id: "pinQuest",     label: "Pin Quest Tracker" },
+  { id: "questLog",     label: "Quest Log" },
+  { id: "legend",       label: "Codex / Legend" },
+  { id: "pause",        label: "Pause" },
+  { id: "menu",         label: "Main Menu / Back" },
+];
+
+// Human-readable label for a raw key value stored in Options.keybinds.
+// Keys are stored lowercased (or " " for space, "escape" for ESC, etc.).
+function keyLabel(k: string): string {
+  if (k === " ") return "SPACE";
+  if (k === "\b") return "BKSP";
+  if (k.length === 1) return k.toUpperCase();
+  return k.toUpperCase();
+}
+
 
 function defaultOptions(): Options {
   return {
