@@ -1344,6 +1344,34 @@ class Input {
   mouseCX = 0;
   mouseCY = 0;
   mouseClicked = false;
+
+  // --- Gamepad state -------------------------------------------------------
+  // Keys currently held "on our behalf" by the gamepad. On the next poll, any
+  // key in this set that is no longer commanded by the pad is released — so
+  // buttons/dpad/sticks feel exactly like their keyboard equivalents.
+  private _gpHeld = new Set<string>();
+  gamepadConnected = false;
+
+  // --- Touch state ---------------------------------------------------------
+  // A single "stick" pointer whose anchor is where the finger first touched
+  // the left half of the viewport; subsequent movement drives yaw/pitch.
+  touchAvailable = false;         // set once we ever see a touch pointer
+  private _stickPtrId: number | null = null;
+  stickAnchorX = 0;
+  stickAnchorY = 0;
+  stickCurX = 0;
+  stickCurY = 0;
+  stickActive = false;
+  // A separate throttle "slider" pointer (upper-left column) — drag up/down to
+  // set throttle 0..1 directly.
+  private _throttlePtrId: number | null = null;
+  throttleActive = false;
+  throttleValue = -1;             // -1 = untouched (do not override throttle)
+  // Buttons registered by the renderer each frame; touched here.
+  buttonRects: { id: string; x: number; y: number; w: number; h: number }[] = [];
+  private _btnPtrIds = new Map<number, string>();   // pointerId → button id
+  private _touchHeld = new Set<string>();
+
   attach(el: HTMLElement, signal?: AbortSignal) {
     const opts = signal ? { signal } : undefined;
     el.addEventListener("keydown", (e) => {
@@ -1356,7 +1384,13 @@ class Input {
       if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
     }, opts);
     el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()), opts);
-    el.addEventListener("blur", () => { this.keys.clear(); this.mouseInside = false; }, opts);
+    el.addEventListener("blur", () => {
+      this.keys.clear(); this.mouseInside = false;
+      this._gpHeld.clear(); this._touchHeld.clear();
+      this._stickPtrId = null; this.stickActive = false;
+      this._throttlePtrId = null; this.throttleActive = false; this.throttleValue = -1;
+      this._btnPtrIds.clear();
+    }, opts);
     el.addEventListener("mousemove", (e) => {
       const r = (el as HTMLCanvasElement).getBoundingClientRect();
       this.mouseCX = e.clientX - r.left;
@@ -1377,6 +1411,88 @@ class Input {
       this.wheelDelta += e.deltaY;
       e.preventDefault();
     }, { ...(opts ?? {}), passive: false } as AddEventListenerOptions);
+
+    // --- Pointer / touch ---------------------------------------------------
+    // We route by pointerType so mouse users keep the existing mouse-steer
+    // path unchanged. Touch is treated as a set of virtual gamepad zones
+    // published by the renderer via `buttonRects` each frame.
+    const localXY = (e: PointerEvent) => {
+      const r = (el as HTMLCanvasElement).getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height };
+    };
+    const hitButton = (x: number, y: number): string | null => {
+      for (const b of this.buttonRects) {
+        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b.id;
+      }
+      return null;
+    };
+    el.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      this.touchAvailable = true;
+      const { x, y, w, h } = localXY(e);
+      try { (el as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
+      // Priority: buttons first (small explicit zones), then throttle slider,
+      // then stick (large left-half fallback).
+      const btn = hitButton(x, y);
+      if (btn) {
+        this._btnPtrIds.set(e.pointerId, btn);
+        if (!this._touchHeld.has(btn)) this.pressed.add(btn);
+        this._touchHeld.add(btn);
+        e.preventDefault();
+        return;
+      }
+      // Throttle strip: leftmost 8% of width, middle 60% of height.
+      const inThrottle = x < w * 0.08 && y > h * 0.15 && y < h * 0.85;
+      if (inThrottle && this._throttlePtrId == null) {
+        this._throttlePtrId = e.pointerId;
+        this.throttleActive = true;
+        this.throttleValue = 1 - (y - h * 0.15) / (h * 0.7);
+        e.preventDefault();
+        return;
+      }
+      // Otherwise, use left half of screen for the flight stick.
+      if (x < w * 0.5 && this._stickPtrId == null) {
+        this._stickPtrId = e.pointerId;
+        this.stickAnchorX = x; this.stickAnchorY = y;
+        this.stickCurX = x; this.stickCurY = y;
+        this.stickActive = true;
+        e.preventDefault();
+      }
+    }, opts);
+    el.addEventListener("pointermove", (e) => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      const { x, y, w, h } = localXY(e);
+      if (e.pointerId === this._stickPtrId) {
+        this.stickCurX = x; this.stickCurY = y;
+        e.preventDefault();
+      } else if (e.pointerId === this._throttlePtrId) {
+        this.throttleValue = Math.max(0, Math.min(1, 1 - (y - h * 0.15) / (h * 0.7)));
+        e.preventDefault();
+      }
+    }, opts);
+    const endPointer = (e: PointerEvent) => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      if (e.pointerId === this._stickPtrId) {
+        this._stickPtrId = null; this.stickActive = false;
+      }
+      if (e.pointerId === this._throttlePtrId) {
+        this._throttlePtrId = null; this.throttleActive = false; this.throttleValue = -1;
+      }
+      const btn = this._btnPtrIds.get(e.pointerId);
+      if (btn) {
+        this._btnPtrIds.delete(e.pointerId);
+        // Only release if no other pointer is holding the same button.
+        const stillHeld = [...this._btnPtrIds.values()].includes(btn);
+        if (!stillHeld) { this._touchHeld.delete(btn); }
+      }
+    };
+    el.addEventListener("pointerup", endPointer, opts);
+    el.addEventListener("pointercancel", endPointer, opts);
+    el.addEventListener("lostpointercapture", endPointer, opts);
+    // Suppress the default touch scroll/zoom on the canvas so drags don't
+    // fight the browser's pan-to-refresh or pinch handlers.
+    el.addEventListener("touchstart", (e) => { e.preventDefault(); }, { ...(opts ?? {}), passive: false } as AddEventListenerOptions);
+    el.addEventListener("touchmove",  (e) => { e.preventDefault(); }, { ...(opts ?? {}), passive: false } as AddEventListenerOptions);
   }
   consume(k: string) {
     const had = this.pressed.has(k);
@@ -1388,6 +1504,112 @@ class Input {
     this.mouseClicked = false;
     this.textBuffer.length = 0;
     this.wheelDelta = 0;
+    // Persistent held sets (_gpHeld, _touchHeld) survive across frames.
+    // buttonRects are rebuilt every render.
+    this.buttonRects.length = 0;
+  }
+
+  // Synthesize a "key held" from a controller/touch source. Idempotent:
+  // safe to call every frame; only emits a pressed edge on rising transitions.
+  private _synthDown(k: string, held: Set<string>) {
+    if (!held.has(k)) this.pressed.add(k);
+    held.add(k);
+    this.keys.add(k);
+  }
+  private _synthUp(k: string, held: Set<string>) {
+    if (held.has(k)) {
+      held.delete(k);
+      this.keys.delete(k);
+    }
+  }
+  // Poll standard-mapped gamepads and translate to key presses matching the
+  // user's keybinds. Called once per frame from the engine loop before update.
+  // dpad + sticks also emit arrow keys / enter for menu navigation.
+  pollGamepad(kb: Record<string, string>, deadzone: number, enabled: boolean) {
+    if (!enabled || typeof navigator === "undefined" || !navigator.getGamepads) {
+      // Release any keys we were holding.
+      for (const k of this._gpHeld) this.keys.delete(k);
+      this._gpHeld.clear();
+      this.gamepadConnected = false;
+      return;
+    }
+    const pads = navigator.getGamepads();
+    let pad: Gamepad | null = null;
+    for (const p of pads) { if (p && p.connected && p.mapping === "standard") { pad = p; break; } }
+    if (!pad) {
+      for (const p of pads) { if (p && p.connected) { pad = p; break; } }
+    }
+    this.gamepadConnected = !!pad;
+    // Compute this frame's desired held-set.
+    const want = new Set<string>();
+    const pressBtn = (i: number, key: string) => { if (pad!.buttons[i]?.pressed) want.add(key); };
+    if (pad) {
+      const ax = pad.axes[0] ?? 0;
+      const ay = pad.axes[1] ?? 0;
+      const dz = deadzone;
+      if (ax < -dz) { want.add(kb.yawLeft); want.add("arrowleft"); }
+      if (ax >  dz) { want.add(kb.yawRight); want.add("arrowright"); }
+      if (ay < -dz) { want.add(kb.pitchUp); want.add("arrowup"); }
+      if (ay >  dz) { want.add(kb.pitchDown); want.add("arrowdown"); }
+      // Right stick — reserved for aim in future; also nudges throttle.
+      const rY = pad.axes[3] ?? 0;
+      if (rY < -dz) want.add(kb.throttleUp);
+      if (rY >  dz) want.add(kb.throttleDown);
+      // Face buttons (standard mapping: 0=A/Cross, 1=B/Circle, 2=X/Square, 3=Y/Triangle)
+      pressBtn(0, kb.fire); if (pad.buttons[0]?.pressed) want.add("enter");
+      pressBtn(1, kb.menu);
+      pressBtn(2, kb.mine);
+      pressBtn(3, kb.dock);
+      // Shoulders / triggers
+      pressBtn(4, kb.cycleCatPrev);
+      pressBtn(5, kb.cycleCatNext);
+      pressBtn(6, kb.boost);        // LT — afterburner
+      pressBtn(7, kb.fire);         // RT — fire
+      // Select/Start
+      pressBtn(8, kb.legend);       // Back/Select → Codex
+      pressBtn(9, kb.pause);        // Start → pause
+      pressBtn(10, kb.toggleGunner); // L3
+      pressBtn(11, kb.autopilot);    // R3
+      // Dpad
+      if (pad.buttons[12]?.pressed) { want.add(kb.throttleUp); want.add("arrowup"); }
+      if (pad.buttons[13]?.pressed) { want.add(kb.throttleDown); want.add("arrowdown"); }
+      if (pad.buttons[14]?.pressed) { want.add(kb.cycleCatPrev); want.add("arrowleft"); }
+      if (pad.buttons[15]?.pressed) { want.add(kb.cycleCatNext); want.add("arrowright"); }
+    }
+    // Diff against _gpHeld to emit rising/falling edges.
+    for (const k of want) this._synthDown(k, this._gpHeld);
+    for (const k of [...this._gpHeld]) if (!want.has(k)) this._synthUp(k, this._gpHeld);
+  }
+
+  // Translate the virtual touch stick + throttle slider + touch buttons into
+  // synthetic held keys. Called once per frame from the engine loop.
+  pollTouch(kb: Record<string, string>, enabled: boolean): { yaw: number; pitch: number; throttle: number } {
+    if (!enabled) {
+      for (const k of this._touchHeld) this.keys.delete(k);
+      this._touchHeld.clear();
+      return { yaw: 0, pitch: 0, throttle: -1 };
+    }
+    // Buttons are already recorded on pointerdown into _touchHeld/pressed.
+    // Re-assert the "keys" bit so they read as held while the finger stays down.
+    for (const k of this._touchHeld) this.keys.add(k);
+    // Compute analog stick output from anchor offset (in px), clamped.
+    let yaw = 0, pitch = 0;
+    if (this.stickActive) {
+      const dx = this.stickCurX - this.stickAnchorX;
+      const dy = this.stickCurY - this.stickAnchorY;
+      const R = 80; // px full-deflection radius
+      yaw = Math.max(-1, Math.min(1, dx / R));
+      pitch = Math.max(-1, Math.min(1, dy / R));
+      // Also feed arrow keys so touch works in menus.
+      const dz = 0.35;
+      if (yaw < -dz) this.pressed.add("arrowleft");
+      if (yaw >  dz) this.pressed.add("arrowright");
+      if (pitch < -dz) this.pressed.add("arrowup");
+      if (pitch >  dz) this.pressed.add("arrowdown");
+    }
+    return { yaw, pitch, throttle: this.throttleActive ? this.throttleValue : -1 };
+    // Note: kb param reserved for future rebindable touch mapping.
+    void kb;
   }
 }
 
