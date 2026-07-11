@@ -491,6 +491,9 @@ interface Entity {
   // Preserved kind so retaliation can revert this ship to friendly/neutral
   // once the timer expires.
   peaceKind?: EntityKind;
+  // Named pirate captain flag. Bosses have +50% hull, a distinct title, and
+  // drop bonus credits/XP on kill. 5% roll on pirate spawn (see spawnNear).
+  boss?: boolean;
 }
 
 interface PlayerChar {
@@ -524,7 +527,7 @@ interface Gunner {
   enabled: boolean;           // toggled by G key
   hiredAt: number;            // ms timestamp, mostly cosmetic
   cooldown: number;           // independent fire cadence
-  share: number;              // 0..1 — fraction of credits skimmed at docks
+  wage: number;               // flat credits paid to this crewmember every dock
   nextBarkAt: number;         // throttle idle barks
 }
 
@@ -542,6 +545,7 @@ interface CrewMember {
   nextBarkAt: number;
   cooldown?: number;    // gunner auto-fire cadence
   autopilot?: boolean;  // pilot: toggled by O key
+  wage?: number;        // flat credits paid every dock — see tryDock()
 }
 
 interface PlayerState {
@@ -758,6 +762,9 @@ const PILOT_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Or
 const PILOT_TITLE_HOSTILE  = ["Ace","Reaver","Fang","Slag","Ghost","Iron","Blackwake"];
 const PILOT_TITLE_FRIENDLY = ["Cmdr","Lt.","Capt.","Wing"];
 const PILOT_TITLE_NEUTRAL  = ["Trader","Freerunner","Skiff","Longhaul"];
+// Reserved for named pirate captains — grander, more menacing than a generic
+// hostile "Ace" or "Reaver". Rolled at spawn on ~5% of pirates.
+const PIRATE_BOSS_TITLE = ["Warlord","Blackwake","Dread","Corsair-Prime","Ironmaw","Voidbaron","Skullbrand"];
 function pilotNameFor(rng: () => number, kind: EntityKind): string {
   const first = PILOT_FIRST[Math.floor(rng() * PILOT_FIRST.length)];
   const last  = PILOT_LAST[Math.floor(rng() * PILOT_LAST.length)];
@@ -765,6 +772,14 @@ function pilotNameFor(rng: () => number, kind: EntityKind): string {
               : kind === "friendly" ? PILOT_TITLE_FRIENDLY
               : PILOT_TITLE_NEUTRAL;
   const title = pool[Math.floor(rng() * pool.length)];
+  return `${title} ${first} ${last}`;
+}
+// Boss-captain callsign. Distinct pool so bosses read differently from
+// regular named hostiles ("Warlord Vex Krev" vs "Ace Vex Mara").
+function pirateBossNameFor(rng: () => number): string {
+  const first = PILOT_FIRST[Math.floor(rng() * PILOT_FIRST.length)];
+  const last  = PILOT_LAST[Math.floor(rng() * PILOT_LAST.length)];
+  const title = PIRATE_BOSS_TITLE[Math.floor(rng() * PIRATE_BOSS_TITLE.length)];
   return `${title} ${first} ${last}`;
 }
 
@@ -926,16 +941,24 @@ function generateUniverse(seed: number): Entity[] {
   // Thargoid-like observers: extremely rare, dormant deep in the void.
   // When triggered they warp near the player, EMP everything, watch, and
   // depart. See engine tick for the encounter state machine.
-  for (let i = 0; i < 2; i++) {
-    out.push({
-      id: nextId(), kind: "thargoid", name: "Unknown Contact",
-      pos: randPos(rng, WORLD_RADIUS * 0.9),
-      vel: { x: 0, y: 0, z: 0 },
-      faction: "alien",
-      state: "dormant",
-      cooldown: 30 + rng() * 90, // seconds until it *might* consider triggering
-    });
-  }
+  //
+  // Cadence: one instance only. The initial dormant cooldown is 60-120
+  // minutes, matching the "special event every hour or two" target. The
+  // encounter itself is disruptive (~10s of no controls), so anything
+  // faster than that gets annoying fast. Post-encounter reset uses the
+  // same window — see the `leave` state in the tick.
+  //
+  // Previous bug: this loop spawned TWO thargoids with 30-120s initial
+  // cooldowns, so effective time-to-first-EMP was 15-60 seconds — the
+  // "why is this happening every couple minutes" report.
+  out.push({
+    id: nextId(), kind: "thargoid", name: "Unknown Contact",
+    pos: randPos(rng, WORLD_RADIUS * 0.9),
+    vel: { x: 0, y: 0, z: 0 },
+    faction: "alien",
+    state: "dormant",
+    cooldown: 3600 + rng() * 3600, // 60-120 minutes until it *might* consider triggering
+  });
   // Traversable wormhole pairs. Each pair shares a `targetId` pointing at
   // its sibling; flying within 60u teleports the player to the sibling.
   for (let i = 0; i < 2; i++) {
@@ -1226,7 +1249,7 @@ function generateGunner(rng: () => number): Gunner {
     enabled: true,
     hiredAt: Date.now(),
     cooldown: 0,
-    share: 0.0,    // currently cosmetic; reserved for future "wages"
+    wage: 30,      // flat cr per dock; see tryDock() wage deduction
     nextBarkAt: 0,
   };
 }
@@ -1314,6 +1337,9 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
   const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
   const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
   const species = SPECIES[Math.floor(rng() * SPECIES.length)];
+  // Role-tuned wages: pilots/engineers are pricier specialists than a
+  // merchant clerk. Flat cr per dock — see tryDock() wage deduction.
+  const wage = role === "pilot" ? 60 : role === "engineer" ? 55 : role === "merchant" ? 40 : 40;
   return {
     role,
     name: `${first} ${last}`,
@@ -1323,6 +1349,7 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
     nextBarkAt: 0,
     cooldown: 0,
     autopilot: false,
+    wage,
   };
 }
 
@@ -3387,7 +3414,7 @@ export class Voidwake {
             e.pos = randPos(Math.random, WORLD_RADIUS * 0.95);
             e.vel = { x: 0, y: 0, z: 0 };
             e.state = "dormant";
-            e.cooldown = 240 + Math.random() * 360; // 4-10 minutes
+            e.cooldown = 3600 + Math.random() * 3600; // 60-120 minutes — matches initial cadence
           }
         }
       } else if (e.kind === "wormhole") {
@@ -3725,11 +3752,16 @@ export class Voidwake {
           if (playerShot && isShip) this.applyFactionRetaliation(t);
           if ((t.hull ?? 0) <= 0) {
             const isPirateBase = isStation && t.faction === "pirate";
+            const isBoss = !!t.boss && !isStation;
             // Only credit the player when they pulled the trigger.
             if (playerShot) {
-              this.pushLog(isPirateBase ? `★ Pirate base ${t.name} obliterated!` : `Destroyed ${t.name}.`);
-              awardXP(p, isPirateBase ? 250 : 25);
-              p.credits += isPirateBase ? 1500 : 50;
+              this.pushLog(
+                isPirateBase ? `★ Pirate base ${t.name} obliterated!` :
+                isBoss ? `★ Bounty claimed: ${t.name} — dead. +${400}cr bonus.` :
+                `Destroyed ${t.name}.`
+              );
+              awardXP(p, isPirateBase ? 250 : isBoss ? 90 : 25);
+              p.credits += isPirateBase ? 1500 : isBoss ? 450 : 50;
               p.kills = (p.kills ?? 0) + 1;
               // Gunner reacts to the kill (when active and not over-talking).
               if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0 && Math.random() < 0.7) {
@@ -3740,23 +3772,29 @@ export class Voidwake {
               if (isPirateBase) {
                 adjustRep(p, "federation", 12); adjustRep(p, "guild", 8); adjustRep(p, "pirate", -15);
               } else if (t.faction === "pirate") {
-                adjustRep(p, "federation", 2); adjustRep(p, "guild", 1); adjustRep(p, "pirate", -3);
+                // Bosses swing rep harder — killing a named captain is a real signal.
+                const mul = isBoss ? 3 : 1;
+                adjustRep(p, "federation", 2 * mul); adjustRep(p, "guild", 1 * mul); adjustRep(p, "pirate", -3 * mul);
               } else if (t.faction === "federation") {
                 adjustRep(p, "federation", -8); adjustRep(p, "pirate", 2);
               } else if (t.faction === "guild") {
                 adjustRep(p, "guild", -5); adjustRep(p, "pirate", 1);
               }
-              // Loot canister
-              if (Math.random() < (isPirateBase ? 1.0 : 0.85)) {
+              // Loot canister. Bosses always drop and drop a fatter cache.
+              if (Math.random() < (isPirateBase ? 1.0 : isBoss ? 1.0 : 0.85)) {
                 this.entities.push({
-                  id: nextId(), kind: "loot", name: isPirateBase ? "cache" : "canister",
+                  id: nextId(), kind: "loot", name: isPirateBase ? "cache" : isBoss ? "captain's cache" : "canister",
                   pos: { ...t.pos },
                   vel: V.scale(t.vel, 0.25),
                   faction: "wreck",
-                  ttlAt: performance.now() / 1000 + (isPirateBase ? 120 : 45),
+                  ttlAt: performance.now() / 1000 + (isPirateBase ? 120 : isBoss ? 90 : 45),
                   loot: {
-                    credits: isPirateBase ? 600 + Math.floor(Math.random() * 800) : 20 + Math.floor(Math.random() * 80),
-                    ore: isPirateBase ? 10 + Math.floor(Math.random() * 15) : Math.floor(Math.random() * 4),
+                    credits: isPirateBase ? 600 + Math.floor(Math.random() * 800)
+                           : isBoss       ? 300 + Math.floor(Math.random() * 400)
+                                          : 20 + Math.floor(Math.random() * 80),
+                    ore:     isPirateBase ? 10 + Math.floor(Math.random() * 15)
+                           : isBoss       ? 4  + Math.floor(Math.random() * 8)
+                                          : Math.floor(Math.random() * 4),
                   },
                 });
               }
@@ -3930,6 +3968,26 @@ export class Voidwake {
       awardXP(p, 80);
       this.pushLog(`Mission paid: +${p.mission.reward}cr`);
       p.mission = this.generateMission();
+    }
+
+    // Pay crew wages. Flat per-dock cr per crewmember + gunner. If the
+    // player can't cover the full bill we still pay whatever's on hand and
+    // flag the shortfall so it's visible — a proper morale system can hook
+    // in here later. Wages are skipped in Cheat Mode.
+    if (!this.options.cheat) {
+      let bill = 0;
+      if (p.gunner) bill += p.gunner.wage ?? 30;
+      if (p.crew) for (const c of p.crew) bill += c.wage ?? 40;
+      if (bill > 0) {
+        const paid = Math.min(bill, p.credits);
+        p.credits -= paid;
+        if (paid < bill) {
+          this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
+          this.pushChatter("Crew", "Payday came up light, boss.", "#fc6");
+        } else {
+          this.pushLog(`Crew wages: -${paid}cr.`);
+        }
+      }
     }
   }
 
@@ -4417,7 +4475,20 @@ export class Voidwake {
       this._nextPirateSpawnAt = 22 + Math.random() * 20;
       if (ships < SHIP_CAP && pirateBases.length) {
         const src = pirateBases[Math.floor(Math.random() * pirateBases.length)];
-        spawnNear(src.pos, "hostile", "pirate", nameFrom(this.rng, "Raider"), 50);
+        // 5% chance this raider is a named captain: distinct callsign,
+        // +50% hull, and pays out a bounty on kill (see kill handler).
+        const isBoss = Math.random() < 0.05;
+        const rname = isBoss ? pirateBossNameFor(Math.random) : nameFrom(this.rng, "Raider");
+        const rhull = isBoss ? 75 : 50;
+        spawnNear(src.pos, "hostile", "pirate", rname, rhull);
+        if (isBoss) {
+          // spawnNear pushed the ship last; tag it.
+          const spawned = this.entities[this.entities.length - 1];
+          spawned.boss = true;
+          spawned.pilotName = rname;
+          spawned.shield = 60;
+          this.pushLog(`⚠ Notorious pirate captain in-system: ${rname}.`);
+        }
       }
     }
     if (this._nextPlanetSpawnAt <= 0) {
@@ -5425,7 +5496,7 @@ export class Voidwake {
         ["•", "#bfd8ff", "pulsar — tiny neutron star, blinks visibly"],
         ["[ ]", "#ffaa55", "targeting brackets — current target on-screen"],
         ["◣◢◤◥", "#fc6", "edge pointer — target off-screen (distance shown)"],
-        ["+", "#ffaa55", "lead indicator — fire here to hit a moving target"],
+        ["+", "#ffaa55", "lead indicator — fire when it turns green ✚ (on the reticle)"],
         ["◇", "#cf6", "mission objective marker"],
         ["-+-", "#3a6", "reticle — green idle, amber aligned, red in-range"],
       ];
@@ -5874,7 +5945,10 @@ export class Voidwake {
         if (ty > vpTop) putText(g, Math.max(vpLeft + 1, bx - rb), ty, tag.slice(0, Math.max(0, vpRight - (bx - rb) - 1)), bracketCol, vpRight);
 
         // Lead indicator: simple constant-bullet-speed first-order intercept.
-        // Only useful for ships (asteroids barely drift). Drawn as a faint '+'.
+        // Only useful for ships (asteroids barely drift). Color flips to
+        // bright green when the marker is within 2 cells of the reticle
+        // (viewport center) — that's the "shoot NOW" window; otherwise it
+        // stays a faint orange nudge so the pilot knows which way to lean.
         if (tgt.kind === "hostile" || tgt.kind === "friendly" || tgt.kind === "neutral") {
           const rel = V.sub(tgt.pos, p.pos);
           const relV = tgt.vel;
@@ -5885,9 +5959,13 @@ export class Voidwake {
             const leadW = { x: tgt.pos.x + relV.x * tLead, y: tgt.pos.y + relV.y * tLead, z: tgt.pos.z + relV.z * tLead };
             const lp = projectPoint(leadW.x, leadW.y, leadW.z);
             if (lp && lp.sx > vpLeft && lp.sx < vpRight && lp.sy > vpTop && lp.sy < vpBottom) {
+              const reticleX = vpLeft + Math.floor(vw / 2);
+              const reticleY = vpTop + Math.floor(vh / 2);
+              const dxL = lp.sx - reticleX, dyL = lp.sy - reticleY;
+              const onTarget = dxL * dxL + dyL * dyL <= 4; // ≤ 2 cells
               const cell = g[lp.sy][lp.sx];
               if (cell.ch === " " || cell.ch === "·" || cell.ch === ".") {
-                g[lp.sy][lp.sx] = { ch: "+", color: "#ffaa55" };
+                g[lp.sy][lp.sx] = { ch: onTarget ? "✚" : "+", color: onTarget ? "#7CFC00" : "#ffaa55" };
               }
             }
           }
@@ -6499,8 +6577,12 @@ export class Voidwake {
 
   renderRadar(g: Cell[][], x: number, y: number, w: number, h: number) {
     const p = this.player; if (!p) return;
-    // Border
-    putText(g, x, y, "[ RADAR ]", "#7CFC00");
+    // Radar range in world units. Same value drives both the culling test
+    // below and the scale label rendered under the frame — keep in sync.
+    const radarRange = 1500;
+    // Border + title. Range readout tucked in the title bar so the sweep
+    // area stays uncluttered; players kept asking "what's the scale?"
+    putText(g, x, y, `[ RADAR  ${radarRange}u ]`, "#7CFC00");
     for (let yy = 0; yy <= h; yy++) {
       g[y + yy][x].ch = "│"; g[y + yy][x + w].ch = "│";
       g[y + yy][x].color = g[y + yy][x + w].color = "#234";
@@ -6512,7 +6594,6 @@ export class Voidwake {
     const cx = x + Math.floor(w / 2), cy = y + Math.floor(h / 2);
     g[cy][cx] = { ch: "@", color: "#7CFC00" };
 
-    const radarRange = 1500;
     const cyY = Math.cos(p.heading.yaw), syY = Math.sin(p.heading.yaw);
     for (const e of this.entities) {
       if (e.kind === "bullet") continue;
