@@ -1248,7 +1248,7 @@ function generateGunner(rng: () => number): Gunner {
     enabled: true,
     hiredAt: Date.now(),
     cooldown: 0,
-    share: 0.0,    // currently cosmetic; reserved for future "wages"
+    wage: 30,      // flat cr per dock; see tryDock() wage deduction
     nextBarkAt: 0,
   };
 }
