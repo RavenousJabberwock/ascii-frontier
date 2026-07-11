@@ -1310,6 +1310,19 @@ function effectiveCrewMax(p: PlayerState): number {
   return base + quarters;
 }
 
+// Effective radar range in world units. Base 1500u, +150u each for an
+// on-crew Pilot (sharp eyes on the nav plot) and Engineer (better sensor
+// tuning), and +600u for a Sensor Array module. Kept as a pure function
+// so renderRadar's culling test and the on-screen "RADAR ####u" label
+// always agree.
+function effectiveRadarRange(p: PlayerState): number {
+  let r = 1500;
+  if (hasCrew(p, "pilot")) r += 150;
+  if (hasCrew(p, "engineer")) r += 150;
+  if (p.ship.modules.includes("sensor-array")) r += 600;
+  return r;
+}
+
 // Merchant on-crew? Sell/buy price multipliers applied at station markets.
 function merchantSellMult(p: PlayerState): number {
   return hasCrew(p, "merchant") ? 1.15 : 1.0;
