@@ -4272,6 +4272,15 @@ export class Voidwake {
       best.ore!--;
       p.cargo.ore = (p.cargo.ore ?? 0) + 1;
       awardXP(p, 1);
+      // Gunner-mined rocks roll the same 1-in-50 relic chance as manual
+      // mining — see mineTarget() for the rationale.
+      if (Math.random() < 0.02) {
+        const bonus = 30 + Math.floor(Math.random() * 61);
+        p.credits += bonus;
+        awardXP(p, 12);
+        this.pushLog(`✦ Encoded relic recovered — +${bonus}cr`);
+        this.pushChatter(tag, "Anomalous inscription in that fragment. Datacore paid out.", "#c4f");
+      }
       if (g.nextBarkAt <= 0) {
         g.nextBarkAt = 4 + Math.random() * 3;
         this.pushChatter(tag, pickLine("gunner_mine", this.chatterCtx(undefined, { target: best })), "#ffd066");
