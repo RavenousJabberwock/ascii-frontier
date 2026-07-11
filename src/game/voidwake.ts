@@ -5945,7 +5945,10 @@ export class Voidwake {
         if (ty > vpTop) putText(g, Math.max(vpLeft + 1, bx - rb), ty, tag.slice(0, Math.max(0, vpRight - (bx - rb) - 1)), bracketCol, vpRight);
 
         // Lead indicator: simple constant-bullet-speed first-order intercept.
-        // Only useful for ships (asteroids barely drift). Drawn as a faint '+'.
+        // Only useful for ships (asteroids barely drift). Color flips to
+        // bright green when the marker is within 2 cells of the reticle
+        // (viewport center) — that's the "shoot NOW" window; otherwise it
+        // stays a faint orange nudge so the pilot knows which way to lean.
         if (tgt.kind === "hostile" || tgt.kind === "friendly" || tgt.kind === "neutral") {
           const rel = V.sub(tgt.pos, p.pos);
           const relV = tgt.vel;
@@ -5956,9 +5959,13 @@ export class Voidwake {
             const leadW = { x: tgt.pos.x + relV.x * tLead, y: tgt.pos.y + relV.y * tLead, z: tgt.pos.z + relV.z * tLead };
             const lp = projectPoint(leadW.x, leadW.y, leadW.z);
             if (lp && lp.sx > vpLeft && lp.sx < vpRight && lp.sy > vpTop && lp.sy < vpBottom) {
+              const reticleX = vpLeft + Math.floor(vw / 2);
+              const reticleY = vpTop + Math.floor(vh / 2);
+              const dxL = lp.sx - reticleX, dyL = lp.sy - reticleY;
+              const onTarget = dxL * dxL + dyL * dyL <= 4; // ≤ 2 cells
               const cell = g[lp.sy][lp.sx];
               if (cell.ch === " " || cell.ch === "·" || cell.ch === ".") {
-                g[lp.sy][lp.sx] = { ch: "+", color: "#ffaa55" };
+                g[lp.sy][lp.sx] = { ch: onTarget ? "✚" : "+", color: onTarget ? "#7CFC00" : "#ffaa55" };
               }
             }
           }
