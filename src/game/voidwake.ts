@@ -6277,7 +6277,103 @@ export class Voidwake {
       }
     }
 
+    // Touch controls overlay (virtual stick + throttle strip + button pad).
+    if (this._touchControlsActive()) this._renderTouchOverlay(g);
+
     this.tickMissions();
+  }
+
+  // Renders the virtual controller overlay and registers per-frame hit-boxes
+  // on the Input class so pointerdown can dispatch button presses. Coordinates
+  // are computed from the current grid dimensions so the layout stays put
+  // whether the canvas is 800×600 (phone portrait) or 1400×900 (tablet).
+  private _renderTouchOverlay(g: Cell[][]) {
+    const kb = this.options.keybinds;
+    const cols = g[0].length;
+    const rows = g.length;
+    const cw = CELL_W, ch = CELL_H;
+    // Virtual stick: bottom-left circle indicator (rendered by dot glyphs).
+    const stickCx = 6, stickCy = rows - 5;
+    const stickR = 3;
+    const drawRing = (cx: number, cy: number, r: number, glyph: string, color: string) => {
+      for (let a = 0; a < 24; a++) {
+        const th = (a / 24) * Math.PI * 2;
+        const gx = Math.round(cx + Math.cos(th) * r * 1.6);
+        const gy = Math.round(cy + Math.sin(th) * r);
+        if (gy >= 0 && gy < rows && gx >= 0 && gx < cols) g[gy][gx] = { ch: glyph, color };
+      }
+    };
+    drawRing(stickCx, stickCy, stickR, "·", "#4a6a80");
+    // Show current stick knob position if active.
+    if (this.input.stickActive) {
+      const t = this._touchStick;
+      const kx = Math.round(stickCx + t.yaw * stickR * 1.6);
+      const ky = Math.round(stickCy + t.pitch * stickR);
+      if (ky >= 0 && ky < rows && kx >= 0 && kx < cols) g[ky][kx] = { ch: "◉", color: "#9be" };
+    } else {
+      if (stickCx >= 0 && stickCx < cols && stickCy >= 0 && stickCy < rows) g[stickCy][stickCx] = { ch: "+", color: "#7a8a9a" };
+    }
+    putText(g, stickCx - 3, stickCy + stickR + 1, "STICK", "#5a6a7a");
+
+    // Throttle strip: 2-column column on the far left.
+    const trCol = 0;
+    const trTop = Math.floor(rows * 0.18);
+    const trBottom = Math.floor(rows * 0.82);
+    const p = this.player;
+    const thr = p ? p.throttle : 0;
+    for (let y = trTop; y <= trBottom; y++) {
+      g[y][trCol] = { ch: "│", color: "#3a4a5a" };
+    }
+    const knobY = Math.round(trBottom - thr * (trBottom - trTop));
+    if (knobY >= 0 && knobY < rows) g[knobY][trCol] = { ch: "◄", color: "#7CFC00" };
+    putText(g, trCol, trTop - 1, "THR", "#5a6a7a");
+
+    // Button pad: bottom-right cluster. Each is a 5×3 tile with a label.
+    const btnW = 6, btnH = 3;
+    // Layout: two rows of buttons in the lower-right quadrant.
+    const btns = [
+      { id: kb.fire,        label: "FIRE" },
+      { id: kb.mine,        label: "MINE" },
+      { id: kb.dock,        label: "DOCK" },
+      { id: kb.cycleTarget, label: "TGT " },
+      { id: kb.cycleCatPrev, label: " [  " },
+      { id: kb.cycleCatNext, label: " ]  " },
+      { id: kb.boost,       label: "BOOST"},
+      { id: kb.jettison,    label: "JETT" },
+      { id: kb.autopilot,   label: "AUTO" },
+      { id: kb.toggleGunner, label: "GUN " },
+      { id: kb.legend,      label: "CDX " },
+      { id: kb.pause,       label: "PAUS" },
+      { id: kb.menu,        label: "MENU" },
+    ];
+    // Arrange from bottom-right upward in a 2-wide column of buttons.
+    const rightCol = cols - btnW - 1;
+    let x = rightCol, y = rows - btnH - 1;
+    let col = 0;
+    for (const b of btns) {
+      const bx = x, by = y;
+      // Draw a bordered box.
+      for (let dy = 0; dy < btnH; dy++) {
+        for (let dx = 0; dx < btnW; dx++) {
+          const gx = bx + dx, gy = by + dy;
+          if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+          const edge = dx === 0 || dx === btnW - 1 || dy === 0 || dy === btnH - 1;
+          const held = this.input.keys.has(b.id);
+          g[gy][gx] = { ch: edge ? "·" : " ", color: held ? "#9be" : "#3a4a5a" };
+        }
+      }
+      putText(g, bx + 1, by + 1, b.label, this.input.keys.has(b.id) ? "#fff" : "#9fe");
+      // Register hit-box in canvas CSS pixels.
+      this.input.buttonRects.push({ id: b.id, x: bx * cw, y: by * ch, w: btnW * cw, h: btnH * ch });
+      // Move up. Two columns wide.
+      y -= btnH + 1;
+      if (y < Math.floor(rows * 0.35)) {
+        col++;
+        x -= btnW + 1;
+        y = rows - btnH - 1;
+      }
+      if (col >= 2) break;
+    }
   }
 
 
