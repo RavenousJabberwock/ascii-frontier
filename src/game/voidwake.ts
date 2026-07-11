@@ -4825,6 +4825,13 @@ export class Voidwake {
   menuNav(n: number) {
     if (this.input.consume("arrowup")) this.menuCursor = (this.menuCursor - 1 + n) % n;
     if (this.input.consume("arrowdown")) this.menuCursor = (this.menuCursor + 1) % n;
+    // Touch tap on a rendered menu item → move cursor to it and confirm.
+    const tap = this.input.menuTapIndex;
+    if (tap >= 0 && tap < n) {
+      this.menuCursor = tap;
+      this.input.pressed.add("enter");
+    }
+    this.input.menuTapIndex = -1;
   }
 
   // ---------------------------------------------------------------------------
