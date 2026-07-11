@@ -2207,6 +2207,11 @@ export class Voidwake {
       this._reducedMotion = mq.matches;
       mq.addEventListener?.("change", (e) => { this._reducedMotion = e.matches; }, { signal: sig });
     } catch { /* matchMedia unavailable */ }
+    try {
+      const mq2 = window.matchMedia("(pointer: coarse)");
+      this._coarsePointer = mq2.matches;
+      mq2.addEventListener?.("change", (e) => { this._coarsePointer = e.matches; }, { signal: sig });
+    } catch { /* matchMedia unavailable */ }
   }
 
 
