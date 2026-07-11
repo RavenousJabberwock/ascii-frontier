@@ -1513,15 +1513,20 @@ class Input {
         const { x, y } = localXY(e);
         const s = this._menuStart;
         const dx = x - s.x, dy = y - s.y;
-        const dist = Math.hypot(dx, dy);
+        const adx = Math.abs(dx), ady = Math.abs(dy);
         const dt = performance.now() - s.t;
         // Horizontal swipe: forward (→) = ENTER, back (←) = ESCAPE.
-        // Threshold: ≥ 40px of horizontal travel, dominant over vertical,
-        // and within 800ms. Otherwise treat as a tap if it landed on an item.
-        if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 800) {
+        // Requires ≥ 80px of horizontal travel, clearly dominant over vertical
+        // (2×), and completed within 600ms — otherwise treat as a tap.
+        if (adx >= 80 && adx > ady * 2 && dt < 600) {
           this.pressed.add(dx > 0 ? "enter" : "escape");
-        } else if (dist < 18 && s.idx >= 0) {
-          this.menuTapIndex = s.idx;
+        } else {
+          // Tap: use the pointerup position against the current rects (fresh
+          // as of the last render). Fall back to the pointerdown hit-test if
+          // the finger drifted off the row. Generous 40px slop.
+          const upIdx = hitMenuItem(x, y);
+          const idx = upIdx >= 0 ? upIdx : s.idx;
+          if (idx >= 0 && Math.hypot(dx, dy) < 40) this.menuTapIndex = idx;
         }
         this._menuPtrId = null;
         return;
