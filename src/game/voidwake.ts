@@ -3969,6 +3969,26 @@ export class Voidwake {
       this.pushLog(`Mission paid: +${p.mission.reward}cr`);
       p.mission = this.generateMission();
     }
+
+    // Pay crew wages. Flat per-dock cr per crewmember + gunner. If the
+    // player can't cover the full bill we still pay whatever's on hand and
+    // flag the shortfall so it's visible — a proper morale system can hook
+    // in here later. Wages are skipped in Cheat Mode.
+    if (!this.options.cheat) {
+      let bill = 0;
+      if (p.gunner) bill += p.gunner.wage ?? 30;
+      if (p.crew) for (const c of p.crew) bill += c.wage ?? 40;
+      if (bill > 0) {
+        const paid = Math.min(bill, p.credits);
+        p.credits -= paid;
+        if (paid < bill) {
+          this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
+          this.pushChatter("Crew", "Payday came up light, boss.", "#fc6");
+        } else {
+          this.pushLog(`Crew wages: -${paid}cr.`);
+        }
+      }
+    }
   }
 
   // --- Missions ------------------------------------------------------------
