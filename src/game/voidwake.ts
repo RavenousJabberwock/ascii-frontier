@@ -3326,9 +3326,20 @@ export class Voidwake {
       } else {
         p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
       }
+      // Fuel-zero notice is throttled — without a guard the branch fires on
+      // every frame that fuel is pinned at 0 (including the one-frame window
+      // where Cheat Mode is toggled right as the tank drains), spamming the
+      // COMMS feed.
       if (p.ship.fuel === 0) {
-        this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
-        this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
+        const nowS = performance.now() / 1000;
+        if (nowS - this._lastFuelWarnAt > 15) {
+          this._lastFuelWarnAt = nowS;
+          this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
+          this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
+        }
+      } else if (p.ship.fuel > 1) {
+        // Re-arm so a fresh emptying after refuel prints the warning again.
+        this._lastFuelWarnAt = 0;
       }
     } else {
       // Zero fuel: keep last drift velocity. Steering and throttle inputs
