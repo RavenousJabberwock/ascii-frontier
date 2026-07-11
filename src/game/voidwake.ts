@@ -2904,7 +2904,22 @@ export class Voidwake {
     // Global: ESC toggles main menu while playing
     if (this.input.consume(kb.menu)) {
       if (this.screen === "playing") { this.prevPlayScreen = this.screen; this.screen = "menu"; this.menuCursor = 0; }
-      else if (this.screen === "menu" || this.screen === "options" || this.screen === "load" || this.screen === "save" || this.screen === "quit-confirm") {
+      else if (this.screen === "options") {
+        // Rebind capture uses its own ESC handler; skip so we don't leave
+        // the screen mid-rebind.
+        if (this._rebindAction) {
+          this._rebindAction = null;
+        } else if (this.optionsSection !== "root") {
+          // Bounce a subsection back to the Options hub. Keybinds goes back
+          // to Controls (its parent), not straight to root.
+          if (this.optionsSection === "keybinds") this.optionsSection = "controls";
+          else this.optionsSection = "root";
+          this.menuCursor = 0;
+        } else {
+          this.screen = this.player ? "playing" : "title";
+        }
+      }
+      else if (this.screen === "menu" || this.screen === "load" || this.screen === "save" || this.screen === "quit-confirm") {
         this.screen = this.player ? "playing" : "title";
       } else if (this.screen === "station") {
         this.screen = "playing";
