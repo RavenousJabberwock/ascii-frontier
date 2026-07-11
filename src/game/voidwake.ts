@@ -4467,6 +4467,9 @@ export class Voidwake {
       `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Radio: ${radioPreset.label}`,
       `Radio URL: ${radioUrlLabel}`,
+      `Gamepad: ${this.options.gamepad.toUpperCase()}${this.input.gamepadConnected ? "  •connected" : ""}`,
+      `Gamepad Deadzone: ${this.options.gamepadDeadzone.toFixed(2)}`,
+      `Touch Controls: ${this.options.touchControls.toUpperCase()}`,
       `Reset Keybinds (current: ${Object.keys(this.options.keybinds).length})`,
       "Back",
     ];
@@ -4501,6 +4504,20 @@ export class Voidwake {
       const n = RADIO_PRESETS.length;
       this.options.radioMode = RADIO_PRESETS[(idx + (right ? 1 : -1) + n) % n].id;
       this.syncRadio();
+    }
+    // i === 14 is Radio URL (handled in the ENTER block below).
+    if (i === 15 && (left || right)) {
+      const modes: Options["gamepad"][] = ["off", "auto", "on"];
+      const idx = modes.indexOf(this.options.gamepad);
+      const n = modes.length;
+      this.options.gamepad = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
+    if (i === 16) this.options.gamepadDeadzone = Math.max(0, Math.min(0.5, this.options.gamepadDeadzone + (right ? 0.02 : left ? -0.02 : 0)));
+    if (i === 17 && (left || right)) {
+      const modes: Options["touchControls"][] = ["off", "auto", "on"];
+      const idx = modes.indexOf(this.options.touchControls);
+      const n = modes.length;
+      this.options.touchControls = modes[(idx + (right ? 1 : -1) + n) % n];
     }
     if (this.input.consume("enter")) {
       if (i === 14) {
