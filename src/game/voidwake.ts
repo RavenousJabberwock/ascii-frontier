@@ -412,7 +412,7 @@ const TITLE_TIPS = [
   "Derelict wrecks (†) are free salvage. No trap, no fight.",
   "Black holes bend your course before they eat you. Watch the drift.",
   "Pulsars (PSR) blink because they spin. Cosmetic — but pretty.",
-  "Options ▸ Radio picks in-game music, including your own stream URL.",
+  "Options ▸ Audio ▸ Radio picks in-game music, including your own stream URL.",
   "Cargo full? Dock and sell before you mine another rock.",
   "Save often. Permadeath is opt-in for a reason.",
 ];
