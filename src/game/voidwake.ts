@@ -1559,8 +1559,9 @@ class Input {
     this.textBuffer.length = 0;
     this.wheelDelta = 0;
     // Persistent held sets (_gpHeld, _touchHeld) survive across frames.
-    // buttonRects are rebuilt every render.
+    // buttonRects and menuItemRects are rebuilt every render.
     this.buttonRects.length = 0;
+    this.menuItemRects.length = 0;
   }
 
   // Synthesize a "key held" from a controller/touch source. Idempotent:
