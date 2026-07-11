@@ -3085,6 +3085,13 @@ export class Voidwake {
       this.die(this.deathReason ?? "Catastrophic hull failure");
       return;
     }
+    // Cheat Mode = full god mode: keep hull/shield pinned to max every frame
+    // so nothing (star scoop, ram, stray bullet, beacon trap) can ever whittle
+    // us down. Damage sites are already gated on !cheat, this is belt-and-braces.
+    if (this.options.cheat) {
+      p.ship.hull = p.ship.hullMax;
+      if (p.ship.shieldMax) p.ship.shield = p.ship.shieldMax;
+    }
     const k = this.options.keybinds;
     const keys = this.input.keys;
 
@@ -3190,7 +3197,13 @@ export class Voidwake {
       const thrustV = V.scale(fwd, sp);
       p.pos = V.add(p.pos, V.scale(thrustV, dt));
       p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
-      p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
+      // Cheat Mode = full god mode: burn no fuel, top the tank off in case
+      // something else drained it before the toggle was flipped.
+      if (this.options.cheat) {
+        p.ship.fuel = p.ship.fuelMax;
+      } else {
+        p.ship.fuel = Math.max(0, p.ship.fuel - sp * dt * 0.001 * fuelMul);
+      }
       if (p.ship.fuel === 0) {
         this.pushLog("⚠ FUEL EXHAUSTED — drifting on momentum. Dock to refuel.");
         this.pushChatter("Sensors", "Reactor cold. Coasting only.", "#fc6");
@@ -5880,40 +5893,38 @@ export class Voidwake {
           }
         }
       } else {
-        // Off-screen edge pointer. Rotate the relative vector into camera
-        // space (same transform as projectPoint), then pick a viewport edge
-        // from its direction and choose a chevron glyph.
+        // Off-screen edge pointer. Use the pure angular direction from the
+        // camera's forward axis to the target (camera-space x1, y1) — this
+        // is the *shortest* angular direction to sweep the reticle onto the
+        // target, i.e. "closest direction" the pilot must turn. We do NOT
+        // divide by z2 here: perspective division distorts the direction
+        // for anything near the edges, and is meaningless when z2 ≤ 0.
         const rel = V.sub(tgt.pos, p.pos);
         const x1 = cy * rel.x - sy * rel.z;
         const z1 = sy * rel.x + cy * rel.z;
         const y1 = cp * rel.y - sp * z1;
         const z2 = sp * rel.y + cp * z1;
         const behind = z2 <= 1;
-        // Direction on the ASCII screen plane. Screen +y = down (matches
-        // projectPoint), so dy sign matches sprite placement.
-        let dx: number, dy: number;
+        let dx = x1;
+        let dy = y1;
         if (behind) {
-          // Radiate outward: target is behind, so the on-screen arrow points
-          // toward the edge the player must swing past to bring it into view.
-          // Invert the camera-space x/y so left-behind reads as left-edge.
+          // Target is behind the camera plane. There is no "closest" edge —
+          // the shortest sweep is 180°. Radiate the arrow toward whichever
+          // side of the screen the target is leaning on so the pilot at
+          // least turns the right way.
           dx = -x1;
           dy = -y1;
-          // Degenerate case: target directly behind → x1≈y1≈0. Point straight
-          // down as a "flip 180" hint instead of collapsing to center.
-          if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) {
-            dx = 0;
-            dy = 1;
-          }
-        } else {
-          // In front but off-screen: divide by z2 so this matches projectPoint's
-          // sx/sy mapping exactly — the arrow points at where the sprite would
-          // have been drawn, just clamped to the viewport rectangle.
-          const zSafe = Math.max(0.5, z2);
-          dx = x1 / zSafe;
-          dy = y1 / zSafe;
+        }
+        // Degenerate (exactly on the camera axis): pick a stable default so
+        // the arrow doesn't collapse to the center. Point down for behind,
+        // right for ahead (arbitrary but consistent).
+        if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) {
+          if (behind) { dx = 0; dy = 1; }
+          else { dx = 1; dy = 0; }
         }
         const cxV = vpLeft + vw / 2, cyV = vpTop + vh / 2;
-        // Scale the direction to the viewport edge (uniform ray-to-rect).
+        // Ray-to-rect: scale the (dx, dy) direction so it lands on the
+        // viewport edge, hugging whichever axis it exceeds first.
         const halfW = Math.max(1, vw / 2 - 2);
         const halfH = Math.max(1, vh / 2 - 2);
         const m = Math.max(Math.abs(dx) / halfW, Math.abs(dy) / halfH) || 1;
