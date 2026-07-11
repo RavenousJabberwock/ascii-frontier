@@ -5497,6 +5497,8 @@ export class Voidwake {
     const cols = g[0].length;
     // Touch: whole screen is a menu-gesture surface (tap items, swipe ←/→).
     this.input.menuActive = true;
+    // Rebuild hit-boxes fresh each frame (see Input.endFrame() comment).
+    this.input.menuItemRects.length = 0;
     items.forEach((it, i) => {
       const sel = i === this.menuCursor;
       const row = 5 + i * 2;
