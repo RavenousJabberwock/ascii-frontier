@@ -761,6 +761,9 @@ const PILOT_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Or
 const PILOT_TITLE_HOSTILE  = ["Ace","Reaver","Fang","Slag","Ghost","Iron","Blackwake"];
 const PILOT_TITLE_FRIENDLY = ["Cmdr","Lt.","Capt.","Wing"];
 const PILOT_TITLE_NEUTRAL  = ["Trader","Freerunner","Skiff","Longhaul"];
+// Reserved for named pirate captains — grander, more menacing than a generic
+// hostile "Ace" or "Reaver". Rolled at spawn on ~5% of pirates.
+const PIRATE_BOSS_TITLE = ["Warlord","Blackwake","Dread","Corsair-Prime","Ironmaw","Voidbaron","Skullbrand"];
 function pilotNameFor(rng: () => number, kind: EntityKind): string {
   const first = PILOT_FIRST[Math.floor(rng() * PILOT_FIRST.length)];
   const last  = PILOT_LAST[Math.floor(rng() * PILOT_LAST.length)];
@@ -768,6 +771,14 @@ function pilotNameFor(rng: () => number, kind: EntityKind): string {
               : kind === "friendly" ? PILOT_TITLE_FRIENDLY
               : PILOT_TITLE_NEUTRAL;
   const title = pool[Math.floor(rng() * pool.length)];
+  return `${title} ${first} ${last}`;
+}
+// Boss-captain callsign. Distinct pool so bosses read differently from
+// regular named hostiles ("Warlord Vex Krev" vs "Ace Vex Mara").
+function pirateBossNameFor(rng: () => number): string {
+  const first = PILOT_FIRST[Math.floor(rng() * PILOT_FIRST.length)];
+  const last  = PILOT_LAST[Math.floor(rng() * PILOT_LAST.length)];
+  const title = PIRATE_BOSS_TITLE[Math.floor(rng() * PIRATE_BOSS_TITLE.length)];
   return `${title} ${first} ${last}`;
 }
 
