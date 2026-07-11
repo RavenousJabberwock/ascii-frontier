@@ -1379,6 +1379,19 @@ class Input {
   private _btnPtrIds = new Map<number, string>();   // pointerId → button id
   private _touchHeld = new Set<string>();
 
+  // --- Menu touch/swipe state ---------------------------------------------
+  // When the game is on a list-style menu screen, touch is repurposed:
+  //   • tap on an item     → select + confirm (ENTER)
+  //   • swipe right (→)    → forward / confirm (ENTER)
+  //   • swipe left  (←)    → back (ESCAPE)
+  // Renderers publish `menuItemRects` each frame; the game reads
+  // `menuTapIndex` from menuNav() and applies it to menuCursor.
+  menuActive = false;
+  menuItemRects: { index: number; x: number; y: number; w: number; h: number }[] = [];
+  menuTapIndex = -1;
+  private _menuPtrId: number | null = null;
+  private _menuStart = { x: 0, y: 0, t: 0, idx: -1 };
+
   attach(el: HTMLElement, signal?: AbortSignal) {
     const opts = signal ? { signal } : undefined;
     el.addEventListener("keydown", (e) => {
@@ -1433,11 +1446,25 @@ class Input {
       }
       return null;
     };
+    const hitMenuItem = (x: number, y: number): number => {
+      for (const m of this.menuItemRects) {
+        if (x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h) return m.index;
+      }
+      return -1;
+    };
     el.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
       this.touchAvailable = true;
       const { x, y, w, h } = localXY(e);
       try { (el as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
+      // Menu screens: capture the whole gesture (tap or horizontal swipe) —
+      // do not start the flight stick or throttle strip.
+      if (this.menuActive && this._menuPtrId == null) {
+        this._menuPtrId = e.pointerId;
+        this._menuStart = { x, y, t: performance.now(), idx: hitMenuItem(x, y) };
+        e.preventDefault();
+        return;
+      }
       // Priority: buttons first (small explicit zones), then throttle slider,
       // then stick (large left-half fallback).
       const btn = hitButton(x, y);
@@ -1475,10 +1502,30 @@ class Input {
       } else if (e.pointerId === this._throttlePtrId) {
         this.throttleValue = Math.max(0, Math.min(1, 1 - (y - h * 0.15) / (h * 0.7)));
         e.preventDefault();
+      } else if (e.pointerId === this._menuPtrId) {
+        // Track only — decision is made on pointerup.
+        e.preventDefault();
       }
     }, opts);
     const endPointer = (e: PointerEvent) => {
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      if (e.pointerId === this._menuPtrId) {
+        const { x, y } = localXY(e);
+        const s = this._menuStart;
+        const dx = x - s.x, dy = y - s.y;
+        const dist = Math.hypot(dx, dy);
+        const dt = performance.now() - s.t;
+        // Horizontal swipe: forward (→) = ENTER, back (←) = ESCAPE.
+        // Threshold: ≥ 40px of horizontal travel, dominant over vertical,
+        // and within 800ms. Otherwise treat as a tap if it landed on an item.
+        if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 800) {
+          this.pressed.add(dx > 0 ? "enter" : "escape");
+        } else if (dist < 18 && s.idx >= 0) {
+          this.menuTapIndex = s.idx;
+        }
+        this._menuPtrId = null;
+        return;
+      }
       if (e.pointerId === this._stickPtrId) {
         this._stickPtrId = null; this.stickActive = false;
       }
@@ -1512,8 +1559,9 @@ class Input {
     this.textBuffer.length = 0;
     this.wheelDelta = 0;
     // Persistent held sets (_gpHeld, _touchHeld) survive across frames.
-    // buttonRects are rebuilt every render.
+    // buttonRects and menuItemRects are rebuilt every render.
     this.buttonRects.length = 0;
+    this.menuItemRects.length = 0;
   }
 
   // Synthesize a "key held" from a controller/touch source. Idempotent:
@@ -4777,6 +4825,13 @@ export class Voidwake {
   menuNav(n: number) {
     if (this.input.consume("arrowup")) this.menuCursor = (this.menuCursor - 1 + n) % n;
     if (this.input.consume("arrowdown")) this.menuCursor = (this.menuCursor + 1) % n;
+    // Touch tap on a rendered menu item → move cursor to it and confirm.
+    const tap = this.input.menuTapIndex;
+    if (tap >= 0 && tap < n) {
+      this.menuCursor = tap;
+      this.input.pressed.add("enter");
+    }
+    this.input.menuTapIndex = -1;
   }
 
   // ---------------------------------------------------------------------------
@@ -4790,6 +4845,8 @@ export class Voidwake {
     const cols = Math.max(40, Math.floor(w / CELL_W));
     const rows = Math.max(20, Math.floor(h / CELL_H));
     const grid = this.acquireGrid(cols, rows);
+    // Reset per-frame menu-touch flag; renderListMenu re-enables it.
+    this.input.menuActive = false;
 
     // Frame delta for starfield motion (independent of game tick).
     const now = performance.now() / 1000;
@@ -5436,12 +5493,25 @@ export class Voidwake {
 
   renderListMenu(g: Cell[][], title: string, items: string[]) {
     putText(g, 4, 2, title, "#7CFC00");
+    const cols = g[0].length;
+    // Touch: whole screen is a menu-gesture surface (tap items, swipe ←/→).
+    this.input.menuActive = true;
     items.forEach((it, i) => {
       const sel = i === this.menuCursor;
-      putText(g, 6, 5 + i * 2, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      const row = 5 + i * 2;
+      putText(g, 6, row, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      // Register hit-box spanning most of the row so a fat-fingered tap
+      // still lands. Full row height, from left margin to right margin.
+      this.input.menuItemRects.push({
+        index: i,
+        x: 2 * CELL_W,
+        y: (row - 0.4) * CELL_H,
+        w: (cols - 4) * CELL_W,
+        h: CELL_H * 1.8,
+      });
     });
     if (this.titleNotice) this.renderTitleNotice(g, 5 + items.length * 2 + 2);
-    putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm   ESC back", "#888");
+    putText(g, 4, g.length - 2, "↑/↓ or tap   ENTER / swipe →   ESC / swipe ←", "#888");
   }
 
   // Playing: cockpit + world ------------------------------------------------
