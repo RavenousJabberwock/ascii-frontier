@@ -1379,6 +1379,19 @@ class Input {
   private _btnPtrIds = new Map<number, string>();   // pointerId → button id
   private _touchHeld = new Set<string>();
 
+  // --- Menu touch/swipe state ---------------------------------------------
+  // When the game is on a list-style menu screen, touch is repurposed:
+  //   • tap on an item     → select + confirm (ENTER)
+  //   • swipe right (→)    → forward / confirm (ENTER)
+  //   • swipe left  (←)    → back (ESCAPE)
+  // Renderers publish `menuItemRects` each frame; the game reads
+  // `menuTapIndex` from menuNav() and applies it to menuCursor.
+  menuActive = false;
+  menuItemRects: { index: number; x: number; y: number; w: number; h: number }[] = [];
+  menuTapIndex = -1;
+  private _menuPtrId: number | null = null;
+  private _menuStart = { x: 0, y: 0, t: 0, idx: -1 };
+
   attach(el: HTMLElement, signal?: AbortSignal) {
     const opts = signal ? { signal } : undefined;
     el.addEventListener("keydown", (e) => {
