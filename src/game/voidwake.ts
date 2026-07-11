@@ -3395,7 +3395,7 @@ export class Voidwake {
             e.pos = randPos(Math.random, WORLD_RADIUS * 0.95);
             e.vel = { x: 0, y: 0, z: 0 };
             e.state = "dormant";
-            e.cooldown = 240 + Math.random() * 360; // 4-10 minutes
+            e.cooldown = 3600 + Math.random() * 3600; // 60-120 minutes — matches initial cadence
           }
         }
       } else if (e.kind === "wormhole") {
