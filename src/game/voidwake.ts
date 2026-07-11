@@ -491,6 +491,9 @@ interface Entity {
   // Preserved kind so retaliation can revert this ship to friendly/neutral
   // once the timer expires.
   peaceKind?: EntityKind;
+  // Named pirate captain flag. Bosses have +50% hull, a distinct title, and
+  // drop bonus credits/XP on kill. 5% roll on pirate spawn (see spawnNear).
+  boss?: boolean;
 }
 
 interface PlayerChar {
