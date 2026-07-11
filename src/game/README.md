@@ -17,7 +17,7 @@ voidwake.ts
 ├─ AI                   simple state machines (friendly/neutral/hostile/station)
 ├─ Player Systems       combat, mining, trading, missions, progression
 ├─ Input                keyboard handling
-├─ Menu                 ESC menu, character creation, ship customization, options
+├─ Menu                 ESC menu, character creation, ship customization, options (Gameplay / Audio / Controls + Keybinds sub-page)
 ├─ Save / Load          unencrypted JSON via localStorage + download/upload
 ├─ Render               ASCII grid renderer + cockpit HUD + 3D radar
 └─ Loop                 fixed-timestep update + render
