@@ -2004,14 +2004,23 @@ const STELLAR_CLASSES: StellarClass[] = [
 // New entries (PSR, BH) are appended at the end and use very small weights.
 const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1];
 const _stellarWSum = STELLAR_WEIGHTS.reduce((a, b) => a + b, 0);
+// Stellar class for a star entity. Called from several hot paths per frame
+// (culling, halo tinting, corona scoop math), so results are memoized per
+// entity in a WeakMap — the class is deterministic from `e.id`, so caching
+// on the object reference is safe and avoids re-running the weighted roll.
+const _stellarClassCache = new WeakMap<Entity, StellarClass>();
 function stellarClassOf(e: Entity): StellarClass {
+  const cached = _stellarClassCache.get(e);
+  if (cached) return cached;
   const h = hash01(e.id * 977 + 31);
   let r = h * _stellarWSum;
+  let out: StellarClass = STELLAR_CLASSES[4]; // G-class fallback
   for (let i = 0; i < STELLAR_CLASSES.length; i++) {
     r -= STELLAR_WEIGHTS[i];
-    if (r <= 0) return STELLAR_CLASSES[i];
+    if (r <= 0) { out = STELLAR_CLASSES[i]; break; }
   }
-  return STELLAR_CLASSES[4]; // G-class fallback
+  _stellarClassCache.set(e, out);
+  return out;
 }
 
 // Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
