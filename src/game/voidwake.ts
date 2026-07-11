@@ -4845,6 +4845,8 @@ export class Voidwake {
     const cols = Math.max(40, Math.floor(w / CELL_W));
     const rows = Math.max(20, Math.floor(h / CELL_H));
     const grid = this.acquireGrid(cols, rows);
+    // Reset per-frame menu-touch flag; renderListMenu re-enables it.
+    this.input.menuActive = false;
 
     // Frame delta for starfield motion (independent of game tick).
     const now = performance.now() / 1000;
