@@ -3085,6 +3085,13 @@ export class Voidwake {
       this.die(this.deathReason ?? "Catastrophic hull failure");
       return;
     }
+    // Cheat Mode = full god mode: keep hull/shield pinned to max every frame
+    // so nothing (star scoop, ram, stray bullet, beacon trap) can ever whittle
+    // us down. Damage sites are already gated on !cheat, this is belt-and-braces.
+    if (this.options.cheat) {
+      p.ship.hull = p.ship.hullMax;
+      if (p.ship.shieldMax) p.ship.shield = p.ship.shieldMax;
+    }
     const k = this.options.keybinds;
     const keys = this.input.keys;
 
