@@ -3480,7 +3480,7 @@ export class Voidwake {
     const boostMul = (boosting ? effectiveBoostMul(p) : 1.0) * (supercruise ? 3.0 : 1.0);
     // Engineer perk: -20% fuel burn.
     const engineerMul = hasCrew(p, "engineer") ? 0.80 : 1.0;
-    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul;
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * speciesFuelMul(p);
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
