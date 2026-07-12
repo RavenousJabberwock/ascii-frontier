@@ -1369,7 +1369,24 @@ function effectiveRadarRange(p: PlayerState): number {
   if (hasCrew(p, "pilot")) r += 150;
   if (hasCrew(p, "engineer")) r += 150;
   if (p.ship.modules.includes("sensor-array")) r += 600;
+  if (p.ship.modules.includes("long-range-scanner")) r += 1000;
   return r;
+}
+
+// Top speed and boost multipliers after module installs. Engine Tune adds
+// +15% to base ship speed; Afterburner OD adds +20% to the boost multiplier
+// (i.e. 1.6x → 1.92x while holding boost). Kept in one place so the flight
+// tick and the collision-speed estimate can't drift apart.
+function effectiveTopSpeed(p: PlayerState): number {
+  const tune = p.ship.modules.includes("engine-tune") ? 1.15 : 1.0;
+  return p.ship.speed * tune;
+}
+function effectiveBoostMul(p: PlayerState): number {
+  return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
+}
+// Auto-Loader trims weapon cooldown by 15%.
+function effectiveCooldownMul(p: PlayerState): number {
+  return p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
 }
 
 // Merchant on-crew? Sell/buy price multipliers applied at station markets.
