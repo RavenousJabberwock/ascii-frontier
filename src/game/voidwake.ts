@@ -5797,14 +5797,26 @@ export class Voidwake {
       const sel = i === this.menuCursor;
       putText(g, 6, 6 + i * 2, (sel ? "▸ " : "  ") + r, sel ? "#fff" : "#9fe");
     });
+    // Species blurb — always shown so the player sees the trade-off before
+    // committing. Placed a few rows below the field list.
+    const info = speciesOf(c.species);
+    putText(g, 6, 6 + rows.length * 2 + 1, `+ ${info.bonus}`,  "#7CFC00");
+    putText(g, 6, 6 + rows.length * 2 + 2, `- ${info.drawback}`, "#fc6");
+    if (info.affinity) {
+      putText(g, 6, 6 + rows.length * 2 + 3,
+        `crew affinity: ${CREW_ROLE_INFO[info.affinity].title}`, "#9fe");
+    }
   }
 
   renderShipCreate(g: Cell[][]) {
     putText(g, 4, 2, "OUTFIT SHIP", "#7CFC00");
-    const hull = SHIP_HULLS[this.hullDraftIdx];
+    const hulls = unlockedShipHulls(this.charDraft.species);
+    const idx = Math.min(this.hullDraftIdx, hulls.length - 1);
+    const hull = hulls[idx] ?? SHIP_HULLS[0];
     const wep = WEAPONS[this.weaponDraftIdx];
+    const blurb = hull.blurb ? `  — ${hull.blurb}` : "";
     const rows = [
-      `hull:   ${hull.name}   (HP ${hull.hull}, SH ${hull.shield}, cargo ${hull.cargo}, spd ${hull.speed})`,
+      `hull:   ${hull.name}   (HP ${hull.hull}, SH ${hull.shield}, cargo ${hull.cargo}, spd ${hull.speed}, crew ${hull.crewSlots})${blurb}`,
       `weapon: ${wep.name}   (dmg ${wep.dmg}, cd ${wep.cooldown}s, rng ${wep.range})`,
       `Launch →`,
     ];
@@ -5812,6 +5824,9 @@ export class Voidwake {
       const sel = i === this.menuCursor;
       putText(g, 6, 6 + i * 2, (sel ? "▸ " : "  ") + r, sel ? "#fff" : "#9fe");
     });
+    putText(g, 4, 6 + rows.length * 2 + 1,
+      `available hulls: ${hulls.length}  (species: ${this.charDraft.species}${hasPriorSave() ? ", veteran unlocks" : ""})`,
+      "#888");
     putText(g, 4, g.length - 2, "←/→ change   ↑/↓ field   ENTER confirm", "#888");
   }
 
