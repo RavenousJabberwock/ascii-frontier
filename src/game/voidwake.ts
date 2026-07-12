@@ -1366,7 +1366,10 @@ function makePlayer(char: PlayerChar, hullId: string): PlayerState {
 }
 
 function awardXP(p: PlayerState, n: number) {
-  p.xp += n;
+  // Player-species XP multiplier (Drift-born / Chorus). Rounded to avoid
+  // fractional-XP drift accumulating over long sessions.
+  const mul = speciesOf(p.char.species).xpMul ?? 1;
+  p.xp += Math.max(0, Math.round(n * mul));
   const ranks = ["Harmless", "Mostly Harmless", "Novice", "Competent", "Expert", "Master", "Elite"];
   const idx = Math.min(ranks.length - 1, Math.floor(p.xp / 200));
   p.rank = ranks[idx];
