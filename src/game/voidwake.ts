@@ -5153,6 +5153,8 @@ export class Voidwake {
       if (offer.id === "cargo-expander") p.ship.cargoMax += 12;
       if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
       if (offer.id === "crew-quarters") this.pushLog("Crew quarters installed — +1 berth.");
+      if (offer.id === "reinforced-plating") { p.ship.hullMax += 40; p.ship.hull += 40; }
+      if (offer.id === "aux-fuel-tank") { p.ship.fuelMax += 50; p.ship.fuel += 50; }
       this.pushLog(`Installed ${offer.name}.`);
       return;
     }
