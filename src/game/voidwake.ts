@@ -1300,16 +1300,22 @@ function generateGunner(rng: () => number): Gunner {
 // market. Stock variety is intentional — frontier outposts charge more
 // for fuel, refineries pay better for ore, etc.
 const MODULE_CATALOG = [
-  { id: "cargo-expander",  name: "Cargo Expander",  price: 800,  desc: "+12 cargo capacity" },
-  { id: "shield-booster",  name: "Shield Booster",  price: 1100, desc: "+25 shield max" },
-  { id: "afterburner-od",  name: "Afterburner OD",  price: 650,  desc: "boost +20% (cheap)" },
-  { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
-  { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
-  { id: "crew-quarters",   name: "Crew Quarters",   price: 1400, desc: "+1 crew slot" },
+  { id: "cargo-expander",     name: "Cargo Expander",     price: 800,  desc: "+12 cargo capacity" },
+  { id: "shield-booster",     name: "Shield Booster",     price: 1100, desc: "+25 shield max" },
+  { id: "afterburner-od",     name: "Afterburner OD",     price: 650,  desc: "boost +20% (cheap)" },
+  { id: "auto-loader",        name: "Auto-Loader",        price: 900,  desc: "weapon cooldown -15%" },
+  { id: "loot-magnet",        name: "Loot Magnet",        price: 500,  desc: "pickup range 3x" },
+  { id: "crew-quarters",      name: "Crew Quarters",      price: 1400, desc: "+1 crew slot" },
   // Sensor Array: passive radar-range boost. Stacks additively with the
   // small crew bonuses granted by an on-board Pilot / Engineer (see
   // effectiveRadarRange). Single install — dupes blocked in buyModule().
-  { id: "sensor-array",    name: "Sensor Array",    price: 950,  desc: "+600u radar range" },
+  { id: "sensor-array",       name: "Sensor Array",       price: 950,  desc: "+600u radar range" },
+  // New: capacity / performance modules. Effects applied at install time
+  // (hullMax/fuelMax bump) or via effective*() helpers (top speed, boost).
+  { id: "engine-tune",        name: "Engine Tune",        price: 1200, desc: "+15% top speed" },
+  { id: "reinforced-plating", name: "Reinforced Plating", price: 1000, desc: "+40 hull max" },
+  { id: "aux-fuel-tank",      name: "Aux Fuel Tank",      price: 700,  desc: "+50 fuel max" },
+  { id: "long-range-scanner", name: "Long-Range Scanner", price: 1300, desc: "+1000u radar range" },
 ];
 
 function generateStationStock(stationId: number): StationStock {
