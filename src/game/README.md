@@ -125,10 +125,13 @@ won't accidentally start flying the ship.
 
 ## Universe
 
-The play area is a cube roughly 36k units across (radius 18k). Anything past
-5k from your ship renders as a single colored period; past 10k it's culled
-entirely — so the deep sky is a moving field of pinpricks that only resolve
-into stars, planets, stations, and traffic as you cruise toward them.
+The play area is a cube roughly 54k units across (radius 27k — expanded
+from 18k). Anything past 5k from your ship renders as a single colored
+period; past 10k it's culled entirely — so the deep sky is a moving field
+of pinpricks that only resolve into stars, planets, stations, and traffic
+as you cruise toward them. Populations (planets, asteroids, stations,
+traffic, comets, nebulae, beacons, wrecks) were scaled up by ~3.4× to keep
+on-screen density roughly constant as the play volume grew.
 
 Stars are drawn by spectral class — blue supergiants, red giants, sun-like
 yellows, orange dwarves, red dwarves, white dwarves — each with a matching
