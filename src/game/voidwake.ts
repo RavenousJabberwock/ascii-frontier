@@ -5197,6 +5197,27 @@ export class Voidwake {
         "Back",
       ];
     }
+    if (this.stationPage === "gunner-bay") {
+      // Gunner-only weapon slot. Requires a hired gunner to be useful, but
+      // the slot is buyable ahead of hiring so the player can pre-outfit.
+      const rows: string[] = [];
+      if (!p.gunner) rows.push("~ No gunner hired — buy anyway, or dismiss first ~");
+      // "Unmount" line clears the gunner's dedicated weapon so they revert
+      // to firing the pilot weapon.
+      if (p.ship.gunnerWeaponId) {
+        const cur = WEAPONS.find((w) => w.id === p.ship.gunnerWeaponId);
+        rows.push(`Unmount current: ${cur?.name ?? p.ship.gunnerWeaponId}`);
+      }
+      rows.push(...stock.weapons.map((w) => {
+        const def = WEAPONS.find((x) => x.id === w.id)!;
+        // Gunner-slot weapons sell at a 25% premium (dedicated mount hardware).
+        const price = Math.round(w.price * 1.25);
+        const owned = p.ship.gunnerWeaponId === w.id ? " (gunner-equipped)" : "";
+        return `${def.name} — ${price}cr${owned}`;
+      }));
+      rows.push("Back");
+      return rows;
+    }
     if (this.stationPage === "modules") {
       return [
         ...stock.modules.map((m) => {
