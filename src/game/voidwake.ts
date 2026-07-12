@@ -776,7 +776,7 @@ function defaultOptions(): Options {
 // cube. Coordinates are in arbitrary units; the cockpit radar is sized to a
 // fixed range so distant entities just appear faint.
 // =============================================================================
-const WORLD_RADIUS = 18000;
+const WORLD_RADIUS = 27000;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
@@ -825,28 +825,30 @@ function pirateBossNameFor(rng: () => number): string {
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
-// World scale + entity counts. The universe radius was doubled (from 9k to
-// 18k) to give a genuinely vast frontier. Renderer still fades anything past
-// 5k to a colored period and culls past 10k, so most bodies will be distant
-// pinpricks until you cruise toward them. Populations scaled up to match.
+// World scale + entity counts. Universe radius has been expanded from 9k →
+// 18k → 27k. Renderer still fades anything past 5k to a colored period and
+// culls past 10k, so most bodies remain distant pinpricks until you cruise
+// toward them. Populations scale with volume (radius^3, ≈3.375x per 1.5x
+// bump) to keep the on-screen density of stars, traffic, and rocks roughly
+// constant as the play area grows.
 const WORLD = {
   starRadius: 0,
-  planetRadius: 18000,
-  asteroidRadius: 15000,
-  stationRadius: 17000,
-  shipRadius: 19000,
-  cometRadius: 21000,
-  nebulaRadius: 18000,
-  beaconRadius: 18000,
-  baseRadius: 19000,
-  planets: 42,
-  asteroids: 520,
-  stations: 20,
-  ships: 150,
-  comets: 28,
-  nebulae: 26,
-  beacons: 20,
-  pirateBases: 11,
+  planetRadius: 27000,
+  asteroidRadius: 22500,
+  stationRadius: 25500,
+  shipRadius: 28500,
+  cometRadius: 31500,
+  nebulaRadius: 27000,
+  beaconRadius: 27000,
+  baseRadius: 28500,
+  planets: 142,
+  asteroids: 1755,
+  stations: 68,
+  ships: 506,
+  comets: 95,
+  nebulae: 88,
+  beacons: 68,
+  pirateBases: 37,
 };
 
 
@@ -859,7 +861,7 @@ function generateUniverse(seed: number): Entity[] {
   // shows a variety of stellar classes (red giants, blue supergiants, white
   // dwarves, etc — see stellarClassOf()).
   out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sol"), pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 47; i++) {
     out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sun"), pos: randPos(rng, WORLD_RADIUS * 0.95), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
   }
 
@@ -916,7 +918,7 @@ function generateUniverse(seed: number): Entity[] {
   // Derelict ships: static, silent wrecks scattered across the frontier.
   // Fly within 40u to salvage credits + ore. No AI, no weapons — just loot
   // and a bit of environmental storytelling.
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 41; i++) {
     out.push({
       id: nextId(), kind: "derelict",
       name: nameFrom(rng, rng() < 0.5 ? "Wreck" : "Hulk"),
@@ -968,7 +970,7 @@ function generateUniverse(seed: number): Entity[] {
   // UFOs: a handful of enigmatic wanderers. They ignore factions and drift
   // between random survey points; if the player gets close they linger
   // ("observe") briefly then boost away.
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 14; i++) {
     out.push({
       id: nextId(), kind: "ufo", name: nameFrom(rng, "UAP"),
       pos: randPos(rng, WORLD_RADIUS),
@@ -1000,7 +1002,7 @@ function generateUniverse(seed: number): Entity[] {
   });
   // Traversable wormhole pairs. Each pair shares a `targetId` pointing at
   // its sibling; flying within 60u teleports the player to the sibling.
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 7; i++) {
     const a: Entity = {
       id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
       pos: randPos(rng, WORLD_RADIUS * 0.85),
@@ -1298,27 +1300,35 @@ function generateGunner(rng: () => number): Gunner {
 // market. Stock variety is intentional — frontier outposts charge more
 // for fuel, refineries pay better for ore, etc.
 const MODULE_CATALOG = [
-  { id: "cargo-expander",  name: "Cargo Expander",  price: 800,  desc: "+12 cargo capacity" },
-  { id: "shield-booster",  name: "Shield Booster",  price: 1100, desc: "+25 shield max" },
-  { id: "afterburner-od",  name: "Afterburner OD",  price: 650,  desc: "boost +20% (cheap)" },
-  { id: "auto-loader",     name: "Auto-Loader",     price: 900,  desc: "weapon cooldown -15%" },
-  { id: "loot-magnet",     name: "Loot Magnet",     price: 500,  desc: "pickup range 3x" },
-  { id: "crew-quarters",   name: "Crew Quarters",   price: 1400, desc: "+1 crew slot" },
+  { id: "cargo-expander",     name: "Cargo Expander",     price: 800,  desc: "+12 cargo capacity" },
+  { id: "shield-booster",     name: "Shield Booster",     price: 1100, desc: "+25 shield max" },
+  { id: "afterburner-od",     name: "Afterburner OD",     price: 650,  desc: "boost +20% (cheap)" },
+  { id: "auto-loader",        name: "Auto-Loader",        price: 900,  desc: "weapon cooldown -15%" },
+  { id: "loot-magnet",        name: "Loot Magnet",        price: 500,  desc: "pickup range 3x" },
+  { id: "crew-quarters",      name: "Crew Quarters",      price: 1400, desc: "+1 crew slot" },
   // Sensor Array: passive radar-range boost. Stacks additively with the
   // small crew bonuses granted by an on-board Pilot / Engineer (see
   // effectiveRadarRange). Single install — dupes blocked in buyModule().
-  { id: "sensor-array",    name: "Sensor Array",    price: 950,  desc: "+600u radar range" },
+  { id: "sensor-array",       name: "Sensor Array",       price: 950,  desc: "+600u radar range" },
+  // New: capacity / performance modules. Effects applied at install time
+  // (hullMax/fuelMax bump) or via effective*() helpers (top speed, boost).
+  { id: "engine-tune",        name: "Engine Tune",        price: 1200, desc: "+15% top speed" },
+  { id: "reinforced-plating", name: "Reinforced Plating", price: 1000, desc: "+40 hull max" },
+  { id: "aux-fuel-tank",      name: "Aux Fuel Tank",      price: 700,  desc: "+50 fuel max" },
+  { id: "long-range-scanner", name: "Long-Range Scanner", price: 1300, desc: "+1000u radar range" },
 ];
 
 function generateStationStock(stationId: number): StationStock {
   const rng = mulberry32(stationId * 9176 + 7);
   const fuelPrice = 4 + Math.floor(rng() * 5);      // 4..8
   const orePrice  = 7 + Math.floor(rng() * 8);      // 7..14
-  // Each station carries 1-3 weapons and 1-3 modules from the catalog.
+  // Each station carries 1-3 weapons and 2-5 modules from the (now larger)
+  // catalog. Slightly widened so the expanded upgrade list is discoverable
+  // without hopping through five stations.
   const shuffled = <T,>(arr: T[]) => arr.slice().sort(() => rng() - 0.5);
   const weapons = shuffled(WEAPONS).slice(0, 1 + Math.floor(rng() * 3))
     .map((w) => ({ id: w.id, price: Math.round((w.dmg * 40 + w.range * 0.4) * (0.8 + rng() * 0.5)) }));
-  const modules = shuffled(MODULE_CATALOG).slice(0, 1 + Math.floor(rng() * 3))
+  const modules = shuffled(MODULE_CATALOG).slice(0, 2 + Math.floor(rng() * 4))
     .map((m) => ({ ...m, price: Math.round(m.price * (0.85 + rng() * 0.4)) }));
   const gunnerFee = 200 + Math.floor(rng() * 400);
   const rumors = [
@@ -1359,7 +1369,24 @@ function effectiveRadarRange(p: PlayerState): number {
   if (hasCrew(p, "pilot")) r += 150;
   if (hasCrew(p, "engineer")) r += 150;
   if (p.ship.modules.includes("sensor-array")) r += 600;
+  if (p.ship.modules.includes("long-range-scanner")) r += 1000;
   return r;
+}
+
+// Top speed and boost multipliers after module installs. Engine Tune adds
+// +15% to base ship speed; Afterburner OD adds +20% to the boost multiplier
+// (i.e. 1.6x → 1.92x while holding boost). Kept in one place so the flight
+// tick and the collision-speed estimate can't drift apart.
+function effectiveTopSpeed(p: PlayerState): number {
+  const tune = p.ship.modules.includes("engine-tune") ? 1.15 : 1.0;
+  return p.ship.speed * tune;
+}
+function effectiveBoostMul(p: PlayerState): number {
+  return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
+}
+// Auto-Loader trims weapon cooldown by 15%.
+function effectiveCooldownMul(p: PlayerState): number {
+  return p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
 }
 
 // Merchant on-crew? Sell/buy price multipliers applied at station markets.
@@ -3304,7 +3331,7 @@ export class Voidwake {
     // Supercruise: hold for 3x speed at 3x fuel burn. Stacks with afterburner
     // but locks weapons (no fire while super-cruising) so it stays a travel tool.
     const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
-    const boostMul = (boosting ? 1.6 : 1.0) * (supercruise ? 3.0 : 1.0);
+    const boostMul = (boosting ? effectiveBoostMul(p) : 1.0) * (supercruise ? 3.0 : 1.0);
     // Engineer perk: -20% fuel burn.
     const engineerMul = hasCrew(p, "engineer") ? 0.80 : 1.0;
     const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul;
@@ -3315,7 +3342,7 @@ export class Voidwake {
     if (p.ship.fuel > 0) {
       // Powered flight: normal thrust. Cache the current velocity so if we
       // stall out mid-frame we keep drifting instead of snapping to zero.
-      const sp = p.ship.speed * p.throttle * boostMul;
+      const sp = effectiveTopSpeed(p) * p.throttle * boostMul;
       const thrustV = V.scale(fwd, sp);
       p.pos = V.add(p.pos, V.scale(thrustV, dt));
       p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
@@ -3610,7 +3637,7 @@ export class Voidwake {
     const _scState = (this as unknown as { _supercruise?: boolean })._supercruise;
     if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0 && !_scState && !this._empActive) {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
-      p.cooldown = w.cooldown;
+      p.cooldown = w.cooldown * effectiveCooldownMul(p);
       this.entities.push({
         id: nextId(), kind: "bullet", name: "shot",
         pos: { ...p.pos }, vel: V.scale(fwd, 260),
@@ -3705,7 +3732,7 @@ export class Voidwake {
       // Approximate current absolute speed (u/s). Uses drift velocity when
       // fuel is out, otherwise the powered-thrust estimate.
       const currentSpeed = p.ship.fuel > 0
-        ? p.ship.speed * p.throttle * (keys.has(k.boost) ? 1.6 : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
+        ? effectiveTopSpeed(p) * p.throttle * (keys.has(k.boost) ? effectiveBoostMul(p) : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
         : V.len(p.driftVel ?? { x: 0, y: 0, z: 0 });
       for (const e of this.entities) {
         // Also collide vs NPC ships (any faction). Ramming a ship costs both
@@ -4249,7 +4276,7 @@ export class Voidwake {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
       if (bestDist > w.range) return;
       if (g.cooldown > 0) return;
-      g.cooldown = w.cooldown * 1.15;   // slightly slower than manual fire
+      g.cooldown = w.cooldown * 1.15 * effectiveCooldownMul(p);   // slightly slower than manual fire
       this.entities.push({
         id: nextId(), kind: "bullet", name: "shot",
         pos: { ...p.pos }, vel: V.scale(fwd, 260),
@@ -5126,6 +5153,8 @@ export class Voidwake {
       if (offer.id === "cargo-expander") p.ship.cargoMax += 12;
       if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
       if (offer.id === "crew-quarters") this.pushLog("Crew quarters installed — +1 berth.");
+      if (offer.id === "reinforced-plating") { p.ship.hullMax += 40; p.ship.hull += 40; }
+      if (offer.id === "aux-fuel-tank") { p.ship.fuelMax += 50; p.ship.fuel += 50; }
       this.pushLog(`Installed ${offer.name}.`);
       return;
     }
@@ -6468,7 +6497,7 @@ export class Voidwake {
     putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, shieldCol);
     putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, fuelCol);
     putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%`, "#9fe");
-    putText(g, panelX, vpTop + 10, `Speed ${(p.ship.speed * p.throttle).toFixed(0)} u/s`, "#9fe");
+    putText(g, panelX, vpTop + 10, `Speed ${(effectiveTopSpeed(p) * p.throttle).toFixed(0)} u/s`, "#9fe");
     putText(g, panelX, vpTop + 12, `Cargo ${cargoTotal(p)}/${p.ship.cargoMax}`, "#9fe");
     let cy2 = vpTop + 13;
     for (const [k, v] of Object.entries(p.cargo)) putText(g, panelX + 1, cy2++, `· ${k}: ${v}`, "#aea");
