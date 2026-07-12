@@ -5319,6 +5319,31 @@ export class Voidwake {
       return;
     }
 
+    if (this.stationPage === "gunner-bay") {
+      // Header row + optional "Unmount" line shift the weapon indices.
+      const rows = lines;
+      const label = rows[i];
+      if (!label || label.startsWith("~")) return;
+      if (label.startsWith("Unmount current:")) {
+        p.ship.gunnerWeaponId = undefined;
+        this.pushLog("Gunner mount unloaded.");
+        return;
+      }
+      // Match the offer by name prefix (rows contain "Name — Ncr[ (owned)]").
+      const offer = stock.weapons.find((w) => {
+        const def = WEAPONS.find((x) => x.id === w.id);
+        return def && label.startsWith(def.name);
+      });
+      if (!offer) return;
+      const price = Math.round(offer.price * 1.25 * merchantBuyMult(p));
+      if (p.ship.gunnerWeaponId === offer.id) { this.pushLog("Already gunner-equipped."); return; }
+      if (p.credits < price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= price;
+      p.ship.gunnerWeaponId = offer.id;
+      this.pushLog(`Gunner armed with ${WEAPONS.find((w) => w.id === offer.id)!.name}.`);
+      return;
+    }
+
     if (this.stationPage === "modules") {
       const offer = stock.modules[i];
       if (!offer) return;
