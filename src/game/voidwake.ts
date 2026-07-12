@@ -3253,7 +3253,7 @@ export class Voidwake {
     const left = this.input.consume("arrowleft");
     const right = this.input.consume("arrowright");
     if (field === "species") {
-      const i = SPECIES.indexOf(this.charDraft.species);
+      const i = SPECIES.indexOf(this.charDraft.species as SpeciesName);
       if (left) this.charDraft.species = SPECIES[(i - 1 + SPECIES.length) % SPECIES.length];
       if (right) this.charDraft.species = SPECIES[(i + 1) % SPECIES.length];
     } else if (field === "gender") {
