@@ -224,6 +224,57 @@ name (e.g. `Nosaj`) and the HUD will render it as `Cmdr Nosaj`. Case is
 preserved, and an accidentally typed leading `Cmdr ` is stripped so you
 won't end up with `Cmdr Cmdr Nosaj`.
 
+### Species
+
+Eight species are selectable at commander creation. Every one has an
+upside and a matching downside, plus a **role affinity** — a crew member
+of that species gives a small extra boost when serving in the matching
+role. Player-species passives apply automatically; crew-species affinity
+is folded into the same helpers so effects stack cleanly.
+
+| Species | Bonus | Drawback | Affinity |
+|---|---|---|---|
+| Human | +3% sell / −3% buy prices | No standout strength | Merchant |
+| Android | −15% fuel burn | −10% hull max | Engineer |
+| Reptilian | −10% weapon cooldown | −10% shield max | Gunner |
+| Aquilan | +250u radar range | +5% fuel burn | Pilot |
+| Drift-born | +10% XP earned | −5% top speed | Merchant |
+| Sylph | +8% top speed, +200u radar | −15% hull max | Pilot |
+| Voidkin | +10% shield max | −10% cargo capacity | Engineer |
+| Chorus | +8% XP earned | −5% top speed | Merchant |
+
+### Ship hulls (unlocks)
+
+The base four hulls (Sparrow Scout, Mule Freighter, Wasp Interceptor,
+Pickaxe Industrial) are always available. Additional hulls unlock based
+on your commander's **species** and whether at least one prior save
+exists on this device:
+
+| Hull | Unlock |
+|---|---|
+| Warhawk Gunship | Reptilian |
+| Skyeye Recon | Aquilan / Sylph |
+| Nomad Cell-Ship | Android / Voidkin |
+| Drift Barge | Drift-born |
+| Wayfarer Explorer | Human / Chorus |
+| Veteran Corvette | prior save on this device |
+| Phoenix Prototype | prior save on this device |
+
+Every hull's berth count has been raised so up to two additional crew
+members can be seated compared to the old baseline — Crew Quarters
+modules still stack +1 each on top.
+
+### Gunner weapon slot
+
+Ships now carry a **dedicated gunner weapon slot** in addition to the
+pilot's primary. Buy or unmount it from the station's **Gunner Bay** page.
+When populated, the gunner autopilot fires that weapon exclusively (with
+the usual 15% cadence penalty on top of its base cooldown). Damage is
+computed from the gunner's weapon on gunner-fired shots. Gunner-mount
+hardware runs at a 25% premium over the pilot loadout price.
+
+
+
 ## Options menu
 
 The **ESC ▸ Options** screen is organized into three subsections plus a
