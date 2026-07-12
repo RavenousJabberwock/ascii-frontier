@@ -776,7 +776,7 @@ function defaultOptions(): Options {
 // cube. Coordinates are in arbitrary units; the cockpit radar is sized to a
 // fixed range so distant entities just appear faint.
 // =============================================================================
-const WORLD_RADIUS = 18000;
+const WORLD_RADIUS = 27000;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
@@ -825,28 +825,30 @@ function pirateBossNameFor(rng: () => number): string {
 let _entityIdSeq = 1;
 function nextId() { return _entityIdSeq++; }
 
-// World scale + entity counts. The universe radius was doubled (from 9k to
-// 18k) to give a genuinely vast frontier. Renderer still fades anything past
-// 5k to a colored period and culls past 10k, so most bodies will be distant
-// pinpricks until you cruise toward them. Populations scaled up to match.
+// World scale + entity counts. Universe radius has been expanded from 9k →
+// 18k → 27k. Renderer still fades anything past 5k to a colored period and
+// culls past 10k, so most bodies remain distant pinpricks until you cruise
+// toward them. Populations scale with volume (radius^3, ≈3.375x per 1.5x
+// bump) to keep the on-screen density of stars, traffic, and rocks roughly
+// constant as the play area grows.
 const WORLD = {
   starRadius: 0,
-  planetRadius: 18000,
-  asteroidRadius: 15000,
-  stationRadius: 17000,
-  shipRadius: 19000,
-  cometRadius: 21000,
-  nebulaRadius: 18000,
-  beaconRadius: 18000,
-  baseRadius: 19000,
-  planets: 42,
-  asteroids: 520,
-  stations: 20,
-  ships: 150,
-  comets: 28,
-  nebulae: 26,
-  beacons: 20,
-  pirateBases: 11,
+  planetRadius: 27000,
+  asteroidRadius: 22500,
+  stationRadius: 25500,
+  shipRadius: 28500,
+  cometRadius: 31500,
+  nebulaRadius: 27000,
+  beaconRadius: 27000,
+  baseRadius: 28500,
+  planets: 142,
+  asteroids: 1755,
+  stations: 68,
+  ships: 506,
+  comets: 95,
+  nebulae: 88,
+  beacons: 68,
+  pirateBases: 37,
 };
 
 
@@ -859,7 +861,7 @@ function generateUniverse(seed: number): Entity[] {
   // shows a variety of stellar classes (red giants, blue supergiants, white
   // dwarves, etc — see stellarClassOf()).
   out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sol"), pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 47; i++) {
     out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sun"), pos: randPos(rng, WORLD_RADIUS * 0.95), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
   }
 
@@ -916,7 +918,7 @@ function generateUniverse(seed: number): Entity[] {
   // Derelict ships: static, silent wrecks scattered across the frontier.
   // Fly within 40u to salvage credits + ore. No AI, no weapons — just loot
   // and a bit of environmental storytelling.
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 41; i++) {
     out.push({
       id: nextId(), kind: "derelict",
       name: nameFrom(rng, rng() < 0.5 ? "Wreck" : "Hulk"),
@@ -968,7 +970,7 @@ function generateUniverse(seed: number): Entity[] {
   // UFOs: a handful of enigmatic wanderers. They ignore factions and drift
   // between random survey points; if the player gets close they linger
   // ("observe") briefly then boost away.
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 14; i++) {
     out.push({
       id: nextId(), kind: "ufo", name: nameFrom(rng, "UAP"),
       pos: randPos(rng, WORLD_RADIUS),
@@ -1000,7 +1002,7 @@ function generateUniverse(seed: number): Entity[] {
   });
   // Traversable wormhole pairs. Each pair shares a `targetId` pointing at
   // its sibling; flying within 60u teleports the player to the sibling.
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 7; i++) {
     const a: Entity = {
       id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
       pos: randPos(rng, WORLD_RADIUS * 0.85),
