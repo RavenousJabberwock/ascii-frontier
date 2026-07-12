@@ -3343,15 +3343,20 @@ export class Voidwake {
 
 
   // --- Ship creation -------------------------------------------------------
+  // Hulls available for the picker are filtered by player species and the
+  // presence of any prior save (veteran hulls). Clamped when the pool
+  // changes so an out-of-range cursor snaps to zero on species change.
   updateShipCreate() {
     const items = ["hull", "weapon", "Launch →"];
     this.menuNav(items.length);
     const left = this.input.consume("arrowleft");
     const right = this.input.consume("arrowright");
     const f = items[this.menuCursor];
+    const hulls = unlockedShipHulls(this.charDraft.species);
+    if (this.hullDraftIdx >= hulls.length) this.hullDraftIdx = 0;
     if (f === "hull") {
-      if (left) this.hullDraftIdx = (this.hullDraftIdx - 1 + SHIP_HULLS.length) % SHIP_HULLS.length;
-      if (right) this.hullDraftIdx = (this.hullDraftIdx + 1) % SHIP_HULLS.length;
+      if (left) this.hullDraftIdx = (this.hullDraftIdx - 1 + hulls.length) % hulls.length;
+      if (right) this.hullDraftIdx = (this.hullDraftIdx + 1) % hulls.length;
     } else if (f === "weapon") {
       if (left) this.weaponDraftIdx = (this.weaponDraftIdx - 1 + WEAPONS.length) % WEAPONS.length;
       if (right) this.weaponDraftIdx = (this.weaponDraftIdx + 1) % WEAPONS.length;
@@ -3364,7 +3369,9 @@ export class Voidwake {
     this.seed = (Math.random() * 1e9) | 0;
     this.rng = mulberry32(this.seed);
     this.entities = generateUniverse(this.seed);
-    this.player = makePlayer(this.charDraft, SHIP_HULLS[this.hullDraftIdx].id);
+    const hulls = unlockedShipHulls(this.charDraft.species);
+    const hullId = hulls[Math.min(this.hullDraftIdx, hulls.length - 1)]?.id ?? SHIP_HULLS[0].id;
+    this.player = makePlayer(this.charDraft, hullId);
     this.player.ship.weaponId = WEAPONS[this.weaponDraftIdx].id;
     this.player.mission = this.generateMission();
     this.screen = "playing";
