@@ -4419,7 +4419,10 @@ export class Voidwake {
 
     const tag = `Gunner ${g.name.split(" ")[0]}`;
     if (best.kind === "hostile") {
-      const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+      // Gunner fires their dedicated weapon if one is installed, else falls
+      // back to the pilot's. Purchased via the station's "Gunner Bay" page.
+      const gunnerWepId = p.ship.gunnerWeaponId ?? p.ship.weaponId;
+      const w = WEAPONS.find((x) => x.id === gunnerWepId) ?? WEAPONS[0];
       if (bestDist > w.range) return;
       if (g.cooldown > 0) return;
       g.cooldown = w.cooldown * 1.15 * effectiveCooldownMul(p);   // slightly slower than manual fire
