@@ -1322,11 +1322,13 @@ function generateStationStock(stationId: number): StationStock {
   const rng = mulberry32(stationId * 9176 + 7);
   const fuelPrice = 4 + Math.floor(rng() * 5);      // 4..8
   const orePrice  = 7 + Math.floor(rng() * 8);      // 7..14
-  // Each station carries 1-3 weapons and 1-3 modules from the catalog.
+  // Each station carries 1-3 weapons and 2-5 modules from the (now larger)
+  // catalog. Slightly widened so the expanded upgrade list is discoverable
+  // without hopping through five stations.
   const shuffled = <T,>(arr: T[]) => arr.slice().sort(() => rng() - 0.5);
   const weapons = shuffled(WEAPONS).slice(0, 1 + Math.floor(rng() * 3))
     .map((w) => ({ id: w.id, price: Math.round((w.dmg * 40 + w.range * 0.4) * (0.8 + rng() * 0.5)) }));
-  const modules = shuffled(MODULE_CATALOG).slice(0, 1 + Math.floor(rng() * 3))
+  const modules = shuffled(MODULE_CATALOG).slice(0, 2 + Math.floor(rng() * 4))
     .map((m) => ({ ...m, price: Math.round(m.price * (0.85 + rng() * 0.4)) }));
   const gunnerFee = 200 + Math.floor(rng() * 400);
   const rumors = [
