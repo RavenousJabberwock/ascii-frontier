@@ -417,15 +417,120 @@ const TITLE_TIPS = [
   "Save often. Permadeath is opt-in for a reason.",
 ];
 
-const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
+// Species catalog. Each entry has a passive (applied when the *player's*
+// species matches) and a role affinity (a *crew member* of this species
+// gets a small extra boost when serving in that role). Every species must
+// have some upside and some drawback — no strict winners.
+//
+// Player passives are woven into the effective*() helpers, and hull /
+// shield / cargo multipliers apply once at makePlayer(). Crew affinity
+// stacks multiplicatively with the base role perk in the same helpers
+// (see crewRoleMul() below).
+const SPECIES = [
+  "Human", "Android", "Reptilian", "Aquilan", "Drift-born",
+  "Sylph", "Voidkin", "Chorus",
+] as const;
+type SpeciesName = typeof SPECIES[number];
+
+interface SpeciesInfo {
+  bonus: string;
+  drawback: string;
+  // Player passives (all optional; default 1.0 / 0):
+  radarBonus?: number;         // flat +u to radar range
+  cooldownMul?: number;        // weapon cooldown multiplier (<1 = faster)
+  topSpeedMul?: number;        // top-speed multiplier
+  fuelMul?: number;            // fuel-burn multiplier (<1 = less)
+  sellMul?: number;            // extra sell-price mult (stacks on merchant)
+  buyMul?: number;             // extra buy-price mult (stacks on merchant)
+  hullMul?: number;            // initial hullMax scale
+  shieldMul?: number;          // initial shieldMax scale
+  cargoMul?: number;           // initial cargoMax scale
+  xpMul?: number;              // XP-gain multiplier
+  affinity?: CrewRole;         // role this species is naturally good at
+  // Ship-hull unlocks (see SHIP_HULLS below).
+  hullUnlocks?: string[];
+}
+
+const SPECIES_INFO: Record<SpeciesName, SpeciesInfo> = {
+  Human:       { bonus: "Adaptable — +3% sell / -3% buy prices",       drawback: "No standout strength",
+                 sellMul: 1.03, buyMul: 0.97, affinity: "merchant", hullUnlocks: ["explorer"] },
+  Android:     { bonus: "Efficient reactor — -15% fuel burn",           drawback: "-10% hull max",
+                 fuelMul: 0.85, hullMul: 0.90, affinity: "engineer", hullUnlocks: ["nomad"] },
+  Reptilian:   { bonus: "Cold-blooded gunnery — -10% weapon cooldown",  drawback: "-10% shield max",
+                 cooldownMul: 0.90, shieldMul: 0.90, affinity: "gunner", hullUnlocks: ["warhawk"] },
+  Aquilan:     { bonus: "Sharp senses — +250u radar range",             drawback: "+5% fuel burn",
+                 radarBonus: 250, fuelMul: 1.05, affinity: "pilot", hullUnlocks: ["skyeye"] },
+  "Drift-born":{ bonus: "Void-native — +10% XP earned",                 drawback: "-5% top speed (fragile bones)",
+                 xpMul: 1.10, topSpeedMul: 0.95, affinity: "merchant", hullUnlocks: ["driftbarge"] },
+  Sylph:       { bonus: "Lightframe — +8% top speed, +200u radar",      drawback: "-15% hull max",
+                 topSpeedMul: 1.08, radarBonus: 200, hullMul: 0.85, affinity: "pilot", hullUnlocks: ["skyeye"] },
+  Voidkin:     { bonus: "Radiation-tolerant — +10% shield max",         drawback: "-10% cargo capacity",
+                 shieldMul: 1.10, cargoMul: 0.90, affinity: "engineer", hullUnlocks: ["nomad"] },
+  Chorus:      { bonus: "Hive-minded — +8% XP, faster crew perks",      drawback: "-5% top speed",
+                 xpMul: 1.08, topSpeedMul: 0.95, affinity: "merchant", hullUnlocks: ["explorer"] },
+};
+
+function speciesOf(name: string | undefined): SpeciesInfo {
+  return SPECIES_INFO[(name as SpeciesName)] ?? SPECIES_INFO.Human;
+}
 
 // Ship hull catalog. Add entries to expose new hulls to character creation.
-const SHIP_HULLS = [
-  { id: "scout", name: "Sparrow Scout", hull: 60, shield: 40, cargo: 12, speed: 90, crewSlots: 1 },
-  { id: "trader", name: "Mule Freighter", hull: 110, shield: 60, cargo: 64, speed: 55, crewSlots: 4 },
-  { id: "fighter", name: "Wasp Interceptor", hull: 80, shield: 90, cargo: 8, speed: 110, crewSlots: 2 },
-  { id: "miner", name: "Pickaxe Industrial", hull: 130, shield: 50, cargo: 40, speed: 50, crewSlots: 3 },
+// crewSlots is the base berth count; the "Crew Quarters" module still adds
+// +1 on top. Every hull now supports up to 2 additional berths beyond the
+// old baseline so larger crews are actually assemblable.
+//
+// unlockSpecies:  hull only appears in ship-create if the player's species
+//                 is listed (or the list is undefined = always available).
+// unlockPriorSave: hull requires at least one prior save in localStorage
+//                 (a "veteran" hull unlocked after your first commander).
+const SHIP_HULLS: Array<{
+  id: string; name: string; hull: number; shield: number;
+  cargo: number; speed: number; crewSlots: number;
+  unlockSpecies?: SpeciesName[]; unlockPriorSave?: boolean;
+  blurb?: string;
+}> = [
+  { id: "scout",   name: "Sparrow Scout",       hull: 60,  shield: 40, cargo: 12, speed: 90,  crewSlots: 3 },
+  { id: "trader",  name: "Mule Freighter",      hull: 110, shield: 60, cargo: 64, speed: 55,  crewSlots: 6 },
+  { id: "fighter", name: "Wasp Interceptor",    hull: 80,  shield: 90, cargo: 8,  speed: 110, crewSlots: 4 },
+  { id: "miner",   name: "Pickaxe Industrial",  hull: 130, shield: 50, cargo: 40, speed: 50,  crewSlots: 5 },
+  // Species-locked hulls.
+  { id: "warhawk",   name: "Warhawk Gunship",     hull: 120, shield: 110, cargo: 14, speed: 100, crewSlots: 4,
+    unlockSpecies: ["Reptilian"], blurb: "Reptilian gunnery frame" },
+  { id: "skyeye",    name: "Skyeye Recon",        hull: 70,  shield: 55,  cargo: 18, speed: 120, crewSlots: 3,
+    unlockSpecies: ["Aquilan", "Sylph"], blurb: "long-range recon hull" },
+  { id: "nomad",     name: "Nomad Cell-Ship",     hull: 140, shield: 70,  cargo: 30, speed: 65,  crewSlots: 5,
+    unlockSpecies: ["Android", "Voidkin"], blurb: "self-repairing cell-ship" },
+  { id: "driftbarge",name: "Drift Barge",         hull: 160, shield: 55,  cargo: 90, speed: 45,  crewSlots: 6,
+    unlockSpecies: ["Drift-born"], blurb: "clan hauler" },
+  { id: "explorer",  name: "Wayfarer Explorer",   hull: 95,  shield: 70,  cargo: 26, speed: 85,  crewSlots: 5,
+    unlockSpecies: ["Human", "Chorus"], blurb: "balanced explorer" },
+  // Veteran hulls — require at least one prior save on this device.
+  { id: "veteran",   name: "Veteran Corvette",    hull: 130, shield: 100, cargo: 20, speed: 95,  crewSlots: 5,
+    unlockPriorSave: true, blurb: "unlocked after your first commander" },
+  { id: "phoenix",   name: "Phoenix Prototype",   hull: 110, shield: 90,  cargo: 22, speed: 105, crewSlots: 5,
+    unlockPriorSave: true, blurb: "veteran skunkworks" },
 ];
+
+// Prior-save check for veteran hull unlocks. Cheap enough to call per frame
+// in the ship-create screen (localStorage.length is a plain int).
+function hasPriorSave(): boolean {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(SAVE_PREFIX)) return true;
+    }
+  } catch { /* localStorage blocked — treat as no priors */ }
+  return false;
+}
+
+function unlockedShipHulls(species: string): typeof SHIP_HULLS {
+  const prior = hasPriorSave();
+  return SHIP_HULLS.filter((h) => {
+    if (h.unlockPriorSave && !prior) return false;
+    if (h.unlockSpecies && !h.unlockSpecies.includes(species as SpeciesName)) return false;
+    return true;
+  });
+}
 
 const WEAPONS = [
   { id: "pulse", name: "Pulse Laser", dmg: 6, cooldown: 0.25, range: 350 },
