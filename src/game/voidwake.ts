@@ -1333,14 +1333,20 @@ function makeBullet(owner: Entity, dir: Vec3): Entity {
 // =============================================================================
 function makePlayer(char: PlayerChar, hullId: string): PlayerState {
   const hull = SHIP_HULLS.find((h) => h.id === hullId) ?? SHIP_HULLS[0];
+  // Apply species multipliers once at creation. All are clamped to reasonable
+  // integers so displayed stats stay clean.
+  const s = speciesOf(char.species);
+  const hullMax   = Math.max(1, Math.round(hull.hull   * (s.hullMul   ?? 1)));
+  const shieldMax = Math.max(0, Math.round(hull.shield * (s.shieldMul ?? 1)));
+  const cargoMax  = Math.max(1, Math.round(hull.cargo  * (s.cargoMul  ?? 1)));
   return {
     char,
     ship: {
       hullId: hull.id,
-      hull: hull.hull, hullMax: hull.hull,
-      shield: hull.shield, shieldMax: hull.shield,
+      hull: hullMax, hullMax,
+      shield: shieldMax, shieldMax,
       fuel: 100, fuelMax: 100,
-      cargoMax: hull.cargo,
+      cargoMax,
       speed: hull.speed,
       weaponId: "pulse",
       modules: ["basic-scanner"],
