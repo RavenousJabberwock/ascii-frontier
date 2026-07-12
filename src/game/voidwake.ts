@@ -5266,6 +5266,7 @@ export class Voidwake {
       const c = this.stationItems[i];
       if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
+      else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Undock")  {
