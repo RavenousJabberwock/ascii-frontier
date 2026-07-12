@@ -116,12 +116,13 @@ See [`src/game/README.md`](src/game/README.md) for extension recipes.
 
 | Want to add…          | Where                                                                    |
 | --------------------- | ------------------------------------------------------------------------ |
-| New ship hull         | Append to `SHIP_HULLS` in `voidwake.ts`                                  |
-| New species           | Append to `SPECIES`                                                      |
-| New weapon            | Append to `WEAPONS`                                                      |
+| New ship hull         | Append to `SHIP_HULLS` in `voidwake.ts` (add `unlockSpecies` / `unlockPriorSave` for gated hulls) |
+| New species           | Append to `SPECIES` **and** `SPECIES_INFO` (bonus / drawback / affinity) |
+| New weapon            | Append to `WEAPONS` (works in both pilot and gunner slots)               |
 | New entity kind       | Extend `EntityKind`, add generator + AI handler + entry in `GLYPHS`      |
 | New mission type      | Extend `MissionKind`, handle in `generateMission()` and `tickMissions()` |
 | New HUD element       | Add a draw call in the Renderer section's `renderPlaying()`              |
+
 
 ---
 

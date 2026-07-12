@@ -84,3 +84,32 @@ All driven by a tiny FX queue (`{x,y,glyph,color,ttl}[]`) drained each render �
 - No new art pipeline — everything remains ASCII-rendered to canvas.
 
 Approve and I'll implement in one pass, verify the build, and refresh the offline bundle.
+
+---
+
+## Backlog / To-Do
+
+The following larger ideas are logged for future passes:
+
+- **Hire xenos** — allow the player to recruit UFO / anomalous-Thargoid-like
+  pilots after they've encountered that xeno faction ~N times in the current
+  game. Requires a per-faction encounter counter on `PlayerState`, gated
+  hire prompts at stations, and role-appropriate stat modifiers.
+- **Ship-to-ship ore trade** — approach a friendly or neutral ship within
+  50u and "dock" with it like a station to open a small buy/sell ore
+  interface. Uses the docking cooldown and a lightweight per-ship stock
+  generated from the ship's faction/prices.
+- **Small orbital stations** — planet-orbiting mini-stations with a reduced
+  station page (market only, no crew / modules). Generated 0–2 per planet
+  based on population/faction.
+- **Friendly-ship rescue AI** — friendly ships within 100u of a player (or
+  another friendly) under fire vector toward the aggressor and engage,
+  reusing the existing hostile-AI attack state.
+- **Rare cross-universe spawns** (rolled at universe generation, stored on
+  the seed blob):
+  - 1% chance of a **UFO Mothership** somewhere in the map (huge hull,
+    escorted, high-value bounty / boarding reward).
+  - 5% chance of an **anomalous "Thargoid" homeworld** with a permanent
+    swarm of anomalous fighters orbiting it.
+  - Every universe seeds 1–6 **desolate alien planets with ruins**; scanning
+    one grants a chunk of XP + Codex entry.

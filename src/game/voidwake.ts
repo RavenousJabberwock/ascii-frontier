@@ -417,15 +417,120 @@ const TITLE_TIPS = [
   "Save often. Permadeath is opt-in for a reason.",
 ];
 
-const SPECIES = ["Human", "Android", "Reptilian", "Aquilan", "Drift-born"];
+// Species catalog. Each entry has a passive (applied when the *player's*
+// species matches) and a role affinity (a *crew member* of this species
+// gets a small extra boost when serving in that role). Every species must
+// have some upside and some drawback — no strict winners.
+//
+// Player passives are woven into the effective*() helpers, and hull /
+// shield / cargo multipliers apply once at makePlayer(). Crew affinity
+// stacks multiplicatively with the base role perk in the same helpers
+// (see crewRoleMul() below).
+const SPECIES = [
+  "Human", "Android", "Reptilian", "Aquilan", "Drift-born",
+  "Sylph", "Voidkin", "Chorus",
+] as const;
+type SpeciesName = typeof SPECIES[number];
+
+interface SpeciesInfo {
+  bonus: string;
+  drawback: string;
+  // Player passives (all optional; default 1.0 / 0):
+  radarBonus?: number;         // flat +u to radar range
+  cooldownMul?: number;        // weapon cooldown multiplier (<1 = faster)
+  topSpeedMul?: number;        // top-speed multiplier
+  fuelMul?: number;            // fuel-burn multiplier (<1 = less)
+  sellMul?: number;            // extra sell-price mult (stacks on merchant)
+  buyMul?: number;             // extra buy-price mult (stacks on merchant)
+  hullMul?: number;            // initial hullMax scale
+  shieldMul?: number;          // initial shieldMax scale
+  cargoMul?: number;           // initial cargoMax scale
+  xpMul?: number;              // XP-gain multiplier
+  affinity?: CrewRole;         // role this species is naturally good at
+  // Ship-hull unlocks (see SHIP_HULLS below).
+  hullUnlocks?: string[];
+}
+
+const SPECIES_INFO: Record<SpeciesName, SpeciesInfo> = {
+  Human:       { bonus: "Adaptable — +3% sell / -3% buy prices",       drawback: "No standout strength",
+                 sellMul: 1.03, buyMul: 0.97, affinity: "merchant", hullUnlocks: ["explorer"] },
+  Android:     { bonus: "Efficient reactor — -15% fuel burn",           drawback: "-10% hull max",
+                 fuelMul: 0.85, hullMul: 0.90, affinity: "engineer", hullUnlocks: ["nomad"] },
+  Reptilian:   { bonus: "Cold-blooded gunnery — -10% weapon cooldown",  drawback: "-10% shield max",
+                 cooldownMul: 0.90, shieldMul: 0.90, affinity: "gunner", hullUnlocks: ["warhawk"] },
+  Aquilan:     { bonus: "Sharp senses — +250u radar range",             drawback: "+5% fuel burn",
+                 radarBonus: 250, fuelMul: 1.05, affinity: "pilot", hullUnlocks: ["skyeye"] },
+  "Drift-born":{ bonus: "Void-native — +10% XP earned",                 drawback: "-5% top speed (fragile bones)",
+                 xpMul: 1.10, topSpeedMul: 0.95, affinity: "merchant", hullUnlocks: ["driftbarge"] },
+  Sylph:       { bonus: "Lightframe — +8% top speed, +200u radar",      drawback: "-15% hull max",
+                 topSpeedMul: 1.08, radarBonus: 200, hullMul: 0.85, affinity: "pilot", hullUnlocks: ["skyeye"] },
+  Voidkin:     { bonus: "Radiation-tolerant — +10% shield max",         drawback: "-10% cargo capacity",
+                 shieldMul: 1.10, cargoMul: 0.90, affinity: "engineer", hullUnlocks: ["nomad"] },
+  Chorus:      { bonus: "Hive-minded — +8% XP, faster crew perks",      drawback: "-5% top speed",
+                 xpMul: 1.08, topSpeedMul: 0.95, affinity: "merchant", hullUnlocks: ["explorer"] },
+};
+
+function speciesOf(name: string | undefined): SpeciesInfo {
+  return SPECIES_INFO[(name as SpeciesName)] ?? SPECIES_INFO.Human;
+}
 
 // Ship hull catalog. Add entries to expose new hulls to character creation.
-const SHIP_HULLS = [
-  { id: "scout", name: "Sparrow Scout", hull: 60, shield: 40, cargo: 12, speed: 90, crewSlots: 1 },
-  { id: "trader", name: "Mule Freighter", hull: 110, shield: 60, cargo: 64, speed: 55, crewSlots: 4 },
-  { id: "fighter", name: "Wasp Interceptor", hull: 80, shield: 90, cargo: 8, speed: 110, crewSlots: 2 },
-  { id: "miner", name: "Pickaxe Industrial", hull: 130, shield: 50, cargo: 40, speed: 50, crewSlots: 3 },
+// crewSlots is the base berth count; the "Crew Quarters" module still adds
+// +1 on top. Every hull now supports up to 2 additional berths beyond the
+// old baseline so larger crews are actually assemblable.
+//
+// unlockSpecies:  hull only appears in ship-create if the player's species
+//                 is listed (or the list is undefined = always available).
+// unlockPriorSave: hull requires at least one prior save in localStorage
+//                 (a "veteran" hull unlocked after your first commander).
+const SHIP_HULLS: Array<{
+  id: string; name: string; hull: number; shield: number;
+  cargo: number; speed: number; crewSlots: number;
+  unlockSpecies?: SpeciesName[]; unlockPriorSave?: boolean;
+  blurb?: string;
+}> = [
+  { id: "scout",   name: "Sparrow Scout",       hull: 60,  shield: 40, cargo: 12, speed: 90,  crewSlots: 3 },
+  { id: "trader",  name: "Mule Freighter",      hull: 110, shield: 60, cargo: 64, speed: 55,  crewSlots: 6 },
+  { id: "fighter", name: "Wasp Interceptor",    hull: 80,  shield: 90, cargo: 8,  speed: 110, crewSlots: 4 },
+  { id: "miner",   name: "Pickaxe Industrial",  hull: 130, shield: 50, cargo: 40, speed: 50,  crewSlots: 5 },
+  // Species-locked hulls.
+  { id: "warhawk",   name: "Warhawk Gunship",     hull: 120, shield: 110, cargo: 14, speed: 100, crewSlots: 4,
+    unlockSpecies: ["Reptilian"], blurb: "Reptilian gunnery frame" },
+  { id: "skyeye",    name: "Skyeye Recon",        hull: 70,  shield: 55,  cargo: 18, speed: 120, crewSlots: 3,
+    unlockSpecies: ["Aquilan", "Sylph"], blurb: "long-range recon hull" },
+  { id: "nomad",     name: "Nomad Cell-Ship",     hull: 140, shield: 70,  cargo: 30, speed: 65,  crewSlots: 5,
+    unlockSpecies: ["Android", "Voidkin"], blurb: "self-repairing cell-ship" },
+  { id: "driftbarge",name: "Drift Barge",         hull: 160, shield: 55,  cargo: 90, speed: 45,  crewSlots: 6,
+    unlockSpecies: ["Drift-born"], blurb: "clan hauler" },
+  { id: "explorer",  name: "Wayfarer Explorer",   hull: 95,  shield: 70,  cargo: 26, speed: 85,  crewSlots: 5,
+    unlockSpecies: ["Human", "Chorus"], blurb: "balanced explorer" },
+  // Veteran hulls — require at least one prior save on this device.
+  { id: "veteran",   name: "Veteran Corvette",    hull: 130, shield: 100, cargo: 20, speed: 95,  crewSlots: 5,
+    unlockPriorSave: true, blurb: "unlocked after your first commander" },
+  { id: "phoenix",   name: "Phoenix Prototype",   hull: 110, shield: 90,  cargo: 22, speed: 105, crewSlots: 5,
+    unlockPriorSave: true, blurb: "veteran skunkworks" },
 ];
+
+// Prior-save check for veteran hull unlocks. Cheap enough to call per frame
+// in the ship-create screen (localStorage.length is a plain int).
+function hasPriorSave(): boolean {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(SAVE_PREFIX)) return true;
+    }
+  } catch { /* localStorage blocked — treat as no priors */ }
+  return false;
+}
+
+function unlockedShipHulls(species: string): typeof SHIP_HULLS {
+  const prior = hasPriorSave();
+  return SHIP_HULLS.filter((h) => {
+    if (h.unlockPriorSave && !prior) return false;
+    if (h.unlockSpecies && !h.unlockSpecies.includes(species as SpeciesName)) return false;
+    return true;
+  });
+}
 
 const WEAPONS = [
   { id: "pulse", name: "Pulse Laser", dmg: 6, cooldown: 0.25, range: 350 },
@@ -514,6 +619,11 @@ interface PlayerShip {
   cargoMax: number;
   speed: number;
   weaponId: string;
+  // Optional dedicated Gunner weapon. When set, updateGunner() fires this
+  // weapon instead of the pilot's. Purchased at the station's "Gunner Bay"
+  // page. Undefined on legacy saves — the gunner falls back to the pilot
+  // weapon in that case.
+  gunnerWeaponId?: string;
   modules: string[];
 }
 
@@ -1223,14 +1333,20 @@ function makeBullet(owner: Entity, dir: Vec3): Entity {
 // =============================================================================
 function makePlayer(char: PlayerChar, hullId: string): PlayerState {
   const hull = SHIP_HULLS.find((h) => h.id === hullId) ?? SHIP_HULLS[0];
+  // Apply species multipliers once at creation. All are clamped to reasonable
+  // integers so displayed stats stay clean.
+  const s = speciesOf(char.species);
+  const hullMax   = Math.max(1, Math.round(hull.hull   * (s.hullMul   ?? 1)));
+  const shieldMax = Math.max(0, Math.round(hull.shield * (s.shieldMul ?? 1)));
+  const cargoMax  = Math.max(1, Math.round(hull.cargo  * (s.cargoMul  ?? 1)));
   return {
     char,
     ship: {
       hullId: hull.id,
-      hull: hull.hull, hullMax: hull.hull,
-      shield: hull.shield, shieldMax: hull.shield,
+      hull: hullMax, hullMax,
+      shield: shieldMax, shieldMax,
       fuel: 100, fuelMax: 100,
-      cargoMax: hull.cargo,
+      cargoMax,
       speed: hull.speed,
       weaponId: "pulse",
       modules: ["basic-scanner"],
@@ -1250,7 +1366,10 @@ function makePlayer(char: PlayerChar, hullId: string): PlayerState {
 }
 
 function awardXP(p: PlayerState, n: number) {
-  p.xp += n;
+  // Player-species XP multiplier (Drift-born / Chorus). Rounded to avoid
+  // fractional-XP drift accumulating over long sessions.
+  const mul = speciesOf(p.char.species).xpMul ?? 1;
+  p.xp += Math.max(0, Math.round(n * mul));
   const ranks = ["Harmless", "Mostly Harmless", "Novice", "Competent", "Expert", "Master", "Elite"];
   const idx = Math.min(ranks.length - 1, Math.floor(p.xp / 200));
   p.rank = ranks[idx];
@@ -1370,6 +1489,8 @@ function effectiveRadarRange(p: PlayerState): number {
   if (hasCrew(p, "engineer")) r += 150;
   if (p.ship.modules.includes("sensor-array")) r += 600;
   if (p.ship.modules.includes("long-range-scanner")) r += 1000;
+  // Player-species passive: Aquilan / Sylph get an innate scope bonus.
+  r += speciesOf(p.char.species).radarBonus ?? 0;
   return r;
 }
 
@@ -1379,22 +1500,47 @@ function effectiveRadarRange(p: PlayerState): number {
 // tick and the collision-speed estimate can't drift apart.
 function effectiveTopSpeed(p: PlayerState): number {
   const tune = p.ship.modules.includes("engine-tune") ? 1.15 : 1.0;
-  return p.ship.speed * tune;
+  const speciesMul = speciesOf(p.char.species).topSpeedMul ?? 1;
+  return p.ship.speed * tune * speciesMul;
 }
 function effectiveBoostMul(p: PlayerState): number {
   return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
 }
-// Auto-Loader trims weapon cooldown by 15%.
+// Auto-Loader trims weapon cooldown by 15%. Reptilians shave another 10%.
 function effectiveCooldownMul(p: PlayerState): number {
-  return p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
+  const modMul = p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
+  const speciesMul = speciesOf(p.char.species).cooldownMul ?? 1;
+  return modMul * speciesMul;
+}
+// Species fuel-burn multiplier applied on top of the boost/supercruise/
+// engineer stack. Android burns less; Aquilan burns slightly more.
+function speciesFuelMul(p: PlayerState): number {
+  return speciesOf(p.char.species).fuelMul ?? 1;
 }
 
 // Merchant on-crew? Sell/buy price multipliers applied at station markets.
+// Player-species passives (Human sellMul/buyMul) stack multiplicatively so
+// a Human without a merchant already gets a small edge, and hiring one
+// widens the spread. A merchant whose species has "merchant" affinity
+// (Human / Drift-born / Chorus) squeezes an extra 3%.
 function merchantSellMult(p: PlayerState): number {
-  return hasCrew(p, "merchant") ? 1.15 : 1.0;
+  const base = hasCrew(p, "merchant") ? 1.15 : 1.0;
+  const affinity = crewAffinityBonus(p, "merchant");
+  return base * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
 }
 function merchantBuyMult(p: PlayerState): number {
-  return hasCrew(p, "merchant") ? 0.90 : 1.0;
+  const base = hasCrew(p, "merchant") ? 0.90 : 1.0;
+  const affinity = crewAffinityBonus(p, "merchant");
+  return base * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
+}
+// Small bonus when the on-crew member of `role` is a species with an
+// affinity for that role. Returns 0..0.05 range (roughly +5%).
+function crewAffinityBonus(p: PlayerState, role: CrewRole): number {
+  if (!hasCrew(p, role)) return 0;
+  const c = role === "gunner" ? p.gunner : getCrew(p, role);
+  if (!c) return 0;
+  const s = speciesOf(c.species);
+  return s.affinity === role ? 0.05 : 0;
 }
 function hasCrew(p: PlayerState, role: CrewRole): boolean {
   if (role === "gunner") return !!p.gunner;
@@ -2238,7 +2384,7 @@ export class Voidwake {
   // Comms / chatter feed (max ~6 lines kept). See pushChatter / renderChatter.
   chatter: ChatterLine[] = [];
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "modules" | "crew" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
   // Throttles for periodic respawning from stations / planets / pirate bases.
@@ -3148,7 +3294,7 @@ export class Voidwake {
     const left = this.input.consume("arrowleft");
     const right = this.input.consume("arrowright");
     if (field === "species") {
-      const i = SPECIES.indexOf(this.charDraft.species);
+      const i = SPECIES.indexOf(this.charDraft.species as SpeciesName);
       if (left) this.charDraft.species = SPECIES[(i - 1 + SPECIES.length) % SPECIES.length];
       if (right) this.charDraft.species = SPECIES[(i + 1) % SPECIES.length];
     } else if (field === "gender") {
@@ -3197,15 +3343,20 @@ export class Voidwake {
 
 
   // --- Ship creation -------------------------------------------------------
+  // Hulls available for the picker are filtered by player species and the
+  // presence of any prior save (veteran hulls). Clamped when the pool
+  // changes so an out-of-range cursor snaps to zero on species change.
   updateShipCreate() {
     const items = ["hull", "weapon", "Launch →"];
     this.menuNav(items.length);
     const left = this.input.consume("arrowleft");
     const right = this.input.consume("arrowright");
     const f = items[this.menuCursor];
+    const hulls = unlockedShipHulls(this.charDraft.species);
+    if (this.hullDraftIdx >= hulls.length) this.hullDraftIdx = 0;
     if (f === "hull") {
-      if (left) this.hullDraftIdx = (this.hullDraftIdx - 1 + SHIP_HULLS.length) % SHIP_HULLS.length;
-      if (right) this.hullDraftIdx = (this.hullDraftIdx + 1) % SHIP_HULLS.length;
+      if (left) this.hullDraftIdx = (this.hullDraftIdx - 1 + hulls.length) % hulls.length;
+      if (right) this.hullDraftIdx = (this.hullDraftIdx + 1) % hulls.length;
     } else if (f === "weapon") {
       if (left) this.weaponDraftIdx = (this.weaponDraftIdx - 1 + WEAPONS.length) % WEAPONS.length;
       if (right) this.weaponDraftIdx = (this.weaponDraftIdx + 1) % WEAPONS.length;
@@ -3218,7 +3369,9 @@ export class Voidwake {
     this.seed = (Math.random() * 1e9) | 0;
     this.rng = mulberry32(this.seed);
     this.entities = generateUniverse(this.seed);
-    this.player = makePlayer(this.charDraft, SHIP_HULLS[this.hullDraftIdx].id);
+    const hulls = unlockedShipHulls(this.charDraft.species);
+    const hullId = hulls[Math.min(this.hullDraftIdx, hulls.length - 1)]?.id ?? SHIP_HULLS[0].id;
+    this.player = makePlayer(this.charDraft, hullId);
     this.player.ship.weaponId = WEAPONS[this.weaponDraftIdx].id;
     this.player.mission = this.generateMission();
     this.screen = "playing";
@@ -3334,7 +3487,7 @@ export class Voidwake {
     const boostMul = (boosting ? effectiveBoostMul(p) : 1.0) * (supercruise ? 3.0 : 1.0);
     // Engineer perk: -20% fuel burn.
     const engineerMul = hasCrew(p, "engineer") ? 0.80 : 1.0;
-    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul;
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * speciesFuelMul(p);
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
@@ -3875,8 +4028,14 @@ export class Voidwake {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
+          // ownerId -2 = gunner-fired shot: use the gunner weapon slot if it
+          // exists, otherwise fall back to the pilot's weapon.
+          const gunnerFired = playerShot && e.ownerId === -2;
+          const shooterWepId = gunnerFired
+            ? (this.player?.ship.gunnerWeaponId ?? this.player?.ship.weaponId)
+            : this.player?.ship.weaponId;
           const dmg = playerShot
-            ? (WEAPONS.find((x) => x.id === (this.player?.ship.weaponId)) ?? WEAPONS[0]).dmg
+            ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
           if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
           else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
@@ -4273,7 +4432,10 @@ export class Voidwake {
 
     const tag = `Gunner ${g.name.split(" ")[0]}`;
     if (best.kind === "hostile") {
-      const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+      // Gunner fires their dedicated weapon if one is installed, else falls
+      // back to the pilot's. Purchased via the station's "Gunner Bay" page.
+      const gunnerWepId = p.ship.gunnerWeaponId ?? p.ship.weaponId;
+      const w = WEAPONS.find((x) => x.id === gunnerWepId) ?? WEAPONS[0];
       if (bestDist > w.range) return;
       if (g.cooldown > 0) return;
       g.cooldown = w.cooldown * 1.15 * effectiveCooldownMul(p);   // slightly slower than manual fire
@@ -5012,7 +5174,7 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Weapon Bay", "Module Shop", "Crew", "Undock"];
+  stationItems = ["Market", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
 
   // Build the visible item list for the current station page so the
   // renderer and update loop stay in lockstep (cursor indexes line up).
@@ -5041,6 +5203,27 @@ export class Voidwake {
         }),
         "Back",
       ];
+    }
+    if (this.stationPage === "gunner-bay") {
+      // Gunner-only weapon slot. Requires a hired gunner to be useful, but
+      // the slot is buyable ahead of hiring so the player can pre-outfit.
+      const rows: string[] = [];
+      if (!p.gunner) rows.push("~ No gunner hired — buy anyway, or dismiss first ~");
+      // "Unmount" line clears the gunner's dedicated weapon so they revert
+      // to firing the pilot weapon.
+      if (p.ship.gunnerWeaponId) {
+        const cur = WEAPONS.find((w) => w.id === p.ship.gunnerWeaponId);
+        rows.push(`Unmount current: ${cur?.name ?? p.ship.gunnerWeaponId}`);
+      }
+      rows.push(...stock.weapons.map((w) => {
+        const def = WEAPONS.find((x) => x.id === w.id)!;
+        // Gunner-slot weapons sell at a 25% premium (dedicated mount hardware).
+        const price = Math.round(w.price * 1.25);
+        const owned = p.ship.gunnerWeaponId === w.id ? " (gunner-equipped)" : "";
+        return `${def.name} — ${price}cr${owned}`;
+      }));
+      rows.push("Back");
+      return rows;
     }
     if (this.stationPage === "modules") {
       return [
@@ -5090,6 +5273,7 @@ export class Voidwake {
       const c = this.stationItems[i];
       if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
+      else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Undock")  {
@@ -5139,6 +5323,31 @@ export class Voidwake {
       p.credits -= price;
       p.ship.weaponId = offer.id;
       this.pushLog(`Equipped ${WEAPONS.find((w) => w.id === offer.id)!.name}.`);
+      return;
+    }
+
+    if (this.stationPage === "gunner-bay") {
+      // Header row + optional "Unmount" line shift the weapon indices.
+      const rows = lines;
+      const label = rows[i];
+      if (!label || label.startsWith("~")) return;
+      if (label.startsWith("Unmount current:")) {
+        p.ship.gunnerWeaponId = undefined;
+        this.pushLog("Gunner mount unloaded.");
+        return;
+      }
+      // Match the offer by name prefix (rows contain "Name — Ncr[ (owned)]").
+      const offer = stock.weapons.find((w) => {
+        const def = WEAPONS.find((x) => x.id === w.id);
+        return def && label.startsWith(def.name);
+      });
+      if (!offer) return;
+      const price = Math.round(offer.price * 1.25 * merchantBuyMult(p));
+      if (p.ship.gunnerWeaponId === offer.id) { this.pushLog("Already gunner-equipped."); return; }
+      if (p.credits < price) { this.pushLog("Not enough credits."); return; }
+      p.credits -= price;
+      p.ship.gunnerWeaponId = offer.id;
+      this.pushLog(`Gunner armed with ${WEAPONS.find((w) => w.id === offer.id)!.name}.`);
       return;
     }
 
@@ -5588,14 +5797,26 @@ export class Voidwake {
       const sel = i === this.menuCursor;
       putText(g, 6, 6 + i * 2, (sel ? "▸ " : "  ") + r, sel ? "#fff" : "#9fe");
     });
+    // Species blurb — always shown so the player sees the trade-off before
+    // committing. Placed a few rows below the field list.
+    const info = speciesOf(c.species);
+    putText(g, 6, 6 + rows.length * 2 + 1, `+ ${info.bonus}`,  "#7CFC00");
+    putText(g, 6, 6 + rows.length * 2 + 2, `- ${info.drawback}`, "#fc6");
+    if (info.affinity) {
+      putText(g, 6, 6 + rows.length * 2 + 3,
+        `crew affinity: ${CREW_ROLE_INFO[info.affinity].title}`, "#9fe");
+    }
   }
 
   renderShipCreate(g: Cell[][]) {
     putText(g, 4, 2, "OUTFIT SHIP", "#7CFC00");
-    const hull = SHIP_HULLS[this.hullDraftIdx];
+    const hulls = unlockedShipHulls(this.charDraft.species);
+    const idx = Math.min(this.hullDraftIdx, hulls.length - 1);
+    const hull = hulls[idx] ?? SHIP_HULLS[0];
     const wep = WEAPONS[this.weaponDraftIdx];
+    const blurb = hull.blurb ? `  — ${hull.blurb}` : "";
     const rows = [
-      `hull:   ${hull.name}   (HP ${hull.hull}, SH ${hull.shield}, cargo ${hull.cargo}, spd ${hull.speed})`,
+      `hull:   ${hull.name}   (HP ${hull.hull}, SH ${hull.shield}, cargo ${hull.cargo}, spd ${hull.speed}, crew ${hull.crewSlots})${blurb}`,
       `weapon: ${wep.name}   (dmg ${wep.dmg}, cd ${wep.cooldown}s, rng ${wep.range})`,
       `Launch →`,
     ];
@@ -5603,6 +5824,9 @@ export class Voidwake {
       const sel = i === this.menuCursor;
       putText(g, 6, 6 + i * 2, (sel ? "▸ " : "  ") + r, sel ? "#fff" : "#9fe");
     });
+    putText(g, 4, 6 + rows.length * 2 + 1,
+      `available hulls: ${hulls.length}  (species: ${this.charDraft.species}${hasPriorSave() ? ", veteran unlocks" : ""})`,
+      "#888");
     putText(g, 4, g.length - 2, "←/→ change   ↑/↓ field   ENTER confirm", "#888");
   }
 
