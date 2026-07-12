@@ -264,6 +264,26 @@ can't cover the full bill you pay whatever's on hand and the crew grumbles
 in the COMMS feed — the shortfall is currently just cosmetic, but hooks are
 in place for a real morale system later.
 
+## Outfitting (module shop)
+
+Dock at a station and open **Module Shop** to buy passive upgrades. Each
+station carries a rotating slice of the catalog (2–5 modules per stop) at
+±20% price jitter. All modules are single-install — dupes are blocked.
+
+| Module | Price (base) | Effect |
+|---|---|---|
+| Cargo Expander | 800cr | +12 cargo capacity |
+| Shield Booster | 1100cr | +25 shield max (also refills) |
+| Afterburner OD | 650cr | boost multiplier 1.6× → 1.92× |
+| Auto-Loader | 900cr | −15% weapon cooldown (player + gunner) |
+| Loot Magnet | 500cr | pickup radius 20u → 60u |
+| Crew Quarters | 1400cr | +1 crew berth |
+| Sensor Array | 950cr | +600u radar range |
+| Engine Tune | 1200cr | +15% top speed |
+| Reinforced Plating | 1000cr | +40 hull max (also repairs 40) |
+| Aux Fuel Tank | 700cr | +50 fuel max (also refills 50) |
+| Long-Range Scanner | 1300cr | +1000u radar range (stacks with Sensor Array) |
+
 ## Notorious pirate captains
 
 Roughly 5% of respawned raiders are named captains (Warlord / Blackwake /
