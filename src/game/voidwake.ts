@@ -5167,7 +5167,7 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Weapon Bay", "Module Shop", "Crew", "Undock"];
+  stationItems = ["Market", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
 
   // Build the visible item list for the current station page so the
   // renderer and update loop stay in lockstep (cursor indexes line up).
