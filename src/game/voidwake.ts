@@ -2384,7 +2384,7 @@ export class Voidwake {
   // Comms / chatter feed (max ~6 lines kept). See pushChatter / renderChatter.
   chatter: ChatterLine[] = [];
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "modules" | "crew" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
   // Throttles for periodic respawning from stations / planets / pirate bases.
