@@ -1519,11 +1519,28 @@ function speciesFuelMul(p: PlayerState): number {
 }
 
 // Merchant on-crew? Sell/buy price multipliers applied at station markets.
+// Player-species passives (Human sellMul/buyMul) stack multiplicatively so
+// a Human without a merchant already gets a small edge, and hiring one
+// widens the spread. A merchant whose species has "merchant" affinity
+// (Human / Drift-born / Chorus) squeezes an extra 3%.
 function merchantSellMult(p: PlayerState): number {
-  return hasCrew(p, "merchant") ? 1.15 : 1.0;
+  const base = hasCrew(p, "merchant") ? 1.15 : 1.0;
+  const affinity = crewAffinityBonus(p, "merchant");
+  return base * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
 }
 function merchantBuyMult(p: PlayerState): number {
-  return hasCrew(p, "merchant") ? 0.90 : 1.0;
+  const base = hasCrew(p, "merchant") ? 0.90 : 1.0;
+  const affinity = crewAffinityBonus(p, "merchant");
+  return base * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
+}
+// Small bonus when the on-crew member of `role` is a species with an
+// affinity for that role. Returns 0..0.05 range (roughly +5%).
+function crewAffinityBonus(p: PlayerState, role: CrewRole): number {
+  if (!hasCrew(p, role)) return 0;
+  const c = role === "gunner" ? p.gunner : getCrew(p, role);
+  if (!c) return 0;
+  const s = speciesOf(c.species);
+  return s.affinity === role ? 0.05 : 0;
 }
 function hasCrew(p: PlayerState, role: CrewRole): boolean {
   if (role === "gunner") return !!p.gunner;
