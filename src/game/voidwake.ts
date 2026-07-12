@@ -3331,7 +3331,7 @@ export class Voidwake {
     // Supercruise: hold for 3x speed at 3x fuel burn. Stacks with afterburner
     // but locks weapons (no fire while super-cruising) so it stays a travel tool.
     const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
-    const boostMul = (boosting ? 1.6 : 1.0) * (supercruise ? 3.0 : 1.0);
+    const boostMul = (boosting ? effectiveBoostMul(p) : 1.0) * (supercruise ? 3.0 : 1.0);
     // Engineer perk: -20% fuel burn.
     const engineerMul = hasCrew(p, "engineer") ? 0.80 : 1.0;
     const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul;
@@ -3342,7 +3342,7 @@ export class Voidwake {
     if (p.ship.fuel > 0) {
       // Powered flight: normal thrust. Cache the current velocity so if we
       // stall out mid-frame we keep drifting instead of snapping to zero.
-      const sp = p.ship.speed * p.throttle * boostMul;
+      const sp = effectiveTopSpeed(p) * p.throttle * boostMul;
       const thrustV = V.scale(fwd, sp);
       p.pos = V.add(p.pos, V.scale(thrustV, dt));
       p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
@@ -3637,7 +3637,7 @@ export class Voidwake {
     const _scState = (this as unknown as { _supercruise?: boolean })._supercruise;
     if (keys.has(k.fire) && p.cooldown <= 0 && !this.options.peaceful && p.ship.fuel >= 0 && !_scState && !this._empActive) {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
-      p.cooldown = w.cooldown;
+      p.cooldown = w.cooldown * effectiveCooldownMul(p);
       this.entities.push({
         id: nextId(), kind: "bullet", name: "shot",
         pos: { ...p.pos }, vel: V.scale(fwd, 260),
@@ -3732,7 +3732,7 @@ export class Voidwake {
       // Approximate current absolute speed (u/s). Uses drift velocity when
       // fuel is out, otherwise the powered-thrust estimate.
       const currentSpeed = p.ship.fuel > 0
-        ? p.ship.speed * p.throttle * (keys.has(k.boost) ? 1.6 : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
+        ? effectiveTopSpeed(p) * p.throttle * (keys.has(k.boost) ? effectiveBoostMul(p) : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
         : V.len(p.driftVel ?? { x: 0, y: 0, z: 0 });
       for (const e of this.entities) {
         // Also collide vs NPC ships (any faction). Ramming a ship costs both
@@ -4276,7 +4276,7 @@ export class Voidwake {
       const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
       if (bestDist > w.range) return;
       if (g.cooldown > 0) return;
-      g.cooldown = w.cooldown * 1.15;   // slightly slower than manual fire
+      g.cooldown = w.cooldown * 1.15 * effectiveCooldownMul(p);   // slightly slower than manual fire
       this.entities.push({
         id: nextId(), kind: "bullet", name: "shot",
         pos: { ...p.pos }, vel: V.scale(fwd, 260),
@@ -6495,7 +6495,7 @@ export class Voidwake {
     putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, shieldCol);
     putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, fuelCol);
     putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%`, "#9fe");
-    putText(g, panelX, vpTop + 10, `Speed ${(p.ship.speed * p.throttle).toFixed(0)} u/s`, "#9fe");
+    putText(g, panelX, vpTop + 10, `Speed ${(effectiveTopSpeed(p) * p.throttle).toFixed(0)} u/s`, "#9fe");
     putText(g, panelX, vpTop + 12, `Cargo ${cargoTotal(p)}/${p.ship.cargoMax}`, "#9fe");
     let cy2 = vpTop + 13;
     for (const [k, v] of Object.entries(p.cargo)) putText(g, panelX + 1, cy2++, `· ${k}: ${v}`, "#aea");
