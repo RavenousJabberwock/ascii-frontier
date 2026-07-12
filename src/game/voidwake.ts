@@ -4021,8 +4021,14 @@ export class Voidwake {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
+          // ownerId -2 = gunner-fired shot: use the gunner weapon slot if it
+          // exists, otherwise fall back to the pilot's weapon.
+          const gunnerFired = playerShot && e.ownerId === -2;
+          const shooterWepId = gunnerFired
+            ? (this.player?.ship.gunnerWeaponId ?? this.player?.ship.weaponId)
+            : this.player?.ship.weaponId;
           const dmg = playerShot
-            ? (WEAPONS.find((x) => x.id === (this.player?.ship.weaponId)) ?? WEAPONS[0]).dmg
+            ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
           if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
           else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
