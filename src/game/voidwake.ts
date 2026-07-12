@@ -1489,6 +1489,8 @@ function effectiveRadarRange(p: PlayerState): number {
   if (hasCrew(p, "engineer")) r += 150;
   if (p.ship.modules.includes("sensor-array")) r += 600;
   if (p.ship.modules.includes("long-range-scanner")) r += 1000;
+  // Player-species passive: Aquilan / Sylph get an innate scope bonus.
+  r += speciesOf(p.char.species).radarBonus ?? 0;
   return r;
 }
 
@@ -1498,14 +1500,22 @@ function effectiveRadarRange(p: PlayerState): number {
 // tick and the collision-speed estimate can't drift apart.
 function effectiveTopSpeed(p: PlayerState): number {
   const tune = p.ship.modules.includes("engine-tune") ? 1.15 : 1.0;
-  return p.ship.speed * tune;
+  const speciesMul = speciesOf(p.char.species).topSpeedMul ?? 1;
+  return p.ship.speed * tune * speciesMul;
 }
 function effectiveBoostMul(p: PlayerState): number {
   return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
 }
-// Auto-Loader trims weapon cooldown by 15%.
+// Auto-Loader trims weapon cooldown by 15%. Reptilians shave another 10%.
 function effectiveCooldownMul(p: PlayerState): number {
-  return p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
+  const modMul = p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
+  const speciesMul = speciesOf(p.char.species).cooldownMul ?? 1;
+  return modMul * speciesMul;
+}
+// Species fuel-burn multiplier applied on top of the boost/supercruise/
+// engineer stack. Android burns less; Aquilan burns slightly more.
+function speciesFuelMul(p: PlayerState): number {
+  return speciesOf(p.char.species).fuelMul ?? 1;
 }
 
 // Merchant on-crew? Sell/buy price multipliers applied at station markets.
