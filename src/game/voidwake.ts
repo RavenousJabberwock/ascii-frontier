@@ -619,6 +619,11 @@ interface PlayerShip {
   cargoMax: number;
   speed: number;
   weaponId: string;
+  // Optional dedicated Gunner weapon. When set, updateGunner() fires this
+  // weapon instead of the pilot's. Purchased at the station's "Gunner Bay"
+  // page. Undefined on legacy saves — the gunner falls back to the pilot
+  // weapon in that case.
+  gunnerWeaponId?: string;
   modules: string[];
 }
 
