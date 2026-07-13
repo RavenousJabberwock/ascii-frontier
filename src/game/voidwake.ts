@@ -678,7 +678,15 @@ interface PlayerState {
   driftVel?: Vec3;           // preserved velocity when fuel hits zero
   reputation?: Record<string, number>;
   kills?: number;
+  // IDs of alien ruin planets already scanned — prevents double-payout on
+  // subsequent flybys. See universe generation for ruin spawn logic.
+  scannedRuins?: number[];
+  // Lifetime count of close-approach encounters with alien-family entities
+  // (UFOs, thargoids, alien swarms, motherships). Once it crosses the
+  // XENO_HIRE_THRESHOLD (5), the station Crew page unlocks Xeno hires.
+  alienEncounters?: number;
 }
+const XENO_HIRE_THRESHOLD = 5;
 
 type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul";
 interface Mission {
