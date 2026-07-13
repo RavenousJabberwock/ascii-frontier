@@ -3646,6 +3646,19 @@ export class Voidwake {
     const now = performance.now() / 1000;
     let insideNebula = false;
     for (const e of this.entities) {
+      // Passive xeno-encounter counter — bumped once per entity per 3 minutes
+      // of close approach. Powers the station "Hire Xeno" gate.
+      if ((e.faction === "alien" || e.faction === "alien-boss" || e.faction === "alien-swarm") && (e.hull ?? 1) > 0) {
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 500 && (!e._encAt || now - e._encAt > 180)) {
+          e._encAt = now;
+          const prev = p.alienEncounters ?? 0;
+          p.alienEncounters = prev + 1;
+          if (prev < XENO_HIRE_THRESHOLD && p.alienEncounters >= XENO_HIRE_THRESHOLD) {
+            this.pushLog("⚠ Xeno-contact quota met — stations will register xeno hires.");
+          }
+        }
+      }
       if (e.kind === "star") {
         // --- Fuel scooping: skim a star's corona at safe range for free fuel.
         // Sweet spot scales with the star's apparent size (bigger stars scoop
