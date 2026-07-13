@@ -1371,8 +1371,32 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       if (Math.random() < 0.02) e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 15);
     }
   } else if (e.kind === "friendly") {
-    // Defend: engage pirates within 500u, else continue station route.
-    const foe = findEnemyShip(500);
+    // Defend: engage pirates within 800u (was 500u — friendly ships now
+    // actively rally to nearby allies under fire, per the "rescue AI"
+    // backlog item). Also engages if any other friendly within 100u is
+    // being retaliated against (hostileUntil active) — flying past a
+    // brawl now pulls in nearby patrols.
+    let foe = findEnemyShip(800);
+    if (!foe) {
+      const ally = ents.find((x) =>
+        x.id !== e.id &&
+        (x.kind === "friendly" || x.kind === "neutral") &&
+        x.hostileUntil != null &&
+        now < x.hostileUntil &&
+        V.len(V.sub(x.pos, e.pos)) < 100);
+      if (ally) {
+        // Attack the nearest hostile to the beleaguered ally, or the
+        // player if they are the aggressor (retaliation vector).
+        let bestD = 1500;
+        let best: Entity | null = null;
+        for (const t of ents) {
+          if (t.kind !== "hostile" || (t.hull ?? 1) <= 0) continue;
+          const d = V.len(V.sub(t.pos, ally.pos));
+          if (d < bestD) { bestD = d; best = t; }
+        }
+        if (best) foe = best;
+      }
+    }
     if (foe) {
       const dir = V.norm(V.sub(foe.pos, e.pos));
       e.vel = V.scale(dir, 28);
