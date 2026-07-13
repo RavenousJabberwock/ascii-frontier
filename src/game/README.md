@@ -183,6 +183,22 @@ like postcards from the deep, not a rotating event calendar:
   feed (ambient, not on the rare-event timer — more often near nebulae or
   during a Thargoid encounter).
 
+### Cross-universe rarities (rolled at generation)
+
+- **Alien ruins** — every universe seeds **1–6 desolate ruin planets**.
+  Fly within 200u to scan for a one-shot credit payout (~180–400cr) and
+  +120 XP. Repeat flybys are silent — each ruin is recorded in
+  `player.scannedRuins`.
+- **UFO Mothership** — **1% chance per universe**. A capital-class
+  hostile (hull 1200 / shield 600, boss bounty) accompanied by 3–4 UFO
+  escorts. Killing the mothership pays the standard boss bounty.
+- **Anomalous Homeworld** — **5% chance per universe**. A single alien
+  world permanently ringed by 8–12 hostile `Anomalous Fighter` ships
+  that engage anything non-alien within range.
+- **Orbital mini-stations** — ~25% of civilian planets get one in low
+  orbit. Dockable, but the menu is stripped to Market + Undock only
+  (no crew, weapons, or modules).
+
 Weapon shots, engine exhausts, comets, and distant suns all glow.
 
 ## HUD banners & reticle
