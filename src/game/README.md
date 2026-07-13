@@ -351,6 +351,28 @@ station carries a rotating slice of the catalog (2–5 modules per stop) at
 | Aux Fuel Tank | 700cr | +50 fuel max (also refills 50) |
 | Long-Range Scanner | 1300cr | +1000u radar range (stacks with Sensor Array) |
 
+## Ship-to-ship trade
+
+Any friendly or neutral ship is a rolling market. Pull within **50u** at
+throttle ≤ 5% and press **F** — a stripped-down station screen opens on
+the target ship (Market only: sell ore / buy fuel at that ship's stock
+prices). No refuel, no repair, no crew wages tick.
+
+## Friendly rescue AI
+
+Friendly ships now defend allies. Their engagement range against pirates
+widened from 500u → 800u, and any friendly within 100u of an ally that's
+being retaliated against will vector toward the aggressor — including the
+player. Flying past a brawl no longer means the patrols ignore it.
+
+## Xeno crew
+
+Passive close-approach ticks against UFOs, thargoids, alien-swarm fighters,
+and the UFO Mothership fill an internal `alienEncounters` counter. Once
+you cross **5** encounters, every station's Crew page unlocks a
+`Hire Xeno <Role>` entry at **2× the normal fee**. Xeno hires occupy a
+regular berth and inherit their role's perk.
+
 ## Notorious pirate captains
 
 Roughly 5% of respawned raiders are named captains (Warlord / Blackwake /
@@ -358,6 +380,8 @@ Ironmaw …). They have +50% hull and shield, pay out a ~450cr bounty plus
 extra XP on kill, drop a fatter "captain's cache" canister, and shift
 faction reputation ~3× as hard as a rank-and-file pirate. A one-line
 sensor alert announces them when they spawn.
+
+
 
 ## Adding new content
 
