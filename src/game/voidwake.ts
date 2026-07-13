@@ -5433,6 +5433,20 @@ export class Voidwake {
           rows.push(`Hire ${info.title} — ${fee}cr — ${info.blurb}${gate}`);
         }
       }
+      // Xeno hires: only after enough alien contact has been logged. Xenos
+      // cost 2x the normal fee, occupy one berth, and are cosmetically tagged
+      // with a xeno species label. They otherwise inherit their role's perk.
+      if ((p.alienEncounters ?? 0) >= XENO_HIRE_THRESHOLD) {
+        rows.push("~ Xeno recruits ~");
+        for (const r of roles) {
+          if (hasCrew(p, r)) continue;
+          const info = CREW_ROLE_INFO[r];
+          const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+          const fee = Math.round(baseFee * 2);
+          const gate = cur >= cap ? "  (berths full)" : "";
+          rows.push(`Hire Xeno ${info.title} — ${fee}cr${gate}`);
+        }
+      }
       rows.push("Back");
       return rows;
     }
