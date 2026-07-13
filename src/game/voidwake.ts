@@ -3726,6 +3726,21 @@ export class Voidwake {
           // Convert to expiring loot so it disappears next tick.
           e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
         }
+      } else if (e.kind === "planet" && e.state === "ruins") {
+        // Alien ruins: silent XP + credit payout once per ruin.
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 200) {
+          p.scannedRuins = p.scannedRuins ?? [];
+          if (!p.scannedRuins.includes(e.id)) {
+            p.scannedRuins.push(e.id);
+            const cr = 180 + Math.floor(Math.random() * 220);
+            p.credits += cr;
+            awardXP(p, 120);
+            this.pushLog(`⛭ Scanned alien ruins on ${e.name}: +${cr}cr, +120 XP.`);
+            this.pushChatter("Sensors", "Datalog: pre-collapse xeno civilization. Uploading.", "#c8a0ff");
+            this.sfx("chime");
+          }
+        }
       } else if (e.kind === "ufo") {
         // Observe-then-flee. Close approach turns them curious.
         const dv = V.sub(p.pos, e.pos);
