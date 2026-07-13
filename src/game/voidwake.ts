@@ -1159,6 +1159,99 @@ function generateUniverse(seed: number): Entity[] {
     }
   }
 
+  // ---- Alien ruins ------------------------------------------------------
+  // 1-6 desolate ruin planets. Scanning one (fly within 200u) awards a
+  // one-shot XP + credit bounty; subsequent flybys are silent. The planet
+  // itself renders like an ordinary world but with a `state: "ruins"`
+  // marker the render / interaction code can key off.
+  const ruinCount = 1 + Math.floor(rng() * 6);
+  for (let i = 0; i < ruinCount; i++) {
+    out.push({
+      id: nextId(), kind: "planet",
+      name: nameFrom(rng, "Ruin-"),
+      pos: randPos(rng, WORLD.planetRadius),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien-ruins",
+      state: "ruins",
+    });
+  }
+
+  // ---- UFO Mothership (1% chance per universe) --------------------------
+  // A single capital-class hostile with 3-4 UFO escorts. Bounty: massive.
+  if (rng() < 0.01) {
+    const motherPos = randPos(rng, WORLD_RADIUS * 0.9);
+    const mother: Entity = {
+      id: nextId(), kind: "hostile",
+      name: "UFO Mothership",
+      pos: motherPos,
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien-boss",
+      hull: 1200, shield: 600,
+      state: "attack", cooldown: 0, weaponId: "pulse",
+      boss: true,
+    };
+    out.push(mother);
+    const escorts = 3 + Math.floor(rng() * 2);
+    for (let i = 0; i < escorts; i++) {
+      const off = { x: (rng() - 0.5) * 400, y: (rng() - 0.5) * 200, z: (rng() - 0.5) * 400 };
+      out.push({
+        id: nextId(), kind: "hostile", name: "UFO Escort",
+        pos: V.add(motherPos, off),
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "alien-boss",
+        hull: 60, shield: 40,
+        state: "attack", cooldown: 0, weaponId: "pulse",
+      });
+    }
+  }
+
+  // ---- Anomalous ("thargoid-like") homeworld (5% chance) ---------------
+  // A single alien world permanently ringed by 8-12 hostile fighters.
+  // These are ordinary hostiles under the `alien-swarm` faction so they
+  // hunt any non-alien within engagement range using the existing AI.
+  if (rng() < 0.05) {
+    const homePos = randPos(rng, WORLD_RADIUS * 0.85);
+    out.push({
+      id: nextId(), kind: "planet",
+      name: "Anomalous Homeworld",
+      pos: homePos,
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien-swarm",
+      state: "homeworld",
+    });
+    const swarm = 8 + Math.floor(rng() * 5);
+    for (let i = 0; i < swarm; i++) {
+      const ang = (i / swarm) * Math.PI * 2;
+      const r = 260 + rng() * 120;
+      out.push({
+        id: nextId(), kind: "hostile", name: "Anomalous Fighter",
+        pos: { x: homePos.x + Math.cos(ang) * r, y: homePos.y + (rng() - 0.5) * 80, z: homePos.z + Math.sin(ang) * r },
+        vel: { x: (rng() - 0.5) * 6, y: (rng() - 0.5) * 6, z: (rng() - 0.5) * 6 },
+        faction: "alien-swarm",
+        hull: 55, shield: 30,
+        state: "attack", cooldown: 0, weaponId: "pulse",
+      });
+    }
+  }
+
+  // ---- Small orbital stations ------------------------------------------
+  // ~25% of civilian planets get a mini-station in low orbit. Dockable
+  // but only sells fuel / buys ore (see buildStationLines: `state: "orbital"`
+  // collapses the menu). No modules / weapons / crew.
+  const civPlanets = out.filter((e) => e.kind === "planet" && e.faction === "nature");
+  for (const pl of civPlanets) {
+    if (rng() > 0.25) continue;
+    const fac = rng() < 0.5 ? "federation" : "guild";
+    const off = { x: (rng() - 0.5) * 300, y: (rng() - 0.5) * 120, z: (rng() - 0.5) * 300 };
+    out.push({
+      id: nextId(), kind: "station",
+      name: `${pl.name} Orbital`,
+      pos: V.add(pl.pos, off),
+      vel: { x: 0, y: 0, z: 0 }, faction: fac,
+      hull: 300, shield: 200, state: "orbital",
+    });
+  }
+
   return out;
 }
 
