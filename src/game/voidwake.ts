@@ -5357,7 +5357,13 @@ export class Voidwake {
     const sid = this.dockedStationId;
     if (sid == null) return ["Undock"];
     const stock = this.getStock(sid);
-    if (this.stationPage === "main") return this.stationItems;
+    // Orbital mini-stations and ship-to-ship "hail" docks expose only the
+    // Market page — no crew, weapons, or module inventory.
+    const dockedEnt = this.entities.find((e) => e.id === sid);
+    const isMini = dockedEnt && (dockedEnt.kind !== "station" || dockedEnt.state === "orbital");
+    if (this.stationPage === "main") {
+      return isMini ? ["Market", "Undock"] : this.stationItems;
+    }
     if (this.stationPage === "market") {
       const ore = p.cargo.ore ?? 0;
       const fuelNeed = Math.ceil(p.ship.fuelMax - p.ship.fuel);
