@@ -4406,7 +4406,24 @@ export class Voidwake {
     if (performance.now() / 1000 < this._dockCooldownUntil) return;
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
-    if (!t || t.kind !== "station") { this.pushLog("Target a station with T."); return; }
+    if (!t) { this.pushLog("Target a station or friendly ship with T."); return; }
+    // Ship-to-ship trade: pull alongside a friendly / neutral within 50u and
+    // "dock" to open a stripped-down market (fuel + ore). No repair, no wages.
+    if ((t.kind === "friendly" || t.kind === "neutral") && (t.hull ?? 0) > 0) {
+      if (t.faction === "pirate") { this.pushLog(`${t.name} isn't the trading kind.`); return; }
+      const dShip = V.len(V.sub(t.pos, p.pos));
+      if (dShip > 50) { this.pushLog("Too far to hail — pull within 50u."); return; }
+      if (p.throttle > 0.05) { this.pushLog("Match speed to hail."); return; }
+      this.screen = "station";
+      this.menuCursor = 0;
+      this.stationPage = "market";
+      this.dockedStationId = t.id;
+      this.pushLog(`Trading with ${t.name}.`);
+      this.pushChatter(t.name, this.getStock(t.id).rumor, "#c2c2ff");
+      this.sfx("dock");
+      return;
+    }
+    if (t.kind !== "station") { this.pushLog("Target a station or friendly ship with T."); return; }
     if (t.faction === "pirate") { this.pushLog(`${t.name} is a pirate stronghold — no docking permitted.`); return; }
     const d = V.len(V.sub(t.pos, p.pos));
     if (d > 200) { this.pushLog("Too far to dock."); return; }
