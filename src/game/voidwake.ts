@@ -599,6 +599,10 @@ interface Entity {
   // Named pirate captain flag. Bosses have +50% hull, a distinct title, and
   // drop bonus credits/XP on kill. 5% roll on pirate spawn (see spawnNear).
   boss?: boolean;
+  // Last time this entity was counted as an alien encounter for the player
+  // (performance.now()/1000). Throttles xeno-encounter counter increments so
+  // one long fly-by doesn't spam the counter.
+  _encAt?: number;
 }
 
 interface PlayerChar {
