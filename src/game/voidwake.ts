@@ -599,6 +599,10 @@ interface Entity {
   // Named pirate captain flag. Bosses have +50% hull, a distinct title, and
   // drop bonus credits/XP on kill. 5% roll on pirate spawn (see spawnNear).
   boss?: boolean;
+  // Last time this entity was counted as an alien encounter for the player
+  // (performance.now()/1000). Throttles xeno-encounter counter increments so
+  // one long fly-by doesn't spam the counter.
+  _encAt?: number;
 }
 
 interface PlayerChar {
@@ -678,7 +682,15 @@ interface PlayerState {
   driftVel?: Vec3;           // preserved velocity when fuel hits zero
   reputation?: Record<string, number>;
   kills?: number;
+  // IDs of alien ruin planets already scanned — prevents double-payout on
+  // subsequent flybys. See universe generation for ruin spawn logic.
+  scannedRuins?: number[];
+  // Lifetime count of close-approach encounters with alien-family entities
+  // (UFOs, thargoids, alien swarms, motherships). Once it crosses the
+  // XENO_HIRE_THRESHOLD (5), the station Crew page unlocks Xeno hires.
+  alienEncounters?: number;
 }
+const XENO_HIRE_THRESHOLD = 5;
 
 type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul";
 interface Mission {
@@ -1151,6 +1163,99 @@ function generateUniverse(seed: number): Entity[] {
     }
   }
 
+  // ---- Alien ruins ------------------------------------------------------
+  // 1-6 desolate ruin planets. Scanning one (fly within 200u) awards a
+  // one-shot XP + credit bounty; subsequent flybys are silent. The planet
+  // itself renders like an ordinary world but with a `state: "ruins"`
+  // marker the render / interaction code can key off.
+  const ruinCount = 1 + Math.floor(rng() * 6);
+  for (let i = 0; i < ruinCount; i++) {
+    out.push({
+      id: nextId(), kind: "planet",
+      name: nameFrom(rng, "Ruin-"),
+      pos: randPos(rng, WORLD.planetRadius),
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien-ruins",
+      state: "ruins",
+    });
+  }
+
+  // ---- UFO Mothership (1% chance per universe) --------------------------
+  // A single capital-class hostile with 3-4 UFO escorts. Bounty: massive.
+  if (rng() < 0.01) {
+    const motherPos = randPos(rng, WORLD_RADIUS * 0.9);
+    const mother: Entity = {
+      id: nextId(), kind: "hostile",
+      name: "UFO Mothership",
+      pos: motherPos,
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien-boss",
+      hull: 1200, shield: 600,
+      state: "attack", cooldown: 0, weaponId: "pulse",
+      boss: true,
+    };
+    out.push(mother);
+    const escorts = 3 + Math.floor(rng() * 2);
+    for (let i = 0; i < escorts; i++) {
+      const off = { x: (rng() - 0.5) * 400, y: (rng() - 0.5) * 200, z: (rng() - 0.5) * 400 };
+      out.push({
+        id: nextId(), kind: "hostile", name: "UFO Escort",
+        pos: V.add(motherPos, off),
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "alien-boss",
+        hull: 60, shield: 40,
+        state: "attack", cooldown: 0, weaponId: "pulse",
+      });
+    }
+  }
+
+  // ---- Anomalous ("thargoid-like") homeworld (5% chance) ---------------
+  // A single alien world permanently ringed by 8-12 hostile fighters.
+  // These are ordinary hostiles under the `alien-swarm` faction so they
+  // hunt any non-alien within engagement range using the existing AI.
+  if (rng() < 0.05) {
+    const homePos = randPos(rng, WORLD_RADIUS * 0.85);
+    out.push({
+      id: nextId(), kind: "planet",
+      name: "Anomalous Homeworld",
+      pos: homePos,
+      vel: { x: 0, y: 0, z: 0 },
+      faction: "alien-swarm",
+      state: "homeworld",
+    });
+    const swarm = 8 + Math.floor(rng() * 5);
+    for (let i = 0; i < swarm; i++) {
+      const ang = (i / swarm) * Math.PI * 2;
+      const r = 260 + rng() * 120;
+      out.push({
+        id: nextId(), kind: "hostile", name: "Anomalous Fighter",
+        pos: { x: homePos.x + Math.cos(ang) * r, y: homePos.y + (rng() - 0.5) * 80, z: homePos.z + Math.sin(ang) * r },
+        vel: { x: (rng() - 0.5) * 6, y: (rng() - 0.5) * 6, z: (rng() - 0.5) * 6 },
+        faction: "alien-swarm",
+        hull: 55, shield: 30,
+        state: "attack", cooldown: 0, weaponId: "pulse",
+      });
+    }
+  }
+
+  // ---- Small orbital stations ------------------------------------------
+  // ~25% of civilian planets get a mini-station in low orbit. Dockable
+  // but only sells fuel / buys ore (see buildStationLines: `state: "orbital"`
+  // collapses the menu). No modules / weapons / crew.
+  const civPlanets = out.filter((e) => e.kind === "planet" && e.faction === "nature");
+  for (const pl of civPlanets) {
+    if (rng() > 0.25) continue;
+    const fac = rng() < 0.5 ? "federation" : "guild";
+    const off = { x: (rng() - 0.5) * 300, y: (rng() - 0.5) * 120, z: (rng() - 0.5) * 300 };
+    out.push({
+      id: nextId(), kind: "station",
+      name: `${pl.name} Orbital`,
+      pos: V.add(pl.pos, off),
+      vel: { x: 0, y: 0, z: 0 }, faction: fac,
+      hull: 300, shield: 200, state: "orbital",
+    });
+  }
+
   return out;
 }
 
@@ -1266,8 +1371,32 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       if (Math.random() < 0.02) e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 15);
     }
   } else if (e.kind === "friendly") {
-    // Defend: engage pirates within 500u, else continue station route.
-    const foe = findEnemyShip(500);
+    // Defend: engage pirates within 800u (was 500u — friendly ships now
+    // actively rally to nearby allies under fire, per the "rescue AI"
+    // backlog item). Also engages if any other friendly within 100u is
+    // being retaliated against (hostileUntil active) — flying past a
+    // brawl now pulls in nearby patrols.
+    let foe = findEnemyShip(800);
+    if (!foe) {
+      const ally = ents.find((x) =>
+        x.id !== e.id &&
+        (x.kind === "friendly" || x.kind === "neutral") &&
+        x.hostileUntil != null &&
+        now < x.hostileUntil &&
+        V.len(V.sub(x.pos, e.pos)) < 100);
+      if (ally) {
+        // Attack the nearest hostile to the beleaguered ally, or the
+        // player if they are the aggressor (retaliation vector).
+        let bestD = 1500;
+        let best: Entity | null = null;
+        for (const t of ents) {
+          if (t.kind !== "hostile" || (t.hull ?? 1) <= 0) continue;
+          const d = V.len(V.sub(t.pos, ally.pos));
+          if (d < bestD) { bestD = d; best = t; }
+        }
+        if (best) foe = best;
+      }
+    }
     if (foe) {
       const dir = V.norm(V.sub(foe.pos, e.pos));
       e.vel = V.scale(dir, 28);
@@ -3541,6 +3670,19 @@ export class Voidwake {
     const now = performance.now() / 1000;
     let insideNebula = false;
     for (const e of this.entities) {
+      // Passive xeno-encounter counter — bumped once per entity per 3 minutes
+      // of close approach. Powers the station "Hire Xeno" gate.
+      if ((e.faction === "alien" || e.faction === "alien-boss" || e.faction === "alien-swarm") && (e.hull ?? 1) > 0) {
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 500 && (!e._encAt || now - e._encAt > 180)) {
+          e._encAt = now;
+          const prev = p.alienEncounters ?? 0;
+          p.alienEncounters = prev + 1;
+          if (prev < XENO_HIRE_THRESHOLD && p.alienEncounters >= XENO_HIRE_THRESHOLD) {
+            this.pushLog("⚠ Xeno-contact quota met — stations will register xeno hires.");
+          }
+        }
+      }
       if (e.kind === "star") {
         // --- Fuel scooping: skim a star's corona at safe range for free fuel.
         // Sweet spot scales with the star's apparent size (bigger stars scoop
@@ -3620,6 +3762,21 @@ export class Voidwake {
           this.sfx("chime");
           // Convert to expiring loot so it disappears next tick.
           e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
+        }
+      } else if (e.kind === "planet" && e.state === "ruins") {
+        // Alien ruins: silent XP + credit payout once per ruin.
+        const d = V.len(V.sub(e.pos, p.pos));
+        if (d < 200) {
+          p.scannedRuins = p.scannedRuins ?? [];
+          if (!p.scannedRuins.includes(e.id)) {
+            p.scannedRuins.push(e.id);
+            const cr = 180 + Math.floor(Math.random() * 220);
+            p.credits += cr;
+            awardXP(p, 120);
+            this.pushLog(`⛭ Scanned alien ruins on ${e.name}: +${cr}cr, +120 XP.`);
+            this.pushChatter("Sensors", "Datalog: pre-collapse xeno civilization. Uploading.", "#c8a0ff");
+            this.sfx("chime");
+          }
         }
       } else if (e.kind === "ufo") {
         // Observe-then-flee. Close approach turns them curious.
@@ -4249,7 +4406,24 @@ export class Voidwake {
     if (performance.now() / 1000 < this._dockCooldownUntil) return;
     const p = this.player; if (!p) return;
     const t = this.entities.find((e) => e.id === this.targetId);
-    if (!t || t.kind !== "station") { this.pushLog("Target a station with T."); return; }
+    if (!t) { this.pushLog("Target a station or friendly ship with T."); return; }
+    // Ship-to-ship trade: pull alongside a friendly / neutral within 50u and
+    // "dock" to open a stripped-down market (fuel + ore). No repair, no wages.
+    if ((t.kind === "friendly" || t.kind === "neutral") && (t.hull ?? 0) > 0) {
+      if (t.faction === "pirate") { this.pushLog(`${t.name} isn't the trading kind.`); return; }
+      const dShip = V.len(V.sub(t.pos, p.pos));
+      if (dShip > 50) { this.pushLog("Too far to hail — pull within 50u."); return; }
+      if (p.throttle > 0.05) { this.pushLog("Match speed to hail."); return; }
+      this.screen = "station";
+      this.menuCursor = 0;
+      this.stationPage = "market";
+      this.dockedStationId = t.id;
+      this.pushLog(`Trading with ${t.name}.`);
+      this.pushChatter(t.name, this.getStock(t.id).rumor, "#c2c2ff");
+      this.sfx("dock");
+      return;
+    }
+    if (t.kind !== "station") { this.pushLog("Target a station or friendly ship with T."); return; }
     if (t.faction === "pirate") { this.pushLog(`${t.name} is a pirate stronghold — no docking permitted.`); return; }
     const d = V.len(V.sub(t.pos, p.pos));
     if (d > 200) { this.pushLog("Too far to dock."); return; }
@@ -5183,7 +5357,13 @@ export class Voidwake {
     const sid = this.dockedStationId;
     if (sid == null) return ["Undock"];
     const stock = this.getStock(sid);
-    if (this.stationPage === "main") return this.stationItems;
+    // Orbital mini-stations and ship-to-ship "hail" docks expose only the
+    // Market page — no crew, weapons, or module inventory.
+    const dockedEnt = this.entities.find((e) => e.id === sid);
+    const isMini = dockedEnt && (dockedEnt.kind !== "station" || dockedEnt.state === "orbital");
+    if (this.stationPage === "main") {
+      return isMini ? ["Market", "Undock"] : this.stationItems;
+    }
     if (this.stationPage === "market") {
       const ore = p.cargo.ore ?? 0;
       const fuelNeed = Math.ceil(p.ship.fuelMax - p.ship.fuel);
@@ -5253,6 +5433,20 @@ export class Voidwake {
           rows.push(`Hire ${info.title} — ${fee}cr — ${info.blurb}${gate}`);
         }
       }
+      // Xeno hires: only after enough alien contact has been logged. Xenos
+      // cost 2x the normal fee, occupy one berth, and are cosmetically tagged
+      // with a xeno species label. They otherwise inherit their role's perk.
+      if ((p.alienEncounters ?? 0) >= XENO_HIRE_THRESHOLD) {
+        rows.push("~ Xeno recruits ~");
+        for (const r of roles) {
+          if (hasCrew(p, r)) continue;
+          const info = CREW_ROLE_INFO[r];
+          const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+          const fee = Math.round(baseFee * 2);
+          const gate = cur >= cap ? "  (berths full)" : "";
+          rows.push(`Hire Xeno ${info.title} — ${fee}cr${gate}`);
+        }
+      }
       rows.push("Back");
       return rows;
     }
@@ -5270,7 +5464,7 @@ export class Voidwake {
     const stock = this.getStock(sid);
 
     if (this.stationPage === "main") {
-      const c = this.stationItems[i];
+      const c = lines[i];
       if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
@@ -5369,14 +5563,14 @@ export class Voidwake {
     }
 
     if (this.stationPage === "crew") {
-      // Row 0 is the header; rows 1..4 are roles; last is Back (handled above).
-      const roleIdx = i - 1;
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~")) return;
       const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
-      if (roleIdx < 0 || roleIdx >= roles.length) return;
-      const r = roles[roleIdx];
-      const info = CREW_ROLE_INFO[r];
-      // Dismiss branch
-      if (hasCrew(p, r)) {
+      // Dismiss line matches "Dismiss <title> ..."
+      if (row.startsWith("Dismiss")) {
+        const r = roles.find((rr) => hasCrew(p, rr) && row.includes(CREW_ROLE_INFO[rr].title));
+        if (!r) return;
+        const info = CREW_ROLE_INFO[r];
         const c = r === "gunner" ? p.gunner! : getCrew(p, r)!;
         const tenureMin = (Date.now() - c.hiredAt) / 60000;
         const hullPct = p.ship.hull / p.ship.hullMax;
@@ -5389,18 +5583,28 @@ export class Voidwake {
         else p.crew = (p.crew ?? []).filter((x) => x.role !== r);
         return;
       }
-      // Hire branch
+      // Xeno hire: "Hire Xeno <title> — Ncr..."
+      const xeno = row.startsWith("Hire Xeno");
+      const hire = xeno || row.startsWith("Hire ");
+      if (!hire) return;
+      const r = roles.find((rr) => row.includes(CREW_ROLE_INFO[rr].title));
+      if (!r) return;
+      const info = CREW_ROLE_INFO[r];
+      if (hasCrew(p, r)) return;
       if (crewCount(p) >= effectiveCrewMax(p)) { this.pushLog("No spare berths — install Crew Quarters."); return; }
-      const fee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+      const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+      const fee = xeno ? Math.round(baseFee * 2) : baseFee;
       if (p.credits < fee) { this.pushLog("Not enough credits."); return; }
       p.credits -= fee;
       if (r === "gunner") {
         p.gunner = generateGunner(Math.random);
+        if (xeno) p.gunner.species = "Xeno";
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
         this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
           pickLine("gunner_greet", this.chatterCtx()), "#fc6");
       } else {
         const c = generateCrewMember(r, Math.random);
+        if (xeno) c.species = "Xeno";
         p.crew = p.crew ?? [];
         p.crew.push(c);
         this.pushLog(`Hired ${info.title} ${c.name} (${c.species}).`);
