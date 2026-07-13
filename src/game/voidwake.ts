@@ -5563,14 +5563,14 @@ export class Voidwake {
     }
 
     if (this.stationPage === "crew") {
-      // Row 0 is the header; rows 1..4 are roles; last is Back (handled above).
-      const roleIdx = i - 1;
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~")) return;
       const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
-      if (roleIdx < 0 || roleIdx >= roles.length) return;
-      const r = roles[roleIdx];
-      const info = CREW_ROLE_INFO[r];
-      // Dismiss branch
-      if (hasCrew(p, r)) {
+      // Dismiss line matches "Dismiss <title> ..."
+      if (row.startsWith("Dismiss")) {
+        const r = roles.find((rr) => hasCrew(p, rr) && row.includes(CREW_ROLE_INFO[rr].title));
+        if (!r) return;
+        const info = CREW_ROLE_INFO[r];
         const c = r === "gunner" ? p.gunner! : getCrew(p, r)!;
         const tenureMin = (Date.now() - c.hiredAt) / 60000;
         const hullPct = p.ship.hull / p.ship.hullMax;
@@ -5583,18 +5583,28 @@ export class Voidwake {
         else p.crew = (p.crew ?? []).filter((x) => x.role !== r);
         return;
       }
-      // Hire branch
+      // Xeno hire: "Hire Xeno <title> — Ncr..."
+      const xeno = row.startsWith("Hire Xeno");
+      const hire = xeno || row.startsWith("Hire ");
+      if (!hire) return;
+      const r = roles.find((rr) => row.includes(CREW_ROLE_INFO[rr].title));
+      if (!r) return;
+      const info = CREW_ROLE_INFO[r];
+      if (hasCrew(p, r)) return;
       if (crewCount(p) >= effectiveCrewMax(p)) { this.pushLog("No spare berths — install Crew Quarters."); return; }
-      const fee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+      const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+      const fee = xeno ? Math.round(baseFee * 2) : baseFee;
       if (p.credits < fee) { this.pushLog("Not enough credits."); return; }
       p.credits -= fee;
       if (r === "gunner") {
         p.gunner = generateGunner(Math.random);
+        if (xeno) p.gunner.species = "Xeno";
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
         this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
           pickLine("gunner_greet", this.chatterCtx()), "#fc6");
       } else {
         const c = generateCrewMember(r, Math.random);
+        if (xeno) c.species = "Xeno";
         p.crew = p.crew ?? [];
         p.crew.push(c);
         this.pushLog(`Hired ${info.title} ${c.name} (${c.species}).`);
