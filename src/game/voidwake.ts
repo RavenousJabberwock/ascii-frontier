@@ -5450,7 +5450,7 @@ export class Voidwake {
     const stock = this.getStock(sid);
 
     if (this.stationPage === "main") {
-      const c = this.stationItems[i];
+      const c = lines[i];
       if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
