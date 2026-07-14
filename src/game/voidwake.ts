@@ -1052,14 +1052,39 @@ function generateUniverse(seed: number): Entity[] {
     const fac = kind === "friendly" ? "federation" : kind === "neutral" ? "guild" : "pirate";
     // ~35% of ships get a named pilot callsign so the world has recurring faces.
     const named = rng() < 0.35;
+    // ~2% of non-hostile ships spawn "stranded" — dead in the water, waiting
+    // for a Space Patrol tow (see tickAI). Cheap, adds emergent flavor.
+    const stranded = kind !== "hostile" && rng() < 0.02;
     out.push({
       id: nextId(), kind, name: nameFrom(rng, kind === "hostile" ? "Raider" : "Ship"),
       pos: randPos(rng, WORLD.shipRadius),
-      vel: { x: (rng() - 0.5) * 10, y: (rng() - 0.5) * 10, z: (rng() - 0.5) * 10 },
+      vel: stranded
+        ? { x: 0, y: 0, z: 0 }
+        : { x: (rng() - 0.5) * 10, y: (rng() - 0.5) * 10, z: (rng() - 0.5) * 10 },
       faction: factions.includes(fac) ? fac : "guild",
       hull: kind === "hostile" ? 50 : 40, shield: 30,
-      state: "wander", cooldown: 0, weaponId: "pulse",
+      state: stranded ? "stranded" : "wander", cooldown: 0, weaponId: "pulse",
       pilotName: named ? pilotNameFor(rng, kind) : undefined,
+      stranded: stranded || undefined,
+    });
+  }
+
+  // Space Patrol ("SPD"): heavily-armed friendlies that hunt pirates, defend
+  // any lawful ship under attack (including retaliation against the player),
+  // and tractor-tow stranded ships to the nearest non-hostile station.
+  // See tickAI's "patrol" branch. Faction is `patrol` so the AI can key on it
+  // without a new EntityKind (colored cyan-blue by tintFor / colorFor).
+  const patrolCount = 5 + Math.floor(rng() * 3);
+  for (let i = 0; i < patrolCount; i++) {
+    out.push({
+      id: nextId(), kind: "friendly",
+      name: `SPD Patrol ${String.fromCharCode(65 + i)}-${100 + Math.floor(rng() * 900)}`,
+      pos: randPos(rng, WORLD.shipRadius),
+      vel: { x: (rng() - 0.5) * 6, y: (rng() - 0.5) * 6, z: (rng() - 0.5) * 6 },
+      faction: "patrol",
+      hull: 140, shield: 90,
+      state: "patrol", cooldown: 0, weaponId: "pulse",
+      pilotName: pilotNameFor(rng, "friendly"),
     });
   }
 
