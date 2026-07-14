@@ -7037,7 +7037,7 @@ export class Voidwake {
       green: "#3aff88", amber: "#fc6", cyan: "#7fd0ff",
       magenta: "#ff7fd0", white: "#eeeeee", red: "#ff8888",
     } as const)[this.options.reticleColor ?? "green"] ?? "#3a6";
-    let reticleCol = reticleBase;
+    let reticleCol: string = reticleBase;
     {
       const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
       let bestDot = 0.93, bestE: Entity | null = null, bestD = Infinity;
