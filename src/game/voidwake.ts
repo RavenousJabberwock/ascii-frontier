@@ -5152,31 +5152,40 @@ export class Voidwake {
     this._nextAmbientChatterAt -= dt;
     if (this._nextAmbientChatterAt > 0) return;
     this._nextAmbientChatterAt = (8 + Math.random() * 10) * mul;
-    // Find a candidate within 1500u, prefer interesting kinds.
+    // Find a candidate within 1500u, prefer interesting kinds. Skip alien-
+    // family factions — UFOs and thargoids stay wordless / gibberish.
     const near = this.entities
-      .filter((e) => e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
+      .filter((e) => (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
+        && !e.faction.startsWith("alien")
+        && e.state !== "stranded")
       .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
       .filter((x) => x.d < 1500)
       .sort((a, b) => a.d - b.d);
     if (near.length === 0) return;
     const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
     const ctx = this.chatterCtx(pick);
-    switch (pick.kind) {
-      case "hostile":
-        this.pushChatter(pick.name, pickLine("hostile", ctx), "#ff8a8a");
-        break;
-      case "friendly":
-        this.pushChatter(pick.name, pickLine("friendly", ctx), "#aef58a");
-        break;
-      case "neutral":
-        this.pushChatter(pick.name, pickLine("neutral", ctx), "#dddddd");
-        break;
-      case "station":
-        this.pushChatter(`Beacon ${pick.name}`, pickLine("station", ctx), "#c2c2ff");
-        break;
-      case "planet":
-        this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
-        break;
+    // Patrols speak with a distinct "SPD" cyan tag rather than the generic
+    // green friendly voice, so they read as authorities.
+    if (pick.kind === "friendly" && pick.faction === "patrol") {
+      this.pushChatter(pick.name, pickLine("patrol", ctx), "#7fd0ff");
+    } else {
+      switch (pick.kind) {
+        case "hostile":
+          this.pushChatter(pick.name, pickLine("hostile", ctx), "#ff8a8a");
+          break;
+        case "friendly":
+          this.pushChatter(pick.name, pickLine("friendly", ctx), "#aef58a");
+          break;
+        case "neutral":
+          this.pushChatter(pick.name, pickLine("neutral", ctx), "#dddddd");
+          break;
+        case "station":
+          this.pushChatter(`Beacon ${pick.name}`, pickLine("station", ctx), "#c2c2ff");
+          break;
+        case "planet":
+          this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
+          break;
+      }
     }
     // If the gunner is around and bored, occasionally chime in.
     if (p.gunner && Math.random() < 0.35) {
