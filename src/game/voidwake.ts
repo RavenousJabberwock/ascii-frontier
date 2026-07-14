@@ -1332,6 +1332,12 @@ const V = {
 // =============================================================================
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson" || e.kind === "derelict") return;
+  // Stranded lawful ships coast in place waiting for a Patrol tow.
+  if (e.stranded && e.towById == null && (e.kind === "friendly" || e.kind === "neutral")) {
+    e.vel = { x: 0, y: 0, z: 0 };
+    e.state = "stranded";
+    return;
+  }
 
   // Faction retaliation: retaliating ships attack the player like hostiles.
   const now = performance.now() / 1000;
