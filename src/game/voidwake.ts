@@ -1421,6 +1421,94 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       e.state = "patrol";
       if (Math.random() < 0.02) e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 15);
     }
+  } else if (e.kind === "friendly" && e.faction === "patrol") {
+    // ---- Space Patrol AI ------------------------------------------------
+    // Priority 1: nearest hostile within 1500u — engage hard, fast, long range.
+    // Priority 2: player marked as aggressor (any friendly/neutral within
+    //             1000u has hostileUntil > now with player as implicit target)
+    //             — fire on the player until the retaliation timer expires.
+    // Priority 3: stranded lawful ship within 600u — engage tow: gently move
+    //             both patrol and towed ship toward the nearest non-hostile
+    //             station until within 220u of it, then release.
+    // Priority 4: patrol randomly.
+    const hostile = findEnemyShip(1500);
+    if (hostile) {
+      e.state = "chase";
+      e.towById = undefined;
+      const dir = V.norm(V.sub(hostile.pos, e.pos));
+      e.vel = V.scale(dir, 42);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      const hd = V.len(V.sub(hostile.pos, e.pos));
+      if (hd < 500 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 0.55;
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
+    // Player aggression: any lawful ship near this patrol with an active
+    // retaliation timer means the player attacked a bystander. Chase & fire.
+    const aggro = ents.some((x) =>
+      (x.kind === "friendly" || x.kind === "neutral") &&
+      x.hostileUntil != null &&
+      now < x.hostileUntil &&
+      V.len(V.sub(x.pos, e.pos)) < 1000);
+    if (aggro && distToPlayer < 1200) {
+      e.state = "arrest";
+      e.towById = undefined;
+      const dir = V.norm(V.sub(player.pos, e.pos));
+      e.vel = V.scale(dir, 38);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      if (distToPlayer < 460 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 0.6;
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
+    // Tractor tow: adopt a stranded ship and drag it to a safe station.
+    if (e.towById != null) {
+      const tow = ents.find((x) => x.id === e.towById);
+      if (!tow || tow.stranded !== true) {
+        e.towById = undefined;
+      } else {
+        const dock = ents.reduce<{ s: Entity | null; d: number }>((acc, x) => {
+          if (x.kind !== "station" || x.faction === "pirate") return acc;
+          const d = V.len(V.sub(x.pos, tow.pos));
+          return d < acc.d ? { s: x, d } : acc;
+        }, { s: null, d: Infinity });
+        if (dock.s) {
+          const dir = V.norm(V.sub(dock.s.pos, tow.pos));
+          e.vel = V.scale(dir, 20);
+          // Drag the towed ship along behind the patrol.
+          tow.pos = V.add(tow.pos, V.scale(dir, 20 * dt));
+          tow.vel = V.scale(dir, 20);
+          if (dock.d < 220) {
+            tow.stranded = undefined;
+            tow.state = "wander";
+            e.towById = undefined;
+            e.state = "patrol";
+          }
+        }
+        return;
+      }
+    }
+    const strandedNearby = ents.find((x) =>
+      x.stranded === true &&
+      (x.kind === "friendly" || x.kind === "neutral") &&
+      x.towById == null &&
+      V.len(V.sub(x.pos, e.pos)) < 600);
+    if (strandedNearby) {
+      strandedNearby.towById = e.id;
+      e.towById = strandedNearby.id;
+      e.state = "tow";
+      const dir = V.norm(V.sub(strandedNearby.pos, e.pos));
+      e.vel = V.scale(dir, 30);
+      return;
+    }
+    e.state = "patrol";
+    if (Math.random() < 0.01) {
+      e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 14);
+    }
+    return;
   } else if (e.kind === "friendly") {
     // Defend: engage pirates within 800u (was 500u — friendly ships now
     // actively rally to nearby allies under fire, per the "rescue AI"
