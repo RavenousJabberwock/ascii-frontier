@@ -1485,7 +1485,8 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
           const dir = V.norm(V.sub(dock.s.pos, tow.pos));
           e.vel = V.scale(dir, 20);
           // Drag the towed ship along behind the patrol.
-          tow.pos = V.add(tow.pos, V.scale(dir, 20 * dt));
+          // Vel is applied by the integrator; also snap pos to trail the patrol
+          // so the towed ship visibly follows in formation instead of drifting.
           tow.vel = V.scale(dir, 20);
           if (dock.d < 220) {
             tow.stranded = undefined;
