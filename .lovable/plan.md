@@ -87,28 +87,43 @@ Approve and I'll implement in one pass, verify the build, and refresh the offlin
 
 ---
 
-## Backlog / To-Do — status
+## 0.3 pass — Patrols, chatter, glitch FX, HUD themes
 
-All items shipped in the current pass. Notes on scope:
+- **Space Patrol ships** — ✅ 5-7 heavily-armed SPD Patrol ships spawn per
+  universe (`kind:"friendly"`, `faction:"patrol"`, hull 140/shield 90). AI
+  priorities: engage nearest hostile within 1500u, arrest the player when
+  any lawful ship within 1000u has active `hostileUntil` retaliation, and
+  tractor-tow the newly-added `stranded` friendly/neutral ships to the
+  nearest non-hostile station. ~2% of non-hostile ships spawn stranded.
+- **Universal chatter** — ✅ New `patrol` chatter kind plus ambient picker
+  now skips any faction starting with `alien` (UFOs, thargoids, motherships,
+  swarms) so those stay wordless. Stranded ships also suppress ambient
+  lines. Bases, planets, and every non-alien ship type speak.
+- **Screen glitch** — ✅ New render pass draws horizontal band-shifts and
+  a chroma tick when hull damage or a non-dormant thargoid is within
+  2000u / EMP is active. Respects reduced-motion and `Options ▸ Gameplay
+  ▸ Glitch FX`.
+- **Scanlines toggle** — ✅ Optional even-row darkening overlay.
+- **HUD color scheme** — ✅ 5 themes (green / amber / cyan / white / red).
+  Applied as a low-alpha multiply pass so every HUD element retints in
+  one draw call.
+- **Reticle color + shape** — ✅ 6 colors × 5 shapes (cross / dot /
+  brackets / circle / diamond). Combat feedback (amber = aligned, red =
+  in-range) still overrides the base tint so lock cues stay readable.
+- **VERSION bump** — ✅ 0.2.0 → 0.3.0 and offline bundle rebuilt.
 
-- **Hire xenos** — ✅ Player tracks close-approach encounters with alien-family
-  entities (UFOs, thargoids, alien-swarm, alien-boss). Once the counter
-  reaches `XENO_HIRE_THRESHOLD` (5), the station Crew page unlocks
-  `Hire Xeno <Role>` entries at 2× the normal fee; the hire is tagged
-  `species: "Xeno"`.
-- **Ship-to-ship ore trade** — ✅ `tryDock` accepts friendly/neutral ships
-  within 50u (throttle ≤ 5%) and opens a market-only stripped-down station
-  screen. No repair, no wages, no crew changes.
-- **Small orbital stations** — ✅ ~25% of civilian planets get an orbital
-  mini-station (`state: "orbital"`) with only Market + Undock exposed.
-- **Friendly-ship rescue AI** — ✅ Friendly engagement range widened
-  500u → 800u, plus a new "ally under retaliation within 100u" check that
-  pulls friendlies into brawls even when the aggressor isn't a pirate.
-- **Rare cross-universe spawns** — ✅ Rolled at generation:
-  - 1% chance of a **UFO Mothership** (hull 1200 / shield 600, boss
-    bounty), spawned with 3–4 UFO escorts.
-  - 5% chance of an **Anomalous Homeworld** planet with 8–12 hostile
-    `Anomalous Fighter` ships permanently orbiting it.
-  - Every universe seeds **1–6 alien ruin planets** (`state: "ruins"`).
-    Flying within 200u awards one-shot credits + 120 XP; re-scans are
-    silent (dedup via `player.scannedRuins`).
+## Backlog / To-Do (0.3 leftovers)
+
+- Per-element HUD retinting (currently a single multiply overlay tints
+  everything at once; a proper theme would recolor `#7CFC00` headers,
+  target brackets, and status bars individually).
+- Distinct patrol ship silhouettes (they still render as generic green
+  friendlies; a cyan tint + unique 3x3 sprite would sell the "police
+  cruiser" read).
+- Patrol comms when actually towing / arresting — right now those are
+  ambient patrol lines, not event-triggered lines keyed to the action.
+- Options for scanline density / glitch intensity — currently both are
+  fixed to conservative defaults.
+- Stranded ships should broadcast a "mayday" chatter line while waiting
+  for a tow.
+
