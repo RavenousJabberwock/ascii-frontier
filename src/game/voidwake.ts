@@ -5303,6 +5303,26 @@ export class Voidwake {
       const n = modes.length;
       this.options.chatterFreq = modes[(idx + (right ? 1 : -1) + n) % n];
     }
+    if (i === 7 && (left || right)) this.options.glitchFx = !this.options.glitchFx;
+    if (i === 8 && (left || right)) this.options.scanlines = !this.options.scanlines;
+    if (i === 9 && (left || right)) {
+      const modes: Options["hudScheme"][] = ["green", "amber", "cyan", "white", "red"];
+      const idx = Math.max(0, modes.indexOf(this.options.hudScheme ?? "green"));
+      const n = modes.length;
+      this.options.hudScheme = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
+    if (i === 10 && (left || right)) {
+      const modes: Options["reticleColor"][] = ["green", "amber", "cyan", "magenta", "white", "red"];
+      const idx = Math.max(0, modes.indexOf(this.options.reticleColor ?? "green"));
+      const n = modes.length;
+      this.options.reticleColor = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
+    if (i === 11 && (left || right)) {
+      const modes: Options["reticleShape"][] = ["cross", "dot", "brackets", "circle", "diamond"];
+      const idx = Math.max(0, modes.indexOf(this.options.reticleShape ?? "cross"));
+      const n = modes.length;
+      this.options.reticleShape = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
     }
@@ -5316,6 +5336,11 @@ export class Voidwake {
       `Unsaved Warn: ${this.options.unsavedWarnMinutes} min`,
       `Permadeath: ${this.options.permadeath ? "ON" : "OFF"}`,
       `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
+      `Glitch FX: ${this.options.glitchFx === false ? "OFF" : "ON"}`,
+      `Scanlines: ${this.options.scanlines ? "ON" : "OFF"}`,
+      `HUD Color: ${this.options.hudScheme ?? "green"}`,
+      `Reticle Color: ${this.options.reticleColor ?? "green"}`,
+      `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
       "Back",
     ];
   }
