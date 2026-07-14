@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const SOURCE_URL = "https://github.com/RavenousJabberwock/ascii-frontier";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
@@ -84,7 +84,7 @@ const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Ni
 const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
 
 type ChatterKind =
-  | "hostile" | "friendly" | "neutral" | "station" | "planet"
+  | "hostile" | "friendly" | "neutral" | "station" | "planet" | "patrol"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
   | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
