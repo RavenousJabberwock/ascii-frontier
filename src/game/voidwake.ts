@@ -7028,13 +7028,16 @@ export class Voidwake {
 
 
 
-    // Crosshair. Color shifts to indicate weapon-range state of whatever's
-    // closest to the reticle's forward vector:
-    //   green  → idle / nothing aligned
-    //   amber  → target aligned but out of weapon range
-    //   red    → target aligned AND in weapon range (free shot)
+    // Crosshair. Color and glyph shape both configurable via Options ▸
+    // Gameplay ▸ Reticle. Base color comes from options.reticleColor; the
+    // range/lock feedback still overrides to amber / red so combat cues
+    // remain readable regardless of the pilot's chosen tint.
     const ccx = vpLeft + Math.floor(vw / 2), ccy = vpTop + Math.floor(vh / 2);
-    let reticleCol = "#3a6";
+    const reticleBase = ({
+      green: "#3aff88", amber: "#fc6", cyan: "#7fd0ff",
+      magenta: "#ff7fd0", white: "#eeeeee", red: "#ff8888",
+    } as const)[this.options.reticleColor ?? "green"] ?? "#3a6";
+    let reticleCol = reticleBase;
     {
       const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
       let bestDot = 0.93, bestE: Entity | null = null, bestD = Infinity;
@@ -7053,9 +7056,23 @@ export class Voidwake {
         reticleCol = inRange ? "#ff5555" : "#fc6";
       }
     }
-    putText(g, ccx - 1, ccy, "-+-", reticleCol);
-    g[ccy - 1][ccx].ch = "|"; g[ccy - 1][ccx].color = reticleCol;
-    g[ccy + 1][ccx].ch = "|"; g[ccy + 1][ccx].color = reticleCol;
+    const shape = this.options.reticleShape ?? "cross";
+    if (shape === "cross") {
+      putText(g, ccx - 1, ccy, "-+-", reticleCol);
+      g[ccy - 1][ccx].ch = "|"; g[ccy - 1][ccx].color = reticleCol;
+      g[ccy + 1][ccx].ch = "|"; g[ccy + 1][ccx].color = reticleCol;
+    } else if (shape === "dot") {
+      g[ccy][ccx].ch = "•"; g[ccy][ccx].color = reticleCol;
+    } else if (shape === "brackets") {
+      putText(g, ccx - 2, ccy, "[ ]", reticleCol);
+      g[ccy][ccx].ch = "·"; g[ccy][ccx].color = reticleCol;
+    } else if (shape === "circle") {
+      putText(g, ccx - 1, ccy, "(+)", reticleCol);
+    } else if (shape === "diamond") {
+      g[ccy][ccx].ch = "◇"; g[ccy][ccx].color = reticleCol;
+      g[ccy - 1][ccx].ch = "·"; g[ccy - 1][ccx].color = reticleCol;
+      g[ccy + 1][ccx].ch = "·"; g[ccy + 1][ccx].color = reticleCol;
+    }
 
     // --- Right-side cockpit panel ---
     const panelX = vpRight + 2;
