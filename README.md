@@ -122,6 +122,7 @@ See [`src/game/README.md`](src/game/README.md) for extension recipes.
 | New entity kind       | Extend `EntityKind`, add generator + AI handler + entry in `GLYPHS`      |
 | New mission type      | Extend `MissionKind`, handle in `generateMission()` and `tickMissions()` |
 | New HUD element       | Add a draw call in the Renderer section's `renderPlaying()`              |
+| New reticle/HUD theme | Extend the tint tables in the Options ▸ Gameplay section of `voidwake.ts` |
 
 
 ---
