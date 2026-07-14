@@ -5888,7 +5888,74 @@ export class Voidwake {
         ctx.fillRect(0, 0, w, h);
       }
     }
+
+    // ---- Glitch overlay -------------------------------------------------
+    // Triggered by (a) recent hull damage and (b) a Thargoid actively
+    // enveloping us (EMP or within 2000u while non-dormant). Draws a few
+    // horizontal band-shifts and per-pixel noise scanlines. Skipped under
+    // reduced-motion or when the player has disabled it.
+    if (this.screen === "playing" && !this._reducedMotion && this.options.glitchFx !== false) {
+      const tNow = performance.now() / 1000;
+      const hullPulse = Math.max(0, this.hullFlashUntil - tNow);
+      let thargoidNear = (this._empUntil ?? 0) > tNow ? 1 : 0;
+      if (!thargoidNear && this.player) {
+        for (const e of this.entities) {
+          if (e.kind !== "thargoid" || e.state === "dormant") continue;
+          if (V.len(V.sub(e.pos, this.player.pos)) < 2000) { thargoidNear = 1; break; }
+        }
+      }
+      const intensity = Math.max(hullPulse > 0 ? 0.6 : 0, thargoidNear ? 0.85 : 0);
+      if (intensity > 0) {
+        // Cheap band-shift: pick 2-3 random horizontal slices and copy them
+        // sideways by a few pixels. Uses drawImage(canvas,...) which the
+        // 2D context supports on its own canvas.
+        const bands = 2 + Math.floor(Math.random() * 3);
+        for (let b = 0; b < bands; b++) {
+          const by = Math.floor(Math.random() * h);
+          const bh = 3 + Math.floor(Math.random() * 12);
+          const dx = Math.floor((Math.random() - 0.5) * 40 * intensity);
+          try { ctx.drawImage(this.canvas, 0, by, w, bh, dx, by, w, bh); } catch { /* ignore */ }
+        }
+        // Green/magenta chroma tick to sell the alien signal.
+        ctx.fillStyle = thargoidNear
+          ? `rgba(160, 255, 60, ${(0.09 * intensity).toFixed(3)})`
+          : `rgba(255, 80, 80, ${(0.10 * intensity).toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
+
+    // ---- Scanlines ------------------------------------------------------
+    // Subtle even-row darkening — pure CRT flavor, opt-in in Options.
+    if (this.screen === "playing" && this.options.scanlines) {
+      ctx.fillStyle = "rgba(0,0,0,0.14)";
+      for (let sy = 0; sy < h; sy += 2) ctx.fillRect(0, sy, w, 1);
+    }
+
+    // ---- HUD scheme tint ------------------------------------------------
+    // Multiply overlay in the chosen theme color. Green is the default and
+    // no-ops. Amber gives a classic amber-CRT feel, cyan/white/red/etc.
+    // recolor the entire HUD (and starfield) at once without touching any
+    // draw call. Alpha is low so glyphs remain readable.
+    if (this.screen === "playing") {
+      const scheme = this.options.hudScheme ?? "green";
+      if (scheme !== "green") {
+        const tint = ({
+          amber: "rgba(255, 165, 40, 0.28)",
+          cyan:  "rgba(80, 200, 255, 0.22)",
+          white: "rgba(240, 240, 255, 0.14)",
+          red:   "rgba(255, 90, 90, 0.22)",
+        } as Record<string, string>)[scheme];
+        if (tint) {
+          const prev = ctx.globalCompositeOperation;
+          ctx.globalCompositeOperation = "multiply";
+          ctx.fillStyle = tint;
+          ctx.fillRect(0, 0, w, h);
+          ctx.globalCompositeOperation = prev;
+        }
+      }
+    }
   }
+
 
   // Reusable cell grid — allocate once per resize, reset characters in place.
   // Replaces the per-frame blankGrid() that produced ~rows*cols fresh objects.
