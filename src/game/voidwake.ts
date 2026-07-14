@@ -158,6 +158,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Local chatter mentions {rumor}.",
     "Orbital relay {hailVerb} you, Cmdr {cmdr}.",
   ],
+  patrol: [
+    "SPD Patrol to {ship} — maintain course, {cmdr}.",
+    "Space Police, {sector} beat. {praise}, Cmdr.",
+    "Any {curse} in your six, {cmdr}? Squawk and we're on 'em.",
+    "SPD advisory — {rumor}. Fly clean.",
+    "{ship}, we log this lane. Behave and we're friends.",
+    "Fuel dry? Squawk mayday — we'll tow you to dock.",
+    "Patrol pinging {ship} — hull {hull}%, doing alright?",
+    "Attack a lawful hull in our range, Cmdr, and we return the favor.",
+  ],
   gunner_idle: [
     "Quiet out here. {weather}.",
     "{smalltalk}.",
