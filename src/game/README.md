@@ -421,11 +421,12 @@ Hooks currently fired by the engine:
 | `onWorldGenerate`   | `{ seed, entities }`                       | end of `generateUniverse()`           |
 | `onTick`            | `{ dt, player, entities }`                 | top of `updatePlaying()`, post-pause  |
 | `onPlayerFire`      | `{ weaponId, from, target }`               | pilot fire path                       |
-| `onPlayerDock`      | `{ entity, kind: "station" \| "ship-trade" }` | inside `tryDock()` success paths  |
+| `onPlayerDock`      | `{ entity, kind: "station" \| "ship-trade" \| "planet" }` | inside `tryDock()` success paths  |
 | `onEntityDestroyed` | `{ entity, byPlayer }`                     | ship/station → debris conversion      |
 | `onChatter`         | `{ who, msg, color, channel }`             | end of `pushChatter()`                |
 | `onSave`            | `{ slot, blob }`                           | after successful save (manual + auto) |
 | `onLoad`            | `{ slot, blob }`                           | after successful load                 |
+| `onPlanetLand`      | `{ entity }`                               | populated-planet landing (fires in addition to `onPlayerDock`) |
 
 Payload shapes are stable — changes require a `VERSION` bump and a note
 in this section. Additional hooks are welcome but must land as no-op
