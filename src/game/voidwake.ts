@@ -4187,12 +4187,26 @@ export class Voidwake {
       this.pushLog(this.questPinned ? "Quest tracker pinned." : "Quest tracker hidden.");
     }
 
+    // Comms panel controls. '\' cycles the tab (All → Crew → External),
+    // PageUp/PageDown scroll the filtered feed. Scroll is clamped in the
+    // renderer against the current tab's line count.
+    if (this.input.consume("\\")) {
+      const order: (typeof this.chatterTab)[] = ["all", "crew", "external"];
+      const i = order.indexOf(this.chatterTab);
+      this.chatterTab = order[(i + 1) % order.length];
+      this.chatterScroll = 0;
+    }
+    if (this.input.consume("pageup"))   this.chatterScroll = Math.min(this.chatterScroll + 4, 240);
+    if (this.input.consume("pagedown")) this.chatterScroll = Math.max(this.chatterScroll - 4, 0);
+    if (this.input.consume("home"))     this.chatterScroll = 0;
+
     // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
     this.updateGunner(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickCrewIdle(dt);
     this.tickCrewBanter(dt);
+    this.tickNpcBanter(dt);
     this.tickRetaliation();
     this.tickRespawns(dt);
 
