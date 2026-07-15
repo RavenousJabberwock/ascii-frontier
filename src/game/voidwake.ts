@@ -6242,7 +6242,13 @@ export class Voidwake {
     if (this.stationPage === "crew") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~")) return;
-      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
+      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant", "navigator", "quartermaster", "recruiter", "tactical"];
+      // "locked" rows: eaten silently so exclusivity messaging in the menu
+      // doesn't try to hire a locked slot.
+      if (row.includes("locked")) {
+        this.pushLog(row.startsWith("Gunner") ? "Dismiss the Tactical Officer first." : "Dismiss the Gunner first.");
+        return;
+      }
       // Dismiss line matches "Dismiss <title> ..."
       if (row.startsWith("Dismiss")) {
         const r = roles.find((rr) => hasCrew(p, rr) && row.includes(CREW_ROLE_INFO[rr].title));
@@ -6268,9 +6274,12 @@ export class Voidwake {
       if (!r) return;
       const info = CREW_ROLE_INFO[r];
       if (hasCrew(p, r)) return;
+      if (r === "gunner" && hasCrew(p, "tactical")) { this.pushLog("Tactical Officer aboard — Gunner slot locked."); return; }
+      if (r === "tactical" && !!p.gunner) { this.pushLog("Gunner aboard — Tactical Officer slot locked."); return; }
       if (crewCount(p) >= effectiveCrewMax(p)) { this.pushLog("No spare berths — install Crew Quarters."); return; }
+      const recruiterMul = hasCrew(p, "recruiter") ? 0.85 : 1.0;
       const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
-      const fee = xeno ? Math.round(baseFee * 2) : baseFee;
+      const fee = Math.round((xeno ? baseFee * 2 : baseFee) * recruiterMul);
       if (p.credits < fee) { this.pushLog("Not enough credits."); return; }
       p.credits -= fee;
       if (r === "gunner") {
