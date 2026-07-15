@@ -1152,7 +1152,13 @@ function generateUniverse(seed: number): Entity[] {
 
   // Planets
   for (let i = 0; i < WORLD.planets; i++) {
-    out.push({ id: nextId(), kind: "planet", name: nameFrom(rng, "P-"), pos: randPos(rng, WORLD.planetRadius), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
+    // ~12% of planets are inhabited colonies. Prefix the name with "◈" so
+    // scanner labels, target panels, and chatter tags all read as inhabited
+    // without needing a per-panel branch.
+    const populated = rng() < 0.12;
+    const baseName = nameFrom(rng, populated ? "Colony" : "P-");
+    const name = populated ? `◈ ${baseName}` : baseName;
+    out.push({ id: nextId(), kind: "planet", name, pos: randPos(rng, WORLD.planetRadius), vel: { x: 0, y: 0, z: 0 }, faction: "nature", populated: populated || undefined });
   }
   // Asteroid field
   for (let i = 0; i < WORLD.asteroids; i++) {
