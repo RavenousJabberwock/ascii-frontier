@@ -298,7 +298,9 @@ The **ESC ▸ Options** screen is organized into three subsections plus a
 Keybinds sub-page:
 
 - **Gameplay** — Difficulty, Peaceful Mode, Cheat Mode, Autosave, Unsaved
-  Warn, Permadeath, Crew Chatter.
+  Warn, Permadeath, Crew Chatter, Glitch FX, Scanlines, HUD Color, Reticle
+  Color, Reticle Shape, and **Comms Width / Comms Height / Comms Word Wrap**
+  (0.5) which resize and word-wrap the top-left Comms panel.
 - **Audio** — Master / SFX / Music volume, Radio preset, Radio URL.
 - **Controls** — Mouse Steer, Mouse Sensitivity, Gamepad, Gamepad Deadzone,
   Touch Controls, Show FPS, and **Configure Keybinds…** which opens a full
