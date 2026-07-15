@@ -248,6 +248,15 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Local chatter mentions {rumor}.",
     "Orbital relay {hailVerb} you, Cmdr {cmdr}.",
   ],
+  planet_populated: [
+    "Colony control to {ship} — landing pads clear, welcome down, Cmdr {cmdr}.",
+    "Tradehouse open — ore moving at spot, fuel at market rate.",
+    "Downwell traffic advisory: {weather}.",
+    "{speaker} bazaar {hailVerb} the {ship} — bring cargo, leave credits.",
+    "Colony militia on the beat — {praise}, {cmdr}.",
+    "Manifest scan queued. Step aboard when you're locked, {cmdr}.",
+    "Kids on the promenade counting hulls — you're number {kills} this cycle.",
+  ],
   patrol: [
     "SPD Patrol to {ship} — maintain course, {cmdr}.",
     "Space Police, {sector} beat. {praise}, Cmdr.",
