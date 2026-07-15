@@ -478,6 +478,92 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr, next captain, listen to your merchant.",
     "Rather sell rocks door-to-door than watch you refuse a margin.",
   ],
+  navigator_idle: [
+    "Plot's clean, Cmdr — nearest station bearing steady.",
+    "{smalltalk}.",
+    "Star charts say {rumor}. Filed it under 'maybe'.",
+    "Fuel window looks fine at this burn rate.",
+    "Wormhole density here is thin. We'd have to hunt for a shortcut.",
+    "I've got the {sector} lanes memorized. Ask any time.",
+  ],
+  navigator_greet: [
+    "Navigator aboard. I'll shave a jump off every long haul, Cmdr.",
+    "Cmdr {cmdr} — I read stars like other people read faces. Glad to be here.",
+    "Charts stowed. Point me at a destination and I'll find the cheap line.",
+  ],
+  navigator_farewell_good: [
+    "Fair skies, Cmdr. I'll leave you the best charts.",
+    "Been a pleasure plotting for the {ship}. Safe vectors.",
+  ],
+  navigator_farewell_bad: [
+    "You ignored every plot I filed. Good luck without me.",
+    "Rather map dead systems than fly with a captain who won't listen.",
+  ],
+  quartermaster_idle: [
+    "Manifest's tight, Cmdr. I know where every crate lives.",
+    "{smalltalk}.",
+    "I can shave 8% off a module sticker if you let me haggle.",
+    "Rations rotated, cargo lashed. Boring is good.",
+    "Ore prices in {sector} would move if we pushed the right buyer.",
+  ],
+  quartermaster_greet: [
+    "Quartermaster reporting. I'll squeeze margin out of every dock, Cmdr.",
+    "Cmdr {cmdr} — pleasure. My ledger's cleaner than most surgeons' hands.",
+    "Cargo hold's mine now. Trust the process.",
+  ],
+  quartermaster_farewell_good: [
+    "Solid ledger, solid captain. I'll invest my cut in {sector}.",
+    "Cmdr — thanks for letting me run the hold. Fly true.",
+  ],
+  quartermaster_farewell_bad: [
+    "You wouldn't take my numbers seriously. I'm out.",
+    "Rather count screws at a dry dock than watch you overpay again.",
+  ],
+  recruiter_idle: [
+    "Talked to a few candidates at the last dock. Decent pool this cycle.",
+    "{smalltalk}.",
+    "Crew morale looks steady, Cmdr. Keep the wages honest.",
+    "I know a gunner in {sector} who'd sign for cheap. Say the word.",
+    "Reputation's a currency too. We're spending it slower than most.",
+  ],
+  recruiter_greet: [
+    "Recruiter aboard. I'll trim hire fees and keep the bunk happy, Cmdr.",
+    "Cmdr {cmdr} — I've placed hands on a hundred hulls. This one's mine now.",
+    "Give me a station and a bar, I'll bring you signatures.",
+  ],
+  recruiter_farewell_good: [
+    "Crew's in good shape. I'll leave you my rolodex, Cmdr.",
+    "Been an honor. Look me up in {sector} — I'll always find you a hand.",
+  ],
+  recruiter_farewell_bad: [
+    "You burned every hire I brought aboard. I'm done.",
+    "Rather post flyers on a stationary hab than watch you drive off another crewman.",
+  ],
+  tactical_idle: [
+    "Threat board's quiet. I like it quiet.",
+    "{smalltalk}.",
+    "Shield harmonics running hot — recharge's up 25%, courtesy of yours truly.",
+    "If it turns red on my scope, {cmdr}, it stops moving.",
+    "Kill count's {kills}. Half of those were my calls.",
+  ],
+  tactical_greet: [
+    "Tactical officer reporting. I run the guns, {cmdr} — Gunner's redundant with me aboard.",
+    "Cmdr {cmdr} — I've boarded three Guild scows and outshot a patrol wing. You're in good hands.",
+    "Shields, targeting, priority calls — mine. You fly, I fight.",
+  ],
+  tactical_hostile: [
+    "Priority target locked — burn 'em, {cmdr}!",
+    "{target} in the reticle. Cleared to engage.",
+    "Shields nominal — trade shots if you have to.",
+  ],
+  tactical_farewell_good: [
+    "Cmdr — {kills} clean kills together. Not bad. Fly true.",
+    "Solid captain, solid ship. I'll take another contract when you call.",
+  ],
+  tactical_farewell_bad: [
+    "You wasted every shot I called. I'm out.",
+    "Rather train recruits than watch another good hull chew on plasma for no reason.",
+  ],
   banter: [
     "{a}: {b}, you ever going to fix that coupler?  ||  {b}: I fixed yours, {a}. Try locking the door.",
     "{a}: If we get boarded, {b} goes first.  ||  {b}: I go first because I'm faster, not braver.",
