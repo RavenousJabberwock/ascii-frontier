@@ -4830,6 +4830,24 @@ export class Voidwake {
       dispatchHook("onPlayerDock", { entity: t, kind: "ship-trade" });
       return;
     }
+    // Populated planet landing — treat as a stripped station (market only,
+    // NO free repair). buildStationLines already returns [Market, Undock]
+    // for any docked entity whose kind !== "station" (isMini branch).
+    if (t.kind === "planet" && t.populated) {
+      const dp = V.len(V.sub(t.pos, p.pos));
+      if (dp > 300) { this.pushLog("Too far to land — hold low orbit within 300u."); return; }
+      if (p.throttle > 0.05) { this.pushLog("Reduce throttle to land."); return; }
+      this.screen = "station";
+      this.menuCursor = 0;
+      this.stationPage = "market";
+      this.dockedStationId = t.id;
+      this.pushLog(`Landed at colony ${t.name}. Colony trade only — no shipyard services.`);
+      this.pushChatter(`Colony ${t.name}`, this.getStock(t.id).rumor, "#ffd28a");
+      this.sfx("dock");
+      dispatchHook("onPlayerDock", { entity: t, kind: "planet" });
+      dispatchHook("onPlanetLand", { entity: t });
+      return;
+    }
     if (t.kind !== "station") { this.pushLog("Target a station or friendly ship with T."); return; }
     if (t.faction === "pirate") { this.pushLog(`${t.name} is a pirate stronghold — no docking permitted.`); return; }
     const d = V.len(V.sub(t.pos, p.pos));
