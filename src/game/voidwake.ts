@@ -4392,6 +4392,7 @@ export class Voidwake {
           version: VERSION, seed: this.seed,
           player: p, entities: this.entities,
           options: this.options, savedAt: Date.now(),
+          chatter: this.chatter.slice(0, 250),
         };
         const res = saveGame("autosave", blob);
         if (!res.ok) {
@@ -5817,6 +5818,7 @@ export class Voidwake {
         version: VERSION, seed: this.seed,
         player: this.player, entities: this.entities,
         options: this.options, savedAt: Date.now(),
+        chatter: this.chatter.slice(0, 250),
       };
       const res = saveGame(c, blob);
       if (!res.ok) {
