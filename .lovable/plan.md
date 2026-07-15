@@ -149,3 +149,100 @@ Approve and I'll implement in one pass, verify the build, and refresh the offlin
 - A "System" tab for `Sensors`/`Radio` if the current 3-tab surface starts
   to feel noisy in practice.
 
+## 0.5 pass — Ship computer, adjustable comms, sun/nebula variety, wreck salvage
+
+- **Ship Computer voice** — ✅ New `Computer` speaker prefix routes to the
+  crew channel via `CREW_BARE_LABELS`. Any crew-labeled chatter that fires
+  when the position is unfilled now falls back to `Computer` (currently the
+  engineer scoop line and the wormhole-slip line).
+- **Guard unassigned-position chatter** — ✅ The two unguarded callsites
+  ("Engineer scooping corona", "Navigator reality fold") now check
+  `hasCrew()` and defer to `Computer` when no one is on-station. All other
+  Gunner/Pilot chatter was already correctly gated by `if (p.gunner) …` /
+  `if (pilot) …` blocks.
+- **Adjustable Comms window** — ✅ `Options ▸ Gameplay` now has three new
+  rows: `Comms Width` (28–120 cols, step 2), `Comms Height` (4–30 rows),
+  and `Comms Word Wrap` (on/off). The renderer wraps on word boundaries
+  when enabled and scrolls in rendered lines instead of raw messages so
+  wrapped multi-line entries scroll intuitively.
+- **Sun size variability** — ✅ New `starSizeMul(e)` combines
+  `stellarClassOf(e).sizeMul` with a per-star deterministic jitter
+  (~0.55×–1.75×). Applied to render world radius AND to corona
+  scoop/burn ring math, so a few G-class Sol analogs are genuinely huge
+  and some M-dwarfs look like pinpricks even up close.
+- **Bigger, farther-visible nebulae** — ✅ `WORLD.nebulaRadius`
+  27000 → 40000, `WORLD.nebulae` 88 → 140, `worldRadius.nebula`
+  240 → 420, and nebulae are now exempted from `FAR_CULL` so their
+  glow bleeds through at long range. Objects (stars, ships, stations,
+  planets) already spawn independently across similar radii, so any
+  entity can occupy a nebula's volume incidentally — nebulae layer over
+  them in the renderer instead of displacing them.
+- **Wreckage neutralization** — ✅ Ship/station destruction now clears
+  `faction` → `"nature"`, `hostileUntil`, `weaponId`, and `state`, so a
+  destroyed hostile can never keep firing, get chased, or read as a
+  target of any faction. Wrecks also carry a small ore payload (1–3, +2
+  for former stations) so a player who mines the corpse gets a small
+  scrap tip.
+- **Wormhole stations** — ✅ 5% of wormhole pairs spawn a Federation
+  "Gate" station orbiting one mouth; ~30% of those also spawn a partner
+  station at the other mouth. Both use the standard station AI/dock
+  path so they're immediately usable.
+- **VERSION bump** — ✅ 0.4.0 → 0.5.0 and offline bundle rebuilt.
+
+### Backlog (0.5 deferred — please implement in a later pass)
+
+Items from the 0.5 ask that did NOT land this pass. All are additive and
+save-safe; the code refs are pointers for the next agent.
+
+- **Dedicated "Chat Windows" submenu** — currently the three comms
+  controls sit inline in the Gameplay list. A nested submenu would need
+  a new `optionsSection = "comms"` state and its own `render/update`
+  pair (mirroring `updateOptionsKeybinds`).
+- **Populated planets + planet trade** — plumb a `populated: boolean`
+  flag onto ~5–15% of `kind:"planet"` entities, wire them into `tryDock`
+  (currently `dockR = 120` for stars only; planets need a similar orbit
+  handshake), open a lightweight trade screen (reuse `renderStation`
+  scaffolding), and add planet chatter lines so the player can
+  eavesdrop to find which planets are inhabited.
+- **Ship-shaped wreckage sprites** — wrecks currently reuse the
+  `asteroid` glyph. Add a `debris` render branch that draws a small
+  irregular cluster (e.g. `╱`, `╲`, `¦`, `·`) with a periodic
+  `*`/`+` spark to sell the "burning parts of a ship" read.
+- **Roche-limit irregular shapes** — under a certain distance from a
+  planet, small bodies (asteroid/comet/meteor) should render with an
+  irregular per-frame edge. Cheapest path: add a small hash-driven
+  `roughness` factor in the asteroid render branch that's boosted when
+  the nearest planet is within `2 × planetRadius`.
+- **New crew roles**:
+    - **Quartermaster** — 10% discount on modules/weapons, +2 cargo slots.
+      Distinct from `merchant`; add as a new `CrewRole`.
+    - **Recruiter** — reduces `CREW_ROLE_INFO[*].baseFee` at hire and
+      slows morale decay (introduce a `morale` field on `CrewMember`).
+    - **Navigator** — −10% fuel burn (stacks with Engineer), +25% radar
+      range, and adds `wormhole` / mission target / `star` (BH) to the
+      T-cycle target set.
+    - **Tactical Officer** — can fire the main weapon (mutually
+      exclusive with `Gunner`), +15% crit chance, +25% shield recharge.
+      Enforce the exclusivity in hire menu.
+  Each new role also needs `chatter.ts` template entries (`quartermaster_idle`,
+  `recruiter_idle`, `navigator_idle`, `tactical_idle`) and a color in
+  `CREW_ROLE_INFO`.
+- **Persist comms history in saves** — Save/Load section currently
+  discards `this.chatter`.
+- **Lua scripting hooks (research spike)** — the natural attach points
+  are the tick boundaries. Suggested hook surface (name, when called):
+    - `onWorldGenerate(entities)` — end of `generateUniverse`.
+    - `onTick(dt, player, entities)` — top of `updatePlaying`.
+    - `onPlayerDock(stationEntity)` — inside `tryDock` after credits/rep
+      apply.
+    - `onPlayerFire(weaponId, targetEntity)` — inside pilot fire path.
+    - `onEntityDestroyed(entity, byPlayer)` — inside the debris
+      conversion block (voidwake.ts ~line 4486).
+    - `onChatter(who, msg, channel)` — end of `pushChatter`.
+    - `onSave(blob) / onLoad(blob)` — Save/Load section.
+  Recommended runtime: `fengari-web` (Lua 5.3 in WASM, MIT, works in
+  offline single-file builds). A skeleton `LuaHost` module could live
+  next to `voidwake.ts` and read scripts out of localStorage; the hook
+  callsites should be added as no-op dispatchers first so a follow-up
+  pass just wires the runtime.
+
