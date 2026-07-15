@@ -1017,7 +1017,7 @@ const WORLD = {
   stationRadius: 25500,
   shipRadius: 28500,
   cometRadius: 31500,
-  nebulaRadius: 27000,
+  nebulaRadius: 40000,
   beaconRadius: 27000,
   baseRadius: 28500,
   planets: 142,
@@ -1025,7 +1025,7 @@ const WORLD = {
   stations: 68,
   ships: 506,
   comets: 95,
-  nebulae: 88,
+  nebulae: 140,
   beacons: 68,
   pirateBases: 37,
 };
@@ -3897,7 +3897,8 @@ export class Voidwake {
           const rate = 6.0 * Math.max(0, Math.min(1, t01));
           p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + rate * dt);
           if (!this._scoopingUntil || now > this._scoopingUntil) {
-            this.pushChatter("Engineer", `Scooping ${sc.name} corona — refuelling.`, "#fc6");
+            this.pushChatter(hasCrew(p, "engineer") ? "Engineer" : "Computer",
+              `Scooping ${sc.name} corona — refuelling.`, hasCrew(p, "engineer") ? "#fc6" : "#9effd2");
           }
           this._scoopingUntil = now + 2.0;
         } else if (scoopable && d < burnR && !this.options.cheat) {
@@ -4069,7 +4070,8 @@ export class Voidwake {
             p.throttle = 0;
             this._wormholeCooldown = 3.0;
             this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
-            this.pushChatter("Navigator", "Reality just... folded. We're somewhere else.", "#c8a0ff");
+            this.pushChatter(hasCrew(p, "navigator" as CrewRole) ? "Navigator" : "Computer",
+              "Reality just... folded. We're somewhere else.", "#c8a0ff");
             this.sfx("dock");
           }
         }
