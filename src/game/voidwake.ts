@@ -1950,7 +1950,7 @@ class Input {
       // Case-preserving text capture for name fields etc.
       if (e.key === "Backspace") this.textBuffer.push("\b");
       else if (e.key.length === 1) this.textBuffer.push(e.key);
-      if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
+      if (["arrowup", "arrowdown", " ", "tab", "pageup", "pagedown"].includes(k)) e.preventDefault();
     }, opts);
     el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()), opts);
     el.addEventListener("blur", () => {
