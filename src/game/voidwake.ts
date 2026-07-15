@@ -7430,7 +7430,7 @@ export class Voidwake {
     const titleCol = inNeb ? "#c47afc" : "#7CFC00";
     const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
     putText(g, commsX, commsY, commsTitle, titleCol);
-    const tabs: { id: typeof this.chatterTab; label: string }[] = [
+    const tabs: { id: Voidwake["chatterTab"]; label: string }[] = [
       { id: "all",      label: "All" },
       { id: "crew",     label: "Crew" },
       { id: "external", label: "Ext" },
