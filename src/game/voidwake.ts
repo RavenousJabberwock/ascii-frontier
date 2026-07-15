@@ -7075,7 +7075,7 @@ export class Voidwake {
         e.kind === "star" ? "*" :
         e.kind === "planet" ? "O" :
         e.kind === "station" ? "#" :
-        e.kind === "asteroid" ? "%" : glyph;
+        e.kind === "asteroid" ? (isWreck(e) ? "¦" : "%") : glyph;
       const edge =
         e.kind === "station" ? "=" :
         e.kind === "planet" ? "o" :
