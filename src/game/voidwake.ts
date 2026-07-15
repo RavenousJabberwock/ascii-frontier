@@ -5524,7 +5524,11 @@ export class Voidwake {
           this.pushChatter(`Beacon ${pick.name}`, pickLine("station", ctx), "#c2c2ff");
           break;
         case "planet":
-          this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
+          if (pick.populated) {
+            this.pushChatter(`Colony ${pick.name}`, pickLine("planet_populated", ctx), "#ffd28a");
+          } else {
+            this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
+          }
           break;
       }
     }
