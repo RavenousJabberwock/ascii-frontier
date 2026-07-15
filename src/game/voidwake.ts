@@ -1206,6 +1206,9 @@ function generateUniverse(seed: number): Entity[] {
   });
   // Traversable wormhole pairs. Each pair shares a `targetId` pointing at
   // its sibling; flying within 60u teleports the player to the sibling.
+  // 0.5: 5% of rifts have a Federation station orbiting one mouth; a
+  // rarer subset (~30% of those) have stations at BOTH ends, useful for
+  // long-haul trading loops.
   for (let i = 0; i < 7; i++) {
     const a: Entity = {
       id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
@@ -1219,6 +1222,31 @@ function generateUniverse(seed: number): Entity[] {
     };
     a.targetId = b.id; b.targetId = a.id;
     out.push(a, b);
+    // Stations orbiting wormhole mouths.
+    const roll = rng();
+    const hasStationA = roll < 0.05;
+    const hasStationB = hasStationA && rng() < 0.30;
+    const orbitOffset = (base: Vec3): Vec3 => ({
+      x: base.x + (rng() - 0.5) * 220,
+      y: base.y + (rng() - 0.5) * 100,
+      z: base.z + (rng() - 0.5) * 220,
+    });
+    if (hasStationA) {
+      out.push({
+        id: nextId(), kind: "station",
+        name: nameFrom(rng, "Gate ") + "-A",
+        pos: orbitOffset(a.pos),
+        vel: { x: 0, y: 0, z: 0 }, faction: "federation",
+      });
+    }
+    if (hasStationB) {
+      out.push({
+        id: nextId(), kind: "station",
+        name: nameFrom(rng, "Gate ") + "-B",
+        pos: orbitOffset(b.pos),
+        vel: { x: 0, y: 0, z: 0 }, faction: "federation",
+      });
+    }
   }
   // Dyson swarm: pick a G/K/F star and lace a ring of "◇" collectors
   // around it. Purely cosmetic — no AI, no interaction beyond awe.
