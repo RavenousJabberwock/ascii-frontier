@@ -421,11 +421,12 @@ Hooks currently fired by the engine:
 | `onWorldGenerate`   | `{ seed, entities }`                       | end of `generateUniverse()`           |
 | `onTick`            | `{ dt, player, entities }`                 | top of `updatePlaying()`, post-pause  |
 | `onPlayerFire`      | `{ weaponId, from, target }`               | pilot fire path                       |
-| `onPlayerDock`      | `{ entity, kind: "station" \| "ship-trade" }` | inside `tryDock()` success paths  |
+| `onPlayerDock`      | `{ entity, kind: "station" \| "ship-trade" \| "planet" }` | inside `tryDock()` success paths  |
 | `onEntityDestroyed` | `{ entity, byPlayer }`                     | ship/station → debris conversion      |
 | `onChatter`         | `{ who, msg, color, channel }`             | end of `pushChatter()`                |
 | `onSave`            | `{ slot, blob }`                           | after successful save (manual + auto) |
 | `onLoad`            | `{ slot, blob }`                           | after successful load                 |
+| `onPlanetLand`      | `{ entity }`                               | populated-planet landing (fires in addition to `onPlayerDock`) |
 
 Payload shapes are stable — changes require a `VERSION` bump and a note
 in this section. Additional hooks are welcome but must land as no-op
@@ -460,4 +461,25 @@ angular `╱ ╲ ¦ · = / \ |` glyphs — plus a small per-cell spark flicker
 (`*` / `+`) so wrecks read as "burning parts of a ship" rather than
 just another rock. Salvage payout (mine the wreck to recover 1–3 ore,
 +2 for former stations) is unchanged from 0.5.
+
+## Populated planets (0.5.3)
+
+~12% of `kind: "planet"` entities spawn as inhabited colonies. They
+carry a `populated: true` flag and get a name prefixed with `◈` so
+scanner labels, target panels, and chatter tags all read as inhabited
+without a per-panel branch.
+
+Land on one by targeting it and hitting `F` from within 300u at
+throttle ≤ 5%. The dock screen opens directly on the `Market` page —
+colonies expose ore/fuel trade only (no shipyard, no repair, no
+weapon/module/crew shops) via the existing `isMini` branch in
+`buildStationLines()`. Wages still tick per dock. Ambient chatter
+routes populated planets through the new `planet_populated` template
+with a `Colony {name}` speaker tag and an amber `#ffd28a` color so
+comms cues match the market UI.
+
+Fires `onPlayerDock` with `kind: "planet"` and the additional
+`onPlanetLand` hook so scripts can distinguish colony landings from
+station docks and ship-to-ship trades.
+
 

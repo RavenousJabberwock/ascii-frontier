@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.2";
+const VERSION = "0.5.3";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -69,10 +69,12 @@ const VERSION = "0.5.2";
 //   onTick            ({ dt, player, entities })        top of updatePlaying
 //   onPlayerFire      ({ weaponId, from, target })      pilot fire path
 //   onPlayerDock      ({ entity, kind })                inside tryDock success
+//                                                     kind: "station" | "ship-trade" | "planet"
 //   onEntityDestroyed ({ entity, byPlayer })            debris conversion block
 //   onChatter         ({ who, msg, color, channel })    end of pushChatter
 //   onSave            ({ slot, blob })                  after successful save
 //   onLoad            ({ slot, blob })                  after successful load
+//   onPlanetLand      ({ entity })                      populated-planet landing (also fires onPlayerDock)
 //
 // All handlers run synchronously in engine order. Hook lists are process-
 // global (not per-Voidwake instance) so a script attached at boot survives
@@ -86,7 +88,8 @@ export type ScriptHookName =
   | "onEntityDestroyed"
   | "onChatter"
   | "onSave"
-  | "onLoad";
+  | "onLoad"
+  | "onPlanetLand";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -100,6 +103,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onChatter:         [],
   onSave:            [],
   onLoad:            [],
+  onPlanetLand:      [],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
@@ -170,7 +174,7 @@ const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Ni
 const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
 
 type ChatterKind =
-  | "hostile" | "friendly" | "neutral" | "station" | "planet" | "patrol"
+  | "hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
   | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
@@ -243,6 +247,15 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Atmospheric thermals strong over the northern arc.",
     "Local chatter mentions {rumor}.",
     "Orbital relay {hailVerb} you, Cmdr {cmdr}.",
+  ],
+  planet_populated: [
+    "Colony control to {ship} — landing pads clear, welcome down, Cmdr {cmdr}.",
+    "Tradehouse open — ore moving at spot, fuel at market rate.",
+    "Downwell traffic advisory: {weather}.",
+    "{speaker} bazaar {hailVerb} the {ship} — bring cargo, leave credits.",
+    "Colony militia on the beat — {praise}, {cmdr}.",
+    "Manifest scan queued. Step aboard when you're locked, {cmdr}.",
+    "Kids on the promenade counting hulls — you're number {kills} this cycle.",
   ],
   patrol: [
     "SPD Patrol to {ship} — maintain course, {cmdr}.",
@@ -704,6 +717,10 @@ interface Entity {
   stranded?: boolean;
   // While a Patrol is towing this stranded ship, its id is stored here.
   towById?: number;
+  // Colony flag: a small subset of planets are inhabited. Landing on one
+  // opens a stripped station-style market (ore/fuel only). Untouched by
+  // combat AI — colonies stay "nature" faction and non-hostile.
+  populated?: boolean;
 }
 
 interface PlayerChar {
@@ -1135,7 +1152,13 @@ function generateUniverse(seed: number): Entity[] {
 
   // Planets
   for (let i = 0; i < WORLD.planets; i++) {
-    out.push({ id: nextId(), kind: "planet", name: nameFrom(rng, "P-"), pos: randPos(rng, WORLD.planetRadius), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
+    // ~12% of planets are inhabited colonies. Prefix the name with "◈" so
+    // scanner labels, target panels, and chatter tags all read as inhabited
+    // without needing a per-panel branch.
+    const populated = rng() < 0.12;
+    const baseName = nameFrom(rng, populated ? "Colony" : "P-");
+    const name = populated ? `◈ ${baseName}` : baseName;
+    out.push({ id: nextId(), kind: "planet", name, pos: randPos(rng, WORLD.planetRadius), vel: { x: 0, y: 0, z: 0 }, faction: "nature", populated: populated || undefined });
   }
   // Asteroid field
   for (let i = 0; i < WORLD.asteroids; i++) {
@@ -4807,6 +4830,24 @@ export class Voidwake {
       dispatchHook("onPlayerDock", { entity: t, kind: "ship-trade" });
       return;
     }
+    // Populated planet landing — treat as a stripped station (market only,
+    // NO free repair). buildStationLines already returns [Market, Undock]
+    // for any docked entity whose kind !== "station" (isMini branch).
+    if (t.kind === "planet" && t.populated) {
+      const dp = V.len(V.sub(t.pos, p.pos));
+      if (dp > 300) { this.pushLog("Too far to land — hold low orbit within 300u."); return; }
+      if (p.throttle > 0.05) { this.pushLog("Reduce throttle to land."); return; }
+      this.screen = "station";
+      this.menuCursor = 0;
+      this.stationPage = "market";
+      this.dockedStationId = t.id;
+      this.pushLog(`Landed at colony ${t.name}. Colony trade only — no shipyard services.`);
+      this.pushChatter(`Colony ${t.name}`, this.getStock(t.id).rumor, "#ffd28a");
+      this.sfx("dock");
+      dispatchHook("onPlayerDock", { entity: t, kind: "planet" });
+      dispatchHook("onPlanetLand", { entity: t });
+      return;
+    }
     if (t.kind !== "station") { this.pushLog("Target a station or friendly ship with T."); return; }
     if (t.faction === "pirate") { this.pushLog(`${t.name} is a pirate stronghold — no docking permitted.`); return; }
     const d = V.len(V.sub(t.pos, p.pos));
@@ -5483,7 +5524,11 @@ export class Voidwake {
           this.pushChatter(`Beacon ${pick.name}`, pickLine("station", ctx), "#c2c2ff");
           break;
         case "planet":
-          this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
+          if (pick.populated) {
+            this.pushChatter(`Colony ${pick.name}`, pickLine("planet_populated", ctx), "#ffd28a");
+          } else {
+            this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
+          }
           break;
       }
     }

@@ -277,28 +277,112 @@ save-safe; the code refs are pointers for the next agent.
   cleanly (backfilled to `[]`).
 - **VERSION bump** — ✅ 0.5.1 → 0.5.2 and offline bundle rebuilt.
 
+## 0.5.3 pass — Populated planets + colony trade
+
+- **Colonies** — ✅ `Entity.populated?: boolean` added. Universe
+  generation rolls ~12% of `kind: "planet"` entities as colonies with
+  a `◈` name prefix so scanner labels, target panels, and chatter tags
+  all read as inhabited without per-panel branches.
+- **Landing** — ✅ `tryDock` now accepts a targeted populated planet at
+  ≤300u and throttle ≤5%. Opens the station screen directly on the
+  Market page; the existing `isMini` branch in `buildStationLines`
+  restricts the menu to `[Market, Undock]`. NO free repair or
+  automatic refuel — colonies are trade posts, not shipyards. Wages
+  still tick per dock.
+- **Colony chatter** — ✅ New `planet_populated` `ChatterKind` with
+  7 tradehouse / bazaar / militia lines. Ambient chatter routes
+  populated planets through it with a `Colony {name}` speaker tag and
+  amber `#ffd28a` color that matches the market UI palette.
+- **Scripting** — ✅ Added `onPlanetLand` hook (`{ entity }`) and
+  extended `onPlayerDock` payload to include `kind: "planet"`. Both
+  fire from the colony landing path; runtime remains no-op until the
+  Lua host lands. Hook table in `src/game/README.md` updated.
+- **VERSION bump** — ✅ 0.5.2 → 0.5.3 and offline bundle rebuilt.
+
 ### Recommended next round (still 0.5.x)
 
 Ranked by ROI for the current codebase. All additive and save-safe.
 
-1. **Populated planets + planet trade** — plumb a `populated: boolean`
-   flag onto ~5–15% of `kind:"planet"` entities, add a planet branch
-   in `tryDock` (currently `dockR=120` for stars only), open a trimmed
-   station-style trade screen, and add planet chatter so players can
-   eavesdrop to find inhabited worlds.
-2. **New crew roles (Quartermaster / Recruiter / Navigator /
+1. **New crew roles (Quartermaster / Recruiter / Navigator /
    Tactical)** — extends `CrewRole`, `CREW_ROLE_INFO`, chatter
    templates, plus a hire-menu exclusivity check for Gunner ↔
    Tactical.
-3. **Lua host wiring (fengari-web)** — hook surface is ready
-   (0.5.1); this round drops in the WASM Lua 5.3 runtime, replaces
-   the greyed Options ▸ Scripting placeholder with load / reload /
-   edit / enable-per-hook / sandbox controls, and reads scripts from
-   localStorage.
-4. **Roche-limit irregular shapes for small bodies** — cheap render
+2. **Lua host wiring + modding pipeline (fengari-web)** — see the
+   detailed Modding roadmap below. Drops in the WASM Lua 5.3 runtime,
+   replaces the greyed Options ▸ Scripting placeholder with load /
+   reload / edit / enable-per-hook / sandbox controls, and ships a
+   real mod-loading pipeline (localStorage today, drag-drop `.lua`
+   files, optional mod bundles).
+3. **Roche-limit irregular shapes for small bodies** — cheap render
    tweak in the asteroid branch; boost per-cell edge roughness when
    the nearest planet is within `2 × planetRadius`. Piggy-backs
    nicely on the 0.5.2 wreckage work.
+4. **Colony flavor polish** — distinct colony glyph or ring in the
+   renderer, plus a colony-specific stock jitter (small discount on
+   fuel, small premium on ore) so colonies aren't market-identical to
+   stations.
+
+## Modding roadmap (Lua + beyond)
+
+The hook surface (0.5.1) and the population of dockable colony
+targets (0.5.3) are the last pieces the Lua host needs before it can
+start doing interesting things. Planned milestones:
+
+**M1 — Lua host (0.5.4 candidate)**
+
+- Bundle `fengari-web` (or a WASM Lua 5.3) into the offline HTML.
+- Boot a sandboxed Lua state at engine start. No `io`, `os.execute`,
+  `debug`, `package.loadlib`, or raw `require` — only a whitelisted
+  `frontier.*` API surface.
+- Wrap every existing hook (`onWorldGenerate`, `onTick`, `onPlayerFire`,
+  `onPlayerDock`, `onEntityDestroyed`, `onChatter`, `onSave`, `onLoad`,
+  `onPlanetLand`) into Lua thunks. Read-only payloads for M1.
+- Replace **Options ▸ Scripting (soon)** with a real submenu: enable
+  scripting, load from localStorage slot, hot-reload, per-hook
+  enable/disable, view last error.
+
+**M2 — Mutation API**
+
+- Introduce `frontier.entities.spawn/despawn`, `frontier.player.grant`,
+  `frontier.pushLog`, `frontier.pushChatter`, and a small event-emit
+  helper so scripts can react without touching JS internals.
+- All writes go through a validation layer that clamps values and
+  refuses invalid entity kinds — a bad script can crash itself, never
+  the engine.
+
+**M3 — Mod bundles**
+
+- Define a `mod.json` manifest (`{ id, name, version, entry, hooks,
+  permissions }`) and let the launcher accept a folder or zipped
+  bundle drag-dropped onto the title screen.
+- Persist installed mods in IndexedDB (localStorage is too small for
+  multi-file bundles). Show them in an Options ▸ Mods submenu with
+  enable/disable toggles.
+- Load order is deterministic (alphabetical by id, with an optional
+  `priority` field). Save files record the active mod set so a save
+  loaded without its mods warns instead of silently missing content.
+
+**M4 — Content packs**
+
+- Data-only mods: JSON packs that extend `WEAPONS`, `CREW_ROLE_INFO`,
+  `TEMPLATES` (chatter), station stock tables, and planet name
+  fragments — no Lua required, so non-programmers can ship content.
+- Reserved namespaces (`mod:<id>/…`) prevent id collisions on custom
+  weapons, ship hulls, and crew roles.
+
+**M5 — Debug / authoring**
+
+- In-game console (backtick) that evals Lua against the sandbox and
+  prints results into the Comms panel with a `Script` speaker tag.
+- `frontier.debug.dumpEntity(id)` and `frontier.debug.time()` helpers.
+- Optional per-hook timing overlay in Options ▸ Scripting so authors
+  can spot heavy handlers.
+
+Hook payload shapes are frozen. Any new hook must land as a no-op
+dispatcher first (like `onPlanetLand` did this pass) so scripts
+written against a newer build don't crash on an older one — see the
+"Payload shapes are stable" note in `src/game/README.md`.
+
 
 
 
