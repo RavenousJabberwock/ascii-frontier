@@ -4376,6 +4376,7 @@ export class Voidwake {
         } else {
           p.lastSaveAt = Date.now();
           this.pushLog("◉ Autosaved.");
+          dispatchHook("onSave", { slot: "autosave", blob });
         }
       } catch (err) {
         console.warn("Autosave failed", err);
@@ -4619,6 +4620,7 @@ export class Voidwake {
             t.hostileUntil = 0;
             t.weaponId = undefined;
             t.state = undefined;
+            dispatchHook("onEntityDestroyed", { entity: t, byPlayer: playerShot });
           }
           return false;
         }
@@ -4778,6 +4780,7 @@ export class Voidwake {
       this.pushLog(`Trading with ${t.name}.`);
       this.pushChatter(t.name, this.getStock(t.id).rumor, "#c2c2ff");
       this.sfx("dock");
+      dispatchHook("onPlayerDock", { entity: t, kind: "ship-trade" });
       return;
     }
     if (t.kind !== "station") { this.pushLog("Target a station or friendly ship with T."); return; }
@@ -4795,10 +4798,12 @@ export class Voidwake {
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.sfx("dock");
+    dispatchHook("onPlayerDock", { entity: t, kind: "station" });
     if (p.gunner) {
       this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
         pickLine("gunner_docked", this.chatterCtx(t)), "#fc6");
     }
+
 
     // Hand in mission
     if (p.mission && p.mission.done) {
@@ -5785,6 +5790,7 @@ export class Voidwake {
       } else {
         this.player.lastSaveAt = Date.now();
         this.pushLog(`Saved to ${c}.`);
+        dispatchHook("onSave", { slot: c, blob });
         this.screen = "menu";
       }
     }
@@ -5806,6 +5812,7 @@ export class Voidwake {
       this.screen = "playing";
       this.pushLog(`Loaded ${c}.`);
       this.syncRadio();
+      dispatchHook("onLoad", { slot: c, blob });
     }
   }
 
