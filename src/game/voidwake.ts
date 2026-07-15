@@ -2661,8 +2661,13 @@ export class Voidwake {
   // Per-station market state, lazily generated on first dock and cached
   // for the rest of the session. Keyed by station entity id.
   stationStocks = new Map<number, StationStock>();
-  // Comms / chatter feed (max ~6 lines kept). See pushChatter / renderChatter.
+  // Comms / chatter feed. See pushChatter / renderChatter. Cap ~250 so the
+  // top-left Comms panel can scroll back through recent traffic.
   chatter: ChatterLine[] = [];
+  // Active tab in the top-left Comms panel. Cycled with '\' (see updatePlaying).
+  chatterTab: "all" | "crew" | "external" = "all";
+  // Scroll offset into the filtered feed. 0 = pinned to newest.
+  chatterScroll = 0;
   // Cursor in the multi-page station screen.
   stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
