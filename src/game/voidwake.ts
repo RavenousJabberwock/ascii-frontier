@@ -5005,6 +5005,65 @@ export class Voidwake {
       pickLine(kind, this.chatterCtx()), CREW_ROLE_INFO[r].color);
   }
 
+  // Occasional inter-NPC exchange — pick two nearby non-alien speakers
+  // (ships, stations, or planets) within scanner range of the player and
+  // post a short back-and-forth so the Comms feed reads like a lived-in
+  // sector. Emits into the "external" channel. Gated by chatterFreq like
+  // every other ambient scheduler.
+  private _nextNpcBanterAt = 25;
+  tickNpcBanter(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.5 : 1.0;
+    this._nextNpcBanterAt -= dt;
+    if (this._nextNpcBanterAt > 0) return;
+    this._nextNpcBanterAt = (22 + Math.random() * 25) * mul;
+    const near = this.entities
+      .filter((e) => (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station")
+        && !e.faction.startsWith("alien")
+        && e.state !== "stranded")
+      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
+      .filter((x) => x.d < 1800)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8);
+    if (near.length < 2) return;
+    // Prefer pairings that feel dramatic: hostile ↔ friendly threats, or a
+    // ship ↔ station handshake. Otherwise fall back to two random nearby
+    // speakers.
+    const shuf = near.slice().sort(() => Math.random() - 0.5);
+    let a = shuf[0].e, b = shuf[1].e;
+    const hostileHere = shuf.find((x) => x.e.kind === "hostile")?.e;
+    const friendlyHere = shuf.find((x) => x.e.kind === "friendly")?.e;
+    const stationHere = shuf.find((x) => x.e.kind === "station")?.e;
+    const shipHere = shuf.find((x) => x.e.kind !== "station")?.e;
+    if (hostileHere && friendlyHere) { a = hostileHere; b = friendlyHere; }
+    else if (stationHere && shipHere) { a = shipHere; b = stationHere; }
+    if (a === b) return;
+    const colorFor = (e: Entity) =>
+      e.kind === "hostile" ? "#ff8a8a"
+      : e.kind === "friendly" ? (e.faction === "patrol" ? "#7fd0ff" : "#aef58a")
+      : e.kind === "station" ? "#c2c2ff"
+      : "#dddddd";
+    const lineFor = (e: Entity, other: Entity) => {
+      const ctx = this.chatterCtx(e, { target: other });
+      if (e.kind === "hostile") return pickLine("hostile", ctx);
+      if (e.kind === "friendly" && e.faction === "patrol") return pickLine("patrol", ctx);
+      if (e.kind === "friendly") return pickLine("friendly", ctx);
+      if (e.kind === "station")  return pickLine("station",  ctx);
+      return pickLine("neutral", ctx);
+    };
+    const tag = (e: Entity) => (e.kind === "station" ? `Beacon ${e.name}` : e.name);
+    this.pushChatter(tag(a), lineFor(a, b), colorFor(a), "external");
+    // Reply lands slightly later via a queued micro-timer so the two lines
+    // don't collapse into the same frame. Simplest cheap version: schedule
+    // via a short setTimeout on the underlying window — engine already runs
+    // in the browser main thread.
+    const bTag = tag(b), bMsg = lineFor(b, a), bCol = colorFor(b);
+    setTimeout(() => this.pushChatter(bTag, bMsg, bCol, "external"), 900 + Math.random() * 700);
+  }
+
+
   // Quest log screen — full-screen popup showing active mission + description
   // + progress + faction reputation. ESC or U closes it.
   updateQuestLog() {
