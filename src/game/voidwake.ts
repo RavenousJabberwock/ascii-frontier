@@ -50,7 +50,93 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.0";
+const VERSION = "0.5.1";
+
+// =============================================================================
+// Scripting Hooks (0.5.1)
+// -----------------------------------------------------------------------------
+// A minimal, runtime-agnostic hook surface reserved for the upcoming Lua
+// scripting system. Hooks are pure JS callbacks today; a future Lua host
+// (fengari-web / a WASM Lua 5.3) will register wrapped functions that thunk
+// into Lua-space. Every hook is fire-and-forget — a throwing handler is
+// caught here and never blocks engine ticks. Handlers must treat all
+// arguments as read-only until a proper mutation API lands.
+//
+// Hook contract (payload shapes are stable — do not change without a
+// VERSION bump and a migration note in src/game/README.md):
+//
+//   onWorldGenerate   ({ seed, entities })              end of generateUniverse
+//   onTick            ({ dt, player, entities })        top of updatePlaying
+//   onPlayerFire      ({ weaponId, from, target })      pilot fire path
+//   onPlayerDock      ({ entity, kind })                inside tryDock success
+//   onEntityDestroyed ({ entity, byPlayer })            debris conversion block
+//   onChatter         ({ who, msg, color, channel })    end of pushChatter
+//   onSave            ({ slot, blob })                  after successful save
+//   onLoad            ({ slot, blob })                  after successful load
+//
+// All handlers run synchronously in engine order. Hook lists are process-
+// global (not per-Voidwake instance) so a script attached at boot survives
+// New Game / Load Game cycles. Registration API is intentionally tiny:
+// register/unregister/clear.
+export type ScriptHookName =
+  | "onWorldGenerate"
+  | "onTick"
+  | "onPlayerFire"
+  | "onPlayerDock"
+  | "onEntityDestroyed"
+  | "onChatter"
+  | "onSave"
+  | "onLoad";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ScriptHookFn = (payload: any) => void;
+
+const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
+  onWorldGenerate:   [],
+  onTick:            [],
+  onPlayerFire:      [],
+  onPlayerDock:      [],
+  onEntityDestroyed: [],
+  onChatter:         [],
+  onSave:            [],
+  onLoad:            [],
+};
+
+export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
+  _scriptHooks[name].push(fn);
+  return () => unregisterScriptHook(name, fn);
+}
+export function unregisterScriptHook(name: ScriptHookName, fn: ScriptHookFn): void {
+  const arr = _scriptHooks[name];
+  const i = arr.indexOf(fn);
+  if (i >= 0) arr.splice(i, 1);
+}
+export function clearScriptHooks(name?: ScriptHookName): void {
+  if (name) _scriptHooks[name].length = 0;
+  else (Object.keys(_scriptHooks) as ScriptHookName[]).forEach((k) => (_scriptHooks[k].length = 0));
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dispatchHook(name: ScriptHookName, payload: any): void {
+  const arr = _scriptHooks[name];
+  if (arr.length === 0) return; // hot-path fast exit
+  for (let i = 0; i < arr.length; i++) {
+    try { arr[i](payload); }
+    catch (err) { console.warn(`[ASCII Frontier] script hook ${name} threw:`, err); }
+  }
+}
+// Expose on window in the browser so an external Lua-host bootstrapper (or
+// devtools console) can attach hooks before the runtime lands. Guarded so
+// SSR / node-only tooling doesn't trip.
+if (typeof window !== "undefined") {
+  (window as unknown as {
+    ASCIIFrontier?: {
+      registerScriptHook: typeof registerScriptHook;
+      unregisterScriptHook: typeof unregisterScriptHook;
+      clearScriptHooks: typeof clearScriptHooks;
+      VERSION: string;
+    };
+  }).ASCIIFrontier = { registerScriptHook, unregisterScriptHook, clearScriptHooks, VERSION };
+}
 const SOURCE_URL = "https://github.com/RavenousJabberwock/ascii-frontier";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
