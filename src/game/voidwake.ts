@@ -717,6 +717,10 @@ interface Entity {
   stranded?: boolean;
   // While a Patrol is towing this stranded ship, its id is stored here.
   towById?: number;
+  // Colony flag: a small subset of planets are inhabited. Landing on one
+  // opens a stripped station-style market (ore/fuel only). Untouched by
+  // combat AI — colonies stay "nature" faction and non-hostile.
+  populated?: boolean;
 }
 
 interface PlayerChar {
