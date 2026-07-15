@@ -734,11 +734,16 @@ interface StationStock {
 
 // One line in the comms / chatter feed. "who" is the speaker label
 // (e.g. "Gunner Mira", "Raider Drak", "Beacon"), "color" tints the source.
+// `channel` groups the line for the Comms tab filter:
+//   "crew"     = on-ship chatter between the player's own crew,
+//   "external" = every other ship, station, planet, alien, distress signal,
+//   "system"   = ship-computer / sensors / radio-station output.
 interface ChatterLine {
   t: number;                  // performance.now() / 1000 when posted
   who: string;
   msg: string;
   color: string;
+  channel: "crew" | "external" | "system";
 }
 
 interface Options {
