@@ -4191,7 +4191,7 @@ export class Voidwake {
     // PageUp/PageDown scroll the filtered feed. Scroll is clamped in the
     // renderer against the current tab's line count.
     if (this.input.consume("\\")) {
-      const order: (typeof this.chatterTab)[] = ["all", "crew", "external"];
+      const order: Voidwake["chatterTab"][] = ["all", "crew", "external"];
       const i = order.indexOf(this.chatterTab);
       this.chatterTab = order[(i + 1) % order.length];
       this.chatterScroll = 0;
