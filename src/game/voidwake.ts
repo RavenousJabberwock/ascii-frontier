@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.1";
+const VERSION = "0.5.2";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -910,6 +910,9 @@ interface SaveBlob {
   entities: Entity[];
   options: Options;
   savedAt: number;
+  // Optional: persisted comms feed (last ~250 lines). Optional so older saves
+  // still load; we backfill to [] on load.
+  chatter?: ChatterLine[];
 }
 
 interface FlightRecorder {
@@ -2554,6 +2557,14 @@ const STATION_FILLS = ["#c2c2ff", "#a8ffd0", "#ffc8a0", "#cfe8ff"];
 const STATION_TEX   = ["#", "H", "X", "=", "8"];
 const ASTEROID_FILLS= ["#a6886a", "#8a7656", "#b89a78", "#7a6650"];
 const ASTEROID_TEX  = ["%", "*", "#", ":", "."];
+// Wreckage / debris palette: scorched hull plating instead of warm rock.
+// Rendered when an "asteroid" entity is actually a wreck (name === "debris"
+// or "wreckage"), which happens after a ship or station is destroyed.
+const DEBRIS_FILLS  = ["#6a6a72", "#8a8890", "#4c4a52", "#a89880"];
+const DEBRIS_TEX    = ["╱", "╲", "¦", "·", "=", "/", "\\", "|"];
+function isWreck(e: Entity): boolean {
+  return e.kind === "asteroid" && (e.name === "debris" || e.name === "wreckage");
+}
 
 // Stellar classification: color / edge / relative size for each spectral
 // class. Deterministic per-entity via hash01(id), so the same seed keeps the
@@ -2687,6 +2698,10 @@ function tintFor(e: Entity): { fill: string; edge: string } {
       return { fill: "#c0d0d8", edge: "#5a6870" };
     }
     case "asteroid": {
+      if (isWreck(e)) {
+        const i = Math.floor(h * DEBRIS_FILLS.length);
+        return { fill: DEBRIS_FILLS[i], edge: "#2a2a30" };
+      }
       const i = Math.floor(h * ASTEROID_FILLS.length);
       return { fill: ASTEROID_FILLS[i], edge: "#5a4838" };
     }
