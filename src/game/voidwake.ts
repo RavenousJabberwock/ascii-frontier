@@ -6760,7 +6760,7 @@ export class Voidwake {
     for (const e of this.entities) {
       const r = V.sub(e.pos, p.pos);
       const dist2 = r.x * r.x + r.y * r.y + r.z * r.z;
-      if (dist2 > FAR_CULL * FAR_CULL && e.kind !== "star") continue;
+      if (dist2 > FAR_CULL * FAR_CULL && e.kind !== "star" && e.kind !== "nebula") continue;
       const x1 = cy * r.x - sy * r.z;
       const z1 = sy * r.x + cy * r.z;
       const y1 = cp * r.y - sp * z1;
