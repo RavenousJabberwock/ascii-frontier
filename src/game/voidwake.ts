@@ -5502,6 +5502,17 @@ export class Voidwake {
       const n = modes.length;
       this.options.reticleShape = modes[(idx + (right ? 1 : -1) + n) % n];
     }
+    // Comms window sub-controls (kept inline under Gameplay; a nested
+    // submenu is in the 0.5 backlog).
+    if (i === 12) {
+      const delta = right ? 2 : left ? -2 : 0;
+      this.options.commsCols = Math.max(28, Math.min(120, (this.options.commsCols ?? 54) + delta));
+    }
+    if (i === 13) {
+      const delta = right ? 1 : left ? -1 : 0;
+      this.options.commsRows = Math.max(4, Math.min(30, (this.options.commsRows ?? 12) + delta));
+    }
+    if (i === 14 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
     }
@@ -5520,6 +5531,9 @@ export class Voidwake {
       `HUD Color: ${this.options.hudScheme ?? "green"}`,
       `Reticle Color: ${this.options.reticleColor ?? "green"}`,
       `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
+      `Comms Width: ${this.options.commsCols ?? 54} cols`,
+      `Comms Height: ${this.options.commsRows ?? 12} rows`,
+      `Comms Word Wrap: ${this.options.commsWrap ? "ON" : "OFF"}`,
       "Back",
     ];
   }
