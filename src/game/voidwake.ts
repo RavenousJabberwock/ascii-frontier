@@ -6770,7 +6770,7 @@ export class Voidwake {
       const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
       const far = dist2 > FAR_DOT * FAR_DOT && e.kind !== "star";
       let wr = worldRadius[e.kind] ?? 1;
-      if (e.kind === "star") wr *= stellarClassOf(e).sizeMul;
+      if (e.kind === "star") wr *= starSizeMul(e);
       if (e.kind === "nebula") wr *= 0.8 + hash01(e.id * 251) * 0.9; // varied cloud sizes
       // Far entities collapse to a single colored period regardless of true size.
       const rCells = far ? 0 : (wr / z2) * vw * 0.7;
