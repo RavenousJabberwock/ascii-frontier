@@ -7505,8 +7505,9 @@ export class Voidwake {
     const nowS = performance.now() / 1000;
     const commsX = 2;
     const commsY = 1;
-    const commsW = 54;
-    const commsRows = 12;
+    const commsW = Math.max(28, Math.min(120, this.options.commsCols ?? 54));
+    const commsRows = Math.max(4, Math.min(30, this.options.commsRows ?? 12));
+    const wrap = !!this.options.commsWrap;
     // Header row with tabs.
     const titleCol = inNeb ? "#c47afc" : "#7CFC00";
     const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
@@ -7526,20 +7527,46 @@ export class Voidwake {
     // Filter feed to the active tab.
     const feed = this.chatter.filter((c) =>
       this.chatterTab === "all" ? true : c.channel === this.chatterTab);
-    // Clamp scroll so we never scroll past the last visible slot.
-    const maxScroll = Math.max(0, feed.length - commsRows);
-    if (this.chatterScroll > maxScroll) this.chatterScroll = maxScroll;
-    // Draw newest-first from the scroll offset.
-    for (let i = 0; i < commsRows; i++) {
-      const idx = i + this.chatterScroll;
-      if (idx >= feed.length) break;
-      const c = feed[idx];
+    // Word-wrap helper: split a line into commsW-wide chunks on word
+    // boundaries when possible; falls back to hard-splitting super-long
+    // tokens so a word never overflows the panel.
+    const wrapLine = (raw: string): string[] => {
+      if (!wrap) {
+        return [raw.length > commsW ? raw.slice(0, commsW - 1) + "…" : raw];
+      }
+      const chunks: string[] = [];
+      const words = raw.split(/(\s+)/);
+      let cur = "";
+      for (const w of words) {
+        if ((cur + w).length <= commsW) { cur += w; continue; }
+        if (cur) chunks.push(cur.trimEnd());
+        cur = "";
+        let rest = w.trimStart();
+        while (rest.length > commsW) {
+          chunks.push(rest.slice(0, commsW));
+          rest = rest.slice(commsW);
+        }
+        cur = rest;
+      }
+      if (cur) chunks.push(cur.trimEnd());
+      return chunks.length ? chunks : [""];
+    };
+    // Build the visible-line buffer (post-wrap) so scroll math is in
+    // rendered rows, not raw messages.
+    const rendered: { text: string; color: string; entry: number }[] = [];
+    for (let e = 0; e < feed.length; e++) {
+      const c = feed[e];
       const age = nowS - c.t;
       const dim = age > 25 ? "#555" : age > 10 ? "#888" : c.color;
-      let line = `«${c.who}» ${c.msg}`;
-      if (line.length > commsW) line = line.slice(0, commsW - 1) + "…";
-      // Nebula interference: replace ~25% of chars with static so comms
-      // read as garbled from inside a cloud.
+      const parts = wrapLine(`«${c.who}» ${c.msg}`);
+      for (const part of parts) rendered.push({ text: part, color: dim, entry: e });
+    }
+    const maxScroll = Math.max(0, rendered.length - commsRows);
+    if (this.chatterScroll > maxScroll) this.chatterScroll = maxScroll;
+    for (let i = 0; i < commsRows; i++) {
+      const idx = i + this.chatterScroll;
+      if (idx >= rendered.length) break;
+      let line = rendered[idx].text;
       if (inNeb) {
         const junk = ["#", "%", "▒", "░", "▓", "*", "~", ".", "?"];
         const rSeed = Math.floor(nowS * 3) + i * 37;
@@ -7552,17 +7579,17 @@ export class Voidwake {
         }
         line = out;
       }
-      putText(g, commsX, commsY + 1 + i, line, dim);
+      putText(g, commsX, commsY + 1 + i, line, rendered[idx].color);
     }
     // Scroll indicators + hint on the last row of the panel.
     const hintY = commsY + commsRows + 1;
-    if (feed.length > commsRows) {
-      const total = feed.length;
+    if (rendered.length > commsRows) {
+      const total = rendered.length;
       const shown = Math.min(commsRows, total - this.chatterScroll);
       const from = this.chatterScroll + 1;
       const to   = this.chatterScroll + shown;
       putText(g, commsX, hintY, `▲/▼ ${from}-${to} / ${total}  (\\ tab · PgUp/Dn scroll)`, "#557");
-    } else if (feed.length === 0) {
+    } else if (rendered.length === 0) {
       putText(g, commsX, hintY, `(quiet)  \\ tab · PgUp/Dn scroll`, "#446");
     } else {
       putText(g, commsX, hintY, `\\ tab · PgUp/Dn scroll · Home newest`, "#446");
