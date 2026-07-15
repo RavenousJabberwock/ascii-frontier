@@ -24,6 +24,8 @@ focus automatically.
 You can also drop the file onto a USB stick, email it to yourself, or host
 it on any plain static file server — it has zero dependencies.
 
+Want to just click a link? It's here: https://ravenousjabberwock.github.io/ascii-frontier/
+
 ## Pros
 
 - **Truly offline.** No fetches, no CDN, no analytics. Works on a plane,
