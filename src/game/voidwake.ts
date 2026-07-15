@@ -69,10 +69,12 @@ const VERSION = "0.5.3";
 //   onTick            ({ dt, player, entities })        top of updatePlaying
 //   onPlayerFire      ({ weaponId, from, target })      pilot fire path
 //   onPlayerDock      ({ entity, kind })                inside tryDock success
+//                                                     kind: "station" | "ship-trade" | "planet"
 //   onEntityDestroyed ({ entity, byPlayer })            debris conversion block
 //   onChatter         ({ who, msg, color, channel })    end of pushChatter
 //   onSave            ({ slot, blob })                  after successful save
 //   onLoad            ({ slot, blob })                  after successful load
+//   onPlanetLand      ({ entity })                      populated-planet landing (also fires onPlayerDock)
 //
 // All handlers run synchronously in engine order. Hook lists are process-
 // global (not per-Voidwake instance) so a script attached at boot survives
