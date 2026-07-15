@@ -4497,7 +4497,7 @@ export class Voidwake {
             }
             t.faction = "nature";
             t.hostileUntil = 0;
-            t.weapon = undefined;
+            t.weaponId = undefined;
             t.state = undefined;
           }
           return false;
