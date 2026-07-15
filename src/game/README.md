@@ -328,11 +328,29 @@ effect immediately.
 
 ## Crew & wages
 
-Hired crew and your gunner draw a flat wage every time you dock: pilot 60cr,
-engineer 55cr, merchant/gunner 30–40cr. Cheat Mode skips the payroll. If you
-can't cover the full bill you pay whatever's on hand and the crew grumbles
-in the COMMS feed — the shortfall is currently just cosmetic, but hooks are
-in place for a real morale system later.
+Hired crew and your gunner draw a flat wage every time you dock: tactical
+75cr, pilot 60cr, engineer 55cr, navigator 50cr, quartermaster/recruiter
+45cr, merchant/gunner 30–40cr. Cheat Mode skips the payroll. If you can't
+cover the full bill you pay whatever's on hand and the crew grumbles in the
+COMMS feed — the shortfall is currently just cosmetic, but hooks are in
+place for a real morale system later.
+
+### Crew roles (0.5.4)
+
+| Role | Effect |
+|---|---|
+| Gunner | auto-fires on hostiles, auto-mines rocks |
+| Pilot | autopilot to current target (O); +150u radar |
+| Engineer | slow hull regen, +75% shield recharge, −20% fuel; +150u radar |
+| Merchant | +15% ore sell, −10% station buy prices |
+| Navigator | +400u radar range, −10% fuel burn |
+| Quartermaster | stacks +5% ore sell / −5% station buy on top of Merchant |
+| Recruiter | −15% crew hire fees (including Xeno) |
+| Tactical | +25% shield recharge — **mutually exclusive with Gunner** |
+
+Gunner ↔ Tactical exclusivity is enforced at the hire menu: if either is
+aboard, the other's row is greyed out and shows a "locked" note.
+
 
 ## Outfitting (module shop)
 

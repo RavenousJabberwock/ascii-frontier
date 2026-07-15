@@ -299,6 +299,53 @@ save-safe; the code refs are pointers for the next agent.
   Lua host lands. Hook table in `src/game/README.md` updated.
 - **VERSION bump** — ✅ 0.5.2 → 0.5.3 and offline bundle rebuilt.
 
+## 0.5.4 pass — New crew roles
+
+- **CrewRole extended** — ✅ Added `navigator`, `quartermaster`,
+  `recruiter`, `tactical` to the `CrewRole` union, `CREW_ROLE_INFO` (title /
+  baseFee / blurb / color), and `generateCrewMember` wage table. Existing
+  saves keep loading since the `crew[]` array is optional and untyped roles
+  are ignored by the hire menu.
+- **Passive perks** —
+  - **Navigator**: +400u radar range (stacks with Pilot/Engineer/Sensor
+    Array/Long-Range Scanner) and a 10% fuel-burn discount (stacks
+    multiplicatively with Engineer's 20% discount).
+  - **Quartermaster**: adds a 5% ore-sell bonus and a 5% station-buy
+    discount on top of Merchant (both multiply through `merchantSellMult` /
+    `merchantBuyMult`, so all module/weapon/fuel prices benefit).
+  - **Recruiter**: multiplies every hire fee (including Xeno tier) by
+    0.85. Menu previews and the hire handler both apply the same mul.
+  - **Tactical**: multiplies shield regen by 1.25 (stacks on top of the
+    Engineer bonus). Full weapon-mount takeover is deferred — see backlog.
+- **Gunner ↔ Tactical exclusivity** — ✅ The station Crew page hides the
+  hire row and shows a `locked (Gunner aboard)` / `locked (Tactical Officer
+  aboard)` line when the counterpart is on the crew. The hire handler
+  double-checks and refuses the swap with a `pushLog` explaining which
+  role to dismiss first. Applies to Xeno hires too.
+- **Chatter templates** — ✅ 8 new `ChatterKind` entries per new role
+  (`navigator_idle` / `_greet` / `_farewell_good` / `_farewell_bad`, etc.)
+  plus a `tactical_hostile` line. All wired through the existing
+  `pushChatter` / `tickCrewIdle` / hire-menu greet path — the crew page's
+  `roles` array is the only registration point.
+- **VERSION bump** — ✅ 0.5.3 → 0.5.4 and offline bundle rebuilt.
+
+### Backlog (0.5.4 deferred)
+
+- **Tactical firing weapon** — plan called out "can fire the main weapon,
+  +15% crit chance". This pass only shipped the shield-recharge and
+  exclusivity halves. Firing needs a new `p.tactical` auto-fire hook (or a
+  refactor to make `p.gunner`'s fire loop role-agnostic) plus a crit-roll
+  extension in the shot damage calc.
+- **Morale field on CrewMember** — the Recruiter plan mentions slowing
+  morale decay. Morale doesn't exist yet as a field; add it once the
+  wage-shortfall system moves past cosmetic grumbling.
+- **Navigator T-cycle expansion** — plan called for the navigator to add
+  `wormhole` / mission targets / stars (BH) to the T-cycle target set.
+  Landed as radar range + fuel burn only; the target-cycle predicate lives
+  in `cycleTarget` and can pick these up in a later pass.
+
+
+
 ### Recommended next round (still 0.5.x)
 
 Ranked by ROI for the current codebase. All additive and save-safe.

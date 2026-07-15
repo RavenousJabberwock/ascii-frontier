@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.3";
+const VERSION = "0.5.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -184,6 +184,14 @@ type ChatterKind =
   | "engineer_fuel" | "engineer_farewell_good" | "engineer_farewell_bad"
   | "merchant_idle" | "merchant_greet" | "merchant_deal" | "merchant_broke"
   | "merchant_farewell_good" | "merchant_farewell_bad"
+  | "navigator_idle" | "navigator_greet"
+  | "navigator_farewell_good" | "navigator_farewell_bad"
+  | "quartermaster_idle" | "quartermaster_greet"
+  | "quartermaster_farewell_good" | "quartermaster_farewell_bad"
+  | "recruiter_idle" | "recruiter_greet"
+  | "recruiter_farewell_good" | "recruiter_farewell_bad"
+  | "tactical_idle" | "tactical_greet" | "tactical_hostile"
+  | "tactical_farewell_good" | "tactical_farewell_bad"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -469,6 +477,92 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You wouldn't take a deal if it kissed you. I'm gone.",
     "Cmdr, next captain, listen to your merchant.",
     "Rather sell rocks door-to-door than watch you refuse a margin.",
+  ],
+  navigator_idle: [
+    "Plot's clean, Cmdr — nearest station bearing steady.",
+    "{smalltalk}.",
+    "Star charts say {rumor}. Filed it under 'maybe'.",
+    "Fuel window looks fine at this burn rate.",
+    "Wormhole density here is thin. We'd have to hunt for a shortcut.",
+    "I've got the {sector} lanes memorized. Ask any time.",
+  ],
+  navigator_greet: [
+    "Navigator aboard. I'll shave a jump off every long haul, Cmdr.",
+    "Cmdr {cmdr} — I read stars like other people read faces. Glad to be here.",
+    "Charts stowed. Point me at a destination and I'll find the cheap line.",
+  ],
+  navigator_farewell_good: [
+    "Fair skies, Cmdr. I'll leave you the best charts.",
+    "Been a pleasure plotting for the {ship}. Safe vectors.",
+  ],
+  navigator_farewell_bad: [
+    "You ignored every plot I filed. Good luck without me.",
+    "Rather map dead systems than fly with a captain who won't listen.",
+  ],
+  quartermaster_idle: [
+    "Manifest's tight, Cmdr. I know where every crate lives.",
+    "{smalltalk}.",
+    "I can shave 8% off a module sticker if you let me haggle.",
+    "Rations rotated, cargo lashed. Boring is good.",
+    "Ore prices in {sector} would move if we pushed the right buyer.",
+  ],
+  quartermaster_greet: [
+    "Quartermaster reporting. I'll squeeze margin out of every dock, Cmdr.",
+    "Cmdr {cmdr} — pleasure. My ledger's cleaner than most surgeons' hands.",
+    "Cargo hold's mine now. Trust the process.",
+  ],
+  quartermaster_farewell_good: [
+    "Solid ledger, solid captain. I'll invest my cut in {sector}.",
+    "Cmdr — thanks for letting me run the hold. Fly true.",
+  ],
+  quartermaster_farewell_bad: [
+    "You wouldn't take my numbers seriously. I'm out.",
+    "Rather count screws at a dry dock than watch you overpay again.",
+  ],
+  recruiter_idle: [
+    "Talked to a few candidates at the last dock. Decent pool this cycle.",
+    "{smalltalk}.",
+    "Crew morale looks steady, Cmdr. Keep the wages honest.",
+    "I know a gunner in {sector} who'd sign for cheap. Say the word.",
+    "Reputation's a currency too. We're spending it slower than most.",
+  ],
+  recruiter_greet: [
+    "Recruiter aboard. I'll trim hire fees and keep the bunk happy, Cmdr.",
+    "Cmdr {cmdr} — I've placed hands on a hundred hulls. This one's mine now.",
+    "Give me a station and a bar, I'll bring you signatures.",
+  ],
+  recruiter_farewell_good: [
+    "Crew's in good shape. I'll leave you my rolodex, Cmdr.",
+    "Been an honor. Look me up in {sector} — I'll always find you a hand.",
+  ],
+  recruiter_farewell_bad: [
+    "You burned every hire I brought aboard. I'm done.",
+    "Rather post flyers on a stationary hab than watch you drive off another crewman.",
+  ],
+  tactical_idle: [
+    "Threat board's quiet. I like it quiet.",
+    "{smalltalk}.",
+    "Shield harmonics running hot — recharge's up 25%, courtesy of yours truly.",
+    "If it turns red on my scope, {cmdr}, it stops moving.",
+    "Kill count's {kills}. Half of those were my calls.",
+  ],
+  tactical_greet: [
+    "Tactical officer reporting. I run the guns, {cmdr} — Gunner's redundant with me aboard.",
+    "Cmdr {cmdr} — I've boarded three Guild scows and outshot a patrol wing. You're in good hands.",
+    "Shields, targeting, priority calls — mine. You fly, I fight.",
+  ],
+  tactical_hostile: [
+    "Priority target locked — burn 'em, {cmdr}!",
+    "{target} in the reticle. Cleared to engage.",
+    "Shields nominal — trade shots if you have to.",
+  ],
+  tactical_farewell_good: [
+    "Cmdr — {kills} clean kills together. Not bad. Fly true.",
+    "Solid captain, solid ship. I'll take another contract when you call.",
+  ],
+  tactical_farewell_bad: [
+    "You wasted every shot I called. I'm out.",
+    "Rather train recruits than watch another good hull chew on plasma for no reason.",
   ],
   banter: [
     "{a}: {b}, you ever going to fix that coupler?  ||  {b}: I fixed yours, {a}. Try locking the door.",
@@ -766,7 +860,7 @@ interface Gunner {
 // Multi-role crew. Roles: "gunner" (auto-fire/mine), "pilot" (autopilot to
 // current target), "engineer" (regen hull/shield + fuel efficiency),
 // "merchant" (better market spreads).
-type CrewRole = "gunner" | "pilot" | "engineer" | "merchant";
+type CrewRole = "gunner" | "pilot" | "engineer" | "merchant" | "navigator" | "quartermaster" | "recruiter" | "tactical";
 interface CrewMember {
   role: CrewRole;
   name: string;
@@ -1934,6 +2028,7 @@ function effectiveRadarRange(p: PlayerState): number {
   let r = 1500;
   if (hasCrew(p, "pilot")) r += 150;
   if (hasCrew(p, "engineer")) r += 150;
+  if (hasCrew(p, "navigator")) r += 400;
   if (p.ship.modules.includes("sensor-array")) r += 600;
   if (p.ship.modules.includes("long-range-scanner")) r += 1000;
   // Player-species passive: Aquilan / Sylph get an innate scope bonus.
@@ -1972,13 +2067,15 @@ function speciesFuelMul(p: PlayerState): number {
 // (Human / Drift-born / Chorus) squeezes an extra 3%.
 function merchantSellMult(p: PlayerState): number {
   const base = hasCrew(p, "merchant") ? 1.15 : 1.0;
+  const qm = hasCrew(p, "quartermaster") ? 1.05 : 1.0;
   const affinity = crewAffinityBonus(p, "merchant");
-  return base * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
+  return base * qm * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
 }
 function merchantBuyMult(p: PlayerState): number {
   const base = hasCrew(p, "merchant") ? 0.90 : 1.0;
+  const qm = hasCrew(p, "quartermaster") ? 0.95 : 1.0;
   const affinity = crewAffinityBonus(p, "merchant");
-  return base * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
+  return base * qm * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
 }
 // Small bonus when the on-crew member of `role` is a species with an
 // affinity for that role. Returns 0..0.05 range (roughly +5%).
@@ -2002,10 +2099,14 @@ function crewCount(p: PlayerState): number {
 
 // Crew hiring fee per role.
 const CREW_ROLE_INFO: Record<CrewRole, { title: string; baseFee: number; blurb: string; color: string }> = {
-  gunner:   { title: "Gunner",   baseFee: 300, blurb: "auto-fires on hostiles, auto-mines rocks", color: "#fc6" },
-  pilot:    { title: "Pilot",    baseFee: 450, blurb: "autopilot to current target (O)",         color: "#8cf" },
-  engineer: { title: "Engineer", baseFee: 500, blurb: "hull regen, faster shield, -20% fuel",     color: "#7CFC00" },
-  merchant: { title: "Merchant", baseFee: 400, blurb: "+15% ore sell, -10% station buy prices",    color: "#ffe066" },
+  gunner:       { title: "Gunner",       baseFee: 300, blurb: "auto-fires on hostiles, auto-mines rocks",  color: "#fc6" },
+  pilot:        { title: "Pilot",        baseFee: 450, blurb: "autopilot to current target (O)",           color: "#8cf" },
+  engineer:     { title: "Engineer",     baseFee: 500, blurb: "hull regen, faster shield, -20% fuel",      color: "#7CFC00" },
+  merchant:     { title: "Merchant",     baseFee: 400, blurb: "+15% ore sell, -10% station buy prices",    color: "#ffe066" },
+  navigator:    { title: "Navigator",    baseFee: 420, blurb: "+400u radar range, -10% fuel burn",         color: "#a9f0ff" },
+  quartermaster:{ title: "Quartermaster",baseFee: 380, blurb: "extra 5% off buys, 5% on ore sells",        color: "#e0c890" },
+  recruiter:    { title: "Recruiter",    baseFee: 350, blurb: "-15% crew hire fees",                        color: "#f0a0ff" },
+  tactical:     { title: "Tactical",     baseFee: 600, blurb: "+25% shield recharge (excludes Gunner)",    color: "#ff7a7a" },
 };
 
 function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
@@ -2013,9 +2114,15 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
   const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
   const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
   const species = SPECIES[Math.floor(rng() * SPECIES.length)];
-  // Role-tuned wages: pilots/engineers are pricier specialists than a
-  // merchant clerk. Flat cr per dock — see tryDock() wage deduction.
-  const wage = role === "pilot" ? 60 : role === "engineer" ? 55 : role === "merchant" ? 40 : 40;
+  // Role-tuned wages: specialists cost more than clerks. Flat cr per dock.
+  const wage =
+    role === "tactical" ? 75 :
+    role === "pilot" ? 60 :
+    role === "engineer" ? 55 :
+    role === "navigator" ? 50 :
+    role === "quartermaster" ? 45 :
+    role === "recruiter" ? 45 :
+    role === "merchant" ? 40 : 40;
   return {
     role,
     name: `${first} ${last}`,
@@ -3991,7 +4098,7 @@ export class Voidwake {
     const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
     const boostMul = (boosting ? effectiveBoostMul(p) : 1.0) * (supercruise ? 3.0 : 1.0);
     // Engineer perk: -20% fuel burn.
-    const engineerMul = hasCrew(p, "engineer") ? 0.80 : 1.0;
+    const engineerMul = (hasCrew(p, "engineer") ? 0.80 : 1.0) * (hasCrew(p, "navigator") ? 0.90 : 1.0);
     const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * speciesFuelMul(p);
 
     // Forward direction from heading
@@ -4035,7 +4142,8 @@ export class Voidwake {
 
     // Shield regen (suppressed while inside a nebula — applied below).
     // Engineer perk: +75% shield recharge rate.
-    const shieldRegen = hasCrew(p, "engineer") ? 7.0 : 4.0;
+    let shieldRegen = hasCrew(p, "engineer") ? 7.0 : 4.0;
+    if (hasCrew(p, "tactical")) shieldRegen *= 1.25;
     p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * shieldRegen);
     // Engineer perk: slow hull regen while throttle is light and not on fire.
     if (hasCrew(p, "engineer") && p.throttle < 0.35 && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
@@ -5974,16 +6082,28 @@ export class Voidwake {
       const cur = crewCount(p);
       const header = `Berths ${cur}/${cap}  (Crew Quarters module gives +1)`;
       const rows: string[] = [`~ ${header} ~`];
-      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
+      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant", "navigator", "quartermaster", "recruiter", "tactical"];
+      const recruiterMul = hasCrew(p, "recruiter") ? 0.85 : 1.0;
       for (const r of roles) {
         const info = CREW_ROLE_INFO[r];
-        const fee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+        const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
+        const fee = Math.round(baseFee * recruiterMul);
         if (hasCrew(p, r)) {
           const c = r === "gunner"
             ? p.gunner!
             : getCrew(p, r)!;
           rows.push(`Dismiss ${info.title} ${c.name}`);
         } else {
+          // Gunner ↔ Tactical mutual exclusivity: only expose the row if
+          // its counterpart is not on the crew list.
+          if (r === "gunner" && hasCrew(p, "tactical")) {
+            rows.push(`Gunner — locked (Tactical Officer aboard)`);
+            continue;
+          }
+          if (r === "tactical" && !!p.gunner) {
+            rows.push(`Tactical — locked (Gunner aboard)`);
+            continue;
+          }
           const gate = cur >= cap ? "  (berths full)" : "";
           rows.push(`Hire ${info.title} — ${fee}cr — ${info.blurb}${gate}`);
         }
@@ -5995,9 +6115,11 @@ export class Voidwake {
         rows.push("~ Xeno recruits ~");
         for (const r of roles) {
           if (hasCrew(p, r)) continue;
+          if (r === "gunner" && hasCrew(p, "tactical")) continue;
+          if (r === "tactical" && !!p.gunner) continue;
           const info = CREW_ROLE_INFO[r];
           const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
-          const fee = Math.round(baseFee * 2);
+          const fee = Math.round(baseFee * 2 * recruiterMul);
           const gate = cur >= cap ? "  (berths full)" : "";
           rows.push(`Hire Xeno ${info.title} — ${fee}cr${gate}`);
         }
@@ -6120,7 +6242,13 @@ export class Voidwake {
     if (this.stationPage === "crew") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~")) return;
-      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant"];
+      const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant", "navigator", "quartermaster", "recruiter", "tactical"];
+      // "locked" rows: eaten silently so exclusivity messaging in the menu
+      // doesn't try to hire a locked slot.
+      if (row.includes("locked")) {
+        this.pushLog(row.startsWith("Gunner") ? "Dismiss the Tactical Officer first." : "Dismiss the Gunner first.");
+        return;
+      }
       // Dismiss line matches "Dismiss <title> ..."
       if (row.startsWith("Dismiss")) {
         const r = roles.find((rr) => hasCrew(p, rr) && row.includes(CREW_ROLE_INFO[rr].title));
@@ -6146,9 +6274,12 @@ export class Voidwake {
       if (!r) return;
       const info = CREW_ROLE_INFO[r];
       if (hasCrew(p, r)) return;
+      if (r === "gunner" && hasCrew(p, "tactical")) { this.pushLog("Tactical Officer aboard — Gunner slot locked."); return; }
+      if (r === "tactical" && !!p.gunner) { this.pushLog("Gunner aboard — Tactical Officer slot locked."); return; }
       if (crewCount(p) >= effectiveCrewMax(p)) { this.pushLog("No spare berths — install Crew Quarters."); return; }
+      const recruiterMul = hasCrew(p, "recruiter") ? 0.85 : 1.0;
       const baseFee = r === "gunner" ? stock.gunnerFee : Math.round(info.baseFee * merchantBuyMult(p));
-      const fee = xeno ? Math.round(baseFee * 2) : baseFee;
+      const fee = Math.round((xeno ? baseFee * 2 : baseFee) * recruiterMul);
       if (p.credits < fee) { this.pushLog("Not enough credits."); return; }
       p.credits -= fee;
       if (r === "gunner") {
