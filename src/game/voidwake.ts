@@ -6615,7 +6615,7 @@ export class Voidwake {
         hint = "↑/↓ select   ENTER rebind   ESC back";
         break;
     }
-    this.renderListMenu(g, title, items);
+    this.renderListMenu(g, title, items, this.optionsSection === "root" ? this.optionsRootDisabled : []);
     // Extra hint sits one row above renderListMenu's footer so the two
     // strings don't clip into each other (this was the "ENTER confirmwipe"
     // artifact — options hint + list-menu footer overwriting the same row).
