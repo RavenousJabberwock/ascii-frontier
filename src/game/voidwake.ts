@@ -4070,8 +4070,7 @@ export class Voidwake {
             p.throttle = 0;
             this._wormholeCooldown = 3.0;
             this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
-            this.pushChatter(hasCrew(p, "navigator" as CrewRole) ? "Navigator" : "Computer",
-              "Reality just... folded. We're somewhere else.", "#c8a0ff");
+            this.pushChatter("Computer", "Reality just... folded. We're somewhere else.", "#9effd2");
             this.sfx("dock");
           }
         }
