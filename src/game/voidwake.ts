@@ -5845,6 +5845,9 @@ export class Voidwake {
       this.entities = blob.entities;
       this.player = blob.player;
       this.options = blob.options;
+      // Restore comms feed if the save carries one (older saves omit it).
+      this.chatter = Array.isArray(blob.chatter) ? blob.chatter.slice(0, 250) : [];
+      this.chatterScroll = 0;
       this.screen = "playing";
       this.pushLog(`Loaded ${c}.`);
       this.syncRadio();
