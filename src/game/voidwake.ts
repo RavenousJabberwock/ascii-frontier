@@ -2501,6 +2501,21 @@ function stellarClassOf(e: Entity): StellarClass {
   _stellarClassCache.set(e, out);
   return out;
 }
+// Per-star effective size multiplier: the class-level baseline modulated
+// by a deterministic per-star jitter (roughly 0.55x–1.75x) so no two stars
+// of the same class look identical — a few Sol-analog G-classes are truly
+// enormous, others are barely-lit dwarfs. Consumed by the renderer world
+// radius and the corona scoop/burn ring math so they stay consistent.
+const _starSizeCache = new WeakMap<Entity, number>();
+function starSizeMul(e: Entity): number {
+  const cached = _starSizeCache.get(e);
+  if (cached !== undefined) return cached;
+  const base = stellarClassOf(e).sizeMul;
+  const jitter = 0.55 + hash01(e.id * 613 + 91) * 1.20;
+  const out = base * jitter;
+  _starSizeCache.set(e, out);
+  return out;
+}
 
 // Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
 // [core, mid, edge] so the noise-driven fill can layer three glyph shades.
@@ -3885,8 +3900,9 @@ export class Voidwake {
         // Sweet spot scales with the star's apparent size (bigger stars scoop
         // from further out). Too close = burn (nebula-style shield/hull etch).
         const sc = stellarClassOf(e);
-        const scoopR = 260 * sc.sizeMul;
-        const burnR = 90 * sc.sizeMul;
+        const szMul = starSizeMul(e);
+        const scoopR = 260 * szMul;
+        const burnR = 90 * szMul;
         // Black holes and pulsars aren't safe to scoop from — their gravity /
         // radiation handlers own that band; skip the fuel bonus entirely.
         const scoopable = sc.name !== "BH" && sc.name !== "PSR";
