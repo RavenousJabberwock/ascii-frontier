@@ -229,20 +229,68 @@ save-safe; the code refs are pointers for the next agent.
   `CREW_ROLE_INFO`.
 - **Persist comms history in saves** — Save/Load section currently
   discards `this.chatter`.
-- **Lua scripting hooks (research spike)** — the natural attach points
-  are the tick boundaries. Suggested hook surface (name, when called):
-    - `onWorldGenerate(entities)` — end of `generateUniverse`.
-    - `onTick(dt, player, entities)` — top of `updatePlaying`.
-    - `onPlayerDock(stationEntity)` — inside `tryDock` after credits/rep
-      apply.
-    - `onPlayerFire(weaponId, targetEntity)` — inside pilot fire path.
-    - `onEntityDestroyed(entity, byPlayer)` — inside the debris
-      conversion block (voidwake.ts ~line 4486).
-    - `onChatter(who, msg, channel)` — end of `pushChatter`.
-    - `onSave(blob) / onLoad(blob)` — Save/Load section.
-  Recommended runtime: `fengari-web` (Lua 5.3 in WASM, MIT, works in
-  offline single-file builds). A skeleton `LuaHost` module could live
-  next to `voidwake.ts` and read scripts out of localStorage; the hook
-  callsites should be added as no-op dispatchers first so a follow-up
-  pass just wires the runtime.
+- **Lua scripting hooks** — ✅ landed in 0.5.1 as no-op dispatchers
+  (`dispatchHook` / `registerScriptHook`) at every attach point below.
+  See `src/game/README.md ▸ Scripting hooks`. Runtime wiring (fengari-web
+  or WASM Lua 5.3) is the next milestone.
+
+## 0.5.1 pass — Lua hook surface reservation
+
+- **Hook module** — ✅ Added near the top of `src/game/voidwake.ts`.
+  Exports `registerScriptHook`, `unregisterScriptHook`, `clearScriptHooks`,
+  and the `ScriptHookName` union. All hook lists are process-global and
+  survive New Game / Load cycles. Handlers run synchronously; a throwing
+  handler is caught and logged, never blocks a tick. Hot-path guard
+  (early-return when the hook list is empty) keeps the `onTick`
+  dispatcher free at zero cost.
+- **Callsite coverage** — ✅ `dispatchHook` invocations added at:
+  end of `generateUniverse` (`onWorldGenerate`), top of `updatePlaying`
+  post-pause (`onTick`), pilot fire path (`onPlayerFire`), both
+  `tryDock` success branches (`onPlayerDock`, `kind`: `station` |
+  `ship-trade`), the debris conversion block (`onEntityDestroyed`, with
+  `byPlayer` sourced from the existing `playerShot` flag), end of
+  `pushChatter` (`onChatter`), both save paths (autosave + manual)
+  (`onSave`), and the load path (`onLoad`).
+- **Browser bridge** — ✅ `window.ASCIIFrontier = { registerScriptHook,
+  unregisterScriptHook, clearScriptHooks, VERSION }` for the future
+  Lua-host bootstrapper (and for devtools-console tinkering today).
+- **Options placeholder** — ✅ New `Options` root row **Scripting
+  (soon)** renders greyed out; `renderListMenu` gained an optional
+  `disabled` argument that dims a row and skips its ENTER handler. A
+  future pass replaces the placeholder with a real subsection
+  (load/reload script, enable/disable per hook, sandbox toggles).
+- **VERSION bump** — ✅ 0.5.0 → 0.5.1 and offline bundle rebuilt.
+
+### Recommended next round (still 0.5.x)
+
+Ranked by ROI for the current codebase. All are additive and save-safe.
+
+1. **Ship-shaped wreckage sprites** — biggest immediate visual polish for
+   the smallest surface area (see 0.5 backlog; touches only the asteroid
+   render branch and a tiny spark-FX helper).
+2. **Populated planets + planet trade** — the world already has hooks
+   for planet metadata and station-style trade; needs a `populated`
+   flag on ~5–15% of planets, a planet-branch in `tryDock`, and a
+   trimmed `renderStation` variant. Also unlocks planet chatter that
+   the player can use to find inhabited worlds.
+3. **New crew roles (Quartermaster / Recruiter / Navigator /
+   Tactical)** — adds meaningful ship-building depth; touches
+   `CrewRole` union, `CREW_ROLE_INFO`, chatter templates, and a small
+   hire-menu exclusivity check for Gunner ↔ Tactical.
+4. **Persist comms history in saves** — trivial (5-line change); the
+   only thing keeping comms feeling ephemeral between sessions.
+5. **Lua host wiring (fengari-web)** — the hook surface is ready; this
+   round drops in a WASM Lua 5.3 runtime, adds the real Options ▸
+   Scripting UI (load / reload / edit / enable-per-hook / sandbox
+   toggle), and reads scripts from localStorage + optional URL.
+   Deferred to end of the 0.5.x window so the hook surface can settle
+   through the earlier items.
+6. **Roche-limit irregular shapes for small bodies** — cheap render
+   tweak, high atmospheric value; can piggy-back on the wreckage sprite
+   pass since both live in the asteroid render branch.
+
+Items 1–4 are all in the "one-pass" range. Item 5 is a two-pass
+milestone (runtime + UI). Item 6 fits into whichever earlier pass
+touches the asteroid renderer.
+
 

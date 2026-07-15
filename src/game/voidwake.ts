@@ -50,7 +50,93 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.0";
+const VERSION = "0.5.1";
+
+// =============================================================================
+// Scripting Hooks (0.5.1)
+// -----------------------------------------------------------------------------
+// A minimal, runtime-agnostic hook surface reserved for the upcoming Lua
+// scripting system. Hooks are pure JS callbacks today; a future Lua host
+// (fengari-web / a WASM Lua 5.3) will register wrapped functions that thunk
+// into Lua-space. Every hook is fire-and-forget — a throwing handler is
+// caught here and never blocks engine ticks. Handlers must treat all
+// arguments as read-only until a proper mutation API lands.
+//
+// Hook contract (payload shapes are stable — do not change without a
+// VERSION bump and a migration note in src/game/README.md):
+//
+//   onWorldGenerate   ({ seed, entities })              end of generateUniverse
+//   onTick            ({ dt, player, entities })        top of updatePlaying
+//   onPlayerFire      ({ weaponId, from, target })      pilot fire path
+//   onPlayerDock      ({ entity, kind })                inside tryDock success
+//   onEntityDestroyed ({ entity, byPlayer })            debris conversion block
+//   onChatter         ({ who, msg, color, channel })    end of pushChatter
+//   onSave            ({ slot, blob })                  after successful save
+//   onLoad            ({ slot, blob })                  after successful load
+//
+// All handlers run synchronously in engine order. Hook lists are process-
+// global (not per-Voidwake instance) so a script attached at boot survives
+// New Game / Load Game cycles. Registration API is intentionally tiny:
+// register/unregister/clear.
+export type ScriptHookName =
+  | "onWorldGenerate"
+  | "onTick"
+  | "onPlayerFire"
+  | "onPlayerDock"
+  | "onEntityDestroyed"
+  | "onChatter"
+  | "onSave"
+  | "onLoad";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ScriptHookFn = (payload: any) => void;
+
+const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
+  onWorldGenerate:   [],
+  onTick:            [],
+  onPlayerFire:      [],
+  onPlayerDock:      [],
+  onEntityDestroyed: [],
+  onChatter:         [],
+  onSave:            [],
+  onLoad:            [],
+};
+
+export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
+  _scriptHooks[name].push(fn);
+  return () => unregisterScriptHook(name, fn);
+}
+export function unregisterScriptHook(name: ScriptHookName, fn: ScriptHookFn): void {
+  const arr = _scriptHooks[name];
+  const i = arr.indexOf(fn);
+  if (i >= 0) arr.splice(i, 1);
+}
+export function clearScriptHooks(name?: ScriptHookName): void {
+  if (name) _scriptHooks[name].length = 0;
+  else (Object.keys(_scriptHooks) as ScriptHookName[]).forEach((k) => (_scriptHooks[k].length = 0));
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dispatchHook(name: ScriptHookName, payload: any): void {
+  const arr = _scriptHooks[name];
+  if (arr.length === 0) return; // hot-path fast exit
+  for (let i = 0; i < arr.length; i++) {
+    try { arr[i](payload); }
+    catch (err) { console.warn(`[ASCII Frontier] script hook ${name} threw:`, err); }
+  }
+}
+// Expose on window in the browser so an external Lua-host bootstrapper (or
+// devtools console) can attach hooks before the runtime lands. Guarded so
+// SSR / node-only tooling doesn't trip.
+if (typeof window !== "undefined") {
+  (window as unknown as {
+    ASCIIFrontier?: {
+      registerScriptHook: typeof registerScriptHook;
+      unregisterScriptHook: typeof unregisterScriptHook;
+      clearScriptHooks: typeof clearScriptHooks;
+      VERSION: string;
+    };
+  }).ASCIIFrontier = { registerScriptHook, unregisterScriptHook, clearScriptHooks, VERSION };
+}
 const SOURCE_URL = "https://github.com/RavenousJabberwock/ascii-frontier";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
@@ -1366,6 +1452,7 @@ function generateUniverse(seed: number): Entity[] {
     });
   }
 
+  dispatchHook("onWorldGenerate", { seed, entities: out });
   return out;
 }
 
@@ -3034,6 +3121,7 @@ export class Voidwake {
     if (this.chatterScroll > 0 && (this.chatterTab === "all" || this.chatterTab === ch)) {
       this.chatterScroll = Math.min(this.chatterScroll + 1, 240);
     }
+    dispatchHook("onChatter", { who, msg, color, channel: ch });
   }
 
   // Eerie alien transmission generator — glyph-mixed strings that read as
@@ -3773,6 +3861,8 @@ export class Voidwake {
       this.pushLog(this.paused ? "‖ Paused" : "▶ Resumed");
     }
     if (this.paused) return;
+    dispatchHook("onTick", { dt, player: p, entities: this.entities });
+
 
     // Autopilot (Pilot crew, toggled by O): full auto — approach current
     // target, match velocity, and auto-dock stations / hold orbit at planets.
@@ -4197,6 +4287,8 @@ export class Voidwake {
         ttlAt: performance.now() / 1000 + 2,
       });
       this.sfx("laser");
+      const _tgt = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) ?? null : null;
+      dispatchHook("onPlayerFire", { weaponId: w.id, from: p, target: _tgt });
     }
 
 
@@ -4284,6 +4376,7 @@ export class Voidwake {
         } else {
           p.lastSaveAt = Date.now();
           this.pushLog("◉ Autosaved.");
+          dispatchHook("onSave", { slot: "autosave", blob });
         }
       } catch (err) {
         console.warn("Autosave failed", err);
@@ -4527,6 +4620,7 @@ export class Voidwake {
             t.hostileUntil = 0;
             t.weaponId = undefined;
             t.state = undefined;
+            dispatchHook("onEntityDestroyed", { entity: t, byPlayer: playerShot });
           }
           return false;
         }
@@ -4686,6 +4780,7 @@ export class Voidwake {
       this.pushLog(`Trading with ${t.name}.`);
       this.pushChatter(t.name, this.getStock(t.id).rumor, "#c2c2ff");
       this.sfx("dock");
+      dispatchHook("onPlayerDock", { entity: t, kind: "ship-trade" });
       return;
     }
     if (t.kind !== "station") { this.pushLog("Target a station or friendly ship with T."); return; }
@@ -4703,10 +4798,12 @@ export class Voidwake {
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.sfx("dock");
+    dispatchHook("onPlayerDock", { entity: t, kind: "station" });
     if (p.gunner) {
       this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
         pickLine("gunner_docked", this.chatterCtx(t)), "#fc6");
     }
+
 
     // Hand in mission
     if (p.mission && p.mission.done) {
@@ -5446,12 +5543,23 @@ export class Voidwake {
     if (this.optionsSection === "keybinds") { this.updateOptionsKeybinds(); return; }
   }
 
-  // Root Options hub: three category entries + Back.
-  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Back"];
+  // Root Options hub: three category entries + a reserved (greyed-out)
+  // Scripting entry that will host Lua scripting controls in a future pass.
+  // The hook surface is already live (see dispatchHook / registerScriptHook
+  // near the top of this file); this menu is the eventual UI mount point.
+  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting (soon)", "Back"];
+  // Indices in optionsRootItems that are visually greyed-out and don't
+  // respond to ENTER. Kept as a class field so renderOptions can dim the
+  // right rows without duplicating the "Scripting" string check.
+  private optionsRootDisabled: number[] = [3];
   private updateOptionsRoot() {
     this.menuNav(this.optionsRootItems.length);
     if (!this.input.consume("enter")) return;
     const c = this.optionsRootItems[this.menuCursor];
+    if (this.optionsRootDisabled.includes(this.menuCursor)) {
+      this.pushLog("Scripting options aren't wired up yet — hook surface is live in code.");
+      return;
+    }
     if (c === "Gameplay") { this.optionsSection = "gameplay"; this.menuCursor = 0; }
     else if (c === "Audio")    { this.optionsSection = "audio";    this.menuCursor = 0; }
     else if (c === "Controls") { this.optionsSection = "controls"; this.menuCursor = 0; }
@@ -5693,6 +5801,7 @@ export class Voidwake {
       } else {
         this.player.lastSaveAt = Date.now();
         this.pushLog(`Saved to ${c}.`);
+        dispatchHook("onSave", { slot: c, blob });
         this.screen = "menu";
       }
     }
@@ -5714,6 +5823,7 @@ export class Voidwake {
       this.screen = "playing";
       this.pushLog(`Loaded ${c}.`);
       this.syncRadio();
+      dispatchHook("onLoad", { slot: c, blob });
     }
   }
 
@@ -6505,7 +6615,7 @@ export class Voidwake {
         hint = "↑/↓ select   ENTER rebind   ESC back";
         break;
     }
-    this.renderListMenu(g, title, items);
+    this.renderListMenu(g, title, items, this.optionsSection === "root" ? this.optionsRootDisabled : []);
     // Extra hint sits one row above renderListMenu's footer so the two
     // strings don't clip into each other (this was the "ENTER confirmwipe"
     // artifact — options hint + list-menu footer overwriting the same row).
@@ -6755,7 +6865,7 @@ export class Voidwake {
     void cols;
   }
 
-  renderListMenu(g: Cell[][], title: string, items: string[]) {
+  renderListMenu(g: Cell[][], title: string, items: string[], disabled: number[] = []) {
     putText(g, 4, 2, title, "#7CFC00");
     const cols = g[0].length;
     // Touch: whole screen is a menu-gesture surface (tap items, swipe ←/→).
@@ -6764,8 +6874,10 @@ export class Voidwake {
     this.input.menuItemRects.length = 0;
     items.forEach((it, i) => {
       const sel = i === this.menuCursor;
+      const dis = disabled.includes(i);
       const row = 5 + i * 2;
-      putText(g, 6, row, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      const col = dis ? (sel ? "#666" : "#444") : (sel ? "#fff" : "#9fe");
+      putText(g, 6, row, (sel ? "▸ " : "  ") + it, col);
       // Register hit-box spanning most of the row so a fat-fingered tap
       // still lands. Full row height, from left margin to right margin.
       this.input.menuItemRects.push({

@@ -396,6 +396,49 @@ sensor alert announces them when they spawn.
   Universe section, an AI handler in the AI section, and a glyph in
   `GLYPHS`.
 
+## Scripting hooks (0.5.1 — reserved for Lua)
+
+A minimal, runtime-agnostic hook surface lives at the top of
+`src/game/voidwake.ts` so the upcoming Lua scripting system has stable
+attach points. Handlers are plain JS callbacks today; a future Lua host
+(fengari-web / WASM Lua 5.3) will register wrapped thunks. Throwing
+handlers are caught and logged — they can never block a tick.
+
+Registration API (also exposed as `window.ASCIIFrontier` in browsers):
+
+```ts
+import { registerScriptHook } from "./voidwake";
+const off = registerScriptHook("onTick", ({ dt, player, entities }) => {
+  // read-only: do not mutate — a mutation API arrives with the Lua host.
+});
+off(); // unregister
+```
+
+Hooks currently fired by the engine:
+
+| Hook                | Payload shape                              | Fired from                            |
+| ------------------- | ------------------------------------------ | ------------------------------------- |
+| `onWorldGenerate`   | `{ seed, entities }`                       | end of `generateUniverse()`           |
+| `onTick`            | `{ dt, player, entities }`                 | top of `updatePlaying()`, post-pause  |
+| `onPlayerFire`      | `{ weaponId, from, target }`               | pilot fire path                       |
+| `onPlayerDock`      | `{ entity, kind: "station" \| "ship-trade" }` | inside `tryDock()` success paths  |
+| `onEntityDestroyed` | `{ entity, byPlayer }`                     | ship/station → debris conversion      |
+| `onChatter`         | `{ who, msg, color, channel }`             | end of `pushChatter()`                |
+| `onSave`            | `{ slot, blob }`                           | after successful save (manual + auto) |
+| `onLoad`            | `{ slot, blob }`                           | after successful load                 |
+
+Payload shapes are stable — changes require a `VERSION` bump and a note
+in this section. Additional hooks are welcome but must land as no-op
+dispatchers first so scripts written against them don't crash on older
+builds.
+
+The **Options ▸ Scripting (soon)** menu row is a placeholder for the
+future Lua controls UI (load / reload / edit script, sandbox toggles,
+per-hook enable). It is greyed-out and no-ops on ENTER; the hook layer
+is live below it in code.
+
+
+
 ## Save format
 
 Saves are plain JSON. They live in `localStorage` under
