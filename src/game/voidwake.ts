@@ -88,7 +88,8 @@ export type ScriptHookName =
   | "onEntityDestroyed"
   | "onChatter"
   | "onSave"
-  | "onLoad";
+  | "onLoad"
+  | "onPlanetLand";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -102,6 +103,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onChatter:         [],
   onSave:            [],
   onLoad:            [],
+  onPlanetLand:      [],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
