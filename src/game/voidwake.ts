@@ -4977,10 +4977,10 @@ export class Voidwake {
     // Split at "||" marker if present so the two lines land as two chatter entries.
     const parts = line.split("||").map((s) => s.trim());
     if (parts.length >= 2) {
-      this.pushChatter(a.name, parts[0].replace(new RegExp(`^${a.name}:\\s*`), ""), a.color);
-      this.pushChatter(b.name, parts[1].replace(new RegExp(`^${b.name}:\\s*`), ""), b.color);
+      this.pushChatter(a.name, parts[0].replace(new RegExp(`^${a.name}:\\s*`), ""), a.color, "crew");
+      this.pushChatter(b.name, parts[1].replace(new RegExp(`^${b.name}:\\s*`), ""), b.color, "crew");
     } else {
-      this.pushChatter(a.name, line, a.color);
+      this.pushChatter(a.name, line, a.color, "crew");
     }
   }
 
