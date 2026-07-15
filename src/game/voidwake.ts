@@ -4142,7 +4142,8 @@ export class Voidwake {
 
     // Shield regen (suppressed while inside a nebula — applied below).
     // Engineer perk: +75% shield recharge rate.
-    const shieldRegen = hasCrew(p, "engineer") ? 7.0 : 4.0;
+    let shieldRegen = hasCrew(p, "engineer") ? 7.0 : 4.0;
+    if (hasCrew(p, "tactical")) shieldRegen *= 1.25;
     p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * shieldRegen);
     // Engineer perk: slow hull regen while throttle is light and not on fire.
     if (hasCrew(p, "engineer") && p.throttle < 0.35 && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
