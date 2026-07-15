@@ -2096,10 +2096,14 @@ function crewCount(p: PlayerState): number {
 
 // Crew hiring fee per role.
 const CREW_ROLE_INFO: Record<CrewRole, { title: string; baseFee: number; blurb: string; color: string }> = {
-  gunner:   { title: "Gunner",   baseFee: 300, blurb: "auto-fires on hostiles, auto-mines rocks", color: "#fc6" },
-  pilot:    { title: "Pilot",    baseFee: 450, blurb: "autopilot to current target (O)",         color: "#8cf" },
-  engineer: { title: "Engineer", baseFee: 500, blurb: "hull regen, faster shield, -20% fuel",     color: "#7CFC00" },
-  merchant: { title: "Merchant", baseFee: 400, blurb: "+15% ore sell, -10% station buy prices",    color: "#ffe066" },
+  gunner:       { title: "Gunner",       baseFee: 300, blurb: "auto-fires on hostiles, auto-mines rocks",  color: "#fc6" },
+  pilot:        { title: "Pilot",        baseFee: 450, blurb: "autopilot to current target (O)",           color: "#8cf" },
+  engineer:     { title: "Engineer",     baseFee: 500, blurb: "hull regen, faster shield, -20% fuel",      color: "#7CFC00" },
+  merchant:     { title: "Merchant",     baseFee: 400, blurb: "+15% ore sell, -10% station buy prices",    color: "#ffe066" },
+  navigator:    { title: "Navigator",    baseFee: 420, blurb: "+400u radar range, -10% fuel burn",         color: "#a9f0ff" },
+  quartermaster:{ title: "Quartermaster",baseFee: 380, blurb: "extra 5% off buys, 5% on ore sells",        color: "#e0c890" },
+  recruiter:    { title: "Recruiter",    baseFee: 350, blurb: "-15% crew hire fees",                        color: "#f0a0ff" },
+  tactical:     { title: "Tactical",     baseFee: 600, blurb: "+25% shield recharge (excludes Gunner)",    color: "#ff7a7a" },
 };
 
 function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
@@ -2107,9 +2111,15 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
   const last  = GUNNER_LAST[Math.floor(rng() * GUNNER_LAST.length)];
   const gender = ["Female","Male","Nonbinary"][Math.floor(rng() * 3)];
   const species = SPECIES[Math.floor(rng() * SPECIES.length)];
-  // Role-tuned wages: pilots/engineers are pricier specialists than a
-  // merchant clerk. Flat cr per dock — see tryDock() wage deduction.
-  const wage = role === "pilot" ? 60 : role === "engineer" ? 55 : role === "merchant" ? 40 : 40;
+  // Role-tuned wages: specialists cost more than clerks. Flat cr per dock.
+  const wage =
+    role === "tactical" ? 75 :
+    role === "pilot" ? 60 :
+    role === "engineer" ? 55 :
+    role === "navigator" ? 50 :
+    role === "quartermaster" ? 45 :
+    role === "recruiter" ? 45 :
+    role === "merchant" ? 40 : 40;
   return {
     role,
     name: `${first} ${last}`,
