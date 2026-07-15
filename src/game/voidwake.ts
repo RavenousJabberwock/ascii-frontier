@@ -6874,8 +6874,10 @@ export class Voidwake {
     this.input.menuItemRects.length = 0;
     items.forEach((it, i) => {
       const sel = i === this.menuCursor;
+      const dis = disabled.includes(i);
       const row = 5 + i * 2;
-      putText(g, 6, row, (sel ? "▸ " : "  ") + it, sel ? "#fff" : "#9fe");
+      const col = dis ? (sel ? "#666" : "#444") : (sel ? "#fff" : "#9fe");
+      putText(g, 6, row, (sel ? "▸ " : "  ") + it, col);
       // Register hit-box spanning most of the row so a fat-fingered tap
       // still lands. Full row height, from left margin to right margin.
       this.input.menuItemRects.push({
