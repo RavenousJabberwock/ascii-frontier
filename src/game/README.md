@@ -61,6 +61,7 @@ Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
 - `U` open Quest Log popup
 - `K` pin / unpin quest tracker
 - `L` open Codex (symbols / colors / keys)
+- `\` cycle **Comms** tab (All / Crew / External); `PgUp/PgDn` scroll the panel, `Home` jumps to newest
 - `P` pause
 - `ESC` main menu (New / Save / Load / Options / Quit)
 

@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const SOURCE_URL = "https://github.com/RavenousJabberwock/ascii-frontier";
 
 // Glyphs used for each entity kind. Extend here when adding a new EntityKind.
@@ -734,11 +734,29 @@ interface StationStock {
 
 // One line in the comms / chatter feed. "who" is the speaker label
 // (e.g. "Gunner Mira", "Raider Drak", "Beacon"), "color" tints the source.
+// `channel` groups the line for the Comms tab filter:
+//   "crew"     = on-ship chatter between the player's own crew,
+//   "external" = every other ship, station, planet, alien, distress signal,
+//   "system"   = ship-computer / sensors / radio-station output.
 interface ChatterLine {
   t: number;                  // performance.now() / 1000 when posted
   who: string;
   msg: string;
   color: string;
+  channel: "crew" | "external" | "system";
+}
+
+// Best-effort routing of a chatter line to a Comms tab based on the speaker
+// label passed to pushChatter. Player-crew titles ("Gunner Mira", "Pilot Roe",
+// bare "Crew") land in Crew; ship-computer voices ("Sensors", "Radio") land
+// in System; everything else — NPC ships, stations, planets, distress calls,
+// alien gibberish — lands in External. Kept as a pure module-level helper so
+// tests can inspect it without instantiating the engine.
+const CREW_SPEAKER_PREFIXES = ["Gunner ", "Pilot ", "Engineer ", "Navigator ", "Merchant ", "Quartermaster "];
+function classifyChatterChannel(who: string): "crew" | "external" | "system" {
+  if (who === "Crew" || CREW_SPEAKER_PREFIXES.some((p) => who.startsWith(p))) return "crew";
+  if (who === "Sensors" || who === "Radio") return "system";
+  return "external";
 }
 
 interface Options {
@@ -1932,7 +1950,7 @@ class Input {
       // Case-preserving text capture for name fields etc.
       if (e.key === "Backspace") this.textBuffer.push("\b");
       else if (e.key.length === 1) this.textBuffer.push(e.key);
-      if (["arrowup", "arrowdown", " ", "tab"].includes(k)) e.preventDefault();
+      if (["arrowup", "arrowdown", " ", "tab", "pageup", "pagedown"].includes(k)) e.preventDefault();
     }, opts);
     el.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()), opts);
     el.addEventListener("blur", () => {
@@ -2656,8 +2674,13 @@ export class Voidwake {
   // Per-station market state, lazily generated on first dock and cached
   // for the rest of the session. Keyed by station entity id.
   stationStocks = new Map<number, StationStock>();
-  // Comms / chatter feed (max ~6 lines kept). See pushChatter / renderChatter.
+  // Comms / chatter feed. See pushChatter / renderChatter. Cap ~250 so the
+  // top-left Comms panel can scroll back through recent traffic.
   chatter: ChatterLine[] = [];
+  // Active tab in the top-left Comms panel. Cycled with '\' (see updatePlaying).
+  chatterTab: "all" | "crew" | "external" = "all";
+  // Scroll offset into the filtered feed. 0 = pinned to newest.
+  chatterScroll = 0;
   // Cursor in the multi-page station screen.
   stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
@@ -2935,11 +2958,26 @@ export class Voidwake {
 
   }
 
-  // Append a single line to the comms / chatter feed shown in the COMMS box.
-  // Newest line floats to the top. Capped at 6 lines so it never crowds the HUD.
-  pushChatter(who: string, msg: string, color = "#9fe") {
-    this.chatter.unshift({ t: performance.now() / 1000, who, msg, color });
-    if (this.chatter.length > 6) this.chatter.pop();
+  // Append a single line to the comms / chatter feed shown in the top-left
+  // Comms panel. Newest line lives at index 0. Capped at 250 so long
+  // sessions don't grow unbounded. `channel` is inferred from the speaker
+  // label when the caller doesn't specify one so the hundreds of existing
+  // pushChatter callsites stay untouched.
+  pushChatter(
+    who: string,
+    msg: string,
+    color = "#9fe",
+    channel?: ChatterLine["channel"],
+  ) {
+    const ch = channel ?? classifyChatterChannel(who);
+    this.chatter.unshift({ t: performance.now() / 1000, who, msg, color, channel: ch });
+    if (this.chatter.length > 250) this.chatter.pop();
+    // If the user was scrolled up, keep their view stable by advancing the
+    // offset — but only within the filtered feed for the current tab so the
+    // panel doesn't drift under lines they can't see.
+    if (this.chatterScroll > 0 && (this.chatterTab === "all" || this.chatterTab === ch)) {
+      this.chatterScroll = Math.min(this.chatterScroll + 1, 240);
+    }
   }
 
   // Eerie alien transmission generator — glyph-mixed strings that read as
@@ -4149,12 +4187,26 @@ export class Voidwake {
       this.pushLog(this.questPinned ? "Quest tracker pinned." : "Quest tracker hidden.");
     }
 
+    // Comms panel controls. '\' cycles the tab (All → Crew → External),
+    // PageUp/PageDown scroll the filtered feed. Scroll is clamped in the
+    // renderer against the current tab's line count.
+    if (this.input.consume("\\")) {
+      const order: Voidwake["chatterTab"][] = ["all", "crew", "external"];
+      const i = order.indexOf(this.chatterTab);
+      this.chatterTab = order[(i + 1) % order.length];
+      this.chatterScroll = 0;
+    }
+    if (this.input.consume("pageup"))   this.chatterScroll = Math.min(this.chatterScroll + 4, 240);
+    if (this.input.consume("pagedown")) this.chatterScroll = Math.max(this.chatterScroll - 4, 0);
+    if (this.input.consume("home"))     this.chatterScroll = 0;
+
     // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
     this.updateGunner(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickCrewIdle(dt);
     this.tickCrewBanter(dt);
+    this.tickNpcBanter(dt);
     this.tickRetaliation();
     this.tickRespawns(dt);
 
@@ -4925,10 +4977,10 @@ export class Voidwake {
     // Split at "||" marker if present so the two lines land as two chatter entries.
     const parts = line.split("||").map((s) => s.trim());
     if (parts.length >= 2) {
-      this.pushChatter(a.name, parts[0].replace(new RegExp(`^${a.name}:\\s*`), ""), a.color);
-      this.pushChatter(b.name, parts[1].replace(new RegExp(`^${b.name}:\\s*`), ""), b.color);
+      this.pushChatter(a.name, parts[0].replace(new RegExp(`^${a.name}:\\s*`), ""), a.color, "crew");
+      this.pushChatter(b.name, parts[1].replace(new RegExp(`^${b.name}:\\s*`), ""), b.color, "crew");
     } else {
-      this.pushChatter(a.name, line, a.color);
+      this.pushChatter(a.name, line, a.color, "crew");
     }
   }
 
@@ -4952,6 +5004,65 @@ export class Voidwake {
     this.pushChatter(`${CREW_ROLE_INFO[r].title} ${c.name.split(" ")[0]}`,
       pickLine(kind, this.chatterCtx()), CREW_ROLE_INFO[r].color);
   }
+
+  // Occasional inter-NPC exchange — pick two nearby non-alien speakers
+  // (ships, stations, or planets) within scanner range of the player and
+  // post a short back-and-forth so the Comms feed reads like a lived-in
+  // sector. Emits into the "external" channel. Gated by chatterFreq like
+  // every other ambient scheduler.
+  private _nextNpcBanterAt = 25;
+  tickNpcBanter(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.5 : 1.0;
+    this._nextNpcBanterAt -= dt;
+    if (this._nextNpcBanterAt > 0) return;
+    this._nextNpcBanterAt = (22 + Math.random() * 25) * mul;
+    const near = this.entities
+      .filter((e) => (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station")
+        && !e.faction.startsWith("alien")
+        && e.state !== "stranded")
+      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
+      .filter((x) => x.d < 1800)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8);
+    if (near.length < 2) return;
+    // Prefer pairings that feel dramatic: hostile ↔ friendly threats, or a
+    // ship ↔ station handshake. Otherwise fall back to two random nearby
+    // speakers.
+    const shuf = near.slice().sort(() => Math.random() - 0.5);
+    let a = shuf[0].e, b = shuf[1].e;
+    const hostileHere = shuf.find((x) => x.e.kind === "hostile")?.e;
+    const friendlyHere = shuf.find((x) => x.e.kind === "friendly")?.e;
+    const stationHere = shuf.find((x) => x.e.kind === "station")?.e;
+    const shipHere = shuf.find((x) => x.e.kind !== "station")?.e;
+    if (hostileHere && friendlyHere) { a = hostileHere; b = friendlyHere; }
+    else if (stationHere && shipHere) { a = shipHere; b = stationHere; }
+    if (a === b) return;
+    const colorFor = (e: Entity) =>
+      e.kind === "hostile" ? "#ff8a8a"
+      : e.kind === "friendly" ? (e.faction === "patrol" ? "#7fd0ff" : "#aef58a")
+      : e.kind === "station" ? "#c2c2ff"
+      : "#dddddd";
+    const lineFor = (e: Entity, other: Entity) => {
+      const ctx = this.chatterCtx(e, { target: other });
+      if (e.kind === "hostile") return pickLine("hostile", ctx);
+      if (e.kind === "friendly" && e.faction === "patrol") return pickLine("patrol", ctx);
+      if (e.kind === "friendly") return pickLine("friendly", ctx);
+      if (e.kind === "station")  return pickLine("station",  ctx);
+      return pickLine("neutral", ctx);
+    };
+    const tag = (e: Entity) => (e.kind === "station" ? `Beacon ${e.name}` : e.name);
+    this.pushChatter(tag(a), lineFor(a, b), colorFor(a), "external");
+    // Reply lands slightly later via a queued micro-timer so the two lines
+    // don't collapse into the same frame. Simplest cheap version: schedule
+    // via a short setTimeout on the underlying window — engine already runs
+    // in the browser main thread.
+    const bTag = tag(b), bMsg = lineFor(b, a), bCol = colorFor(b);
+    setTimeout(() => this.pushChatter(bTag, bMsg, bCol, "external"), 900 + Math.random() * 700);
+  }
+
 
   // Quest log screen — full-screen popup showing active mission + description
   // + progress + faction reputation. ESC or U closes it.
@@ -7304,21 +7415,48 @@ export class Voidwake {
     }
     if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
 
-    // --- COMMS / chatter box ---
-    // Lives along the bottom edge between the system column and the log.
-    // Newest line on top, dimmed by age so old lines fade visually.
-    const commsX = 28;
-    const commsY = rTop + 7;
+    // --- COMMS / chatter panel ---
+    // Top-left overlay with All / Crew / External tabs. Filtered by
+    // this.chatterTab, scrolled by this.chatterScroll (0 = newest pinned).
+    // Overlays the star viewport corner intentionally so the feed is always
+    // visible without hunting for it on the HUD.
     const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula === true;
-    const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
-    putText(g, commsX, commsY, commsTitle, inNeb ? "#c47afc" : "#7CFC00");
     const nowS = performance.now() / 1000;
-    const commsW = Math.max(20, (cols - 52) - commsX - 2);
-    for (let i = 0; i < Math.min(4, this.chatter.length); i++) {
-      const c = this.chatter[i];
+    const commsX = 2;
+    const commsY = 1;
+    const commsW = 54;
+    const commsRows = 12;
+    // Header row with tabs.
+    const titleCol = inNeb ? "#c47afc" : "#7CFC00";
+    const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
+    putText(g, commsX, commsY, commsTitle, titleCol);
+    const tabs: { id: Voidwake["chatterTab"]; label: string }[] = [
+      { id: "all",      label: "All" },
+      { id: "crew",     label: "Crew" },
+      { id: "external", label: "Ext" },
+    ];
+    let tx = commsX + commsTitle.length + 1;
+    for (const t of tabs) {
+      const active = this.chatterTab === t.id;
+      const lbl = active ? `[${t.label}]` : ` ${t.label} `;
+      putText(g, tx, commsY, lbl, active ? "#ffe066" : "#7aa");
+      tx += lbl.length + 1;
+    }
+    // Filter feed to the active tab.
+    const feed = this.chatter.filter((c) =>
+      this.chatterTab === "all" ? true : c.channel === this.chatterTab);
+    // Clamp scroll so we never scroll past the last visible slot.
+    const maxScroll = Math.max(0, feed.length - commsRows);
+    if (this.chatterScroll > maxScroll) this.chatterScroll = maxScroll;
+    // Draw newest-first from the scroll offset.
+    for (let i = 0; i < commsRows; i++) {
+      const idx = i + this.chatterScroll;
+      if (idx >= feed.length) break;
+      const c = feed[idx];
       const age = nowS - c.t;
-      const dim = age > 20 ? "#555" : age > 8 ? "#888" : c.color;
+      const dim = age > 25 ? "#555" : age > 10 ? "#888" : c.color;
       let line = `«${c.who}» ${c.msg}`;
+      if (line.length > commsW) line = line.slice(0, commsW - 1) + "…";
       // Nebula interference: replace ~25% of chars with static so comms
       // read as garbled from inside a cloud.
       if (inNeb) {
@@ -7333,7 +7471,20 @@ export class Voidwake {
         }
         line = out;
       }
-      putText(g, commsX, commsY + 1 + i, line.slice(0, commsW), dim);
+      putText(g, commsX, commsY + 1 + i, line, dim);
+    }
+    // Scroll indicators + hint on the last row of the panel.
+    const hintY = commsY + commsRows + 1;
+    if (feed.length > commsRows) {
+      const total = feed.length;
+      const shown = Math.min(commsRows, total - this.chatterScroll);
+      const from = this.chatterScroll + 1;
+      const to   = this.chatterScroll + shown;
+      putText(g, commsX, hintY, `▲/▼ ${from}-${to} / ${total}  (\\ tab · PgUp/Dn scroll)`, "#557");
+    } else if (feed.length === 0) {
+      putText(g, commsX, hintY, `(quiet)  \\ tab · PgUp/Dn scroll`, "#446");
+    } else {
+      putText(g, commsX, hintY, `\\ tab · PgUp/Dn scroll · Home newest`, "#446");
     }
 
 
@@ -7348,7 +7499,7 @@ export class Voidwake {
     const gunnerHint = p.gunner ? `  G ${p.gunner.enabled ? "gunner ON" : "gunner off"}` : "";
     const pilotCrew = getCrew(p, "pilot");
     const autoHint = pilotCrew ? `  O ${pilotCrew.autopilot ? "AUTOPILOT" : "auto off"}` : "";
-    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  [/] kind  M mine  F dock  J jett  O auto  U log  L legend  K pin  P pause  ESC menu" + gunnerHint + autoHint, "#666");
+    putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  [/] kind  M mine  F dock  J jett  O auto  U log  L legend  K pin  \\ comms  P pause  ESC menu" + gunnerHint + autoHint, "#666");
 
     // FPS overlay (optional)
     if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");

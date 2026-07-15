@@ -127,3 +127,25 @@ Approve and I'll implement in one pass, verify the build, and refresh the offlin
 - Stranded ships should broadcast a "mayday" chatter line while waiting
   for a tow.
 
+## 0.4 pass — Comms panel
+
+- **Top-left Comms panel** — ✅ Replaced the 4-line bottom comms strip with
+  a 12-row scrolling panel anchored to the top-left of the viewport.
+- **Tabs** — ✅ `All`, `Crew`, `Ext`. `\` cycles the tab; PgUp/PgDn scroll;
+  Home jumps to newest. Filter routes lines by `ChatterLine.channel`, which
+  `pushChatter` infers from the speaker label (`Gunner …`, `Pilot …`, bare
+  `Crew` → crew; `Sensors`/`Radio` → system; everything else → external).
+- **Inter-NPC banter** — ✅ New `tickNpcBanter` scheduler picks two nearby
+  non-alien speakers (ships or stations, hostile ↔ friendly and station ↔
+  ship preferred) and posts a short two-line exchange into the external
+  channel. Hostile taunts, friendly cover fire, and station chatter now
+  read like a lived-in sector.
+- **VERSION bump** — ✅ 0.3.0 → 0.4.0 and offline bundle rebuilt.
+
+### Backlog (0.4 leftovers)
+
+- Persist the last N comms lines in the save file (currently transient).
+- Mouse wheel scroll + click-to-select tabs on the panel.
+- A "System" tab for `Sensors`/`Radio` if the current 3-tab surface starts
+  to feel noisy in practice.
+
