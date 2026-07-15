@@ -4483,13 +4483,22 @@ export class Voidwake {
               // NPC-on-NPC kill — just log it as ambient color.
               if (Math.random() < 0.4) this.pushLog(`${t.name} was destroyed in a skirmish.`);
             }
-            // Convert to debris so AI/render stop treating it as a live ship.
+            // Convert to debris so AI/render stop treating it as a live
+            // ship. Neutralize the wreck so it can't fire, get chased, or
+            // get targeted as hostile: faction → nature, hostileUntil
+            // cleared, weapons stripped. Small salvage ore payload so a
+            // player who mines the corpse gets a scrap tip.
+            const salvageOre = 1 + Math.floor(Math.random() * 3);
             if (isStation) {
               // Stations become a chunky debris field marker.
-              t.kind = "asteroid"; t.ore = 0; t.name = "wreckage"; t.hull = 0;
+              t.kind = "asteroid"; t.ore = salvageOre + 2; t.name = "wreckage"; t.hull = 0;
             } else {
-              t.kind = "asteroid"; t.ore = 0; t.name = "debris";
+              t.kind = "asteroid"; t.ore = salvageOre; t.name = "debris"; t.hull = 0;
             }
+            t.faction = "nature";
+            t.hostileUntil = 0;
+            t.weapon = undefined;
+            t.state = undefined;
           }
           return false;
         }
