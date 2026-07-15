@@ -2945,11 +2945,26 @@ export class Voidwake {
 
   }
 
-  // Append a single line to the comms / chatter feed shown in the COMMS box.
-  // Newest line floats to the top. Capped at 6 lines so it never crowds the HUD.
-  pushChatter(who: string, msg: string, color = "#9fe") {
-    this.chatter.unshift({ t: performance.now() / 1000, who, msg, color });
-    if (this.chatter.length > 6) this.chatter.pop();
+  // Append a single line to the comms / chatter feed shown in the top-left
+  // Comms panel. Newest line lives at index 0. Capped at 250 so long
+  // sessions don't grow unbounded. `channel` is inferred from the speaker
+  // label when the caller doesn't specify one so the hundreds of existing
+  // pushChatter callsites stay untouched.
+  pushChatter(
+    who: string,
+    msg: string,
+    color = "#9fe",
+    channel?: ChatterLine["channel"],
+  ) {
+    const ch = channel ?? classifyChatterChannel(who);
+    this.chatter.unshift({ t: performance.now() / 1000, who, msg, color, channel: ch });
+    if (this.chatter.length > 250) this.chatter.pop();
+    // If the user was scrolled up, keep their view stable by advancing the
+    // offset — but only within the filtered feed for the current tab so the
+    // panel doesn't drift under lines they can't see.
+    if (this.chatterScroll > 0 && (this.chatterTab === "all" || this.chatterTab === ch)) {
+      this.chatterScroll = Math.min(this.chatterScroll + 1, 240);
+    }
   }
 
   // Eerie alien transmission generator — glyph-mixed strings that read as
