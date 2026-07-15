@@ -174,7 +174,7 @@ const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Ni
 const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
 
 type ChatterKind =
-  | "hostile" | "friendly" | "neutral" | "station" | "planet" | "patrol"
+  | "hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
   | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
