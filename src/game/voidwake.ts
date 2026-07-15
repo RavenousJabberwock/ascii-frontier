@@ -2067,13 +2067,15 @@ function speciesFuelMul(p: PlayerState): number {
 // (Human / Drift-born / Chorus) squeezes an extra 3%.
 function merchantSellMult(p: PlayerState): number {
   const base = hasCrew(p, "merchant") ? 1.15 : 1.0;
+  const qm = hasCrew(p, "quartermaster") ? 1.05 : 1.0;
   const affinity = crewAffinityBonus(p, "merchant");
-  return base * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
+  return base * qm * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
 }
 function merchantBuyMult(p: PlayerState): number {
   const base = hasCrew(p, "merchant") ? 0.90 : 1.0;
+  const qm = hasCrew(p, "quartermaster") ? 0.95 : 1.0;
   const affinity = crewAffinityBonus(p, "merchant");
-  return base * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
+  return base * qm * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
 }
 // Small bonus when the on-crew member of `role` is a species with an
 // affinity for that role. Returns 0..0.05 range (roughly +5%).
