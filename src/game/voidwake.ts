@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.3";
+const VERSION = "0.5.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -184,6 +184,14 @@ type ChatterKind =
   | "engineer_fuel" | "engineer_farewell_good" | "engineer_farewell_bad"
   | "merchant_idle" | "merchant_greet" | "merchant_deal" | "merchant_broke"
   | "merchant_farewell_good" | "merchant_farewell_bad"
+  | "navigator_idle" | "navigator_greet"
+  | "navigator_farewell_good" | "navigator_farewell_bad"
+  | "quartermaster_idle" | "quartermaster_greet"
+  | "quartermaster_farewell_good" | "quartermaster_farewell_bad"
+  | "recruiter_idle" | "recruiter_greet"
+  | "recruiter_farewell_good" | "recruiter_farewell_bad"
+  | "tactical_idle" | "tactical_greet" | "tactical_hostile"
+  | "tactical_farewell_good" | "tactical_farewell_bad"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
