@@ -860,7 +860,7 @@ interface Gunner {
 // Multi-role crew. Roles: "gunner" (auto-fire/mine), "pilot" (autopilot to
 // current target), "engineer" (regen hull/shield + fuel efficiency),
 // "merchant" (better market spreads).
-type CrewRole = "gunner" | "pilot" | "engineer" | "merchant";
+type CrewRole = "gunner" | "pilot" | "engineer" | "merchant" | "navigator" | "quartermaster" | "recruiter" | "tactical";
 interface CrewMember {
   role: CrewRole;
   name: string;
