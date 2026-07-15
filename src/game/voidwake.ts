@@ -6749,7 +6749,7 @@ export class Voidwake {
     // distance so big objects (stars, stations, planets) read as solid.
     const worldRadius: Record<string, number> = {
       star: 40, planet: 30, station: 18, asteroid: 8,
-      ship: 4, bullet: 0.5, comet: 2, nebula: 240, beacon: 3,
+      ship: 4, bullet: 0.5, comet: 2, nebula: 420, beacon: 3,
       ufo: 5, thargoid: 9, wormhole: 22, dyson: 4, derelict: 6,
     };
     // Sort far→near so close objects overdraw distant ones.
