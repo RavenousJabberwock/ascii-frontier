@@ -1452,6 +1452,7 @@ function generateUniverse(seed: number): Entity[] {
     });
   }
 
+  dispatchHook("onWorldGenerate", { seed, entities: out });
   return out;
 }
 
@@ -3120,6 +3121,7 @@ export class Voidwake {
     if (this.chatterScroll > 0 && (this.chatterTab === "all" || this.chatterTab === ch)) {
       this.chatterScroll = Math.min(this.chatterScroll + 1, 240);
     }
+    dispatchHook("onChatter", { who, msg, color, channel: ch });
   }
 
   // Eerie alien transmission generator — glyph-mixed strings that read as
@@ -3859,6 +3861,8 @@ export class Voidwake {
       this.pushLog(this.paused ? "‖ Paused" : "▶ Resumed");
     }
     if (this.paused) return;
+    dispatchHook("onTick", { dt, player: p, entities: this.entities });
+
 
     // Autopilot (Pilot crew, toggled by O): full auto — approach current
     // target, match velocity, and auto-dock stations / hold orbit at planets.
@@ -4283,6 +4287,8 @@ export class Voidwake {
         ttlAt: performance.now() / 1000 + 2,
       });
       this.sfx("laser");
+      const _tgt = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) ?? null : null;
+      dispatchHook("onPlayerFire", { weaponId: w.id, from: p, target: _tgt });
     }
 
 
