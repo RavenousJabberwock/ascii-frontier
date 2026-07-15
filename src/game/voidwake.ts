@@ -6865,7 +6865,7 @@ export class Voidwake {
     void cols;
   }
 
-  renderListMenu(g: Cell[][], title: string, items: string[]) {
+  renderListMenu(g: Cell[][], title: string, items: string[], disabled: number[] = []) {
     putText(g, 4, 2, title, "#7CFC00");
     const cols = g[0].length;
     // Touch: whole screen is a menu-gesture surface (tap items, swipe ←/→).
