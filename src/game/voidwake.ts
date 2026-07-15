@@ -746,6 +746,19 @@ interface ChatterLine {
   channel: "crew" | "external" | "system";
 }
 
+// Best-effort routing of a chatter line to a Comms tab based on the speaker
+// label passed to pushChatter. Player-crew titles ("Gunner Mira", "Pilot Roe",
+// bare "Crew") land in Crew; ship-computer voices ("Sensors", "Radio") land
+// in System; everything else — NPC ships, stations, planets, distress calls,
+// alien gibberish — lands in External. Kept as a pure module-level helper so
+// tests can inspect it without instantiating the engine.
+const CREW_SPEAKER_PREFIXES = ["Gunner ", "Pilot ", "Engineer ", "Navigator ", "Merchant ", "Quartermaster "];
+function classifyChatterChannel(who: string): "crew" | "external" | "system" {
+  if (who === "Crew" || CREW_SPEAKER_PREFIXES.some((p) => who.startsWith(p))) return "crew";
+  if (who === "Sensors" || who === "Radio") return "system";
+  return "external";
+}
+
 interface Options {
   difficulty: typeof DIFFICULTIES[number];
   peaceful: boolean;
