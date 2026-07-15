@@ -462,3 +462,24 @@ angular `╱ ╲ ¦ · = / \ |` glyphs — plus a small per-cell spark flicker
 just another rock. Salvage payout (mine the wreck to recover 1–3 ore,
 +2 for former stations) is unchanged from 0.5.
 
+## Populated planets (0.5.3)
+
+~12% of `kind: "planet"` entities spawn as inhabited colonies. They
+carry a `populated: true` flag and get a name prefixed with `◈` so
+scanner labels, target panels, and chatter tags all read as inhabited
+without a per-panel branch.
+
+Land on one by targeting it and hitting `F` from within 300u at
+throttle ≤ 5%. The dock screen opens directly on the `Market` page —
+colonies expose ore/fuel trade only (no shipyard, no repair, no
+weapon/module/crew shops) via the existing `isMini` branch in
+`buildStationLines()`. Wages still tick per dock. Ambient chatter
+routes populated planets through the new `planet_populated` template
+with a `Colony {name}` speaker tag and an amber `#ffd28a` color so
+comms cues match the market UI.
+
+Fires `onPlayerDock` with `kind: "planet"` and the additional
+`onPlanetLand` hook so scripts can distinguish colony landings from
+station docks and ship-to-ship trades.
+
+
