@@ -7415,21 +7415,48 @@ export class Voidwake {
     }
     if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
 
-    // --- COMMS / chatter box ---
-    // Lives along the bottom edge between the system column and the log.
-    // Newest line on top, dimmed by age so old lines fade visually.
-    const commsX = 28;
-    const commsY = rTop + 7;
+    // --- COMMS / chatter panel ---
+    // Top-left overlay with All / Crew / External tabs. Filtered by
+    // this.chatterTab, scrolled by this.chatterScroll (0 = newest pinned).
+    // Overlays the star viewport corner intentionally so the feed is always
+    // visible without hunting for it on the HUD.
     const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula === true;
-    const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
-    putText(g, commsX, commsY, commsTitle, inNeb ? "#c47afc" : "#7CFC00");
     const nowS = performance.now() / 1000;
-    const commsW = Math.max(20, (cols - 52) - commsX - 2);
-    for (let i = 0; i < Math.min(4, this.chatter.length); i++) {
-      const c = this.chatter[i];
+    const commsX = 2;
+    const commsY = 1;
+    const commsW = 54;
+    const commsRows = 12;
+    // Header row with tabs.
+    const titleCol = inNeb ? "#c47afc" : "#7CFC00";
+    const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
+    putText(g, commsX, commsY, commsTitle, titleCol);
+    const tabs: { id: typeof this.chatterTab; label: string }[] = [
+      { id: "all",      label: "All" },
+      { id: "crew",     label: "Crew" },
+      { id: "external", label: "Ext" },
+    ];
+    let tx = commsX + commsTitle.length + 1;
+    for (const t of tabs) {
+      const active = this.chatterTab === t.id;
+      const lbl = active ? `[${t.label}]` : ` ${t.label} `;
+      putText(g, tx, commsY, lbl, active ? "#ffe066" : "#7aa");
+      tx += lbl.length + 1;
+    }
+    // Filter feed to the active tab.
+    const feed = this.chatter.filter((c) =>
+      this.chatterTab === "all" ? true : c.channel === this.chatterTab);
+    // Clamp scroll so we never scroll past the last visible slot.
+    const maxScroll = Math.max(0, feed.length - commsRows);
+    if (this.chatterScroll > maxScroll) this.chatterScroll = maxScroll;
+    // Draw newest-first from the scroll offset.
+    for (let i = 0; i < commsRows; i++) {
+      const idx = i + this.chatterScroll;
+      if (idx >= feed.length) break;
+      const c = feed[idx];
       const age = nowS - c.t;
-      const dim = age > 20 ? "#555" : age > 8 ? "#888" : c.color;
+      const dim = age > 25 ? "#555" : age > 10 ? "#888" : c.color;
       let line = `«${c.who}» ${c.msg}`;
+      if (line.length > commsW) line = line.slice(0, commsW - 1) + "…";
       // Nebula interference: replace ~25% of chars with static so comms
       // read as garbled from inside a cloud.
       if (inNeb) {
@@ -7444,7 +7471,20 @@ export class Voidwake {
         }
         line = out;
       }
-      putText(g, commsX, commsY + 1 + i, line.slice(0, commsW), dim);
+      putText(g, commsX, commsY + 1 + i, line, dim);
+    }
+    // Scroll indicators + hint on the last row of the panel.
+    const hintY = commsY + commsRows + 1;
+    if (feed.length > commsRows) {
+      const total = feed.length;
+      const shown = Math.min(commsRows, total - this.chatterScroll);
+      const from = this.chatterScroll + 1;
+      const to   = this.chatterScroll + shown;
+      putText(g, commsX, hintY, `▲/▼ ${from}-${to} / ${total}  (\\ tab · PgUp/Dn scroll)`, "#557");
+    } else if (feed.length === 0) {
+      putText(g, commsX, hintY, `(quiet)  \\ tab · PgUp/Dn scroll`, "#446");
+    } else {
+      putText(g, commsX, hintY, `\\ tab · PgUp/Dn scroll · Home newest`, "#446");
     }
 
 
