@@ -752,9 +752,13 @@ interface ChatterLine {
 // in System; everything else — NPC ships, stations, planets, distress calls,
 // alien gibberish — lands in External. Kept as a pure module-level helper so
 // tests can inspect it without instantiating the engine.
-const CREW_SPEAKER_PREFIXES = ["Gunner ", "Pilot ", "Engineer ", "Navigator ", "Merchant ", "Quartermaster "];
+const CREW_SPEAKER_PREFIXES = ["Gunner ", "Pilot ", "Engineer ", "Navigator ", "Merchant ", "Quartermaster ", "Recruiter ", "Tactical "];
+// Bare speaker labels that route to the "crew" channel. "Computer" is the
+// ship's onboard voice — it speaks when a crew station is unfilled or when
+// the ship itself needs to report a systems event.
+const CREW_BARE_LABELS = new Set(["Crew", "Computer", "Ship Computer", "Gunner", "Pilot", "Engineer", "Navigator", "Merchant", "Quartermaster", "Recruiter", "Tactical"]);
 function classifyChatterChannel(who: string): "crew" | "external" | "system" {
-  if (who === "Crew" || CREW_SPEAKER_PREFIXES.some((p) => who.startsWith(p))) return "crew";
+  if (CREW_BARE_LABELS.has(who) || CREW_SPEAKER_PREFIXES.some((p) => who.startsWith(p))) return "crew";
   if (who === "Sensors" || who === "Radio") return "system";
   return "external";
 }
