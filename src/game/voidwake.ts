@@ -2722,10 +2722,18 @@ function surfaceChar(e: Entity, gx: number, gy: number, onEdge: boolean, edgeCh:
   const palette =
     e.kind === "planet"  ? PLANET_TEX :
     e.kind === "station" ? STATION_TEX :
-    e.kind === "asteroid"? ASTEROID_TEX :
+    e.kind === "asteroid"? (isWreck(e) ? DEBRIS_TEX : ASTEROID_TEX) :
     null;
   if (!palette) return fillCh;
   const h = hash01(e.id * 131 + gx * 1009 + gy * 7919);
+  // Debris sparks: a small % of cells flicker to a bright '*' or '+' per
+  // second, sold as burning parts of the ship. Deterministic per-cell
+  // seed + a coarse time bucket keeps it cheap and stable.
+  if (e.kind === "asteroid" && isWreck(e)) {
+    const t = Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 140);
+    const sparkH = hash01(e.id * 977 + gx * 613 + gy * 419 + t * 7);
+    if (sparkH < 0.06) return sparkH < 0.03 ? "*" : "+";
+  }
   return palette[Math.floor(h * palette.length)];
 }
 
