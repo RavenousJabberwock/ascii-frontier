@@ -2028,6 +2028,7 @@ function effectiveRadarRange(p: PlayerState): number {
   let r = 1500;
   if (hasCrew(p, "pilot")) r += 150;
   if (hasCrew(p, "engineer")) r += 150;
+  if (hasCrew(p, "navigator")) r += 400;
   if (p.ship.modules.includes("sensor-array")) r += 600;
   if (p.ship.modules.includes("long-range-scanner")) r += 1000;
   // Player-species passive: Aquilan / Sylph get an innate scope bonus.
