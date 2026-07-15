@@ -445,3 +445,19 @@ Saves are plain JSON. They live in `localStorage` under
 `voidwake.save.<slot>` and can also be exported/imported as `.json`
 files from the menu. No encryption, no obfuscation — open them in any
 text editor.
+
+**0.5.2** adds an optional `chatter: ChatterLine[]` field so the Comms
+feed survives Save / Load. Older saves that omit the field still load
+cleanly — the engine backfills an empty feed.
+
+## Wreckage sprites (0.5.2)
+
+Ship and station kills convert the entity to `kind: "asteroid"` with
+`name: "debris"` (ships) or `"wreckage"` (stations). The renderer now
+detects wrecks via `isWreck(e)` and swaps in a dedicated palette
+(`DEBRIS_FILLS` / `DEBRIS_TEX`) — cool grey scorched-hull colors and
+angular `╱ ╲ ¦ · = / \ |` glyphs — plus a small per-cell spark flicker
+(`*` / `+`) so wrecks read as "burning parts of a ship" rather than
+just another rock. Salvage payout (mine the wreck to recover 1–3 ore,
++2 for former stations) is unchanged from 0.5.
+

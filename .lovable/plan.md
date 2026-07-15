@@ -261,36 +261,44 @@ save-safe; the code refs are pointers for the next agent.
   (load/reload script, enable/disable per hook, sandbox toggles).
 - **VERSION bump** — ✅ 0.5.0 → 0.5.1 and offline bundle rebuilt.
 
+## 0.5.2 pass — Wreckage sprites + comms persistence
+
+- **Ship-shaped wreckage sprites** — ✅ Added `DEBRIS_FILLS`,
+  `DEBRIS_TEX`, and an `isWreck(e)` helper. `fillsFor` and
+  `surfaceChar` branch on wreck vs. rock; the close-body fill glyph
+  switches from `%` to `¦`; a time-bucketed spark override drops
+  bright `*` / `+` characters onto ~6% of wreck cells per ~140ms
+  tick. Wrecks now read as "burning parts of a ship" rather than
+  another asteroid, with zero change to salvage payout or AI.
+- **Persist comms history in saves** — ✅ `SaveBlob.chatter?`
+  (`ChatterLine[]`, capped at 250) added. Autosave + manual save
+  both populate it; Load restores `this.chatter` with an
+  `Array.isArray` guard so older saves without the field still load
+  cleanly (backfilled to `[]`).
+- **VERSION bump** — ✅ 0.5.1 → 0.5.2 and offline bundle rebuilt.
+
 ### Recommended next round (still 0.5.x)
 
-Ranked by ROI for the current codebase. All are additive and save-safe.
+Ranked by ROI for the current codebase. All additive and save-safe.
 
-1. **Ship-shaped wreckage sprites** — biggest immediate visual polish for
-   the smallest surface area (see 0.5 backlog; touches only the asteroid
-   render branch and a tiny spark-FX helper).
-2. **Populated planets + planet trade** — the world already has hooks
-   for planet metadata and station-style trade; needs a `populated`
-   flag on ~5–15% of planets, a planet-branch in `tryDock`, and a
-   trimmed `renderStation` variant. Also unlocks planet chatter that
-   the player can use to find inhabited worlds.
-3. **New crew roles (Quartermaster / Recruiter / Navigator /
-   Tactical)** — adds meaningful ship-building depth; touches
-   `CrewRole` union, `CREW_ROLE_INFO`, chatter templates, and a small
-   hire-menu exclusivity check for Gunner ↔ Tactical.
-4. **Persist comms history in saves** — trivial (5-line change); the
-   only thing keeping comms feeling ephemeral between sessions.
-5. **Lua host wiring (fengari-web)** — the hook surface is ready; this
-   round drops in a WASM Lua 5.3 runtime, adds the real Options ▸
-   Scripting UI (load / reload / edit / enable-per-hook / sandbox
-   toggle), and reads scripts from localStorage + optional URL.
-   Deferred to end of the 0.5.x window so the hook surface can settle
-   through the earlier items.
-6. **Roche-limit irregular shapes for small bodies** — cheap render
-   tweak, high atmospheric value; can piggy-back on the wreckage sprite
-   pass since both live in the asteroid render branch.
+1. **Populated planets + planet trade** — plumb a `populated: boolean`
+   flag onto ~5–15% of `kind:"planet"` entities, add a planet branch
+   in `tryDock` (currently `dockR=120` for stars only), open a trimmed
+   station-style trade screen, and add planet chatter so players can
+   eavesdrop to find inhabited worlds.
+2. **New crew roles (Quartermaster / Recruiter / Navigator /
+   Tactical)** — extends `CrewRole`, `CREW_ROLE_INFO`, chatter
+   templates, plus a hire-menu exclusivity check for Gunner ↔
+   Tactical.
+3. **Lua host wiring (fengari-web)** — hook surface is ready
+   (0.5.1); this round drops in the WASM Lua 5.3 runtime, replaces
+   the greyed Options ▸ Scripting placeholder with load / reload /
+   edit / enable-per-hook / sandbox controls, and reads scripts from
+   localStorage.
+4. **Roche-limit irregular shapes for small bodies** — cheap render
+   tweak in the asteroid branch; boost per-cell edge roughness when
+   the nearest planet is within `2 × planetRadius`. Piggy-backs
+   nicely on the 0.5.2 wreckage work.
 
-Items 1–4 are all in the "one-pass" range. Item 5 is a two-pass
-milestone (runtime + UI). Item 6 fits into whichever earlier pass
-touches the asteroid renderer.
 
 
