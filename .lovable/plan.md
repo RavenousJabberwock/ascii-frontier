@@ -83,8 +83,6 @@ All driven by a tiny FX queue (`{x,y,glyph,color,ttl}[]`) drained each render �
 - No external audio assets (keeps bundle small and offline-pure).
 - No new art pipeline — everything remains ASCII-rendered to canvas.
 
-Approve and I'll implement in one pass, verify the build, and refresh the offline bundle.
-
 ---
 
 ## 0.3 pass — Patrols, chatter, glitch FX, HUD themes
@@ -343,7 +341,6 @@ save-safe; the code refs are pointers for the next agent.
   `wormhole` / mission targets / stars (BH) to the T-cycle target set.
   Landed as radar range + fuel burn only; the target-cycle predicate lives
   in `cycleTarget` and can pick these up in a later pass.
-
 
 ## 0.5.5 pass — Lua host + crew backlog
 
@@ -667,10 +664,4 @@ Backlog rolled forward to 0.5.8+
   (Engineer × Merchant, Navigator × Tactical, etc.).
 - **Boss chatter** — dedicated pool for named captains distinct from
   generic hostile chatter.
-
-
-
-
-
-
 
