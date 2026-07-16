@@ -351,13 +351,34 @@ place for a real morale system later.
 Gunner ↔ Tactical exclusivity is enforced at the hire menu: if either is
 aboard, the other's row is greyed out and shows a "locked" note.
 
-### Morale (0.5.5)
+### Morale (0.5.5 → 0.5.6)
 
 Every crewmember carries a `morale` field (0..100, new hires start at 100).
 Wage shortfalls at dock drop morale by 15/dock (halved to 8 when a
 Recruiter is aboard). Full-pay docks heal +2. Morale below 30 changes the
 Comms grumble line from "Payday came up light" to "Morale's underwater —
-fix this or we walk." Walk-outs and perk attenuation are on the backlog.
+fix this or we walk."
+
+**0.5.6 gating (walk-outs):**
+
+- **Cheat Mode** — wages and morale are skipped entirely. Crew never
+  grumble, never walk. Safe sandbox.
+- **Easy** difficulty — morale floors at 5. Crew still gripe when shorted
+  but **never walk off**. A softer line is posted on short pay.
+- **Normal / Hard / Brutal / Nightmare** — morale can hit 0 on repeated
+  short pay. At 0, the crewmember walks off at that dock, is spliced from
+  `player.crew`, and posts their `*_farewell_bad` line (or a generic
+  `walkout` line if the role has none).
+
+### Critical hits (0.5.6)
+
+Every player shot rolls for a crit. Base chance is 8%; +5% with a Gunner
+aboard; the Tactical Officer's auto-fire uses a 23% floor (the promised
+"+15% crit chance" from the crew backlog). Crits apply a **2× damage
+multiplier** and post a brief `★ CRIT` chatter line ("Gunner" /
+"Tactical" / "Weapons") in the amber Comms color. NPC shots do not crit
+— crits are a player-side feedback loop, not a two-way lottery.
+
 
 
 ## Outfitting (module shop)
