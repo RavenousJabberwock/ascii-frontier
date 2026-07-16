@@ -3166,6 +3166,12 @@ export class Voidwake {
   start() {
     this.running = true;
     this.lastTs = performance.now();
+    // 0.5.5 — restore persisted Lua script + enable flag. If it was on last
+    // session, boot the host now so hooks are live before New Game / Load.
+    this.loadScriptSettings();
+    if (this.scriptEnabled && this.scriptSource.trim()) {
+      void this.reloadScript();
+    }
     const loop = (ts: number) => {
       if (!this.running) return;
       // While the tab is hidden, idle cheaply — don't update or render.
