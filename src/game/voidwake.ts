@@ -5798,10 +5798,11 @@ export class Voidwake {
     this._nextAmbientChatterAt = (8 + Math.random() * 10) * mul;
     // Find a candidate within 1500u, prefer interesting kinds. Skip alien-
     // family factions — UFOs and thargoids stay wordless / gibberish.
+    // 0.5.6 — Stranded ships now broadcast maydays (previously suppressed).
+    // Filter still skips alien-family factions.
     const near = this.entities
       .filter((e) => (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
-        && !e.faction.startsWith("alien")
-        && e.state !== "stranded")
+        && !e.faction.startsWith("alien"))
       .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
       .filter((x) => x.d < 1500)
       .sort((a, b) => a.d - b.d);
