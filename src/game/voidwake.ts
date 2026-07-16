@@ -7653,10 +7653,35 @@ export class Voidwake {
         continue;
       }
 
+      // 0.5.6 — Roche-limit deformation for small bodies (asteroids/comets/
+      // meteors). If the entity sits within 2× the nearest planet's world
+      // radius, perturb the edge threshold with a hash-driven per-cell
+      // roughness so its silhouette reads as tidally-shredded rather than
+      // a clean disc. Cheapest possible: seed roughness with `e.id`, `dx`,
+      // `dy`, and a coarse time bucket for a slow shimmer.
+      let rocheK = 0;
+      if (e.kind === "asteroid" || e.kind === "comet") {
+        let nearestPR = 0, nearestPD = Infinity;
+        for (const q of this.entities) {
+          if (q.kind !== "planet") continue;
+          const dq = V.len(V.sub(q.pos, e.pos));
+          if (dq < nearestPD) { nearestPD = dq; nearestPR = worldRadius.planet ?? 30; }
+        }
+        if (nearestPD < nearestPR * 3) {
+          // Ramp from 0 at 3×R to ~0.28 at 1×R (inside surface).
+          rocheK = Math.max(0, Math.min(0.28, (nearestPR * 3 - nearestPD) / (nearestPR * 3) * 0.28));
+        }
+      }
+      const tBucket = rocheK > 0 ? Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 220) : 0;
+
       for (let dy = -ry; dy <= ry; dy++) {
         for (let dx = -rx; dx <= rx; dx++) {
           const nx = dx / rx, ny = dy / ry;
-          const d2 = nx * nx + ny * ny;
+          let d2 = nx * nx + ny * ny;
+          if (rocheK > 0) {
+            const rough = hash01(e.id * 1301 + dx * 613 + dy * 419 + tBucket * 11);
+            d2 += (rough - 0.5) * rocheK;
+          }
           if (d2 > 1) continue;
           const gx = sx + dx, gy = sy2 + dy;
           if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
@@ -7675,6 +7700,32 @@ export class Voidwake {
         }
       }
 
+      // 0.5.6 — Colony overlay ring: populated planets get a faint dotted
+      // orbital ring (`·`) just outside the sprite and a small `◈` beacon
+      // tag at the top, so they read as inhabited at a glance without
+      // waiting for the name label.
+      if (e.kind === "planet" && e.populated) {
+        const ringR = 1.15;
+        const rrx = Math.max(2, Math.round(rx * ringR));
+        const rry = Math.max(1, Math.round(ry * ringR));
+        for (let dy = -rry; dy <= rry; dy++) {
+          for (let dx = -rrx; dx <= rrx; dx++) {
+            const nx = dx / rrx, ny = dy / rry;
+            const d2 = nx * nx + ny * ny;
+            if (d2 <= 1.02 || d2 > ringR * ringR) continue;
+            // Sparse ring: only paint every ~3rd cell along the ring.
+            if (hash01(e.id * 733 + dx * 191 + dy * 313) > 0.22) continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            if (g[gy][gx].ch !== " ") continue;
+            g[gy][gx] = { ch: "·", color: "#ffd28a", glow: false };
+          }
+        }
+        const bx = sx, by = sy2 - ry - 1;
+        if (bx > vpLeft && bx < vpRight && by > vpTop && by < vpBottom) {
+          g[by][bx] = { ch: "◈", color: "#ffd28a", glow: true };
+        }
+      }
 
       // Label big objects centered just below the sprite.
       if (rCells >= 3 && e.name) {
