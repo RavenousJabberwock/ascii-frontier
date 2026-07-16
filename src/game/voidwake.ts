@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.5";
+const VERSION = "0.5.6";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -175,6 +175,7 @@ const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","O
 
 type ChatterKind =
   | "hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
+  | "patrol_tow" | "patrol_arrest" | "stranded_mayday" | "crit_hit" | "walkout"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
   | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
@@ -224,6 +225,12 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{cmdr} of the {ship}, last words?",
     "Cargo manifest or vacuum — pick.",
     "Your bounty pays my fuel, {cmdr}.",
+    "Nice hull. Be nicer as scrap.",
+    "You a courier or a coffin, {ship}?",
+    "Broadcasting: {ship} marked. Cut her open.",
+    "Federation ain't coming. Not out here.",
+    "Say hi to the void, {cmdr}.",
+    "You brought {cargo}% cargo to a knife fight.",
   ],
   friendly: [
     "Safe vectors, Cmdr {cmdr}.",
@@ -232,6 +239,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Heard about your {kills} kills — fly true.",
     "Need anything? Nearest dock pings from {sector}.",
     "Eyes up — {rumor}.",
+    "Convoy running clean today. Fly with us if you like.",
+    "Been reading your bounty tally, Cmdr. Keep at it.",
+    "If you see a mayday out here, squawk it up the lane.",
+    "Coffee's terrible, company's fine. Come say hi at {sector}.",
   ],
   neutral: [
     "{ship}, mind your wake.",
@@ -240,6 +251,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Heard {rumor}. Probably nothing.",
     "Comms check — read you five-by, {cmdr}.",
     "If you see {curse} types out here, don't engage.",
+    "Long haul today. Company's welcome — trouble isn't.",
+    "You buying? I'm selling. Otherwise, drift on.",
+    "Manifest's clean, {cmdr}. Don't get creative.",
+    "This lane's slow. Sun's warm. That's the report.",
   ],
   station: [
     "...automated beacon, {sector}: dock fees waived this cycle.",
@@ -248,6 +263,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Advisory: {weather}.",
     "Market tick — ore moving well today.",
     "Manifest scan ready when you dock, {cmdr}.",
+    "Docking clamps standing by for {ship}. Cmdr {cmdr}, welcome.",
+    "Beacon nominal, {sector} traffic light. Come on in.",
+    "Bounty board updated — new marks posted this cycle.",
+    "Hydro cycling — recycled air tastes like {coffee} again. Sorry.",
   ],
   planet: [
     "Surface comms crackle: {weather}.",
@@ -255,6 +274,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Atmospheric thermals strong over the northern arc.",
     "Local chatter mentions {rumor}.",
     "Orbital relay {hailVerb} you, Cmdr {cmdr}.",
+    "Unpopulated world — automated relay only, Cmdr.",
+    "Sensors log dust storms over the equator this rotation.",
+    "Downwell winds are ugly. Wouldn't recommend a drop.",
   ],
   planet_populated: [
     "Colony control to {ship} — landing pads clear, welcome down, Cmdr {cmdr}.",
@@ -264,6 +286,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Colony militia on the beat — {praise}, {cmdr}.",
     "Manifest scan queued. Step aboard when you're locked, {cmdr}.",
     "Kids on the promenade counting hulls — you're number {kills} this cycle.",
+    "Fresh water on tap, {cmdr}. First round's on the colony.",
+    "Ore prices holding steady — buyers hungry for {ore} units this rotation.",
+    "Ring lights up when you're on final. Bring her in gentle.",
+    "Militia's dry today. Any {curse} types come with you, sing out.",
+    "Recruiters at the tradehouse — hiring hands out of dirtside.",
   ],
   patrol: [
     "SPD Patrol to {ship} — maintain course, {cmdr}.",
@@ -274,6 +301,40 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Fuel dry? Squawk mayday — we'll tow you to dock.",
     "Patrol pinging {ship} — hull {hull}%, doing alright?",
     "Attack a lawful hull in our range, Cmdr, and we return the favor.",
+    "SPD to all traffic: keep weapons cold on approach lanes.",
+    "Coffee's cold, guns are warm. Standard shift.",
+    "Cruiser {ship} logged. Move along, {cmdr}.",
+  ],
+  patrol_tow: [
+    "SPD to {target}: sit tight, tractor locking on.",
+    "Patrol has your mayday, {target}. Tow inbound — no charge.",
+    "Hooking the {target}. Nearest lawful dock in {sector}, ETA short.",
+    "Stranded hull acquired. Cmdr {cmdr}, hold your lane while we drag.",
+  ],
+  patrol_arrest: [
+    "SPD to {ship}: cease fire and stand down. This is your only warning.",
+    "You lit up a lawful hull, {cmdr}. Patrol is now engaging.",
+    "Guns hot on {ship}. Drop shields or drop hull, your call.",
+    "Weapons free on {ship}. Compliments of the {sector} beat.",
+  ],
+  stranded_mayday: [
+    "MAYDAY, MAYDAY — {ship} drifting, no fuel, any vessel please respond.",
+    "Comms open — dead in the water. Squawking on all bands.",
+    "Reactor's cold. Life support on batteries. Anyone reading?",
+    "{fac} freighter {ship} broadcasting mayday. Please advise.",
+    "Fuel's out, patience thin. Tow, please. Anyone.",
+  ],
+  crit_hit: [
+    "★ CRIT — {target} rocked.",
+    "★ CRITICAL HIT on {target}.",
+    "★ Solid hit, {target} is smoking.",
+    "★ Clean crit — {target}'s glowing.",
+  ],
+  walkout: [
+    "That's it — I'm off at the next dock. Morale's dust.",
+    "Pack my kit. This tour's over, {cmdr}.",
+    "You couldn't feed the crew, you can't keep 'em. I'm out.",
+    "Walking. Find someone else to bleed for {credits}cr.",
   ],
   gunner_idle: [
     "Quiet out here. {weather}.",
@@ -288,6 +349,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "If we see a †, that's a derelict. Free money, no shooting.",
     "Black holes on the scope. Give them a wide berth, {cmdr}.",
     "That {ship} handles nicer than the last three I've been on.",
+    "One good crit and even a raider captain rethinks his day.",
+    "You know a Federation escort'll roll the whole wing for one lit hostile?",
+    "Colonies pay ore premiums, {cmdr}. Filed under 'good to know'.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
@@ -295,18 +359,22 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Got the lock — {target}'s {threat}!",
     "Eat plasma, {curse}!",
     "Range good, {target} lit up!",
+    "Splash-two-in-progress on {target}!",
+    "Trace round on {target} — walk it in!",
   ],
   gunner_mine: [
     "Chewing rock — {ore} in the hold.",
     "Nice vein. Cargo at {cargo}%.",
     "Mining {target}, hold her steady.",
     "Ore tally: {ore}. Keep us pointed.",
+    "Chip, chip, chip. My favorite music.",
   ],
   gunner_dock: [
     "Suggest we dock at {target}, Cmdr.",
     "{target} looks safe. Fuel's at {fuel}%.",
     "Could use a stretch — {target}'s right there.",
     "Hull {hull}%, shields {shield}% — dock at {target}?",
+    "I could use a hot meal. {target}'s got a tradehouse.",
   ],
   gunner_hit: [
     "We're taking fire! Hull {hull}%!",
@@ -315,6 +383,7 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "That's coming from {nearest}!",
     "Evasive! Hull at {hull}%!",
     "Whoever's shooting us — they'll regret it.",
+    "Rounds off the bow, {cmdr} — jink!",
   ],
   gunner_greet: [
     "On board, Cmdr. Press G to toggle me.",
@@ -340,6 +409,7 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Hope your next gunner likes {curse}s as much as you do.",
     "Fly into a star for all I care, Cmdr.",
     "Worst tour I ever flew. Out.",
+    "Empty pay chit, empty magazine. I'm walking.",
   ],
   gunner_kill: [
     "{target} — splashed!",
@@ -347,6 +417,7 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Scratch one. Kill count: {kills}.",
     "Cleaner than I expected. Nice angle.",
     "Down they go. Manifest 'em, Cmdr.",
+    "Hostile scratched. Loot on the plot.",
   ],
   gunner_docked: [
     "Solid dock. I'll stretch the legs.",
@@ -989,6 +1060,7 @@ interface Options {
   // Visual FX toggles + HUD/reticle theming (added 0.3).
   glitchFx: boolean;              // enable screen glitch on hull hits + thargoid presence
   scanlines: boolean;             // draw subtle horizontal scanlines over the canvas
+  scanlineDensity?: 1 | 2 | 3;    // 0.5.6 — row skip (1=dense/every row, 2=default, 3=sparse)
   hudScheme: "green" | "amber" | "cyan" | "white" | "red";
   reticleColor: "green" | "amber" | "cyan" | "magenta" | "white" | "red";
   reticleShape: "cross" | "dot" | "brackets" | "circle" | "diamond";
@@ -1144,6 +1216,7 @@ function defaultOptions(): Options {
     touchControls: "auto",
     glitchFx: true,
     scanlines: false,
+    scanlineDensity: 2,
     hudScheme: "green",
     reticleColor: "green",
     reticleShape: "cross",
@@ -1601,6 +1674,21 @@ const V = {
 // Each ship kind has a tiny decision routine. Keep these small — they run
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
+// 0.5.6 — AI event queue. tickAI pushes state-transition events (patrol
+// starting a tow, patrol beginning to arrest the player) that Voidwake
+// drains each frame so it can post keyed chatter without threading `this`
+// through the module-level AI helper.
+export type AiEvent =
+  | { kind: "patrol_tow_start";     e: Entity; targetId: number }
+  | { kind: "patrol_arrest_start";  e: Entity };
+const _aiEvents: AiEvent[] = [];
+export function drainAiEvents(): AiEvent[] {
+  if (_aiEvents.length === 0) return [];
+  const out = _aiEvents.slice();
+  _aiEvents.length = 0;
+  return out;
+}
+
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson" || e.kind === "derelict") return;
   // Stranded lawful ships coast in place waiting for a Patrol tow.
@@ -1730,6 +1818,7 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       now < x.hostileUntil &&
       V.len(V.sub(x.pos, e.pos)) < 1000);
     if (aggro && distToPlayer < 1200) {
+      if (e.state !== "arrest") _aiEvents.push({ kind: "patrol_arrest_start", e });
       e.state = "arrest";
       e.towById = undefined;
       const dir = V.norm(V.sub(player.pos, e.pos));
@@ -1780,6 +1869,7 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       e.state = "tow";
       const dir = V.norm(V.sub(strandedNearby.pos, e.pos));
       e.vel = V.scale(dir, 30);
+      _aiEvents.push({ kind: "patrol_tow_start", e, targetId: strandedNearby.id });
       return;
     }
     e.state = "patrol";
@@ -3439,7 +3529,27 @@ export class Voidwake {
   // Cached station market lookup. Generates on first request.
   getStock(stationId: number): StationStock {
     let s = this.stationStocks.get(stationId);
-    if (!s) { s = generateStationStock(stationId); this.stationStocks.set(stationId, s); }
+    if (!s) {
+      s = generateStationStock(stationId);
+      // 0.5.6 — Colony jitter. Populated planets pay noticeably more for
+      // ore (colonies always need refinery feedstock), charge a small
+      // premium on fuel (no atmosphere refinery), and use a colony-specific
+      // rumor set. Weapons are unlisted at colonies (militia-only supply).
+      const ent = this.entities.find((x) => x.id === stationId);
+      if (ent && ent.kind === "planet" && ent.populated) {
+        s.orePrice = Math.round(s.orePrice * 1.25);
+        s.fuelPrice = Math.round(s.fuelPrice * 1.10);
+        s.weapons = [];
+        const colonyRumors = [
+          "Colony gossip: militia recruiting anyone with a straight trigger finger.",
+          "Bazaar buzz: ore buyers offering above spot for the next cycle.",
+          "Dirtside chatter: a courier vanished on the outer belt run.",
+          "Kids swear they saw a derelict spin past the moon last night.",
+        ];
+        s.rumor = colonyRumors[Math.floor((Math.abs(stationId) * 7 + 3) % colonyRumors.length)];
+      }
+      this.stationStocks.set(stationId, s);
+    }
     return s;
   }
 
@@ -4666,6 +4776,22 @@ export class Voidwake {
       if (e.kind !== "bullet") tickAI(e, dt, p, this.entities, this.rng);
       e.pos = V.add(e.pos, V.scale(e.vel, dt));
     }
+    // 0.5.6 — drain AI state-transition events into keyed chatter lines.
+    const aiEvents = drainAiEvents();
+    if (aiEvents.length) {
+      for (const ev of aiEvents) {
+        if (ev.kind === "patrol_tow_start") {
+          const tow = this.entities.find((x) => x.id === ev.targetId);
+          if (tow) {
+            const ctx = this.chatterCtx(tow, { target: tow });
+            this.pushChatter(ev.e.name, pickLine("patrol_tow", ctx), "#7fd0ff");
+          }
+        } else if (ev.kind === "patrol_arrest_start") {
+          const ctx = this.chatterCtx();
+          this.pushChatter(ev.e.name, pickLine("patrol_arrest", ctx), "#ff9a6a");
+        }
+      }
+    }
     // Bullet collisions + TTL
     this.entities = this.entities.filter((e) => {
       if (e.kind !== "bullet") return true;
@@ -4710,17 +4836,37 @@ export class Voidwake {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
-          // ownerId -2 = gunner-fired shot: use the gunner weapon slot if it
-          // exists, otherwise fall back to the pilot's weapon.
-          const gunnerFired = playerShot && e.ownerId === -2;
+          // ownerId -2 = gunner-fired shot; -3 = tactical-fired shot.
+          const gunnerFired   = playerShot && e.ownerId === -2;
+          const tacticalFired = playerShot && e.ownerId === -3;
           const shooterWepId = gunnerFired
             ? (this.player?.ship.gunnerWeaponId ?? this.player?.ship.weaponId)
             : this.player?.ship.weaponId;
-          const dmg = playerShot
+          let dmg = playerShot
             ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
+          // 0.5.6 — critical hits. Base 8% on any player shot; +5% with a
+          // Gunner aboard; +15% floor when a Tactical Officer fires. Crits
+          // apply a 2× multiplier and post a brief "★ CRIT" chatter line.
+          let crit = false;
+          if (playerShot) {
+            let critChance = 0.08;
+            if (this.player?.gunner) critChance += 0.05;
+            if (tacticalFired) critChance = Math.max(critChance, 0.23);
+            if (Math.random() < critChance) {
+              dmg *= 2;
+              crit = true;
+            }
+          }
           if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
           else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
+          if (crit && playerShot) {
+            const tag = tacticalFired ? "Tactical" : gunnerFired ? "Gunner" : "Weapons";
+            this.pushChatter(tag,
+              pickLine("crit_hit", this.chatterCtx(undefined, { target: t })),
+              "#ffdd66");
+            this.beep(1180, 0.05, "square");
+          }
           // Faction retaliation: player-shot ship pings same-faction ships
           // within 2500u to become hostile for 90 seconds.
           if (playerShot && isShip) this.applyFactionRetaliation(t);
@@ -5015,7 +5161,12 @@ export class Voidwake {
 
     // Pay crew wages. Flat per-dock cr per crewmember + gunner. Shortfalls
     // drop each crewmember's `morale` (0..100). Recruiter aboard halves the
-    // hit. Full pay nudges morale back toward 100. Wages skip in Cheat Mode.
+    // hit. Full pay nudges morale back toward 100.
+    //
+    // 0.5.6 — Cheat Mode: wages+morale entirely skipped (safe sandbox).
+    //         Easy difficulty: morale floors at 5 (griping only, no
+    //         walk-outs). Normal+: morale ≤ 0 triggers a walk-out with a
+    //         farewell_bad line and the crewmember is spliced from crew[].
     if (!this.options.cheat) {
       let bill = 0;
       if (p.gunner) bill += p.gunner.wage ?? 30;
@@ -5026,15 +5177,38 @@ export class Voidwake {
         const short = paid < bill;
         const decay = short ? (hasCrew(p, "recruiter") ? 8 : 15) : 0;
         const gain  = short ? 0 : 2;
+        const easy = this.options.difficulty === "Easy";
+        const moraleFloor = easy ? 5 : 0;
+        const walkouts: CrewMember[] = [];
         if (p.crew) for (const c of p.crew) {
           const m = (c.morale ?? 100) - decay + gain;
-          c.morale = Math.max(0, Math.min(100, m));
+          c.morale = Math.max(moraleFloor, Math.min(100, m));
+          if (!easy && c.morale <= 0) walkouts.push(c);
+        }
+        // Splice walkouts out of the crew and post a farewell line each.
+        if (walkouts.length && p.crew) {
+          for (const w of walkouts) {
+            const i = p.crew.indexOf(w);
+            if (i >= 0) p.crew.splice(i, 1);
+            const first = w.name.split(" ")[0];
+            const roleTag = (CREW_ROLE_INFO[w.role]?.title ?? w.role);
+            this.pushLog(`✗ ${roleTag} ${first} walked off — morale collapsed.`);
+            const roleFarewell = `${w.role}_farewell_bad` as ChatterKind;
+            const line = (TEMPLATES[roleFarewell] && TEMPLATES[roleFarewell].length)
+              ? pickLine(roleFarewell, this.chatterCtx())
+              : pickLine("walkout", this.chatterCtx());
+            this.pushChatter(`${roleTag} ${first}`, line,
+              CREW_ROLE_INFO[w.role]?.color ?? "#fc6");
+          }
         }
         // The legacy gunner has its own morale field on Gunner if present.
         if (short) {
-          const grump = p.crew && p.crew.some((c) => (c.morale ?? 100) < 30)
-            ? "Morale's underwater. Fix this or we walk."
-            : "Payday came up light, boss.";
+          const anyLow = p.crew && p.crew.some((c) => (c.morale ?? 100) < 30);
+          const grump = easy
+            ? "Payday's short, but we'll manage. Barely."
+            : anyLow
+              ? "Morale's underwater. Fix this or we walk."
+              : "Payday came up light, boss.";
           this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
           this.pushChatter("Crew", grump, "#fc6");
         } else {
@@ -5687,16 +5861,22 @@ export class Voidwake {
     this._nextAmbientChatterAt = (8 + Math.random() * 10) * mul;
     // Find a candidate within 1500u, prefer interesting kinds. Skip alien-
     // family factions — UFOs and thargoids stay wordless / gibberish.
+    // 0.5.6 — Stranded ships now broadcast maydays (previously suppressed).
+    // Filter still skips alien-family factions.
     const near = this.entities
       .filter((e) => (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral" || e.kind === "station" || e.kind === "planet")
-        && !e.faction.startsWith("alien")
-        && e.state !== "stranded")
+        && !e.faction.startsWith("alien"))
       .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
       .filter((x) => x.d < 1500)
       .sort((a, b) => a.d - b.d);
     if (near.length === 0) return;
     const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
     const ctx = this.chatterCtx(pick);
+    // 0.5.6 — Stranded ships broadcast mayday on the ext channel.
+    if (pick.stranded && pick.state === "stranded" && (pick.kind === "friendly" || pick.kind === "neutral")) {
+      this.pushChatter(pick.name, pickLine("stranded_mayday", ctx), "#ffcc55");
+      return;
+    }
     // Patrols speak with a distinct "SPD" cyan tag rather than the generic
     // green friendly voice, so they read as authorities.
     if (pick.kind === "friendly" && pick.faction === "patrol") {
@@ -5849,18 +6029,24 @@ export class Voidwake {
     if (i === 7 && (left || right)) this.options.glitchFx = !this.options.glitchFx;
     if (i === 8 && (left || right)) this.options.scanlines = !this.options.scanlines;
     if (i === 9 && (left || right)) {
+      const modes: Array<1 | 2 | 3> = [1, 2, 3];
+      const cur = (this.options.scanlineDensity ?? 2) as 1 | 2 | 3;
+      const idx = Math.max(0, modes.indexOf(cur));
+      this.options.scanlineDensity = modes[(idx + (right ? 1 : -1) + modes.length) % modes.length];
+    }
+    if (i === 10 && (left || right)) {
       const modes: Options["hudScheme"][] = ["green", "amber", "cyan", "white", "red"];
       const idx = Math.max(0, modes.indexOf(this.options.hudScheme ?? "green"));
       const n = modes.length;
       this.options.hudScheme = modes[(idx + (right ? 1 : -1) + n) % n];
     }
-    if (i === 10 && (left || right)) {
+    if (i === 11 && (left || right)) {
       const modes: Options["reticleColor"][] = ["green", "amber", "cyan", "magenta", "white", "red"];
       const idx = Math.max(0, modes.indexOf(this.options.reticleColor ?? "green"));
       const n = modes.length;
       this.options.reticleColor = modes[(idx + (right ? 1 : -1) + n) % n];
     }
-    if (i === 11 && (left || right)) {
+    if (i === 12 && (left || right)) {
       const modes: Options["reticleShape"][] = ["cross", "dot", "brackets", "circle", "diamond"];
       const idx = Math.max(0, modes.indexOf(this.options.reticleShape ?? "cross"));
       const n = modes.length;
@@ -5868,20 +6054,22 @@ export class Voidwake {
     }
     // Comms window sub-controls (kept inline under Gameplay; a nested
     // submenu is in the 0.5 backlog).
-    if (i === 12) {
+    if (i === 13) {
       const delta = right ? 2 : left ? -2 : 0;
       this.options.commsCols = Math.max(28, Math.min(120, (this.options.commsCols ?? 54) + delta));
     }
-    if (i === 13) {
+    if (i === 14) {
       const delta = right ? 1 : left ? -1 : 0;
       this.options.commsRows = Math.max(4, Math.min(30, (this.options.commsRows ?? 12) + delta));
     }
-    if (i === 14 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
+    if (i === 15 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
     }
   }
   private optionsGameplayItems(): string[] {
+    const dens = this.options.scanlineDensity ?? 2;
+    const densLabel = dens === 1 ? "dense" : dens === 3 ? "sparse" : "normal";
     return [
       `Difficulty: ${this.options.difficulty}`,
       `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
@@ -5892,6 +6080,7 @@ export class Voidwake {
       `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Glitch FX: ${this.options.glitchFx === false ? "OFF" : "ON"}`,
       `Scanlines: ${this.options.scanlines ? "ON" : "OFF"}`,
+      `Scanline Density: ${densLabel}`,
       `HUD Color: ${this.options.hudScheme ?? "green"}`,
       `Reticle Color: ${this.options.reticleColor ?? "green"}`,
       `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
@@ -6634,8 +6823,11 @@ export class Voidwake {
     // ---- Scanlines ------------------------------------------------------
     // Subtle even-row darkening — pure CRT flavor, opt-in in Options.
     if (this.screen === "playing" && this.options.scanlines) {
-      ctx.fillStyle = "rgba(0,0,0,0.14)";
-      for (let sy = 0; sy < h; sy += 2) ctx.fillRect(0, sy, w, 1);
+      // 0.5.6 — density adjustable in Options. Higher step = sparser lines.
+      const step = Math.max(1, Math.min(4, this.options.scanlineDensity ?? 2));
+      const alpha = step === 1 ? 0.20 : step === 2 ? 0.14 : 0.10;
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+      for (let sy = 0; sy < h; sy += step) ctx.fillRect(0, sy, w, 1);
     }
 
     // ---- HUD scheme tint ------------------------------------------------
@@ -7530,10 +7722,35 @@ export class Voidwake {
         continue;
       }
 
+      // 0.5.6 — Roche-limit deformation for small bodies (asteroids/comets/
+      // meteors). If the entity sits within 2× the nearest planet's world
+      // radius, perturb the edge threshold with a hash-driven per-cell
+      // roughness so its silhouette reads as tidally-shredded rather than
+      // a clean disc. Cheapest possible: seed roughness with `e.id`, `dx`,
+      // `dy`, and a coarse time bucket for a slow shimmer.
+      let rocheK = 0;
+      if (e.kind === "asteroid" || e.kind === "comet") {
+        let nearestPR = 0, nearestPD = Infinity;
+        for (const q of this.entities) {
+          if (q.kind !== "planet") continue;
+          const dq = V.len(V.sub(q.pos, e.pos));
+          if (dq < nearestPD) { nearestPD = dq; nearestPR = worldRadius.planet ?? 30; }
+        }
+        if (nearestPD < nearestPR * 3) {
+          // Ramp from 0 at 3×R to ~0.28 at 1×R (inside surface).
+          rocheK = Math.max(0, Math.min(0.28, (nearestPR * 3 - nearestPD) / (nearestPR * 3) * 0.28));
+        }
+      }
+      const tBucket = rocheK > 0 ? Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 220) : 0;
+
       for (let dy = -ry; dy <= ry; dy++) {
         for (let dx = -rx; dx <= rx; dx++) {
           const nx = dx / rx, ny = dy / ry;
-          const d2 = nx * nx + ny * ny;
+          let d2 = nx * nx + ny * ny;
+          if (rocheK > 0) {
+            const rough = hash01(e.id * 1301 + dx * 613 + dy * 419 + tBucket * 11);
+            d2 += (rough - 0.5) * rocheK;
+          }
           if (d2 > 1) continue;
           const gx = sx + dx, gy = sy2 + dy;
           if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
@@ -7552,6 +7769,32 @@ export class Voidwake {
         }
       }
 
+      // 0.5.6 — Colony overlay ring: populated planets get a faint dotted
+      // orbital ring (`·`) just outside the sprite and a small `◈` beacon
+      // tag at the top, so they read as inhabited at a glance without
+      // waiting for the name label.
+      if (e.kind === "planet" && e.populated) {
+        const ringR = 1.15;
+        const rrx = Math.max(2, Math.round(rx * ringR));
+        const rry = Math.max(1, Math.round(ry * ringR));
+        for (let dy = -rry; dy <= rry; dy++) {
+          for (let dx = -rrx; dx <= rrx; dx++) {
+            const nx = dx / rrx, ny = dy / rry;
+            const d2 = nx * nx + ny * ny;
+            if (d2 <= 1.02 || d2 > ringR * ringR) continue;
+            // Sparse ring: only paint every ~3rd cell along the ring.
+            if (hash01(e.id * 733 + dx * 191 + dy * 313) > 0.22) continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            if (g[gy][gx].ch !== " ") continue;
+            g[gy][gx] = { ch: "·", color: "#ffd28a", glow: false };
+          }
+        }
+        const bx = sx, by = sy2 - ry - 1;
+        if (bx > vpLeft && bx < vpRight && by > vpTop && by < vpBottom) {
+          g[by][bx] = { ch: "◈", color: "#ffd28a", glow: true };
+        }
+      }
 
       // Label big objects centered just below the sprite.
       if (rCells >= 3 && e.name) {
