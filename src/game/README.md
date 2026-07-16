@@ -335,7 +335,7 @@ cover the full bill you pay whatever's on hand and the crew grumbles in the
 COMMS feed — the shortfall is currently just cosmetic, but hooks are in
 place for a real morale system later.
 
-### Crew roles (0.5.4)
+### Crew roles (0.5.4 / 0.5.5)
 
 | Role | Effect |
 |---|---|
@@ -343,13 +343,21 @@ place for a real morale system later.
 | Pilot | autopilot to current target (O); +150u radar |
 | Engineer | slow hull regen, +75% shield recharge, −20% fuel; +150u radar |
 | Merchant | +15% ore sell, −10% station buy prices |
-| Navigator | +400u radar range, −10% fuel burn |
+| Navigator | +400u radar range, −10% fuel burn, unlocks WORMHOLE / MISSION / EXOTIC target cycle categories |
 | Quartermaster | stacks +5% ore sell / −5% station buy on top of Merchant |
-| Recruiter | −15% crew hire fees (including Xeno) |
-| Tactical | +25% shield recharge — **mutually exclusive with Gunner** |
+| Recruiter | −15% crew hire fees (including Xeno), halves morale decay on shortfall pay |
+| Tactical | auto-fires main weapon on hostiles, +25% shield recharge — **mutually exclusive with Gunner** |
 
 Gunner ↔ Tactical exclusivity is enforced at the hire menu: if either is
 aboard, the other's row is greyed out and shows a "locked" note.
+
+### Morale (0.5.5)
+
+Every crewmember carries a `morale` field (0..100, new hires start at 100).
+Wage shortfalls at dock drop morale by 15/dock (halved to 8 when a
+Recruiter is aboard). Full-pay docks heal +2. Morale below 30 changes the
+Comms grumble line from "Payday came up light" to "Morale's underwater —
+fix this or we walk." Walk-outs and perk attenuation are on the backlog.
 
 
 ## Outfitting (module shop)
