@@ -349,6 +349,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "If we see a †, that's a derelict. Free money, no shooting.",
     "Black holes on the scope. Give them a wide berth, {cmdr}.",
     "That {ship} handles nicer than the last three I've been on.",
+    "One good crit and even a raider captain rethinks his day.",
+    "You know a Federation escort'll roll the whole wing for one lit hostile?",
+    "Colonies pay ore premiums, {cmdr}. Filed under 'good to know'.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
@@ -356,18 +359,22 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Got the lock — {target}'s {threat}!",
     "Eat plasma, {curse}!",
     "Range good, {target} lit up!",
+    "Splash-two-in-progress on {target}!",
+    "Trace round on {target} — walk it in!",
   ],
   gunner_mine: [
     "Chewing rock — {ore} in the hold.",
     "Nice vein. Cargo at {cargo}%.",
     "Mining {target}, hold her steady.",
     "Ore tally: {ore}. Keep us pointed.",
+    "Chip, chip, chip. My favorite music.",
   ],
   gunner_dock: [
     "Suggest we dock at {target}, Cmdr.",
     "{target} looks safe. Fuel's at {fuel}%.",
     "Could use a stretch — {target}'s right there.",
     "Hull {hull}%, shields {shield}% — dock at {target}?",
+    "I could use a hot meal. {target}'s got a tradehouse.",
   ],
   gunner_hit: [
     "We're taking fire! Hull {hull}%!",
@@ -376,6 +383,7 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "That's coming from {nearest}!",
     "Evasive! Hull at {hull}%!",
     "Whoever's shooting us — they'll regret it.",
+    "Rounds off the bow, {cmdr} — jink!",
   ],
   gunner_greet: [
     "On board, Cmdr. Press G to toggle me.",
@@ -401,6 +409,7 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Hope your next gunner likes {curse}s as much as you do.",
     "Fly into a star for all I care, Cmdr.",
     "Worst tour I ever flew. Out.",
+    "Empty pay chit, empty magazine. I'm walking.",
   ],
   gunner_kill: [
     "{target} — splashed!",
@@ -408,6 +417,7 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Scratch one. Kill count: {kills}.",
     "Cleaner than I expected. Nice angle.",
     "Down they go. Manifest 'em, Cmdr.",
+    "Hostile scratched. Loot on the plot.",
   ],
   gunner_docked: [
     "Solid dock. I'll stretch the legs.",
