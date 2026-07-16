@@ -5098,7 +5098,12 @@ export class Voidwake {
 
     // Pay crew wages. Flat per-dock cr per crewmember + gunner. Shortfalls
     // drop each crewmember's `morale` (0..100). Recruiter aboard halves the
-    // hit. Full pay nudges morale back toward 100. Wages skip in Cheat Mode.
+    // hit. Full pay nudges morale back toward 100.
+    //
+    // 0.5.6 — Cheat Mode: wages+morale entirely skipped (safe sandbox).
+    //         Easy difficulty: morale floors at 5 (griping only, no
+    //         walk-outs). Normal+: morale ≤ 0 triggers a walk-out with a
+    //         farewell_bad line and the crewmember is spliced from crew[].
     if (!this.options.cheat) {
       let bill = 0;
       if (p.gunner) bill += p.gunner.wage ?? 30;
@@ -5109,15 +5114,38 @@ export class Voidwake {
         const short = paid < bill;
         const decay = short ? (hasCrew(p, "recruiter") ? 8 : 15) : 0;
         const gain  = short ? 0 : 2;
+        const easy = this.options.difficulty === "Easy";
+        const moraleFloor = easy ? 5 : 0;
+        const walkouts: CrewMember[] = [];
         if (p.crew) for (const c of p.crew) {
           const m = (c.morale ?? 100) - decay + gain;
-          c.morale = Math.max(0, Math.min(100, m));
+          c.morale = Math.max(moraleFloor, Math.min(100, m));
+          if (!easy && c.morale <= 0) walkouts.push(c);
+        }
+        // Splice walkouts out of the crew and post a farewell line each.
+        if (walkouts.length && p.crew) {
+          for (const w of walkouts) {
+            const i = p.crew.indexOf(w);
+            if (i >= 0) p.crew.splice(i, 1);
+            const first = w.name.split(" ")[0];
+            const roleTag = (CREW_ROLE_INFO[w.role]?.title ?? w.role);
+            this.pushLog(`✗ ${roleTag} ${first} walked off — morale collapsed.`);
+            const roleFarewell = `${w.role}_farewell_bad` as ChatterKind;
+            const line = (TEMPLATES[roleFarewell] && TEMPLATES[roleFarewell].length)
+              ? pickLine(roleFarewell, this.chatterCtx())
+              : pickLine("walkout", this.chatterCtx());
+            this.pushChatter(`${roleTag} ${first}`, line,
+              CREW_ROLE_INFO[w.role]?.color ?? "#fc6");
+          }
         }
         // The legacy gunner has its own morale field on Gunner if present.
         if (short) {
-          const grump = p.crew && p.crew.some((c) => (c.morale ?? 100) < 30)
-            ? "Morale's underwater. Fix this or we walk."
-            : "Payday came up light, boss.";
+          const anyLow = p.crew && p.crew.some((c) => (c.morale ?? 100) < 30);
+          const grump = easy
+            ? "Payday's short, but we'll manage. Barely."
+            : anyLow
+              ? "Morale's underwater. Fix this or we walk."
+              : "Payday came up light, boss.";
           this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
           this.pushChatter("Crew", grump, "#fc6");
         } else {
