@@ -5791,34 +5791,29 @@ export class Voidwake {
       return;
     }
 
-    if (this.optionsSection === "root")     { this.updateOptionsRoot();     return; }
-    if (this.optionsSection === "gameplay") { this.updateOptionsGameplay(); return; }
-    if (this.optionsSection === "audio")    { this.updateOptionsAudio();    return; }
-    if (this.optionsSection === "controls") { this.updateOptionsControls(); return; }
-    if (this.optionsSection === "keybinds") { this.updateOptionsKeybinds(); return; }
+    if (this.optionsSection === "root")      { this.updateOptionsRoot();      return; }
+    if (this.optionsSection === "gameplay")  { this.updateOptionsGameplay();  return; }
+    if (this.optionsSection === "audio")     { this.updateOptionsAudio();     return; }
+    if (this.optionsSection === "controls")  { this.updateOptionsControls();  return; }
+    if (this.optionsSection === "keybinds")  { this.updateOptionsKeybinds();  return; }
+    if (this.optionsSection === "scripting") { this.updateOptionsScripting(); return; }
   }
 
-  // Root Options hub: three category entries + a reserved (greyed-out)
-  // Scripting entry that will host Lua scripting controls in a future pass.
-  // The hook surface is already live (see dispatchHook / registerScriptHook
-  // near the top of this file); this menu is the eventual UI mount point.
-  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting (soon)", "Back"];
-  // Indices in optionsRootItems that are visually greyed-out and don't
-  // respond to ENTER. Kept as a class field so renderOptions can dim the
-  // right rows without duplicating the "Scripting" string check.
-  private optionsRootDisabled: number[] = [3];
+  // Root Options hub. Scripting became a real subsection in 0.5.5; the
+  // greyed-out placeholder is gone.
+  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Back"];
+  // Reserved for future greyed-out rows. Empty in 0.5.5.
+  private optionsRootDisabled: number[] = [];
   private updateOptionsRoot() {
     this.menuNav(this.optionsRootItems.length);
     if (!this.input.consume("enter")) return;
     const c = this.optionsRootItems[this.menuCursor];
-    if (this.optionsRootDisabled.includes(this.menuCursor)) {
-      this.pushLog("Scripting options aren't wired up yet — hook surface is live in code.");
-      return;
-    }
+    if (this.optionsRootDisabled.includes(this.menuCursor)) return;
     if (c === "Gameplay") { this.optionsSection = "gameplay"; this.menuCursor = 0; }
-    else if (c === "Audio")    { this.optionsSection = "audio";    this.menuCursor = 0; }
-    else if (c === "Controls") { this.optionsSection = "controls"; this.menuCursor = 0; }
-    else if (c === "Back")     { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
+    else if (c === "Audio")     { this.optionsSection = "audio";     this.menuCursor = 0; }
+    else if (c === "Controls")  { this.optionsSection = "controls";  this.menuCursor = 0; }
+    else if (c === "Scripting") { this.optionsSection = "scripting"; this.menuCursor = 0; }
+    else if (c === "Back")      { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
   }
 
   // --- Options ▸ Gameplay --------------------------------------------------
