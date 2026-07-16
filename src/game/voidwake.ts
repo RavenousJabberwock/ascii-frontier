@@ -2917,7 +2917,15 @@ export class Voidwake {
   // Options screen has been split into a small hub with three subsections
   // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
   // "root" is the hub itself.
-  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" = "root";
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" = "root";
+  // Lua scripting (0.5.5): source is edited via a browser prompt from the
+  // Options ▸ Scripting page and persisted in localStorage. The runtime
+  // (LuaHost) is created lazily on the first enable so users who never open
+  // that submenu don't pay the ~200KB fengari-web parse cost.
+  private luaHost: import("./lua-host").LuaHost | null = null;
+  private scriptSource = "";
+  private scriptEnabled = false;
+  private scriptStatus = "";       // last load result summary shown in the menu
   // While non-null, the Keybinds screen is capturing the next pressed key
   // as the new binding for this action id (a key in Options.keybinds).
   private _rebindAction: string | null = null;
