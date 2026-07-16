@@ -7560,6 +7560,7 @@ export class Voidwake {
         { text: "" },
         { text: "Combat & Interaction", color: "#7CFC00" },
         { text: `  SPACE  fire weapon   ·   ${kb.cycleTarget.toUpperCase()}  cycle target   ·   ${kb.mine.toUpperCase()}  mine asteroid` },
+        { text: `  ${kb.cycleCatPrev}/${kb.cycleCatNext}  target by category   ·   ${kb.cycleTypePrev}/${kb.cycleTypeNext}  next of same type in range` },
         { text: `  ${kb.dock.toUpperCase()} / ${kb.station.toUpperCase()}  dock or land (must be close and slow)` },
         { text: `  ${kb.jettison.toUpperCase()}  jettison heaviest cargo   ·   ${kb.toggleGunner.toUpperCase()}  gunner AUTO/STANDBY` },
         { text: "" },
