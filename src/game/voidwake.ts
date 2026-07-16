@@ -5065,18 +5065,55 @@ export class Voidwake {
 
   cycleTarget() {
     const p = this.player; if (!p) return;
-    // Squared-distance comparator — no sqrt needed and we already skip bullets/self.
+    // Iterate distance-sorted candidates so repeated presses walk *through*
+    // every entity in range, not just ping-pong between the two nearest.
+    // Prior bug: the filter excluded the current target and picked nearest,
+    // which meant "cycle" bounced between target A and target B forever —
+    // hostiles that arrived third-nearest (behind a station + asteroid, for
+    // instance) were unreachable via T once a Navigator's extended radar
+    // pulled more mundane blips into view.
+    const range = effectiveRadarRange(p);
     const cand = this.entities
-      .filter((e) => e.kind !== "bullet" && e.id !== this.targetId);
-    let bestI = -1, bestD2 = Infinity;
-    for (let i = 0; i < cand.length; i++) {
-      const dx = cand[i].pos.x - p.pos.x;
-      const dy = cand[i].pos.y - p.pos.y;
-      const dz = cand[i].pos.z - p.pos.z;
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 < bestD2) { bestD2 = d2; bestI = i; }
+      .filter((e) => e.kind !== "bullet" && e.id !== p.id)
+      .map((e) => {
+        const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+        return { e, d2: dx * dx + dy * dy + dz * dz };
+      })
+      .filter(({ d2 }) => d2 <= range * range)
+      .sort((a, b) => a.d2 - b.d2);
+    if (cand.length === 0) { this.targetId = null; return; }
+    const curIdx = cand.findIndex(({ e }) => e.id === this.targetId);
+    const nextIdx = curIdx < 0 ? 0 : (curIdx + 1) % cand.length;
+    this.targetId = cand[nextIdx].e.id;
+  }
+
+  // {/} — cycle in-range targets that match the current target's category.
+  // If nothing is targeted (or the target's category isn't recognised), fall
+  // through to a plain nearest-of-any cycle so the keys never feel dead.
+  cycleTargetSameType(step: 1 | -1) {
+    const p = this.player; if (!p) return;
+    const cur = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    if (!cur) { this.cycleTarget(); return; }
+    const cat = this._targetCategories.find((c) => c.match(cur));
+    if (!cat) { this.cycleTarget(); return; }
+    const range = effectiveRadarRange(p);
+    const cand = this.entities
+      .filter((e) => cat.match(e))
+      .map((e) => {
+        const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+        return { e, d2: dx * dx + dy * dy + dz * dz };
+      })
+      .filter(({ d2 }) => d2 <= range * range)
+      .sort((a, b) => a.d2 - b.d2);
+    if (cand.length === 0) {
+      this.pushLog(`No other ${cat.label} in range.`);
+      return;
     }
-    this.targetId = bestI >= 0 ? cand[bestI].id : null;
+    const curIdx = cand.findIndex(({ e }) => e.id === this.targetId);
+    const n = cand.length;
+    const nextIdx = curIdx < 0 ? 0 : ((curIdx + step) % n + n) % n;
+    this.targetId = cand[nextIdx].e.id;
+    this.pushLog(`Target: ${cat.label} — ${cand[nextIdx].e.name ?? "?"} (${curIdx < 0 ? 1 : nextIdx + 1}/${n})`);
   }
 
   // Category-cycle order for [ / ]. Each press steps to the next category and
