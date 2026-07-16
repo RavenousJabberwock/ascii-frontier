@@ -175,6 +175,7 @@ const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","O
 
 type ChatterKind =
   | "hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
+  | "patrol_tow" | "patrol_arrest" | "stranded_mayday" | "crit_hit" | "walkout"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
   | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
