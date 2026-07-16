@@ -4992,10 +4992,9 @@ export class Voidwake {
       p.mission = this.generateMission();
     }
 
-    // Pay crew wages. Flat per-dock cr per crewmember + gunner. If the
-    // player can't cover the full bill we still pay whatever's on hand and
-    // flag the shortfall so it's visible — a proper morale system can hook
-    // in here later. Wages are skipped in Cheat Mode.
+    // Pay crew wages. Flat per-dock cr per crewmember + gunner. Shortfalls
+    // drop each crewmember's `morale` (0..100). Recruiter aboard halves the
+    // hit. Full pay nudges morale back toward 100. Wages skip in Cheat Mode.
     if (!this.options.cheat) {
       let bill = 0;
       if (p.gunner) bill += p.gunner.wage ?? 30;
@@ -5003,9 +5002,20 @@ export class Voidwake {
       if (bill > 0) {
         const paid = Math.min(bill, p.credits);
         p.credits -= paid;
-        if (paid < bill) {
+        const short = paid < bill;
+        const decay = short ? (hasCrew(p, "recruiter") ? 8 : 15) : 0;
+        const gain  = short ? 0 : 2;
+        if (p.crew) for (const c of p.crew) {
+          const m = (c.morale ?? 100) - decay + gain;
+          c.morale = Math.max(0, Math.min(100, m));
+        }
+        // The legacy gunner has its own morale field on Gunner if present.
+        if (short) {
+          const grump = p.crew && p.crew.some((c) => (c.morale ?? 100) < 30)
+            ? "Morale's underwater. Fix this or we walk."
+            : "Payday came up light, boss.";
           this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
-          this.pushChatter("Crew", "Payday came up light, boss.", "#fc6");
+          this.pushChatter("Crew", grump, "#fc6");
         } else {
           this.pushLog(`Crew wages: -${paid}cr.`);
         }
