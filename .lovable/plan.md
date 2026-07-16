@@ -517,21 +517,101 @@ dispatcher first (like `onPlanetLand` did in 0.5.3) so scripts written
 against a newer build don't crash on an older one — see the "Payload
 shapes are stable" note in `src/game/README.md`.
 
-### Recommended next round (0.5.6+)
+### Recommended next round (0.5.7+)
 
 Ranked by ROI:
 
-1. **Roche-limit irregular shapes** — cheap render tweak; boosts
-   visual polish near planets. Piggy-backs on 0.5.2 wreckage work.
-2. **M2 mutation API** — `frontier.entities.spawn/despawn`,
-   `frontier.player.grant`. Unlocks meaningful gameplay mods on top
-   of the Lua host that just shipped.
-3. **Colony flavor polish** — glyph/ring + market jitter.
-4. **Tactical crit + morale consequences** — closes the two remaining
-   crew-backlog items so the crew system reads as "done" before we
-   move to mods.
-5. **M3 mod bundles** — the moment M2 lands, ship the manifest and
+1. **M2 mutation API** — `frontier.entities.spawn/despawn`,
+   `frontier.player.grant`. Unlocks meaningful gameplay mods on top of
+   the Lua host that shipped in 0.5.5.
+2. **Dedicated "Chat Windows" submenu** — the three comms controls
+   still sit inline under Gameplay.
+3. **Distinct patrol silhouettes** — patrol ships still render as
+   generic green friendlies. Cyan tint + unique 3×3 sprite.
+4. **Morale perk attenuation** — role passives should soften as morale
+   dips below 30 (Engineer's fuel discount fades, Recruiter's hire cut
+   halves) so low morale bites before the walk-out step.
+5. **NPC crits** — a mirror of the 0.5.6 player crit path so hostile
+   fire lands the occasional big hit and the combat loop reads as
+   symmetric rather than player-favored.
+6. **M3 mod bundles** — the moment M2 lands, ship the manifest and
    IndexedDB loader so authors can distribute multi-file mods.
+
+## 0.5.6 pass — Crits, walk-outs, Roche shapes, colony polish, chatter
+
+- **Critical hits** — ✅ Every player shot rolls for a crit in the
+  bullet-hit path. Base 8%, +5% with a Gunner aboard; Tactical
+  auto-fire uses a 23% floor (the "+15% Tactical crit" from the crew
+  backlog). Crits apply a 2× damage multiplier and post a `★ CRIT`
+  chatter line tagged `Weapons` / `Gunner` / `Tactical`. NPC fire does
+  not crit (deliberate — this is a player-side feedback loop, not a
+  two-way lottery).
+- **Morale walk-outs** — ✅ Wage decay path now supports walk-outs.
+  - **Cheat Mode**: wages + morale entirely skipped (already gated).
+  - **Easy difficulty**: morale floors at 5. Crew gripe on short pay
+    but never walk. Softer grumble line posted.
+  - **Normal / Hard / Brutal / Nightmare**: morale can hit 0. At 0 the
+    crewmember is spliced from `player.crew` and posts a role-specific
+    `*_farewell_bad` line (falling back to a generic `walkout` template
+    if the role has none).
+- **Roche-limit shapes** — ✅ Small bodies (asteroid/comet) inside 3×
+  the nearest planet's world radius render with hash-driven per-cell
+  roughness perturbing the ellipse threshold. Ramps from 0 at 3×R to
+  ~0.28 at 1×R so drifters look intact and rocks pressed against a
+  planet look shredded. Seeded by `id * 1301 + dx * 613 + dy * 419 +
+  tBucket * 11` for a slow shimmer without allocating per frame.
+- **Colony polish** — ✅ Populated planets now render a faint dotted
+  orbital ring (`·`, amber) around the sprite plus a top-center `◈`
+  beacon glyph so colonies read as inhabited without waiting for the
+  name label. `getStock` post-processes colony stocks to charge +25%
+  on ore (colonies always want feedstock), +10% on fuel (no atmosphere
+  refinery), zero out the weapons list (militia-only supply), and
+  swap in colony-specific rumor lines.
+- **Patrol event chatter** — ✅ New module-level `_aiEvents` queue.
+  `tickAI` pushes on `patrol_tow_start` and `patrol_arrest_start`
+  transitions; the engine drains it after the AI loop and posts a
+  `patrol_tow` or `patrol_arrest` chatter line keyed to the actual
+  event instead of ambient patrol filler. Ambient patrol chatter still
+  runs alongside.
+- **Stranded mayday** — ✅ Ambient chatter picker no longer filters out
+  stranded ships. When a stranded lawful ship is picked, the engine
+  short-circuits to a `stranded_mayday` line in the amber warning
+  color so the mayday reads distinctly from ordinary chatter.
+- **Scanline density** — ✅ New Options ▸ Gameplay row
+  `Scanline Density: dense / normal / sparse` maps to a 1/2/3 step
+  and 0.20/0.14/0.10 alpha. Defaults to `normal` (matches previous
+  visual). Persists in save.
+- **Chatter expansion** — ✅ Six new `ChatterKind` entries
+  (`patrol_tow`, `patrol_arrest`, `stranded_mayday`, `crit_hit`,
+  `walkout`, plus extended `planet_populated` / `hostile` / `friendly`
+  / `neutral` / `station` / `planet` / `patrol` / `gunner_*` pools).
+  15+ hostile lines, 10+ neutrals, 12 colony lines, 5 stranded
+  maydays. Also stretched `gunner_idle` / `gunner_hostile` /
+  `gunner_hit` / `gunner_mine` / `gunner_dock` / `gunner_kill` and
+  `gunner_farewell_bad`.
+- **VERSION bump** — ✅ 0.5.5 → 0.5.6 and offline bundle rebuilt.
+
+### Backlog (0.5.6 deferred)
+
+- **NPC crit path** — mirror the player crit logic for hostile shots so
+  combat feels symmetric. Kept off intentionally in 0.5.6 to prove
+  crits read as a player-side reward first.
+- **Morale perk attenuation** — role passives don't yet soften as
+  morale dips below 30. Add per-role effect multipliers keyed on
+  `c.morale` (Engineer fuel discount fades, Merchant sell bonus
+  shrinks, Recruiter hire cut halves).
+- **Chat Windows submenu** — the three comms controls still sit inline
+  under Gameplay. Nested submenu deferred.
+- **Distinct patrol silhouettes** — 0.3 backlog, still open.
+- **In-canvas Lua editor** — the current `prompt()` editor works but
+  truncates at ~2KB in some browsers. Drag-drop `.lua` file loading
+  arrives with M3 of the modding roadmap.
+- **Lua mutation API (M2)** — `frontier.entities.spawn/despawn`,
+  `frontier.player.grant`. Read-only surface remains.
+- **Mouse-wheel scroll + click-to-select tabs** on Comms panel — 0.4
+  backlog, still open.
+- **`System` tab for Sensors/Radio** — 0.4 backlog if noise rises.
+
 
 
 
