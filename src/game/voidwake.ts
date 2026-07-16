@@ -5255,6 +5255,9 @@ export class Voidwake {
         pickLine("tactical_hostile", this.chatterCtx(undefined, { target: best })),
         "#ff7a7a");
     }
+  }
+
+
 
   // --- Pilot autopilot ----------------------------------------------------
   // Full-auto approach to `this.targetId`. Points the nose at the target,
