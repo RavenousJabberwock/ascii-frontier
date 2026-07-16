@@ -422,25 +422,57 @@ sensor alert announces them when they spawn.
   Universe section, an AI handler in the AI section, and a glyph in
   `GLYPHS`.
 
-## Scripting hooks (0.5.1 — reserved for Lua)
+## Scripting (0.5.5 — Lua host live)
 
-A minimal, runtime-agnostic hook surface lives at the top of
-`src/game/voidwake.ts` so the upcoming Lua scripting system has stable
-attach points. Handlers are plain JS callbacks today; a future Lua host
-(fengari-web / WASM Lua 5.3) will register wrapped thunks. Throwing
-handlers are caught and logged — they can never block a tick.
+A sandboxed Lua 5.3 runtime (fengari-web, ~200KB, bundled into the
+offline HTML lazily on first enable) lives at `src/game/lua-host.ts`. It
+wires user Lua directly into the `dispatchHook` callsites defined in
+`voidwake.ts`.
 
-Registration API (also exposed as `window.ASCIIFrontier` in browsers):
+Enable it from **Options ▸ Scripting**:
 
-```ts
-import { registerScriptHook } from "./voidwake";
-const off = registerScriptHook("onTick", ({ dt, player, entities }) => {
-  // read-only: do not mutate — a mutation API arrives with the Lua host.
-});
-off(); // unregister
+- `Scripting: ON/OFF` — toggles the runtime. Source and enable flag
+  persist in `localStorage` (`voidwake.script.source` /
+  `voidwake.script.enabled`).
+- `Edit Script...` — opens a browser `prompt()` with the current
+  source. Drag-drop `.lua` file loading arrives with M3 of the modding
+  roadmap.
+- `Reload Script` — re-runs the source (creates a fresh Lua state so
+  every hook re-registers cleanly).
+- `Clear Script` — wipes source and disposes the runtime.
+- `Status:` — surfaces the last load or per-hook error.
+
+The sandbox nulls `io`, `package`, `debug`, `require`, `dofile`,
+`loadfile`, `load`, `loadstring`, `collectgarbage`, and replaces `os`
+with a timing-only stub (`os.time` / `os.clock`). Errors from load,
+top-level run, and per-hook invocation are trapped and echoed to the
+Comms log — a bad script can never take down an engine tick.
+
+### `frontier.*` API (M1)
+
+```lua
+print("engine version " .. frontier.version)
+
+frontier.log("Hello from Lua!")
+frontier.chat("Script", "Hooks online.", "#c4f")
+
+frontier.on("onTick", function(payload)
+  -- payload.dt : number  seconds since last tick
+  -- payload.player : shallow table with pos, credits, xp, ...
+end)
+
+frontier.on("onPlayerDock", function(p)
+  frontier.chat("Script", "Docked at " .. (p.entity.name or "?"))
+end)
 ```
 
-Hooks currently fired by the engine:
+Payloads are depth-capped Lua tables with primitive leaves. Anything
+past depth 2 is stringified so scripts never receive a live JS entity
+handle. A read/write mutation API (`frontier.entities.spawn`,
+`frontier.player.grant`, …) lands with M2 — see `.lovable/plan.md`
+▸ "Modding roadmap".
+
+### Available hooks
 
 | Hook                | Payload shape                              | Fired from                            |
 | ------------------- | ------------------------------------------ | ------------------------------------- |
@@ -455,14 +487,19 @@ Hooks currently fired by the engine:
 | `onPlanetLand`      | `{ entity }`                               | populated-planet landing (fires in addition to `onPlayerDock`) |
 
 Payload shapes are stable — changes require a `VERSION` bump and a note
-in this section. Additional hooks are welcome but must land as no-op
-dispatchers first so scripts written against them don't crash on older
-builds.
+in this section. Additional hooks must land as no-op dispatchers first
+so scripts written against them don't crash on older builds.
 
-The **Options ▸ Scripting (soon)** menu row is a placeholder for the
-future Lua controls UI (load / reload / edit script, sandbox toggles,
-per-hook enable). It is greyed-out and no-ops on ENTER; the hook layer
-is live below it in code.
+### Direct hook API (JS / devtools)
+
+For non-Lua scripting (e.g. devtools poking), the same hooks are on
+`window.ASCIIFrontier`:
+
+```ts
+window.ASCIIFrontier.registerScriptHook("onTick", ({ dt, player }) => {
+  // ...
+});
+```
 
 
 
