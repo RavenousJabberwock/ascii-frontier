@@ -4874,9 +4874,11 @@ export class Voidwake {
     const p = this.player; if (!p) return;
     const n = this._targetCategories.length;
     // Try each category once; skip ones with no candidates in range.
+    const hasNav = hasCrew(p, "navigator");
     for (let attempt = 0; attempt < n; attempt++) {
       this._targetCatIdx = ((this._targetCatIdx + step) % n + n) % n;
       const cat = this._targetCategories[this._targetCatIdx];
+      if (cat.navigator && !hasNav) continue;
       let bestId = -1, bestD2 = Infinity;
       for (const e of this.entities) {
         if (!cat.match(e)) continue;
