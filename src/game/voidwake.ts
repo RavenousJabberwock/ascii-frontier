@@ -869,9 +869,14 @@ interface CrewMember {
   enabled: boolean;
   hiredAt: number;
   nextBarkAt: number;
-  cooldown?: number;    // gunner auto-fire cadence
+  cooldown?: number;    // gunner/tactical auto-fire cadence
   autopilot?: boolean;  // pilot: toggled by O key
   wage?: number;        // flat credits paid every dock — see tryDock()
+  // 0.5.5 — morale drifts down on wage shortfalls, up on full pay. Loaded
+  // saves default to 100. Recruiter halves the decay rate. A future pass
+  // ties morale <30 to reduced perks / walk-outs; today it just changes the
+  // Comms line the crew posts after payroll.
+  morale?: number;      // 0..100, defaults to 100
 }
 
 interface PlayerState {
