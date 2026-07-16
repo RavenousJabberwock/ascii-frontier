@@ -4854,7 +4854,7 @@ export class Voidwake {
 
   // Category-cycle order for [ / ]. Each press steps to the next category and
   // locks the nearest entity matching it. Skips categories with no candidates.
-  private _targetCategories: { label: string; match: (e: Entity) => boolean }[] = [
+  private _targetCategories: { label: string; match: (e: Entity) => boolean; navigator?: boolean }[] = [
     { label: "STATION",  match: (e) => e.kind === "station" && e.faction !== "pirate" },
     { label: "ASTEROID", match: (e) => e.kind === "asteroid" },
     { label: "HOSTILE",  match: (e) => e.kind === "hostile" || (e.kind === "station" && e.faction === "pirate") },
@@ -4863,6 +4863,10 @@ export class Voidwake {
     { label: "BEACON",   match: (e) => e.kind === "beacon" },
     { label: "PLANET",   match: (e) => e.kind === "planet" },
     { label: "DERELICT", match: (e) => e.kind === "derelict" },
+    // 0.5.5 — Navigator crew unlocks three extra categories in [/] cycle.
+    { label: "WORMHOLE", match: (e) => e.kind === "wormhole", navigator: true },
+    { label: "MISSION",  match: (e) => this.player?.mission?.targetId === e.id, navigator: true },
+    { label: "EXOTIC",   match: (e) => e.kind === "star" && (e.stellarClass === "BH" || e.stellarClass === "PSR"), navigator: true },
   ];
   private _targetCatIdx = -1;
 
