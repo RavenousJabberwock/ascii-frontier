@@ -4773,17 +4773,37 @@ export class Voidwake {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
-          // ownerId -2 = gunner-fired shot: use the gunner weapon slot if it
-          // exists, otherwise fall back to the pilot's weapon.
-          const gunnerFired = playerShot && e.ownerId === -2;
+          // ownerId -2 = gunner-fired shot; -3 = tactical-fired shot.
+          const gunnerFired   = playerShot && e.ownerId === -2;
+          const tacticalFired = playerShot && e.ownerId === -3;
           const shooterWepId = gunnerFired
             ? (this.player?.ship.gunnerWeaponId ?? this.player?.ship.weaponId)
             : this.player?.ship.weaponId;
-          const dmg = playerShot
+          let dmg = playerShot
             ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
+          // 0.5.6 — critical hits. Base 8% on any player shot; +5% with a
+          // Gunner aboard; +15% floor when a Tactical Officer fires. Crits
+          // apply a 2× multiplier and post a brief "★ CRIT" chatter line.
+          let crit = false;
+          if (playerShot) {
+            let critChance = 0.08;
+            if (this.player?.gunner) critChance += 0.05;
+            if (tacticalFired) critChance = Math.max(critChance, 0.23);
+            if (Math.random() < critChance) {
+              dmg *= 2;
+              crit = true;
+            }
+          }
           if ((t.shield ?? 0) > 0) t.shield = Math.max(0, (t.shield ?? 0) - dmg);
           else t.hull = Math.max(0, (t.hull ?? 0) - dmg);
+          if (crit && playerShot) {
+            const tag = tacticalFired ? "Tactical" : gunnerFired ? "Gunner" : "Weapons";
+            this.pushChatter(tag,
+              pickLine("crit_hit", this.chatterCtx(undefined, { target: t })),
+              "#ffdd66");
+            this.beep(1180, 0.05, "square");
+          }
           // Faction retaliation: player-shot ship pings same-faction ships
           // within 2500u to become hostile for 90 seconds.
           if (playerShot && isShip) this.applyFactionRetaliation(t);
