@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.5";
+const VERSION = "0.5.6";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -989,6 +989,7 @@ interface Options {
   // Visual FX toggles + HUD/reticle theming (added 0.3).
   glitchFx: boolean;              // enable screen glitch on hull hits + thargoid presence
   scanlines: boolean;             // draw subtle horizontal scanlines over the canvas
+  scanlineDensity?: 1 | 2 | 3;    // 0.5.6 — row skip (1=dense/every row, 2=default, 3=sparse)
   hudScheme: "green" | "amber" | "cyan" | "white" | "red";
   reticleColor: "green" | "amber" | "cyan" | "magenta" | "white" | "red";
   reticleShape: "cross" | "dot" | "brackets" | "circle" | "diamond";
@@ -1144,6 +1145,7 @@ function defaultOptions(): Options {
     touchControls: "auto",
     glitchFx: true,
     scanlines: false,
+    scanlineDensity: 2,
     hudScheme: "green",
     reticleColor: "green",
     reticleShape: "cross",
@@ -6634,8 +6636,11 @@ export class Voidwake {
     // ---- Scanlines ------------------------------------------------------
     // Subtle even-row darkening — pure CRT flavor, opt-in in Options.
     if (this.screen === "playing" && this.options.scanlines) {
-      ctx.fillStyle = "rgba(0,0,0,0.14)";
-      for (let sy = 0; sy < h; sy += 2) ctx.fillRect(0, sy, w, 1);
+      // 0.5.6 — density adjustable in Options. Higher step = sparser lines.
+      const step = Math.max(1, Math.min(4, this.options.scanlineDensity ?? 2));
+      const alpha = step === 1 ? 0.20 : step === 2 ? 0.14 : 0.10;
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+      for (let sy = 0; sy < h; sy += step) ctx.fillRect(0, sy, w, 1);
     }
 
     // ---- HUD scheme tint ------------------------------------------------
