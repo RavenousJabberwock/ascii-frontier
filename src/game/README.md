@@ -443,7 +443,7 @@ sensor alert announces them when they spawn.
   Universe section, an AI handler in the AI section, and a glyph in
   `GLYPHS`.
 
-## Scripting (0.5.5 — Lua host live)
+## Scripting (0.5.7 — Lua host + M2 mutation API)
 
 A sandboxed Lua 5.3 runtime (fengari-web, ~200KB, bundled into the
 offline HTML lazily on first enable) lives at `src/game/lua-host.ts`. It
@@ -489,9 +489,8 @@ end)
 
 Payloads are depth-capped Lua tables with primitive leaves. Anything
 past depth 2 is stringified so scripts never receive a live JS entity
-handle. A read/write mutation API (`frontier.entities.spawn`,
-`frontier.player.grant`, …) lands with M2 — see `.lovable/plan.md`
-▸ "Modding roadmap".
+handle. See "M2 mutation API" below for the writable surface added in
+0.5.7 (credits, fuel, player snapshot).
 
 ### Available hooks
 
@@ -566,4 +565,78 @@ Fires `onPlayerDock` with `kind: "planet"` and the additional
 `onPlanetLand` hook so scripts can distinguish colony landings from
 station docks and ship-to-ship trades.
 
+## How To Play overlay (0.5.7)
+
+A six-page onboarding overlay is available from the main menu (between
+`Load Game` and `Legend (Codex)`) and the pause menu. Pages cover:
+
+1. **Premise** — high-level pitch and difficulty/cheat rules.
+2. **Survive your first quest** — the 5-step "dock, buy work, complete,
+   collect" loop with early-game warnings.
+3. **Controls** — every bind, live from `options.keybinds` so rebinds
+   render correctly.
+4. **HUD & display** — cockpit, reticle, targeting brackets, radar,
+   comms/log panes.
+5. **Mouse-steer safety** — bold red warning explaining the
+   "spinning cockpit" symptom and how to recover (center the mouse or
+   disable Mouse-Steer under Options ▸ Controls).
+6. **Tips & tricks** — credits, crew loadouts, hazards, and the new
+   friendly-rescue interaction.
+
+Content lives in `renderHowto()` and re-flows to the current viewport
+width via an inline word-wrapper. ESC / the menu key closes back to
+whichever screen opened it (`_howtoReturn`).
+
+## NPC crit symmetry (0.5.7)
+
+Hostile bullets that connect roll a crit at 6% base (10% for named
+"boss" pirates), applying a 2× damage multiplier, a short screen shake,
+and a red `‼` line in comms via the new `npc_crit` chatter pool. Cheat
+Mode still short-circuits all damage before the crit roll, so the
+sandbox stays safe.
+
+## Morale perk attenuation (0.5.7)
+
+Wage-shortfall morale decay now scales down per support role aboard,
+with a floor of 3:
+
+| Role          | Decay reduction |
+| ------------- | --------------- |
+| Recruiter     | −7              |
+| Quartermaster | −3              |
+| Merchant      | −2              |
+
+A Recruiter + Quartermaster + Merchant crew still leaks 3 per short
+paycheck (never zero — wages always matter). A bare crew loses the
+full 15. Cheat Mode bypasses wages/morale entirely; Easy Mode floors
+morale at 5 to prevent walkouts.
+
+## Stranded-ship rescue (0.5.7)
+
+Friendly / neutral hulls broadcasting `stranded_mayday` can now be
+rescued directly by the player. Pull within 50u, cut throttle ≤ 5%,
+and press `F`: you donate 15% of your fuel bar, the ship clears its
+stranded flag, and you collect `+120cr / +40 XP / +3 rep` with its
+faction plus a `stranded_thanks` chatter line. Requires at least 20%
+of your own fuel remaining, so the interaction can't strand *you*.
+
+SPD Patrols still auto-tow stranded lawful hulls (unchanged) — the
+player rescue is an additional path, not a replacement.
+
+## M2 mutation API (0.5.7)
+
+The Lua host bridge now exposes a small, audited write surface:
+
+```lua
+local bal  = frontier.addCredits(500)   -- returns new balance, nil if no player
+local fuel = frontier.addFuel(-10)      -- returns new fuel amount
+local snap = frontier.player()          -- read-only snapshot table
+if snap and snap.hull / snap.hullMax < 0.25 then
+  frontier.chat("Script", "Hull critical: " .. snap.hull, "#ff5555")
+end
+```
+
+Everything else — entities, missions, universe seed — remains read-only
+until M3 (mod bundles + entity mutation). Bridge mutators are optional
+so older host code keeps loading unchanged.
 

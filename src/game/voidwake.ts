@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.6";
+const VERSION = "0.5.7";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -175,7 +175,7 @@ const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","O
 
 type ChatterKind =
   | "hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
-  | "patrol_tow" | "patrol_arrest" | "stranded_mayday" | "crit_hit" | "walkout"
+  | "patrol_tow" | "patrol_arrest" | "stranded_mayday" | "crit_hit" | "npc_crit" | "walkout" | "stranded_thanks"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
   | "gunner_kill" | "gunner_docked" | "gunner_cargofull"
@@ -231,6 +231,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Federation ain't coming. Not out here.",
     "Say hi to the void, {cmdr}.",
     "You brought {cargo}% cargo to a knife fight.",
+    "That's a fine {ship}. Be a shame if it stopped flying.",
+    "Comms are hot, guns are hotter, {cmdr}.",
+    "Every second you drift, you owe me another credit.",
+    "Bounty on you says ambitious. Corpse says overcooked.",
   ],
   friendly: [
     "Safe vectors, Cmdr {cmdr}.",
@@ -243,6 +247,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Been reading your bounty tally, Cmdr. Keep at it.",
     "If you see a mayday out here, squawk it up the lane.",
     "Coffee's terrible, company's fine. Come say hi at {sector}.",
+    "Wing formation's tight today. Nice to see, {cmdr}.",
+    "Lanes are calm. We'll take a quiet shift.",
+    "Fly under our colors sometime — the pay's honest.",
+    "Cmdr, if the black gets loud, we're a squawk away.",
   ],
   neutral: [
     "{ship}, mind your wake.",
@@ -255,6 +263,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You buying? I'm selling. Otherwise, drift on.",
     "Manifest's clean, {cmdr}. Don't get creative.",
     "This lane's slow. Sun's warm. That's the report.",
+    "Guild rate today: pay me or don't hail me.",
+    "Ore's moving. Fuel isn't. Do the math.",
+    "You look like credit, {cmdr}. Or trouble. Same thing sometimes.",
   ],
   station: [
     "...automated beacon, {sector}: dock fees waived this cycle.",
@@ -267,6 +278,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Beacon nominal, {sector} traffic light. Come on in.",
     "Bounty board updated — new marks posted this cycle.",
     "Hydro cycling — recycled air tastes like {coffee} again. Sorry.",
+    "Docking control: pad four's yours if you like the view of the star.",
+    "Shipwright's got a slot open — refits go quick this shift.",
+    "Bar's open till the next tick. Bring credits and stories.",
   ],
   planet: [
     "Surface comms crackle: {weather}.",
@@ -304,6 +318,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "SPD to all traffic: keep weapons cold on approach lanes.",
     "Coffee's cold, guns are warm. Standard shift.",
     "Cruiser {ship} logged. Move along, {cmdr}.",
+    "Fly straight, hail early, and we're friends this shift.",
+    "New lawful hull just launched from {sector}. Say hi.",
+    "Report {curse} activity on this band, Cmdr. We answer maydays.",
   ],
   patrol_tow: [
     "SPD to {target}: sit tight, tractor locking on.",
@@ -323,18 +340,40 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Reactor's cold. Life support on batteries. Anyone reading?",
     "{fac} freighter {ship} broadcasting mayday. Please advise.",
     "Fuel's out, patience thin. Tow, please. Anyone.",
+    "Batteries at half, crew rationing air. Any hull in range?",
+    "This is {ship}, adrift on the {sector} lane. Squawking mayday.",
+    "If you're listening: we can pay in cargo for a top-up.",
   ],
   crit_hit: [
     "★ CRIT — {target} rocked.",
     "★ CRITICAL HIT on {target}.",
     "★ Solid hit, {target} is smoking.",
     "★ Clean crit — {target}'s glowing.",
+    "★ Punched through — {target} is venting.",
+    "★ Weak point breach — {target} is spitting sparks.",
+    "★ Sweet spot on {target} — that one hurt.",
+  ],
+  npc_crit: [
+    "‼ HULL BREACH — that shot went deep.",
+    "‼ Direct hit! Damage control to all decks.",
+    "‼ They found a seam, Cmdr — brace!",
+    "‼ Critical strike registered — hull integrity dropping.",
+    "‼ Ouch. That was a clean shot on us.",
   ],
   walkout: [
     "That's it — I'm off at the next dock. Morale's dust.",
     "Pack my kit. This tour's over, {cmdr}.",
     "You couldn't feed the crew, you can't keep 'em. I'm out.",
     "Walking. Find someone else to bleed for {credits}cr.",
+    "Been a pleasure. It hasn't. I'm gone.",
+    "Log me as departed, Cmdr. Empty bunks pay empty wages.",
+  ],
+  stranded_thanks: [
+    "Bless you, {cmdr}. Fuel in the tanks and stars in my sights.",
+    "That top-up saved the crew. We owe you a round in {sector}.",
+    "You didn't have to stop — but you did. Fly safe.",
+    "Reactor's warm again. Thank you kindly, {ship}.",
+    "The lanes remember kindness. So do we. Safe vectors.",
   ],
   gunner_idle: [
     "Quiet out here. {weather}.",
@@ -648,6 +687,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{a}: Weather's {weather}.  ||  {b}: Weather is always {weather}. That's space.",
     "{a}: {praise}, Cmdr.  ||  {b}: Don't inflate the ego. He'll try to dock at a star.",
     "{a}: Any word on {rumor}?  ||  {b}: Yeah, and it gets worse the closer you look.",
+    "{a}: {b}, quit humming.  ||  {b}: {a}, it's the reactor. That's a bad sign.",
+    "{a}: Cmdr's on a streak.  ||  {b}: Cmdr's on borrowed time. Same difference.",
+    "{a}: What's for shore leave?  ||  {b}: Whatever {sector} still has stocked. So, rations.",
   ],
 };
 
@@ -2599,6 +2641,7 @@ type Screen =
   | "destroyed"
   | "crashed"
   | "codex"
+  | "howto"
   | "quest-log";
 
 
@@ -3163,6 +3206,9 @@ export class Voidwake {
   private _codexPage = 0;
   // Bounds of the clickable source-code link drawn at the bottom of the Codex.
   private _codexLinkRect: { x: number; y: number; w: number; h: number } | null = null;
+  // How-To-Play overlay: same return-screen pattern as Codex.
+  private _howtoReturn: Screen = "title";
+  private _howtoPage = 0;
   // Fuel-scoop chatter throttle. When set, we're actively scooping a star;
   // reused by the HUD to render a "SCOOPING" badge.
   private _scoopingUntil = 0;
@@ -3856,6 +3902,9 @@ export class Voidwake {
       } else if (this.screen === "codex") {
         this.screen = this._codexReturn;
         this.menuCursor = 0;
+      } else if (this.screen === "howto") {
+        this.screen = this._howtoReturn;
+        this.menuCursor = 0;
       } else if (this.screen === "quest-log") {
         this.screen = this._codexReturn;
         this.menuCursor = 0;
@@ -3876,6 +3925,7 @@ export class Voidwake {
       case "destroyed": this.updateDestroyed(); break;
       case "crashed": this.updateCrashed(); break;
       case "codex": this.updateCodex(); break;
+      case "howto": this.updateHowto(); break;
       case "quest-log": this.updateQuestLog(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
@@ -4013,13 +4063,14 @@ export class Voidwake {
 
 
   // --- Title --------------------------------------------------------------
-  titleItems = ["New Game", "Load Game", "Legend (Codex)", "Options", "Quit"];
+  titleItems = ["New Game", "Load Game", "How To Play", "Legend (Codex)", "Options", "Quit"];
   updateTitle() {
     this.menuNav(this.titleItems.length);
     if (this.input.consume("enter")) {
       const choice = this.titleItems[this.menuCursor];
       if (choice === "New Game") { this.clearTitleNotice(); this.screen = "create-char"; this.menuCursor = 0; }
       else if (choice === "Load Game") { this.clearTitleNotice(); this.screen = "load"; this.menuCursor = 0; }
+      else if (choice === "How To Play") { this._howtoReturn = "title"; this.screen = "howto"; this.menuCursor = 0; this._howtoPage = 0; }
       else if (choice === "Legend (Codex)") { this._codexReturn = "title"; this.screen = "codex"; this.menuCursor = 0; }
       else if (choice === "Options") { this.screen = "options"; this.optionsSection = "root"; this.menuCursor = 0; }
       else if (choice === "Quit") this.tryQuit();
@@ -4799,10 +4850,21 @@ export class Voidwake {
       // Player hit
       if (e.faction !== "player" && V.len(V.sub(e.pos, p.pos)) < 12) {
         if (!this.options.cheat) {
-          const dmg = 6 * this.dmgScale();
+          let dmg = 6 * this.dmgScale();
+          // 0.5.7 — NPC crit symmetry. Hostile fire crits back at 6% base
+          // (10% if the shooter is a "boss" bounty). 2× damage + comms line.
+          const shooter = this.entities.find((x) => x.id === e.ownerId);
+          const critBase = shooter?.boss ? 0.10 : 0.06;
+          const npcCrit = Math.random() < critBase;
+          if (npcCrit) dmg *= 2;
           if ((p.ship.shield ?? 0) > 0) p.ship.shield = Math.max(0, p.ship.shield - dmg);
           else p.ship.hull = Math.max(0, p.ship.hull - dmg);
-          this.beep(220, 0.04, "sawtooth");
+          this.beep(npcCrit ? 160 : 220, 0.04, "sawtooth");
+          if (npcCrit) {
+            this._shakeUntil = performance.now() / 1000 + 0.25;
+            this._shakeMag = 4;
+            this.pushChatter("Damage", pickLine("npc_crit", this.chatterCtx()), "#ff5555");
+          }
           // Gunner reacts to incoming fire, throttled so it isn't spammy.
           if (p.gunner && p.gunner.enabled && p.gunner.nextBarkAt <= 0) {
             p.gunner.nextBarkAt = 4 + Math.random() * 3;
@@ -4810,7 +4872,6 @@ export class Voidwake {
               pickLine("gunner_hit", this.chatterCtx()), "#ff8a8a");
           }
           if (p.ship.hull <= 0) {
-            const shooter = this.entities.find((x) => x.id === e.ownerId);
             const killer = shooter?.name ?? e.faction;
             this.die(`Killed by ${killer}`, killer);
           }
@@ -5101,6 +5162,32 @@ export class Voidwake {
       const dShip = V.len(V.sub(t.pos, p.pos));
       if (dShip > 50) { this.pushLog("Too far to hail — pull within 50u."); return; }
       if (p.throttle > 0.05) { this.pushLog("Match speed to hail."); return; }
+      // 0.5.7 — Stranded rescue: hailing a mayday ship donates 15% of your
+      // fuel, clears its stranded state, and pays a small rep/credit bounty.
+      // No market screen — this is a discrete helping-hand interaction.
+      if (t.stranded) {
+        if (p.ship.fuel < p.ship.fuelMax * 0.2) {
+          this.pushLog(`Not enough fuel to spare for ${t.name}. Refuel first.`);
+          return;
+        }
+        const gift = Math.floor(p.ship.fuelMax * 0.15);
+        p.ship.fuel = Math.max(0, p.ship.fuel - gift);
+        t.stranded = undefined;
+        t.state = "wander";
+        t.vel = { x: (Math.random() - 0.5) * 6, y: 0, z: (Math.random() - 0.5) * 6 };
+        t.towById = undefined;
+        const bonus = 120;
+        p.credits += bonus;
+        awardXP(p, 40);
+        if (t.faction && t.faction !== "pirate") {
+          adjustRep(p, t.faction, 3);
+        }
+        this.pushLog(`Donated ${gift} fuel to ${t.name}. +${bonus}cr, +40 XP, +3 rep.`);
+        this.pushChatter(t.name, pickLine("stranded_thanks", this.chatterCtx(t)), "#7CFC00");
+        this.sfx("dock");
+        dispatchHook("onPlayerDock", { entity: t, kind: "ship-trade" });
+        return;
+      }
       this.screen = "station";
       this.menuCursor = 0;
       this.stationPage = "market";
@@ -5175,7 +5262,14 @@ export class Voidwake {
         const paid = Math.min(bill, p.credits);
         p.credits -= paid;
         const short = paid < bill;
-        const decay = short ? (hasCrew(p, "recruiter") ? 8 : 15) : 0;
+        // 0.5.7 — morale perk attenuation: Recruiter halves the base decay,
+        // Quartermaster/Merchant stretch supplies to soften it further, and a
+        // floor of 3 keeps at least a nudge so wages still matter.
+        let decayBase = 15;
+        if (hasCrew(p, "recruiter")) decayBase -= 7;
+        if (hasCrew(p, "quartermaster")) decayBase -= 3;
+        if (hasCrew(p, "merchant")) decayBase -= 2;
+        const decay = short ? Math.max(3, decayBase) : 0;
         const gain  = short ? 0 : 2;
         const easy = this.options.difficulty === "Easy";
         const moraleFloor = easy ? 5 : 0;
@@ -5913,7 +6007,7 @@ export class Voidwake {
 
 
   // --- Main menu -----------------------------------------------------------
-  menuItems = ["Resume", "Save Game", "Load Game", "Legend (Codex)", "Options", "Quit"];
+  menuItems = ["Resume", "Save Game", "Load Game", "How To Play", "Legend (Codex)", "Options", "Quit"];
   updateMenu() {
     this.menuNav(this.menuItems.length);
     if (this.input.consume("enter")) {
@@ -5921,6 +6015,7 @@ export class Voidwake {
       if (c === "Resume") this.screen = "playing";
       else if (c === "Save Game") { this.screen = "save"; this.menuCursor = 0; }
       else if (c === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
+      else if (c === "How To Play") { this._howtoReturn = "menu"; this.screen = "howto"; this.menuCursor = 0; this._howtoPage = 0; }
       else if (c === "Legend (Codex)") { this._codexReturn = "menu"; this.screen = "codex"; this.menuCursor = 0; }
       else if (c === "Options") { this.screen = "options"; this.optionsSection = "root"; this.menuCursor = 0; }
       else if (c === "Quit") this.tryQuit();
@@ -6305,6 +6400,26 @@ export class Voidwake {
       this.luaHost = new mod.LuaHost({
         pushLog: (m) => this.pushLog(m),
         pushChatter: (w, m, c) => this.pushChatter(w, m, c),
+        addCredits: (d) => {
+          const p = this.player; if (!p) return null;
+          p.credits = Math.max(0, Math.floor(p.credits + d));
+          return p.credits;
+        },
+        addFuel: (d) => {
+          const p = this.player; if (!p) return null;
+          p.ship.fuel = Math.max(0, Math.min(p.ship.fuelMax, p.ship.fuel + d));
+          return p.ship.fuel;
+        },
+        getPlayerSnapshot: () => {
+          const p = this.player; if (!p) return null;
+          return {
+            name: p.char.name, credits: p.credits, kills: p.kills ?? 0, xp: p.xp ?? 0,
+            hull: p.ship.hull, hullMax: p.ship.hullMax,
+            shield: p.ship.shield, shieldMax: p.ship.shieldMax,
+            fuel: p.ship.fuel, fuelMax: p.ship.fuelMax,
+            throttle: p.throttle, seed: this.seed,
+          };
+        },
       }, VERSION);
       const res = this.luaHost.load(this.scriptSource);
       if (res.ok) {
@@ -6705,7 +6820,7 @@ export class Voidwake {
       this.screen === "title" || this.screen === "create-char" ||
       this.screen === "create-ship" || this.screen === "load" ||
       this.screen === "options" || this.screen === "destroyed" ||
-      this.screen === "crashed" || this.screen === "quit-confirm"
+      this.screen === "crashed" || this.screen === "quit-confirm" || this.screen === "howto"
     ) {
       this.drawTitleStarfield(grid, sdt);
     }
@@ -6724,6 +6839,7 @@ export class Voidwake {
       case "destroyed": this.renderDestroyed(grid); break;
       case "crashed": this.renderCrashed(grid); break;
       case "codex": this.renderCodex(grid); break;
+      case "howto": this.renderHowto(grid); break;
       case "quest-log": this.renderQuestLog(grid); break;
     }
 
@@ -7297,6 +7413,194 @@ export class Voidwake {
       putText(g, 6, 23 + i * 2, (sel ? "▸ " : "  ") + it, color);
     });
     putText(g, 4, g.length - 2, "↑/↓ select   ENTER confirm", "#888");
+  }
+
+  // --- How To Play --------------------------------------------------------
+  // Six-page onboarding overlay. Pages: Premise, First Quest, Controls, HUD,
+  // Mouse-steer warning, Tips. ←/→ or Enter to flip; ESC to close back to
+  // whichever menu opened it (title or pause).
+  updateHowto() {
+    const pages = 6;
+    if (this.input.consume("arrowleft"))  this._howtoPage = (this._howtoPage + pages - 1) % pages;
+    if (this.input.consume("arrowright")) this._howtoPage = (this._howtoPage + 1) % pages;
+    if (this.input.consume("enter"))      this._howtoPage = (this._howtoPage + 1) % pages;
+    if (this.input.consume(this.options.keybinds.menu)) {
+      this.screen = this._howtoReturn;
+      this.menuCursor = 0;
+    }
+  }
+
+  renderHowto(g: Cell[][]) {
+    const cols = g[0].length;
+    const kb = this.options.keybinds;
+    const pageTitles = ["PREMISE", "SURVIVE YOUR FIRST QUEST", "CONTROLS", "HUD & DISPLAY", "MOUSE-STEER SAFETY", "TIPS & TRICKS"];
+    const title = `[ HOW TO PLAY — ${pageTitles[this._howtoPage]} (${this._howtoPage + 1}/${pageTitles.length}) ]   ←/→ pages   ESC close`;
+    putText(g, 4, 1, title, "#7CFC00");
+
+    const wrap = (text: string, width: number): string[] => {
+      const out: string[] = [];
+      for (const para of text.split("\n")) {
+        if (!para.length) { out.push(""); continue; }
+        const words = para.split(" ");
+        let line = "";
+        for (const w of words) {
+          if ((line + (line ? " " : "") + w).length > width) {
+            if (line) out.push(line);
+            line = w;
+          } else {
+            line = line ? line + " " + w : w;
+          }
+        }
+        if (line) out.push(line);
+      }
+      return out;
+    };
+
+    const drawBody = (lines: { text: string; color?: string }[]) => {
+      let y = 4;
+      const width = Math.min(cols - 8, 96);
+      for (const ln of lines) {
+        if (y >= g.length - 3) break;
+        if (ln.text === "") { y++; continue; }
+        const wrapped = wrap(ln.text, width);
+        for (const w of wrapped) {
+          if (y >= g.length - 3) break;
+          putText(g, 4, y++, w, ln.color ?? "#cfd");
+        }
+      }
+    };
+
+    if (this._howtoPage === 0) {
+      drawBody([
+        { text: "You are a solitary starship captain flying an ASCII cockpit through a", color: "#9fe" },
+        { text: "procedurally-generated pocket of space. Trade, mine, hunt bounties,", color: "#9fe" },
+        { text: "escort convoys, dodge pirates — or make them wish they'd stayed home.", color: "#9fe" },
+        { text: "" },
+        { text: "There is no fixed storyline. The galaxy is small but restless: pirates" },
+        { text: "raid, Federation patrols answer maydays, Guild traders haul ore between" },
+        { text: "stations, and rare wanderers (UFOs, unknowns, derelicts, wormholes) drift" },
+        { text: "through the black. Your reputation with each faction rises and falls" },
+        { text: "with your choices." },
+        { text: "" },
+        { text: "Death is permanent on Normal difficulty and above; on Easy you get a", color: "#fc6" },
+        { text: "softcore rescue for a fee. Cheat Mode makes you invincible and turns off", color: "#fc6" },
+        { text: "wages/morale entirely — a safe sandbox for exploring the systems.", color: "#fc6" },
+      ]);
+    } else if (this._howtoPage === 1) {
+      drawBody([
+        { text: "Your first job is to survive long enough to earn a real paycheck.", color: "#7CFC00" },
+        { text: "" },
+        { text: `1. Press ${kb.cycleTarget.toUpperCase()} to cycle targets. Find a nearby station (▲ glyph, blue).` },
+        { text: `2. Point at it, throttle up with ${kb.throttleUp.toUpperCase()}, and close the range.` },
+        { text: `3. Within 200u, cut throttle (${kb.throttleDown.toUpperCase()}) below 5% and press ${kb.dock.toUpperCase()} to dock.` },
+        { text: "   Docking is FREE — it refuels and repairs you and pays the crew." },
+        { text: `4. At the station, press ${kb.station.toUpperCase()}/Enter through the menu:` },
+        { text: "     Market  — buy low, sell high (ore, fuel, weapons at real stations)" },
+        { text: "     Missions — accept a mission (J) for guaranteed credits" },
+        { text: "     Shipyard — upgrade later, when you've saved 2000+ credits" },
+        { text: "" },
+        { text: "5. Undock and complete the mission — the tracker pins on the HUD." },
+        { text: "" },
+        { text: "Early warnings:", color: "#fc6" },
+        { text: "  • Red ships (◄) are hostile. Turn away from them until you have shields.", color: "#fc6" },
+        { text: "  • Watch fuel — if it hits 0 you drift. Squawk near a Patrol for a free tow.", color: "#fc6" },
+        { text: "  • Asteroids look pretty but bump hard. Approach at low throttle to mine (M).", color: "#fc6" },
+        { text: "  • Never fly into a star's corona at high throttle. Idle near it to fuel-scoop.", color: "#fc6" },
+      ]);
+    } else if (this._howtoPage === 2) {
+      drawBody([
+        { text: "Flight", color: "#7CFC00" },
+        { text: `  ${kb.throttleUp.toUpperCase()} / ${kb.throttleDown.toUpperCase()}   throttle up / down` },
+        { text: `  ${kb.yawLeft.toUpperCase()} / ${kb.yawRight.toUpperCase()}   yaw left / right` },
+        { text: `  ${kb.pitchUp.toUpperCase()} / ${kb.pitchDown.toUpperCase()}   pitch up / down` },
+        { text: `  SHIFT     afterburner   ·   ${kb.supercruise.toUpperCase()}   supercruise (weapons off)` },
+        { text: "" },
+        { text: "Combat & Interaction", color: "#7CFC00" },
+        { text: `  SPACE  fire weapon   ·   ${kb.cycleTarget.toUpperCase()}  cycle target   ·   ${kb.mine.toUpperCase()}  mine asteroid` },
+        { text: `  ${kb.dock.toUpperCase()} / ${kb.station.toUpperCase()}  dock or land (must be close and slow)` },
+        { text: `  ${kb.jettison.toUpperCase()}  jettison heaviest cargo   ·   ${kb.toggleGunner.toUpperCase()}  gunner AUTO/STANDBY` },
+        { text: "" },
+        { text: "UI", color: "#7CFC00" },
+        { text: `  ${kb.legend.toUpperCase()}  Codex (every glyph & color explained)` },
+        { text: `  ${kb.questLog.toUpperCase()}  Quest Log   ·   ${kb.pinQuest.toUpperCase()}  pin/unpin mission tracker` },
+        { text: `  ${kb.autopilot.toUpperCase()}  autopilot toggle   ·   ${kb.pause.toUpperCase()}  pause   ·   ESC  main menu` },
+        { text: "" },
+        { text: "Every key can be rebound under Options ▸ Controls ▸ Configure Keybinds…", color: "#9fe" },
+        { text: "Gamepad and touch controls are also supported under Options ▸ Controls.", color: "#9fe" },
+      ]);
+    } else if (this._howtoPage === 3) {
+      drawBody([
+        { text: "Cockpit HUD (top-left)", color: "#7CFC00" },
+        { text: "  Ship name, hull %, shield %, fuel %, cargo %, credits, kills." },
+        { text: "  Bars flash amber when a value is critical." },
+        { text: "" },
+        { text: "Reticle (center)", color: "#7CFC00" },
+        { text: "  -+-  green = idle   ·   amber = aligned   ·   red = target in range" },
+        { text: "  ✚  lead indicator turns green when a firing solution is ready." },
+        { text: "" },
+        { text: "Targeting", color: "#7CFC00" },
+        { text: "  [ ]  brackets tighten around the current on-screen target." },
+        { text: "  ◣◢◤◥  edge pointers show off-screen targets with a distance readout." },
+        { text: "  ◇  mission objective marker." },
+        { text: "" },
+        { text: "Radar (top-right)", color: "#7CFC00" },
+        { text: "  A pseudo-3D ASCII sphere. `@` is you at center. Contacts render as their" },
+        { text: "  glyph — green friendly, amber neutral, red hostile, blue station." },
+        { text: "" },
+        { text: "Comms & Log (bottom)", color: "#7CFC00" },
+        { text: "  Left  = system log (mission progress, damage, dock events)." },
+        { text: "  Right = comms chatter — NPC voices, patrol calls, crew banter." },
+      ]);
+    } else if (this._howtoPage === 4) {
+      drawBody([
+        { text: "★ MOUSE-STEER SAFETY — READ THIS ★", color: "#ff5555" },
+        { text: "" },
+        { text: "If your ship is SPINNING or SPIRALING out of control, this is almost", color: "#ff5555" },
+        { text: "always the mouse-steer input. To recover:", color: "#ff5555" },
+        { text: "" },
+        { text: "  1. MOVE YOUR MOUSE CURSOR TO THE CENTER OF THE SCREEN and hold it there.", color: "#ff5555" },
+        { text: "  2. Or open the pause menu (ESC) and turn Mouse-Steer OFF under", color: "#ff5555" },
+        { text: "     Options ▸ Controls ▸ Mouse-Steer.", color: "#ff5555" },
+        { text: "" },
+        { text: "How mouse-steer works", color: "#7CFC00" },
+        { text: "  When enabled, your mouse position relative to the screen center pitches" },
+        { text: "  and yaws the ship. A cursor parked in the center = neutral input. A" },
+        { text: "  cursor at the corner = maximum turn in that direction. If you switch" },
+        { text: "  windows, alt-tab, or the cursor lands off-center on load, the ship will" },
+        { text: "  spin until you recenter or disable the option." },
+        { text: "" },
+        { text: "Alternatives", color: "#7CFC00" },
+        { text: "  Keyboard steering with A/D (yaw) and Q/E (pitch) works fine on its own." },
+        { text: "  Gamepads use the right stick. Touch devices use on-screen thumbsticks." },
+      ]);
+    } else {
+      drawBody([
+        { text: "Making credits", color: "#7CFC00" },
+        { text: "  • Bounty missions pay big and give you an excuse to fight pirates." },
+        { text: "  • Ore prices vary between stations — buy low at asteroid-heavy sectors," },
+        { text: "    sell high at populated colonies (+25% ore price at colony markets)." },
+        { text: "  • Salvage derelicts (†) by flying within 40u — free loot canisters." },
+        { text: "" },
+        { text: "Crew", color: "#7CFC00" },
+        { text: "  Hire crew at stations. Roles stack: an Engineer + Navigator + Merchant is" },
+        { text: "  a solid trader loadout; Gunner OR Tactical (they conflict) plus Recruiter" },
+        { text: "  keeps a combat build stable. Pay wages every dock — low morale grumbles," },
+        { text: "  empty morale walks the crew off (unless Easy Mode or Cheat Mode is on)." },
+        { text: "" },
+        { text: "Hazards", color: "#fc6" },
+        { text: "  ◉ Black hole — bends your course, kills on contact. Go around, not through." },
+        { text: "  ▒ Nebula — drains shields and hides ships. Great for ambushes, either way." },
+        { text: "  ⚠ Unknown contact (thargoid) — EMPs you, then leaves. Don't provoke it." },
+        { text: "" },
+        { text: "Rescue", color: "#7CFC00" },
+        { text: "  Friendly ships broadcasting MAYDAY are out of fuel. SPD Patrols will tow" },
+        { text: "  them for free, but you can also hail one directly: pull within 50u, match" },
+        { text: "  speed (throttle ≤ 5%), and press dock. You'll donate 15% fuel and get a" },
+        { text: "  cash bonus + XP for your trouble." },
+        { text: "" },
+        { text: "See also: Codex (L) for glyph/color legend and full keybinds.", color: "#9fe" },
+      ]);
+    }
   }
 
   // --- Codex / Legend ------------------------------------------------------

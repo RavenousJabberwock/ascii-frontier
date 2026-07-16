@@ -42,6 +42,11 @@ const HOOK_NAMES: ScriptHookName[] = [
 export interface LuaHostBridge {
   pushLog: (msg: string) => void;
   pushChatter: (who: string, msg: string, color?: string) => void;
+  // 0.5.7 — M2 mutation API. Scripts can nudge player state via a narrow,
+  // audited surface. All mutators are optional so older bridges keep working.
+  addCredits?: (delta: number) => number | null;   // returns new balance, or null if no player
+  addFuel?:    (delta: number) => number | null;   // returns new fuel, or null if no player
+  getPlayerSnapshot?: () => Record<string, unknown> | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,6 +116,32 @@ export class LuaHost {
       return 0;
     });
     lua.lua_setfield(L, -2, to_luastring("chat"));
+
+    // --- M2 mutation API (0.5.7) ---------------------------------------
+    // Narrow, safe writes to the running game. Each mutator returns the
+    // resulting number so scripts can react (e.g. warn on empty fuel).
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const d = lua.lua_tonumber(Ls, 1);
+      const r = this.bridge.addCredits?.(Number(d) || 0) ?? null;
+      if (r == null) lua.lua_pushnil(Ls); else lua.lua_pushnumber(Ls, r);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("addCredits"));
+
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const d = lua.lua_tonumber(Ls, 1);
+      const r = this.bridge.addFuel?.(Number(d) || 0) ?? null;
+      if (r == null) lua.lua_pushnil(Ls); else lua.lua_pushnumber(Ls, r);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("addFuel"));
+
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const snap = this.bridge.getPlayerSnapshot?.() ?? null;
+      pushJsAsLua(Ls, snap, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("player"));
 
     lua.lua_pushjsfunction(L, (Ls: L) => {
       const nameStr = lua.lua_tojsstring(Ls, 1) ?? "";
