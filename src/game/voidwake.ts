@@ -330,6 +330,12 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "★ Solid hit, {target} is smoking.",
     "★ Clean crit — {target}'s glowing.",
   ],
+  walkout: [
+    "That's it — I'm off at the next dock. Morale's dust.",
+    "Pack my kit. This tour's over, {cmdr}.",
+    "You couldn't feed the crew, you can't keep 'em. I'm out.",
+    "Walking. Find someone else to bleed for {credits}cr.",
+  ],
   gunner_idle: [
     "Quiet out here. {weather}.",
     "{smalltalk}.",
