@@ -443,7 +443,7 @@ sensor alert announces them when they spawn.
   Universe section, an AI handler in the AI section, and a glyph in
   `GLYPHS`.
 
-## Scripting (0.5.5 — Lua host live)
+## Scripting (0.5.7 — Lua host + M2 mutation API)
 
 A sandboxed Lua 5.3 runtime (fengari-web, ~200KB, bundled into the
 offline HTML lazily on first enable) lives at `src/game/lua-host.ts`. It
@@ -489,9 +489,8 @@ end)
 
 Payloads are depth-capped Lua tables with primitive leaves. Anything
 past depth 2 is stringified so scripts never receive a live JS entity
-handle. A read/write mutation API (`frontier.entities.spawn`,
-`frontier.player.grant`, …) lands with M2 — see `.lovable/plan.md`
-▸ "Modding roadmap".
+handle. See "M2 mutation API" below for the writable surface added in
+0.5.7 (credits, fuel, player snapshot).
 
 ### Available hooks
 
