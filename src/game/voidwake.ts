@@ -5212,6 +5212,50 @@ export class Voidwake {
     }
   }
 
+  // --- Tactical firing (0.5.5) --------------------------------------------
+  // Tactical Officer is mutually exclusive with Gunner, so this only runs
+  // when a `tactical` crew slot is filled. Same alignment cone / range check
+  // as updateGunner() but only engages hostiles — a Tactical will never
+  // fire on rocks or stations. Fires the pilot's mounted weapon (there is
+  // no separate Tactical bay), and posts an occasional bark on hit.
+  updateTactical(dt: number, fwd: Vec3) {
+    const p = this.player;
+    if (!p || this.options.peaceful) return;
+    const tac = getCrew(p, "tactical");
+    if (!tac || !tac.enabled) return;
+    tac.cooldown = (tac.cooldown ?? 0) - dt;
+    tac.nextBarkAt -= dt;
+    let best: Entity | null = null;
+    let bestDot = 0.94, bestDist = Infinity;
+    for (const e of this.entities) {
+      if (e.kind !== "hostile") continue;
+      if ((e.hull ?? 1) <= 0) continue;
+      const rel = V.sub(e.pos, p.pos);
+      const d = V.len(rel);
+      if (d < 1 || d > 900) continue;
+      const dotv = (rel.x * fwd.x + rel.y * fwd.y + rel.z * fwd.z) / d;
+      if (dotv > bestDot) { bestDot = dotv; best = e; bestDist = d; }
+    }
+    if (!best) return;
+    const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+    if (bestDist > w.range) return;
+    if ((tac.cooldown ?? 0) > 0) return;
+    tac.cooldown = w.cooldown * 1.10 * effectiveCooldownMul(p); // slight cadence bonus vs. Gunner
+    this.entities.push({
+      id: nextId(), kind: "bullet", name: "shot",
+      pos: { ...p.pos }, vel: V.scale(fwd, 260),
+      faction: "player", ownerId: -3, ttl: 2,
+      ttlAt: performance.now() / 1000 + 2,
+    });
+    this.beep(760, 0.04, "square");
+    if (tac.nextBarkAt <= 0) {
+      tac.nextBarkAt = 3 + Math.random() * 2.5;
+      const first = tac.name.split(" ")[0];
+      this.pushChatter(`Tactical ${first}`,
+        pickLine("tactical_hostile", this.chatterCtx(undefined, { target: best })),
+        "#ff7a7a");
+    }
+
   // --- Pilot autopilot ----------------------------------------------------
   // Full-auto approach to `this.targetId`. Points the nose at the target,
   // scales throttle by distance so we decelerate on approach, and auto-docks
