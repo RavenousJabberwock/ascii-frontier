@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.8";
+const VERSION = "0.5.9";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -174,7 +174,7 @@ const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Ni
 const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
 
 type ChatterKind =
-  | "hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
+  | "hostile" | "boss_hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
   | "patrol_tow" | "patrol_arrest" | "stranded_mayday" | "crit_hit" | "npc_crit" | "walkout" | "stranded_thanks"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
@@ -235,6 +235,22 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Comms are hot, guns are hotter, {cmdr}.",
     "Every second you drift, you owe me another credit.",
     "Bounty on you says ambitious. Corpse says overcooked.",
+    "Slow-burn courier? Slower-burn corpse. Same difference.",
+    "This lane's ours by right of guns, {cmdr}.",
+    "Peel that {ship} like a ration can, boys.",
+    "You should've picked a bigger hull, or a bigger set of nerves.",
+  ],
+  boss_hostile: [
+    "So THIS is the {cmdr} the bounty board's been screaming about.",
+    "Name's on my hull. Yours will be on my log tonight.",
+    "Wing — hold. I want the {ship} personally.",
+    "Every captain I killed had that same look, {cmdr}.",
+    "Half the sector wants your kill-mark. I got here first.",
+    "Broadcasting: this hull is mine. Come and remember me.",
+    "You made the boards, {cmdr}. Enjoy the last verse.",
+    "Guns free on the {ship}. No cargo, no manifest — just meat.",
+    "I don't chase small fry. I hunt commanders.",
+    "You brought a hobbyist loadout to a professional's lane.",
   ],
   friendly: [
     "Safe vectors, Cmdr {cmdr}.",
@@ -251,6 +267,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Lanes are calm. We'll take a quiet shift.",
     "Fly under our colors sometime — the pay's honest.",
     "Cmdr, if the black gets loud, we're a squawk away.",
+    "Bounty scanner's noisy today — mind your six.",
+    "Half our lane rides on kindness. Yours is banked.",
+    "Wing salutes the {ship}. That paint job earned it.",
   ],
   neutral: [
     "{ship}, mind your wake.",
@@ -266,6 +285,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Guild rate today: pay me or don't hail me.",
     "Ore's moving. Fuel isn't. Do the math.",
     "You look like credit, {cmdr}. Or trouble. Same thing sometimes.",
+    "Long-hauler code: hail early, dock later, spend never.",
+    "Not my sector, not my mayday. Might be yours though.",
+    "You want gossip, {cmdr}? Cheap for cargo, free for fuel.",
   ],
   station: [
     "...automated beacon, {sector}: dock fees waived this cycle.",
@@ -321,6 +343,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Fly straight, hail early, and we're friends this shift.",
     "New lawful hull just launched from {sector}. Say hi.",
     "Report {curse} activity on this band, Cmdr. We answer maydays.",
+    "SPD to {sector}: any lit hostiles, squawk 'em. We roll fast.",
+    "Cruiser's got fuel to burn. Wave if you see grief.",
+    "Patrol logs today's fly-bys. Yours reads clean, {cmdr}.",
   ],
   patrol_tow: [
     "SPD to {target}: sit tight, tractor locking on.",
@@ -343,6 +368,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Batteries at half, crew rationing air. Any hull in range?",
     "This is {ship}, adrift on the {sector} lane. Squawking mayday.",
     "If you're listening: we can pay in cargo for a top-up.",
+    "Kids are scared. Fuel's dry. We just need someone to slow down.",
+    "Any hull, any faction — we'll take the tow. Beggars, not choosers.",
+    "Broadcasting on repeat: {ship} adrift. Please, any response.",
   ],
   crit_hit: [
     "★ CRIT — {target} rocked.",
@@ -690,6 +718,18 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{a}: {b}, quit humming.  ||  {b}: {a}, it's the reactor. That's a bad sign.",
     "{a}: Cmdr's on a streak.  ||  {b}: Cmdr's on borrowed time. Same difference.",
     "{a}: What's for shore leave?  ||  {b}: Whatever {sector} still has stocked. So, rations.",
+    "{a}: The coupler's whining again.  ||  {b}: The coupler's always whining. Ignore it or fix it.",
+    "{a}: If Cmdr docks that hot one more time —  ||  {b}: — the shipwright buys a boat. Yeah.",
+    "{a}: I filed a hazard report on our approach lanes.  ||  {b}: Cmdr filed it in the airlock.",
+    "{a}: You ever pray, {b}?  ||  {b}: Only when the reactor sings. So, weekly.",
+    "{a}: We should unionize.  ||  {b}: We're two people, {a}. That's just a conversation.",
+    "{a}: Bet Cmdr can't dock without scraping.  ||  {b}: You're on. Loser buys {coffee}.",
+    "{a}: How much did the last refit cost?  ||  {b}: Don't. You'll cry.",
+    "{a}: If we hit another rock —  ||  {b}: — we're calling it exploration. Sound better on the log.",
+    "{a}: Rations again.  ||  {b}: Rations forever. Welcome aboard.",
+    "{a}: What's the emergency plan?  ||  {b}: Panic loudly and hope Cmdr's listening.",
+    "{a}: Cmdr's aim was better this week.  ||  {b}: Cmdr paid the wage bill this week. Related?",
+    "{a}: You believe in luck, {b}?  ||  {b}: I believe in trajectory. Same thing, less superstition.",
   ],
 };
 
@@ -5779,7 +5819,7 @@ export class Voidwake {
       : "#dddddd";
     const lineFor = (e: Entity, other: Entity) => {
       const ctx = this.chatterCtx(e, { target: other });
-      if (e.kind === "hostile") return pickLine("hostile", ctx);
+      if (e.kind === "hostile") return pickLine(e.boss ? "boss_hostile" : "hostile", ctx);
       if (e.kind === "friendly" && e.faction === "patrol") return pickLine("patrol", ctx);
       if (e.kind === "friendly") return pickLine("friendly", ctx);
       if (e.kind === "station")  return pickLine("station",  ctx);
@@ -6021,7 +6061,7 @@ export class Voidwake {
     } else {
       switch (pick.kind) {
         case "hostile":
-          this.pushChatter(pick.name, pickLine("hostile", ctx), "#ff8a8a");
+          this.pushChatter(pick.name, pickLine(pick.boss ? "boss_hostile" : "hostile", ctx), pick.boss ? "#ff5566" : "#ff8a8a");
           break;
         case "friendly":
           this.pushChatter(pick.name, pickLine("friendly", ctx), "#aef58a");

@@ -490,7 +490,9 @@ end)
 Payloads are depth-capped Lua tables with primitive leaves. Anything
 past depth 2 is stringified so scripts never receive a live JS entity
 handle. See "M2 mutation API" below for the writable surface added in
-0.5.7 (credits, fuel, player snapshot).
+0.5.7 (credits, fuel, player snapshot). For copy-pasteable examples,
+see [`lua-samples.md`](lua-samples.md) — 7 self-contained snippets
+covering every hook shipped so far.
 
 ### Available hooks
 
