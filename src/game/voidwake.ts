@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.7";
+const VERSION = "0.5.8";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1189,6 +1189,8 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   pinQuest: "k",         // toggle the persistent quest tracker panel
   cycleCatPrev: "[",     // target nearest of previous category (station/rock/hostile/...)
   cycleCatNext: "]",     // target nearest of next category
+  cycleTypePrev: "{",    // cycle to previous in-range target of the current target's type
+  cycleTypeNext: "}",    // cycle to next in-range target of the current target's type
   autopilot: "o",        // toggle hired Pilot's autopilot to current target
   questLog: "u",         // open the toggle-able Quest Log popup
 };
@@ -1209,6 +1211,8 @@ const KEYBIND_ACTIONS: { id: string; label: string }[] = [
   { id: "cycleTarget",  label: "Cycle Target" },
   { id: "cycleCatPrev", label: "Prev Target Category" },
   { id: "cycleCatNext", label: "Next Target Category" },
+  { id: "cycleTypePrev", label: "Prev Target (Same Type)" },
+  { id: "cycleTypeNext", label: "Next Target (Same Type)" },
   { id: "dock",         label: "Dock" },
   { id: "station",      label: "Station Menu" },
   { id: "boost",        label: "Boost" },
@@ -4584,6 +4588,8 @@ export class Voidwake {
     if (this.input.consume(k.cycleTarget)) this.cycleTarget();
     if (this.input.consume(k.cycleCatNext)) this.cycleTargetCategory(1);
     if (this.input.consume(k.cycleCatPrev)) this.cycleTargetCategory(-1);
+    if (this.input.consume(k.cycleTypeNext)) this.cycleTargetSameType(1);
+    if (this.input.consume(k.cycleTypePrev)) this.cycleTargetSameType(-1);
 
     // Jettison: drop one unit of the heaviest cargo item.
     if (this.input.consume(k.jettison)) {
