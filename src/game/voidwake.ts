@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.8";
+const VERSION = "0.5.9";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -174,7 +174,7 @@ const GUNNER_FIRST = ["Vex","Rho","Mira","Kael","Zara","Brun","Tessa","Doxx","Ni
 const GUNNER_LAST  = ["Mara","Vant","Sool","Krev","Iyo","Drax","Phane","Wist","Orbit","Tann","Holt","Reyne"];
 
 type ChatterKind =
-  | "hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
+  | "hostile" | "boss_hostile" | "friendly" | "neutral" | "station" | "planet" | "planet_populated" | "patrol"
   | "patrol_tow" | "patrol_arrest" | "stranded_mayday" | "crit_hit" | "npc_crit" | "walkout" | "stranded_thanks"
   | "gunner_idle" | "gunner_hostile" | "gunner_mine" | "gunner_dock" | "gunner_hit"
   | "gunner_greet" | "gunner_farewell_good" | "gunner_farewell_bad"
