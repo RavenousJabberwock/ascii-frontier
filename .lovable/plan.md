@@ -665,3 +665,40 @@ Backlog rolled forward to 0.5.8+
 - **Boss chatter** — dedicated pool for named captains distinct from
   generic hostile chatter.
 
+## 0.5.8 pass — Targeting bugfix, same-type cycle, low-hanging fruit
+
+Targeting
+
+- **Bugfix: T no longer ping-pongs.** The previous `cycleTarget` filtered
+  out the current target and picked the nearest survivor, which meant
+  repeated presses bounced between the two closest entities — reproducible
+  after hiring the Navigator (+400u radar) and Pilot because the extra
+  in-range blips (stations, asteroids) crowded hostiles out of the "two
+  nearest" ping-pong. Now `cycleTarget` sorts every non-bullet entity in
+  radar range by distance, finds the current selection, and advances one
+  index (wrapping at the end). Every visible entity is reachable in a
+  finite number of presses regardless of crew loadout.
+- **`{` / `}` — same-type cycle.** New keybinds (`cycleTypePrev` /
+  `cycleTypeNext`) walk in-range targets matching the current target's
+  category (STATION / ASTEROID / HOSTILE / FRIENDLY / NEUTRAL / BEACON /
+  PLANET / DERELICT / WORMHOLE / MISSION / EXOTIC). Useful for "give me
+  the *next* hostile" without leaving combat via `[`/`]`. Falls through
+  to plain nearest-cycle when nothing is targeted.
+- **Radar-range clamp on `T`.** Cycling now respects `effectiveRadarRange`
+  so entities beyond sensor reach can't hijack the selection. Distant
+  stars and out-of-scope planets no longer sit in the cycle when a bare
+  loadout starts targeting nearby traffic.
+
+Docs & UI
+
+- How To Play controls page and Codex bindings updated with the new
+  `{`/`}` cycle-by-type keys.
+- Options ▸ Controls ▸ Keybinds gains two new rebindable rows
+  (`Prev/Next Target (Same Type)`), placed alongside the existing
+  category-cycle rows.
+
+VERSION bump
+
+- 0.5.7 → 0.5.8, offline bundle rebuilt.
+
+
