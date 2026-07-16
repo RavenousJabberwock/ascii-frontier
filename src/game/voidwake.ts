@@ -5851,18 +5851,24 @@ export class Voidwake {
     if (i === 7 && (left || right)) this.options.glitchFx = !this.options.glitchFx;
     if (i === 8 && (left || right)) this.options.scanlines = !this.options.scanlines;
     if (i === 9 && (left || right)) {
+      const modes: Array<1 | 2 | 3> = [1, 2, 3];
+      const cur = (this.options.scanlineDensity ?? 2) as 1 | 2 | 3;
+      const idx = Math.max(0, modes.indexOf(cur));
+      this.options.scanlineDensity = modes[(idx + (right ? 1 : -1) + modes.length) % modes.length];
+    }
+    if (i === 10 && (left || right)) {
       const modes: Options["hudScheme"][] = ["green", "amber", "cyan", "white", "red"];
       const idx = Math.max(0, modes.indexOf(this.options.hudScheme ?? "green"));
       const n = modes.length;
       this.options.hudScheme = modes[(idx + (right ? 1 : -1) + n) % n];
     }
-    if (i === 10 && (left || right)) {
+    if (i === 11 && (left || right)) {
       const modes: Options["reticleColor"][] = ["green", "amber", "cyan", "magenta", "white", "red"];
       const idx = Math.max(0, modes.indexOf(this.options.reticleColor ?? "green"));
       const n = modes.length;
       this.options.reticleColor = modes[(idx + (right ? 1 : -1) + n) % n];
     }
-    if (i === 11 && (left || right)) {
+    if (i === 12 && (left || right)) {
       const modes: Options["reticleShape"][] = ["cross", "dot", "brackets", "circle", "diamond"];
       const idx = Math.max(0, modes.indexOf(this.options.reticleShape ?? "cross"));
       const n = modes.length;
@@ -5870,20 +5876,22 @@ export class Voidwake {
     }
     // Comms window sub-controls (kept inline under Gameplay; a nested
     // submenu is in the 0.5 backlog).
-    if (i === 12) {
+    if (i === 13) {
       const delta = right ? 2 : left ? -2 : 0;
       this.options.commsCols = Math.max(28, Math.min(120, (this.options.commsCols ?? 54) + delta));
     }
-    if (i === 13) {
+    if (i === 14) {
       const delta = right ? 1 : left ? -1 : 0;
       this.options.commsRows = Math.max(4, Math.min(30, (this.options.commsRows ?? 12) + delta));
     }
-    if (i === 14 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
+    if (i === 15 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
     }
   }
   private optionsGameplayItems(): string[] {
+    const dens = this.options.scanlineDensity ?? 2;
+    const densLabel = dens === 1 ? "dense" : dens === 3 ? "sparse" : "normal";
     return [
       `Difficulty: ${this.options.difficulty}`,
       `Peaceful Mode: ${this.options.peaceful ? "ON" : "OFF"}`,
@@ -5894,6 +5902,7 @@ export class Voidwake {
       `Crew Chatter: ${this.options.chatterFreq ?? "normal"}`,
       `Glitch FX: ${this.options.glitchFx === false ? "OFF" : "ON"}`,
       `Scanlines: ${this.options.scanlines ? "ON" : "OFF"}`,
+      `Scanline Density: ${densLabel}`,
       `HUD Color: ${this.options.hudScheme ?? "green"}`,
       `Reticle Color: ${this.options.reticleColor ?? "green"}`,
       `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
