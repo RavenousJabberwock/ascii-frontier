@@ -5074,7 +5074,7 @@ export class Voidwake {
     // pulled more mundane blips into view.
     const range = effectiveRadarRange(p);
     const cand = this.entities
-      .filter((e) => e.kind !== "bullet" && e.id !== p.id)
+      .filter((e) => e.kind !== "bullet")
       .map((e) => {
         const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
         return { e, d2: dx * dx + dy * dy + dz * dz };
