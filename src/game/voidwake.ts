@@ -7747,6 +7747,7 @@ export class Voidwake {
         ["SPACE",  "fire weapon"],
         [kb.cycleTarget.toUpperCase(), "cycle nearest target (any kind)"],
         [kb.cycleCatPrev + " / " + kb.cycleCatNext, "cycle nearest by category (stations / rocks / hostiles / ...)"],
+        [kb.cycleTypePrev + " / " + kb.cycleTypeNext, "cycle in-range targets of the current target's type"],
         [kb.mine.toUpperCase(), "mine targeted asteroid"],
         [kb.dock.toUpperCase() + " / " + kb.station.toUpperCase(), "dock at targeted station"],
         [kb.jettison.toUpperCase(), "jettison heaviest cargo"],
