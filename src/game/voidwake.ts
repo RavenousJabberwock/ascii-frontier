@@ -706,6 +706,18 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{a}: {b}, quit humming.  ||  {b}: {a}, it's the reactor. That's a bad sign.",
     "{a}: Cmdr's on a streak.  ||  {b}: Cmdr's on borrowed time. Same difference.",
     "{a}: What's for shore leave?  ||  {b}: Whatever {sector} still has stocked. So, rations.",
+    "{a}: The coupler's whining again.  ||  {b}: The coupler's always whining. Ignore it or fix it.",
+    "{a}: If Cmdr docks that hot one more time —  ||  {b}: — the shipwright buys a boat. Yeah.",
+    "{a}: I filed a hazard report on our approach lanes.  ||  {b}: Cmdr filed it in the airlock.",
+    "{a}: You ever pray, {b}?  ||  {b}: Only when the reactor sings. So, weekly.",
+    "{a}: We should unionize.  ||  {b}: We're two people, {a}. That's just a conversation.",
+    "{a}: Bet Cmdr can't dock without scraping.  ||  {b}: You're on. Loser buys {coffee}.",
+    "{a}: How much did the last refit cost?  ||  {b}: Don't. You'll cry.",
+    "{a}: If we hit another rock —  ||  {b}: — we're calling it exploration. Sound better on the log.",
+    "{a}: Rations again.  ||  {b}: Rations forever. Welcome aboard.",
+    "{a}: What's the emergency plan?  ||  {b}: Panic loudly and hope Cmdr's listening.",
+    "{a}: Cmdr's aim was better this week.  ||  {b}: Cmdr paid the wage bill this week. Related?",
+    "{a}: You believe in luck, {b}?  ||  {b}: I believe in trajectory. Same thing, less superstition.",
   ],
 };
 
