@@ -4866,7 +4866,7 @@ export class Voidwake {
     // 0.5.5 — Navigator crew unlocks three extra categories in [/] cycle.
     { label: "WORMHOLE", match: (e) => e.kind === "wormhole", navigator: true },
     { label: "MISSION",  match: (e) => this.player?.mission?.targetId === e.id, navigator: true },
-    { label: "EXOTIC",   match: (e) => e.kind === "star" && (e.stellarClass === "BH" || e.stellarClass === "PSR"), navigator: true },
+    { label: "EXOTIC",   match: (e) => { if (e.kind !== "star") return false; const n = stellarClassOf(e).name; return n === "BH" || n === "PSR"; }, navigator: true },
   ];
   private _targetCatIdx = -1;
 
