@@ -2138,6 +2138,7 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
     cooldown: 0,
     autopilot: false,
     wage,
+    morale: 100,
   };
 }
 
