@@ -701,4 +701,71 @@ VERSION bump
 
 - 0.5.7 → 0.5.8, offline bundle rebuilt.
 
+## 0.5.9 pass — Boss chatter, banter matrix, pool expansion, Lua samples
+
+Chatter
+
+- **Boss chatter pool.** New `boss_hostile` `ChatterKind` with 10
+  distinct captain-tier lines. Ambient hostile chatter and the
+  inter-NPC banter picker both route `e.boss === true` hostiles
+  through it, so named pirate captains now trash-talk in their own
+  voice with a deeper red tag (`#ff5566`) instead of blending into
+  the generic hostile pool. (0.5.7 backlog item.)
+- **Crew banter matrix expansion.** Added 12 new pair-flavored lines
+  to the `banter` pool — coupler repairs, hazard reports, rations,
+  wage-bill jokes, "you ever pray?" — so ambient crew banter reads
+  distinct from single-role idle chatter. (0.5.7 backlog item.)
+- **Pool expansion.** Extended `friendly` (+3), `neutral` (+3),
+  `patrol` (+3), and `stranded_mayday` (+3) with fresh lines to keep
+  ambient chatter from repeating on long sessions.
+
+Modding docs / low-hanging fruit
+
+- **Lua sample scripts library.** New `src/game/lua-samples.md`
+  contains 7 self-contained snippets covering `frontier.log`,
+  `frontier.chat`, `frontier.addCredits`, `frontier.addFuel`,
+  `frontier.player()`, and the `onChatter` / `onPlayerDock` /
+  `onPlayerFire` / `onEntityDestroyed` / `onSave` / `onPlanetLand`
+  hooks. Paste any block into Options ▸ Scripting ▸ Edit Script to
+  see the sandbox in action. (Suggestion #13 from the roadmap.)
+
+VERSION bump
+
+- 0.5.8 → 0.5.9, offline bundle rebuilt.
+
+## Long-term wishlist (deferred, no ETA)
+
+Items explicitly on hold for a future release (or an outside mod).
+
+- **Player-to-NPC comms with template replies.** New rebindable
+  "Hail target" key with a Comms composer (intent menu: Greet /
+  Request status / Warn off / Surrender demand / Trade ping /
+  Distress). Reply generator classifies the target — ships,
+  stations, and populated planets can reply; asteroids, stars,
+  wrecks, and bullets cannot (ship computer explains why). Reply
+  pool keyed by `(faction, intent, reputationBucket, hostilityState)`
+  and seeded off entity id + tick for coherence. Side effects on
+  intent: "Warn off" de-aggros low-threat raiders, "Surrender
+  demand" against near-dead pirates awards a bounty, "Trade ping"
+  previews station prices, "Distress" broadcasts a mayday. Lua
+  `onHail` hook exposes `{ targetKind, faction, intent, replyDraft }`
+  so scripts can override the reply. Feasibility notes captured
+  earlier: ~1 focused release for template-based replies, ~2 for an
+  LLM-backed dialogue arc. Explicitly waiting on either a later
+  in-house pass or a community mod on top of M3.
+- **Rebindable rescue prompt at station menus.** Complements the
+  existing hail-proximity rescue (0.5.7).
+- **In-canvas multi-line Lua editor.** `prompt()` still truncates
+  at ~2KB in some browsers; drag-drop `.lua` loading ships with M3
+  of the modding roadmap.
+- **`System` tab for Sensors/Radio** on the Comms panel — 0.4
+  backlog, deferred until noise rises.
+- **Chat Windows submenu** — nested Options subsection for the
+  three inline Comms controls under Gameplay.
+- **Distinct patrol silhouettes** — 0.3 backlog, still open.
+- **Mouse-wheel scroll + click-to-select tabs on Comms** — 0.4
+  backlog, still open.
+
+
+
 
