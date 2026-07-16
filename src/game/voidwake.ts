@@ -267,6 +267,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Lanes are calm. We'll take a quiet shift.",
     "Fly under our colors sometime — the pay's honest.",
     "Cmdr, if the black gets loud, we're a squawk away.",
+    "Bounty scanner's noisy today — mind your six.",
+    "Half our lane rides on kindness. Yours is banked.",
+    "Wing salutes the {ship}. That paint job earned it.",
   ],
   neutral: [
     "{ship}, mind your wake.",
@@ -282,6 +285,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Guild rate today: pay me or don't hail me.",
     "Ore's moving. Fuel isn't. Do the math.",
     "You look like credit, {cmdr}. Or trouble. Same thing sometimes.",
+    "Long-hauler code: hail early, dock later, spend never.",
+    "Not my sector, not my mayday. Might be yours though.",
+    "You want gossip, {cmdr}? Cheap for cargo, free for fuel.",
   ],
   station: [
     "...automated beacon, {sector}: dock fees waived this cycle.",
@@ -337,6 +343,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Fly straight, hail early, and we're friends this shift.",
     "New lawful hull just launched from {sector}. Say hi.",
     "Report {curse} activity on this band, Cmdr. We answer maydays.",
+    "SPD to {sector}: any lit hostiles, squawk 'em. We roll fast.",
+    "Cruiser's got fuel to burn. Wave if you see grief.",
+    "Patrol logs today's fly-bys. Yours reads clean, {cmdr}.",
   ],
   patrol_tow: [
     "SPD to {target}: sit tight, tractor locking on.",
@@ -359,6 +368,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Batteries at half, crew rationing air. Any hull in range?",
     "This is {ship}, adrift on the {sector} lane. Squawking mayday.",
     "If you're listening: we can pay in cargo for a top-up.",
+    "Kids are scared. Fuel's dry. We just need someone to slow down.",
+    "Any hull, any faction — we'll take the tow. Beggars, not choosers.",
+    "Broadcasting on repeat: {ship} adrift. Please, any response.",
   ],
   crit_hit: [
     "★ CRIT — {target} rocked.",
