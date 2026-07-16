@@ -3519,7 +3519,27 @@ export class Voidwake {
   // Cached station market lookup. Generates on first request.
   getStock(stationId: number): StationStock {
     let s = this.stationStocks.get(stationId);
-    if (!s) { s = generateStationStock(stationId); this.stationStocks.set(stationId, s); }
+    if (!s) {
+      s = generateStationStock(stationId);
+      // 0.5.6 — Colony jitter. Populated planets pay noticeably more for
+      // ore (colonies always need refinery feedstock), charge a small
+      // premium on fuel (no atmosphere refinery), and use a colony-specific
+      // rumor set. Weapons are unlisted at colonies (militia-only supply).
+      const ent = this.entities.find((x) => x.id === stationId);
+      if (ent && ent.kind === "planet" && ent.populated) {
+        s.orePrice = Math.round(s.orePrice * 1.25);
+        s.fuelPrice = Math.round(s.fuelPrice * 1.10);
+        s.weapons = [];
+        const colonyRumors = [
+          "Colony gossip: militia recruiting anyone with a straight trigger finger.",
+          "Bazaar buzz: ore buyers offering above spot for the next cycle.",
+          "Dirtside chatter: a courier vanished on the outer belt run.",
+          "Kids swear they saw a derelict spin past the moon last night.",
+        ];
+        s.rumor = colonyRumors[Math.floor((Math.abs(stationId) * 7 + 3) % colonyRumors.length)];
+      }
+      this.stationStocks.set(stationId, s);
+    }
     return s;
   }
 
