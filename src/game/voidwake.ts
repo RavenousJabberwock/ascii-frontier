@@ -1859,6 +1859,7 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       e.state = "tow";
       const dir = V.norm(V.sub(strandedNearby.pos, e.pos));
       e.vel = V.scale(dir, 30);
+      _aiEvents.push({ kind: "patrol_tow_start", e, targetId: strandedNearby.id });
       return;
     }
     e.state = "patrol";
