@@ -1808,6 +1808,7 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       now < x.hostileUntil &&
       V.len(V.sub(x.pos, e.pos)) < 1000);
     if (aggro && distToPlayer < 1200) {
+      if (e.state !== "arrest") _aiEvents.push({ kind: "patrol_arrest_start", e });
       e.state = "arrest";
       e.towById = undefined;
       const dir = V.norm(V.sub(player.pos, e.pos));
