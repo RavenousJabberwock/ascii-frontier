@@ -5809,6 +5809,11 @@ export class Voidwake {
     if (near.length === 0) return;
     const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
     const ctx = this.chatterCtx(pick);
+    // 0.5.6 — Stranded ships broadcast mayday on the ext channel.
+    if (pick.stranded && pick.state === "stranded" && (pick.kind === "friendly" || pick.kind === "neutral")) {
+      this.pushChatter(pick.name, pickLine("stranded_mayday", ctx), "#ffcc55");
+      return;
+    }
     // Patrols speak with a distinct "SPD" cyan tag rather than the generic
     // green friendly voice, so they read as authorities.
     if (pick.kind === "friendly" && pick.faction === "patrol") {
