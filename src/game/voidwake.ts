@@ -6027,6 +6027,102 @@ export class Voidwake {
     return rows;
   }
 
+  // --- Options ▸ Scripting (0.5.5) -----------------------------------------
+  // Lua runtime lives in ./lua-host.ts (fengari-web). Source is edited via a
+  // browser `prompt()` — no in-canvas text editor, but works offline. Script
+  // + enabled flag persist in localStorage. See dispose/init helpers below.
+  private optionsScriptingItems(): string[] {
+    const on = this.scriptEnabled;
+    const loaded = !!this.luaHost?.loaded;
+    const len = this.scriptSource.length;
+    const err = this.luaHost?.lastError ?? null;
+    return [
+      `Scripting: ${on ? "ON" : "OFF"}`,
+      `Edit Script...  (${len} chars)`,
+      `Reload Script${loaded ? "  (loaded)" : ""}`,
+      "Clear Script",
+      `Status: ${err ? "err — " + this.truncate(err, 44) : (on && loaded ? "running" : on ? "idle" : "disabled")}`,
+      "Back",
+    ];
+  }
+  private truncate(s: string, n: number): string { return s.length <= n ? s : s.slice(0, n - 1) + "…"; }
+
+  private updateOptionsScripting() {
+    const items = this.optionsScriptingItems();
+    this.menuNav(items.length);
+    if (!this.input.consume("enter")) return;
+    const i = this.menuCursor;
+    const row = items[i];
+    if (row.startsWith("Scripting:")) {
+      this.scriptEnabled = !this.scriptEnabled;
+      this.saveScriptSettings();
+      if (this.scriptEnabled) this.reloadScript();
+      else this.disposeScript();
+    } else if (row.startsWith("Edit Script")) {
+      // Browser prompt is the simplest cross-target editor. Truncated at
+      // ~2KB in most browsers — a drag-drop .lua file picker is on the mod
+      // roadmap (M3).
+      if (typeof window !== "undefined" && typeof window.prompt === "function") {
+        const next = window.prompt("Paste Lua source (M1 sandbox: frontier.on/log/chat):", this.scriptSource);
+        if (next != null) {
+          this.scriptSource = next;
+          this.saveScriptSettings();
+          if (this.scriptEnabled) this.reloadScript();
+        }
+      } else {
+        this.pushLog("No prompt() available — edit via localStorage 'voidwake.script.source'.");
+      }
+    } else if (row.startsWith("Reload Script")) {
+      if (this.scriptEnabled) this.reloadScript();
+      else this.pushLog("Enable Scripting first.");
+    } else if (row === "Clear Script") {
+      this.scriptSource = "";
+      this.saveScriptSettings();
+      this.disposeScript();
+      this.pushLog("Script cleared.");
+    } else if (row === "Back") {
+      this.optionsSection = "root"; this.menuCursor = 0;
+    }
+  }
+
+  private saveScriptSettings() {
+    try {
+      localStorage.setItem("voidwake.script.source", this.scriptSource);
+      localStorage.setItem("voidwake.script.enabled", this.scriptEnabled ? "1" : "0");
+    } catch { /* quota — silent */ }
+  }
+  private loadScriptSettings() {
+    try {
+      this.scriptSource = localStorage.getItem("voidwake.script.source") ?? "";
+      this.scriptEnabled = localStorage.getItem("voidwake.script.enabled") === "1";
+    } catch { /* noop */ }
+  }
+  private disposeScript() {
+    if (this.luaHost) { this.luaHost.dispose(); this.luaHost = null; }
+  }
+  private async reloadScript() {
+    this.disposeScript();
+    if (!this.scriptSource.trim()) { this.pushLog("Script is empty."); return; }
+    try {
+      // Lazy import so users who never enable scripting don't pay the
+      // fengari-web bundle cost.
+      const mod = await import("./lua-host");
+      this.luaHost = new mod.LuaHost({
+        pushLog: (m) => this.pushLog(m),
+        pushChatter: (w, m, c) => this.pushChatter(w, m, c),
+      }, VERSION);
+      const res = this.luaHost.load(this.scriptSource);
+      if (res.ok) {
+        this.pushLog("[script] loaded.");
+        this.pushChatter("Script", "Lua host online.", "#c4f");
+      } else {
+        this.pushLog(`[script] load failed: ${res.error}`);
+      }
+    } catch (e) {
+      this.pushLog(`[script] runtime unavailable: ${String(e)}`);
+    }
+  }
+
 
 
 
