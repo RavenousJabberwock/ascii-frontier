@@ -335,7 +335,7 @@ cover the full bill you pay whatever's on hand and the crew grumbles in the
 COMMS feed — the shortfall is currently just cosmetic, but hooks are in
 place for a real morale system later.
 
-### Crew roles (0.5.4)
+### Crew roles (0.5.4 / 0.5.5)
 
 | Role | Effect |
 |---|---|
@@ -343,13 +343,21 @@ place for a real morale system later.
 | Pilot | autopilot to current target (O); +150u radar |
 | Engineer | slow hull regen, +75% shield recharge, −20% fuel; +150u radar |
 | Merchant | +15% ore sell, −10% station buy prices |
-| Navigator | +400u radar range, −10% fuel burn |
+| Navigator | +400u radar range, −10% fuel burn, unlocks WORMHOLE / MISSION / EXOTIC target cycle categories |
 | Quartermaster | stacks +5% ore sell / −5% station buy on top of Merchant |
-| Recruiter | −15% crew hire fees (including Xeno) |
-| Tactical | +25% shield recharge — **mutually exclusive with Gunner** |
+| Recruiter | −15% crew hire fees (including Xeno), halves morale decay on shortfall pay |
+| Tactical | auto-fires main weapon on hostiles, +25% shield recharge — **mutually exclusive with Gunner** |
 
 Gunner ↔ Tactical exclusivity is enforced at the hire menu: if either is
 aboard, the other's row is greyed out and shows a "locked" note.
+
+### Morale (0.5.5)
+
+Every crewmember carries a `morale` field (0..100, new hires start at 100).
+Wage shortfalls at dock drop morale by 15/dock (halved to 8 when a
+Recruiter is aboard). Full-pay docks heal +2. Morale below 30 changes the
+Comms grumble line from "Payday came up light" to "Morale's underwater —
+fix this or we walk." Walk-outs and perk attenuation are on the backlog.
 
 
 ## Outfitting (module shop)
@@ -414,25 +422,57 @@ sensor alert announces them when they spawn.
   Universe section, an AI handler in the AI section, and a glyph in
   `GLYPHS`.
 
-## Scripting hooks (0.5.1 — reserved for Lua)
+## Scripting (0.5.5 — Lua host live)
 
-A minimal, runtime-agnostic hook surface lives at the top of
-`src/game/voidwake.ts` so the upcoming Lua scripting system has stable
-attach points. Handlers are plain JS callbacks today; a future Lua host
-(fengari-web / WASM Lua 5.3) will register wrapped thunks. Throwing
-handlers are caught and logged — they can never block a tick.
+A sandboxed Lua 5.3 runtime (fengari-web, ~200KB, bundled into the
+offline HTML lazily on first enable) lives at `src/game/lua-host.ts`. It
+wires user Lua directly into the `dispatchHook` callsites defined in
+`voidwake.ts`.
 
-Registration API (also exposed as `window.ASCIIFrontier` in browsers):
+Enable it from **Options ▸ Scripting**:
 
-```ts
-import { registerScriptHook } from "./voidwake";
-const off = registerScriptHook("onTick", ({ dt, player, entities }) => {
-  // read-only: do not mutate — a mutation API arrives with the Lua host.
-});
-off(); // unregister
+- `Scripting: ON/OFF` — toggles the runtime. Source and enable flag
+  persist in `localStorage` (`voidwake.script.source` /
+  `voidwake.script.enabled`).
+- `Edit Script...` — opens a browser `prompt()` with the current
+  source. Drag-drop `.lua` file loading arrives with M3 of the modding
+  roadmap.
+- `Reload Script` — re-runs the source (creates a fresh Lua state so
+  every hook re-registers cleanly).
+- `Clear Script` — wipes source and disposes the runtime.
+- `Status:` — surfaces the last load or per-hook error.
+
+The sandbox nulls `io`, `package`, `debug`, `require`, `dofile`,
+`loadfile`, `load`, `loadstring`, `collectgarbage`, and replaces `os`
+with a timing-only stub (`os.time` / `os.clock`). Errors from load,
+top-level run, and per-hook invocation are trapped and echoed to the
+Comms log — a bad script can never take down an engine tick.
+
+### `frontier.*` API (M1)
+
+```lua
+print("engine version " .. frontier.version)
+
+frontier.log("Hello from Lua!")
+frontier.chat("Script", "Hooks online.", "#c4f")
+
+frontier.on("onTick", function(payload)
+  -- payload.dt : number  seconds since last tick
+  -- payload.player : shallow table with pos, credits, xp, ...
+end)
+
+frontier.on("onPlayerDock", function(p)
+  frontier.chat("Script", "Docked at " .. (p.entity.name or "?"))
+end)
 ```
 
-Hooks currently fired by the engine:
+Payloads are depth-capped Lua tables with primitive leaves. Anything
+past depth 2 is stringified so scripts never receive a live JS entity
+handle. A read/write mutation API (`frontier.entities.spawn`,
+`frontier.player.grant`, …) lands with M2 — see `.lovable/plan.md`
+▸ "Modding roadmap".
+
+### Available hooks
 
 | Hook                | Payload shape                              | Fired from                            |
 | ------------------- | ------------------------------------------ | ------------------------------------- |
@@ -447,14 +487,19 @@ Hooks currently fired by the engine:
 | `onPlanetLand`      | `{ entity }`                               | populated-planet landing (fires in addition to `onPlayerDock`) |
 
 Payload shapes are stable — changes require a `VERSION` bump and a note
-in this section. Additional hooks are welcome but must land as no-op
-dispatchers first so scripts written against them don't crash on older
-builds.
+in this section. Additional hooks must land as no-op dispatchers first
+so scripts written against them don't crash on older builds.
 
-The **Options ▸ Scripting (soon)** menu row is a placeholder for the
-future Lua controls UI (load / reload / edit script, sandbox toggles,
-per-hook enable). It is greyed-out and no-ops on ENTER; the hook layer
-is live below it in code.
+### Direct hook API (JS / devtools)
+
+For non-Lua scripting (e.g. devtools poking), the same hooks are on
+`window.ASCIIFrontier`:
+
+```ts
+window.ASCIIFrontier.registerScriptHook("onTick", ({ dt, player }) => {
+  // ...
+});
+```
 
 
 

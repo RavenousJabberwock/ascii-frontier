@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.4";
+const VERSION = "0.5.5";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -869,9 +869,14 @@ interface CrewMember {
   enabled: boolean;
   hiredAt: number;
   nextBarkAt: number;
-  cooldown?: number;    // gunner auto-fire cadence
+  cooldown?: number;    // gunner/tactical auto-fire cadence
   autopilot?: boolean;  // pilot: toggled by O key
   wage?: number;        // flat credits paid every dock — see tryDock()
+  // 0.5.5 — morale drifts down on wage shortfalls, up on full pay. Loaded
+  // saves default to 100. Recruiter halves the decay rate. A future pass
+  // ties morale <30 to reduced perks / walk-outs; today it just changes the
+  // Comms line the crew posts after payroll.
+  morale?: number;      // 0..100, defaults to 100
 }
 
 interface PlayerState {
@@ -2133,6 +2138,7 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
     cooldown: 0,
     autopilot: false,
     wage,
+    morale: 100,
   };
 }
 
@@ -2911,7 +2917,15 @@ export class Voidwake {
   // Options screen has been split into a small hub with three subsections
   // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
   // "root" is the hub itself.
-  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" = "root";
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" = "root";
+  // Lua scripting (0.5.5): source is edited via a browser prompt from the
+  // Options ▸ Scripting page and persisted in localStorage. The runtime
+  // (LuaHost) is created lazily on the first enable so users who never open
+  // that submenu don't pay the ~200KB fengari-web parse cost.
+  private luaHost: import("./lua-host").LuaHost | null = null;
+  private scriptSource = "";
+  private scriptEnabled = false;
+  private scriptStatus = "";       // last load result summary shown in the menu
   // While non-null, the Keybinds screen is capturing the next pressed key
   // as the new binding for this action id (a key in Options.keybinds).
   private _rebindAction: string | null = null;
@@ -3152,6 +3166,12 @@ export class Voidwake {
   start() {
     this.running = true;
     this.lastTs = performance.now();
+    // 0.5.5 — restore persisted Lua script + enable flag. If it was on last
+    // session, boot the host now so hooks are live before New Game / Load.
+    this.loadScriptSettings();
+    if (this.scriptEnabled && this.scriptSource.trim()) {
+      void this.reloadScript();
+    }
     const loop = (ts: number) => {
       if (!this.running) return;
       // While the tab is hidden, idle cheaply — don't update or render.
@@ -4506,6 +4526,7 @@ export class Voidwake {
 
     // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
     this.updateGunner(dt, fwd);
+    this.updateTactical(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickCrewIdle(dt);
@@ -4847,7 +4868,7 @@ export class Voidwake {
 
   // Category-cycle order for [ / ]. Each press steps to the next category and
   // locks the nearest entity matching it. Skips categories with no candidates.
-  private _targetCategories: { label: string; match: (e: Entity) => boolean }[] = [
+  private _targetCategories: { label: string; match: (e: Entity) => boolean; navigator?: boolean }[] = [
     { label: "STATION",  match: (e) => e.kind === "station" && e.faction !== "pirate" },
     { label: "ASTEROID", match: (e) => e.kind === "asteroid" },
     { label: "HOSTILE",  match: (e) => e.kind === "hostile" || (e.kind === "station" && e.faction === "pirate") },
@@ -4856,6 +4877,10 @@ export class Voidwake {
     { label: "BEACON",   match: (e) => e.kind === "beacon" },
     { label: "PLANET",   match: (e) => e.kind === "planet" },
     { label: "DERELICT", match: (e) => e.kind === "derelict" },
+    // 0.5.5 — Navigator crew unlocks three extra categories in [/] cycle.
+    { label: "WORMHOLE", match: (e) => e.kind === "wormhole", navigator: true },
+    { label: "MISSION",  match: (e) => this.player?.mission?.targetId === e.id, navigator: true },
+    { label: "EXOTIC",   match: (e) => { if (e.kind !== "star") return false; const n = stellarClassOf(e).name; return n === "BH" || n === "PSR"; }, navigator: true },
   ];
   private _targetCatIdx = -1;
 
@@ -4863,9 +4888,11 @@ export class Voidwake {
     const p = this.player; if (!p) return;
     const n = this._targetCategories.length;
     // Try each category once; skip ones with no candidates in range.
+    const hasNav = hasCrew(p, "navigator");
     for (let attempt = 0; attempt < n; attempt++) {
       this._targetCatIdx = ((this._targetCatIdx + step) % n + n) % n;
       const cat = this._targetCategories[this._targetCatIdx];
+      if (cat.navigator && !hasNav) continue;
       let bestId = -1, bestD2 = Infinity;
       for (const e of this.entities) {
         if (!cat.match(e)) continue;
@@ -4986,10 +5013,9 @@ export class Voidwake {
       p.mission = this.generateMission();
     }
 
-    // Pay crew wages. Flat per-dock cr per crewmember + gunner. If the
-    // player can't cover the full bill we still pay whatever's on hand and
-    // flag the shortfall so it's visible — a proper morale system can hook
-    // in here later. Wages are skipped in Cheat Mode.
+    // Pay crew wages. Flat per-dock cr per crewmember + gunner. Shortfalls
+    // drop each crewmember's `morale` (0..100). Recruiter aboard halves the
+    // hit. Full pay nudges morale back toward 100. Wages skip in Cheat Mode.
     if (!this.options.cheat) {
       let bill = 0;
       if (p.gunner) bill += p.gunner.wage ?? 30;
@@ -4997,9 +5023,20 @@ export class Voidwake {
       if (bill > 0) {
         const paid = Math.min(bill, p.credits);
         p.credits -= paid;
-        if (paid < bill) {
+        const short = paid < bill;
+        const decay = short ? (hasCrew(p, "recruiter") ? 8 : 15) : 0;
+        const gain  = short ? 0 : 2;
+        if (p.crew) for (const c of p.crew) {
+          const m = (c.morale ?? 100) - decay + gain;
+          c.morale = Math.max(0, Math.min(100, m));
+        }
+        // The legacy gunner has its own morale field on Gunner if present.
+        if (short) {
+          const grump = p.crew && p.crew.some((c) => (c.morale ?? 100) < 30)
+            ? "Morale's underwater. Fix this or we walk."
+            : "Payday came up light, boss.";
           this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
-          this.pushChatter("Crew", "Payday came up light, boss.", "#fc6");
+          this.pushChatter("Crew", grump, "#fc6");
         } else {
           this.pushLog(`Crew wages: -${paid}cr.`);
         }
@@ -5194,6 +5231,53 @@ export class Voidwake {
       this.pushChatter(tag, pickLine("gunner_dock", this.chatterCtx(undefined, { target: best })), "#9fe");
     }
   }
+
+  // --- Tactical firing (0.5.5) --------------------------------------------
+  // Tactical Officer is mutually exclusive with Gunner, so this only runs
+  // when a `tactical` crew slot is filled. Same alignment cone / range check
+  // as updateGunner() but only engages hostiles — a Tactical will never
+  // fire on rocks or stations. Fires the pilot's mounted weapon (there is
+  // no separate Tactical bay), and posts an occasional bark on hit.
+  updateTactical(dt: number, fwd: Vec3) {
+    const p = this.player;
+    if (!p || this.options.peaceful) return;
+    const tac = getCrew(p, "tactical");
+    if (!tac || !tac.enabled) return;
+    tac.cooldown = (tac.cooldown ?? 0) - dt;
+    tac.nextBarkAt -= dt;
+    let best: Entity | null = null;
+    let bestDot = 0.94, bestDist = Infinity;
+    for (const e of this.entities) {
+      if (e.kind !== "hostile") continue;
+      if ((e.hull ?? 1) <= 0) continue;
+      const rel = V.sub(e.pos, p.pos);
+      const d = V.len(rel);
+      if (d < 1 || d > 900) continue;
+      const dotv = (rel.x * fwd.x + rel.y * fwd.y + rel.z * fwd.z) / d;
+      if (dotv > bestDot) { bestDot = dotv; best = e; bestDist = d; }
+    }
+    if (!best) return;
+    const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+    if (bestDist > w.range) return;
+    if ((tac.cooldown ?? 0) > 0) return;
+    tac.cooldown = w.cooldown * 1.10 * effectiveCooldownMul(p); // slight cadence bonus vs. Gunner
+    this.entities.push({
+      id: nextId(), kind: "bullet", name: "shot",
+      pos: { ...p.pos }, vel: V.scale(fwd, 260),
+      faction: "player", ownerId: -3, ttl: 2,
+      ttlAt: performance.now() / 1000 + 2,
+    });
+    this.beep(760, 0.04, "square");
+    if (tac.nextBarkAt <= 0) {
+      tac.nextBarkAt = 3 + Math.random() * 2.5;
+      const first = tac.name.split(" ")[0];
+      this.pushChatter(`Tactical ${first}`,
+        pickLine("tactical_hostile", this.chatterCtx(undefined, { target: best })),
+        "#ff7a7a");
+    }
+  }
+
+
 
   // --- Pilot autopilot ----------------------------------------------------
   // Full-auto approach to `this.targetId`. Points the nose at the target,
@@ -5713,34 +5797,29 @@ export class Voidwake {
       return;
     }
 
-    if (this.optionsSection === "root")     { this.updateOptionsRoot();     return; }
-    if (this.optionsSection === "gameplay") { this.updateOptionsGameplay(); return; }
-    if (this.optionsSection === "audio")    { this.updateOptionsAudio();    return; }
-    if (this.optionsSection === "controls") { this.updateOptionsControls(); return; }
-    if (this.optionsSection === "keybinds") { this.updateOptionsKeybinds(); return; }
+    if (this.optionsSection === "root")      { this.updateOptionsRoot();      return; }
+    if (this.optionsSection === "gameplay")  { this.updateOptionsGameplay();  return; }
+    if (this.optionsSection === "audio")     { this.updateOptionsAudio();     return; }
+    if (this.optionsSection === "controls")  { this.updateOptionsControls();  return; }
+    if (this.optionsSection === "keybinds")  { this.updateOptionsKeybinds();  return; }
+    if (this.optionsSection === "scripting") { this.updateOptionsScripting(); return; }
   }
 
-  // Root Options hub: three category entries + a reserved (greyed-out)
-  // Scripting entry that will host Lua scripting controls in a future pass.
-  // The hook surface is already live (see dispatchHook / registerScriptHook
-  // near the top of this file); this menu is the eventual UI mount point.
-  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting (soon)", "Back"];
-  // Indices in optionsRootItems that are visually greyed-out and don't
-  // respond to ENTER. Kept as a class field so renderOptions can dim the
-  // right rows without duplicating the "Scripting" string check.
-  private optionsRootDisabled: number[] = [3];
+  // Root Options hub. Scripting became a real subsection in 0.5.5; the
+  // greyed-out placeholder is gone.
+  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Back"];
+  // Reserved for future greyed-out rows. Empty in 0.5.5.
+  private optionsRootDisabled: number[] = [];
   private updateOptionsRoot() {
     this.menuNav(this.optionsRootItems.length);
     if (!this.input.consume("enter")) return;
     const c = this.optionsRootItems[this.menuCursor];
-    if (this.optionsRootDisabled.includes(this.menuCursor)) {
-      this.pushLog("Scripting options aren't wired up yet — hook surface is live in code.");
-      return;
-    }
+    if (this.optionsRootDisabled.includes(this.menuCursor)) return;
     if (c === "Gameplay") { this.optionsSection = "gameplay"; this.menuCursor = 0; }
-    else if (c === "Audio")    { this.optionsSection = "audio";    this.menuCursor = 0; }
-    else if (c === "Controls") { this.optionsSection = "controls"; this.menuCursor = 0; }
-    else if (c === "Back")     { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
+    else if (c === "Audio")     { this.optionsSection = "audio";     this.menuCursor = 0; }
+    else if (c === "Controls")  { this.optionsSection = "controls";  this.menuCursor = 0; }
+    else if (c === "Scripting") { this.optionsSection = "scripting"; this.menuCursor = 0; }
+    else if (c === "Back")      { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
   }
 
   // --- Options ▸ Gameplay --------------------------------------------------
@@ -5952,6 +6031,102 @@ export class Voidwake {
     rows.push("Reset Keybinds to Defaults");
     rows.push("Back");
     return rows;
+  }
+
+  // --- Options ▸ Scripting (0.5.5) -----------------------------------------
+  // Lua runtime lives in ./lua-host.ts (fengari-web). Source is edited via a
+  // browser `prompt()` — no in-canvas text editor, but works offline. Script
+  // + enabled flag persist in localStorage. See dispose/init helpers below.
+  private optionsScriptingItems(): string[] {
+    const on = this.scriptEnabled;
+    const loaded = !!this.luaHost?.loaded;
+    const len = this.scriptSource.length;
+    const err = this.luaHost?.lastError ?? null;
+    return [
+      `Scripting: ${on ? "ON" : "OFF"}`,
+      `Edit Script...  (${len} chars)`,
+      `Reload Script${loaded ? "  (loaded)" : ""}`,
+      "Clear Script",
+      `Status: ${err ? "err — " + this.truncate(err, 44) : (on && loaded ? "running" : on ? "idle" : "disabled")}`,
+      "Back",
+    ];
+  }
+  private truncate(s: string, n: number): string { return s.length <= n ? s : s.slice(0, n - 1) + "…"; }
+
+  private updateOptionsScripting() {
+    const items = this.optionsScriptingItems();
+    this.menuNav(items.length);
+    if (!this.input.consume("enter")) return;
+    const i = this.menuCursor;
+    const row = items[i];
+    if (row.startsWith("Scripting:")) {
+      this.scriptEnabled = !this.scriptEnabled;
+      this.saveScriptSettings();
+      if (this.scriptEnabled) this.reloadScript();
+      else this.disposeScript();
+    } else if (row.startsWith("Edit Script")) {
+      // Browser prompt is the simplest cross-target editor. Truncated at
+      // ~2KB in most browsers — a drag-drop .lua file picker is on the mod
+      // roadmap (M3).
+      if (typeof window !== "undefined" && typeof window.prompt === "function") {
+        const next = window.prompt("Paste Lua source (M1 sandbox: frontier.on/log/chat):", this.scriptSource);
+        if (next != null) {
+          this.scriptSource = next;
+          this.saveScriptSettings();
+          if (this.scriptEnabled) this.reloadScript();
+        }
+      } else {
+        this.pushLog("No prompt() available — edit via localStorage 'voidwake.script.source'.");
+      }
+    } else if (row.startsWith("Reload Script")) {
+      if (this.scriptEnabled) this.reloadScript();
+      else this.pushLog("Enable Scripting first.");
+    } else if (row === "Clear Script") {
+      this.scriptSource = "";
+      this.saveScriptSettings();
+      this.disposeScript();
+      this.pushLog("Script cleared.");
+    } else if (row === "Back") {
+      this.optionsSection = "root"; this.menuCursor = 0;
+    }
+  }
+
+  private saveScriptSettings() {
+    try {
+      localStorage.setItem("voidwake.script.source", this.scriptSource);
+      localStorage.setItem("voidwake.script.enabled", this.scriptEnabled ? "1" : "0");
+    } catch { /* quota — silent */ }
+  }
+  private loadScriptSettings() {
+    try {
+      this.scriptSource = localStorage.getItem("voidwake.script.source") ?? "";
+      this.scriptEnabled = localStorage.getItem("voidwake.script.enabled") === "1";
+    } catch { /* noop */ }
+  }
+  private disposeScript() {
+    if (this.luaHost) { this.luaHost.dispose(); this.luaHost = null; }
+  }
+  private async reloadScript() {
+    this.disposeScript();
+    if (!this.scriptSource.trim()) { this.pushLog("Script is empty."); return; }
+    try {
+      // Lazy import so users who never enable scripting don't pay the
+      // fengari-web bundle cost.
+      const mod = await import("./lua-host");
+      this.luaHost = new mod.LuaHost({
+        pushLog: (m) => this.pushLog(m),
+        pushChatter: (w, m, c) => this.pushChatter(w, m, c),
+      }, VERSION);
+      const res = this.luaHost.load(this.scriptSource);
+      if (res.ok) {
+        this.pushLog("[script] loaded.");
+        this.pushChatter("Script", "Lua host online.", "#c4f");
+      } else {
+        this.pushLog(`[script] load failed: ${res.error}`);
+      }
+    } catch (e) {
+      this.pushLog(`[script] runtime unavailable: ${String(e)}`);
+    }
   }
 
 
@@ -6817,6 +6992,11 @@ export class Voidwake {
         title = "OPTIONS ▸ CONTROLS ▸ KEYBINDS";
         items = this.optionsKeybindsItems();
         hint = "↑/↓ select   ENTER rebind   ESC back";
+        break;
+      case "scripting":
+        title = "OPTIONS ▸ SCRIPTING (LUA)";
+        items = this.optionsScriptingItems();
+        hint = "↑/↓ select   ENTER activate   ESC back";
         break;
     }
     this.renderListMenu(g, title, items, this.optionsSection === "root" ? this.optionsRootDisabled : []);
