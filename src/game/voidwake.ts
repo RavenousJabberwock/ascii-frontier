@@ -6896,6 +6896,11 @@ export class Voidwake {
         items = this.optionsKeybindsItems();
         hint = "↑/↓ select   ENTER rebind   ESC back";
         break;
+      case "scripting":
+        title = "OPTIONS ▸ SCRIPTING (LUA)";
+        items = this.optionsScriptingItems();
+        hint = "↑/↓ select   ENTER activate   ESC back";
+        break;
     }
     this.renderListMenu(g, title, items, this.optionsSection === "root" ? this.optionsRootDisabled : []);
     // Extra hint sits one row above renderListMenu's footer so the two
