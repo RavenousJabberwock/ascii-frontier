@@ -612,6 +612,63 @@ Ranked by ROI:
   backlog, still open.
 - **`System` tab for Sensors/Radio** — 0.4 backlog if noise rises.
 
+## 0.5.7 pass — How To Play, M2 mutation API, morale perks, NPC crit, rescue
+
+Menu / onboarding
+
+- **How To Play** menu item, wired on both the title menu and the pause
+  menu between `Load Game` and `Legend (Codex)`. Six pages: Premise,
+  Survive Your First Quest, Controls, HUD & Display, **Mouse-Steer
+  Safety** (bold red panel explaining recovery from a spinning
+  cockpit), Tips & Tricks. Controls page reads live from
+  `options.keybinds` so rebinds render correctly. ESC returns to the
+  screen that opened it via `_howtoReturn`.
+
+Combat
+
+- **NPC crit symmetry.** Hostile bullet hits now roll a crit at 6%
+  (10% for named "boss" pirates): 2× damage, quick screen shake, and a
+  red `‼`-tagged line from the new `npc_crit` chatter pool. Cheat Mode
+  keeps the invulnerability short-circuit.
+
+Crew
+
+- **Morale perk attenuation.** Wage-shortfall decay now stacks role
+  reductions: Recruiter −7, Quartermaster −3, Merchant −2, floor 3.
+  Wages always matter, but a support crew can keep morale sustainable.
+- **Friendly rescue interaction.** Hailing a `stranded` friendly /
+  neutral (F within 50u, throttle ≤ 5%) donates 15% of your fuel bar,
+  clears the mayday, pays `+120cr / +40 XP / +3 rep`, and posts a
+  `stranded_thanks` chatter line. Requires ≥ 20% own fuel so it can't
+  strand the player. Complements the existing SPD-Patrol auto-tow.
+
+Scripting
+
+- **M2 mutation API.** `LuaHostBridge` gains optional `addCredits`,
+  `addFuel`, and `getPlayerSnapshot` writers. Lua surface adds
+  `frontier.addCredits`, `frontier.addFuel`, and a read-only
+  `frontier.player()` snapshot. Entities, missions, and world state
+  stay read-only until M3.
+
+Chatter
+
+- Expanded `hostile`, `friendly`, `neutral`, `station`, `patrol`,
+  `stranded_mayday`, `banter`, `crit_hit`, and `walkout` pools; added
+  `npc_crit` and `stranded_thanks` pools.
+
+Backlog rolled forward to 0.5.8+
+
+- **M3 modding:** entity spawn/despawn API, mod bundle loader, content
+  packs for hulls / weapons / missions, in-game script editor overlay
+  (multi-line, syntax hints), drag-drop `.lua` load.
+- **Rebindable rescue prompt** at station menus (currently only via
+  hail proximity + F).
+- **Crew banter matrix expansion** — role-pair-specific banter lines
+  (Engineer × Merchant, Navigator × Tactical, etc.).
+- **Boss chatter** — dedicated pool for named captains distinct from
+  generic hostile chatter.
+
+
 
 
 
