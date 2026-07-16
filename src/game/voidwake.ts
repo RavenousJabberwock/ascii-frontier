@@ -4512,6 +4512,7 @@ export class Voidwake {
 
     // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
     this.updateGunner(dt, fwd);
+    this.updateTactical(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickCrewIdle(dt);
