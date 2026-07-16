@@ -5795,7 +5795,7 @@ export class Voidwake {
       : "#dddddd";
     const lineFor = (e: Entity, other: Entity) => {
       const ctx = this.chatterCtx(e, { target: other });
-      if (e.kind === "hostile") return pickLine("hostile", ctx);
+      if (e.kind === "hostile") return pickLine(e.boss ? "boss_hostile" : "hostile", ctx);
       if (e.kind === "friendly" && e.faction === "patrol") return pickLine("patrol", ctx);
       if (e.kind === "friendly") return pickLine("friendly", ctx);
       if (e.kind === "station")  return pickLine("station",  ctx);
@@ -6037,7 +6037,7 @@ export class Voidwake {
     } else {
       switch (pick.kind) {
         case "hostile":
-          this.pushChatter(pick.name, pickLine("hostile", ctx), "#ff8a8a");
+          this.pushChatter(pick.name, pickLine(pick.boss ? "boss_hostile" : "hostile", ctx), pick.boss ? "#ff5566" : "#ff8a8a");
           break;
         case "friendly":
           this.pushChatter(pick.name, pickLine("friendly", ctx), "#aef58a");
