@@ -4746,6 +4746,22 @@ export class Voidwake {
       if (e.kind !== "bullet") tickAI(e, dt, p, this.entities, this.rng);
       e.pos = V.add(e.pos, V.scale(e.vel, dt));
     }
+    // 0.5.6 — drain AI state-transition events into keyed chatter lines.
+    const aiEvents = drainAiEvents();
+    if (aiEvents.length) {
+      for (const ev of aiEvents) {
+        if (ev.kind === "patrol_tow_start") {
+          const tow = this.entities.find((x) => x.id === ev.targetId);
+          if (tow) {
+            const ctx = this.chatterCtx(tow, { target: tow });
+            this.pushChatter(ev.e.name, pickLine("patrol_tow", ctx), "#7fd0ff");
+          }
+        } else if (ev.kind === "patrol_arrest_start") {
+          const ctx = this.chatterCtx();
+          this.pushChatter(ev.e.name, pickLine("patrol_arrest", ctx), "#ff9a6a");
+        }
+      }
+    }
     // Bullet collisions + TTL
     this.entities = this.entities.filter((e) => {
       if (e.kind !== "bullet") return true;
