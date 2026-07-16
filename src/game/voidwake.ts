@@ -1664,6 +1664,21 @@ const V = {
 // Each ship kind has a tiny decision routine. Keep these small — they run
 // every tick for every NPC. Add new behaviors by branching on `e.kind`.
 // =============================================================================
+// 0.5.6 — AI event queue. tickAI pushes state-transition events (patrol
+// starting a tow, patrol beginning to arrest the player) that Voidwake
+// drains each frame so it can post keyed chatter without threading `this`
+// through the module-level AI helper.
+export type AiEvent =
+  | { kind: "patrol_tow_start";     e: Entity; targetId: number }
+  | { kind: "patrol_arrest_start";  e: Entity };
+const _aiEvents: AiEvent[] = [];
+export function drainAiEvents(): AiEvent[] {
+  if (_aiEvents.length === 0) return [];
+  const out = _aiEvents.slice();
+  _aiEvents.length = 0;
+  return out;
+}
+
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson" || e.kind === "derelict") return;
   // Stranded lawful ships coast in place waiting for a Patrol tow.
