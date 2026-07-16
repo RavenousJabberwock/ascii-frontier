@@ -345,90 +345,194 @@ save-safe; the code refs are pointers for the next agent.
   in `cycleTarget` and can pick these up in a later pass.
 
 
+## 0.5.5 pass — Lua host + crew backlog
 
-### Recommended next round (still 0.5.x)
+- **Lua runtime landed** — ✅ `src/game/lua-host.ts` bundles `fengari-web`
+  (WASM-less pure-JS Lua 5.3) into the offline build. Sandbox strips
+  `io`, `package`, `debug`, `require`, `dofile`, `loadfile`, `load`,
+  `loadstring`, `collectgarbage`, and replaces `os` with a timing-only
+  stub (`os.time` / `os.clock`). Errors from load, top-level run, and
+  per-hook invocation are trapped and echoed to the pushLog bridge — a
+  bad script cannot take down an engine tick.
+- **`frontier.*` API** — ✅ Three bindings for M1:
+  - `frontier.version` — engine `VERSION` string.
+  - `frontier.log(msg)` — pushes a system log line.
+  - `frontier.chat(who, msg, color?)` — pushes a Comms line.
+  - `frontier.on(hook, fn)` — registers a Lua callback on any
+    `ScriptHookName`. Payloads arrive as depth-capped Lua tables with
+    primitive leaves; nested JS objects deeper than depth 2 are
+    stringified so scripts never see live entity handles.
+- **Options ▸ Scripting submenu (real)** — ✅ The greyed-out "Scripting
+  (soon)" placeholder is replaced by a live subsection with
+  `Scripting: ON/OFF`, `Edit Script...` (browser `prompt()` editor —
+  drag-drop `.lua` loading is M3), `Reload Script`, `Clear Script`,
+  and a `Status:` row that surfaces the last load/hook error. Source
+  and enable flag persist in `localStorage` under `voidwake.script.*`.
+  Runtime is lazy-imported so users who never enable scripting don't
+  pay the ~200KB fengari-web bundle cost — the offline HTML grew from
+  ~197KB → ~397KB, entirely inside the on-demand chunk in dev.
+- **Tactical firing** — ✅ New `updateTactical(dt, fwd)` runs alongside
+  `updateGunner`. Same alignment cone / range check but only engages
+  hostiles (never rocks or stations). Fires the pilot's mounted weapon
+  with a 10% cadence penalty (vs. 15% for Gunner), posts an occasional
+  `tactical_hostile` bark. Because Gunner ↔ Tactical are mutually
+  exclusive, the two firing loops can never both engage.
+- **Morale field** — ✅ `CrewMember.morale?: number` (0..100, defaults
+  to 100 on new hires, backfills to 100 for legacy saves). Wage
+  shortfalls decay morale by 15/dock (halved to 8/dock when a
+  Recruiter is aboard). Full pay heals +2/dock. A crewmember below 30
+  gets a distinct "morale's underwater — fix this or we walk" grumble
+  line. Walk-out / perk-loss behaviour is still deferred (see backlog).
+- **Navigator T-cycle expansion** — ✅ Three new `[/]` categories —
+  `WORMHOLE`, `MISSION`, `EXOTIC` (BH / PSR) — appended to
+  `_targetCategories` with a `navigator: true` flag. Cycle logic skips
+  them unless a Navigator is on the crew.
+- **VERSION bump** — ✅ 0.5.4 → 0.5.5 and offline bundle rebuilt.
 
-Ranked by ROI for the current codebase. All additive and save-safe.
+### Backlog (0.5.5 deferred — pick up next pass)
 
-1. **New crew roles (Quartermaster / Recruiter / Navigator /
-   Tactical)** — extends `CrewRole`, `CREW_ROLE_INFO`, chatter
-   templates, plus a hire-menu exclusivity check for Gunner ↔
-   Tactical.
-2. **Lua host wiring + modding pipeline (fengari-web)** — see the
-   detailed Modding roadmap below. Drops in the WASM Lua 5.3 runtime,
-   replaces the greyed Options ▸ Scripting placeholder with load /
-   reload / edit / enable-per-hook / sandbox controls, and ships a
-   real mod-loading pipeline (localStorage today, drag-drop `.lua`
-   files, optional mod bundles).
-3. **Roche-limit irregular shapes for small bodies** — cheap render
-   tweak in the asteroid branch; boost per-cell edge roughness when
-   the nearest planet is within `2 × planetRadius`. Piggy-backs
-   nicely on the 0.5.2 wreckage work.
-4. **Colony flavor polish** — distinct colony glyph or ring in the
-   renderer, plus a colony-specific stock jitter (small discount on
-   fuel, small premium on ore) so colonies aren't market-identical to
-   stations.
+- **Tactical crit chance** — plan called for +15% crit on Tactical shots.
+  Not landed: the damage path is spread across several bullet-resolution
+  branches and needs a `critMul` helper before the bump can drop in one
+  edit. Aiming for a small refactor pass.
+- **Morale consequences** — decay + display works; walk-outs, perk
+  attenuation below 30, and morale-modulated chatter frequency are still
+  cosmetic. Wire once the wage-shortfall/hostility loop is fleshed out.
+- **Roche-limit irregular shapes** — cheap render tweak still on deck.
+  Small bodies (asteroid/comet/meteor) within `2 × planetRadius` of a
+  planet should render with an irregular per-frame edge; hash the entity
+  id + tick to seed roughness so it's stable per cell.
+- **Colony flavor polish** — colonies still look identical to stations
+  outside the `◈` prefix. Add a colony glyph or ring in the renderer
+  plus a colony-specific stock jitter so they're not market-identical.
+- **Dedicated "Chat Windows" submenu** — the three comms controls still
+  sit inline under Gameplay. Nested submenu deferred.
+- **Distinct patrol silhouettes** and **event-triggered patrol comms** —
+  0.3 backlog, still open.
+- **Options for scanline density / glitch intensity** — 0.3 backlog.
+- **Stranded ships mayday chatter** — 0.3 backlog.
+- **Mouse-wheel scroll + click-to-select tabs** on Comms panel — 0.4
+  backlog.
+- **`System` tab for Sensors/Radio** — 0.4 backlog if the noise
+  threshold rises.
+- **In-canvas Lua editor** — the current `prompt()` editor works but
+  truncates at ~2KB in some browsers. Drag-drop `.lua` file loading
+  arrives with M3 of the modding roadmap.
+- **Lua mutation API** — M2 below. Today's `frontier.*` is read-only
+  (log / chat / hook subscribe). Writes will land next.
 
-## Modding roadmap (Lua + beyond)
+## Modding roadmap (Lua + content packs)
 
-The hook surface (0.5.1) and the population of dockable colony
-targets (0.5.3) are the last pieces the Lua host needs before it can
-start doing interesting things. Planned milestones:
+Modding is a first-class feature target. The hook surface (0.5.1) and
+the Lua host (0.5.5) are the foundation; the milestones below turn the
+runtime into a real mod platform users can extend without editing the
+engine.
 
-**M1 — Lua host (0.5.4 candidate)**
-
-- Bundle `fengari-web` (or a WASM Lua 5.3) into the offline HTML.
-- Boot a sandboxed Lua state at engine start. No `io`, `os.execute`,
-  `debug`, `package.loadlib`, or raw `require` — only a whitelisted
-  `frontier.*` API surface.
-- Wrap every existing hook (`onWorldGenerate`, `onTick`, `onPlayerFire`,
-  `onPlayerDock`, `onEntityDestroyed`, `onChatter`, `onSave`, `onLoad`,
-  `onPlanetLand`) into Lua thunks. Read-only payloads for M1.
-- Replace **Options ▸ Scripting (soon)** with a real submenu: enable
-  scripting, load from localStorage slot, hot-reload, per-hook
-  enable/disable, view last error.
+**M1 — Lua host** — ✅ shipped in 0.5.5. Sandbox, `frontier.log/chat/on`,
+Options ▸ Scripting submenu, localStorage persistence, lazy runtime
+import. Payloads are read-only depth-capped tables.
 
 **M2 — Mutation API**
 
-- Introduce `frontier.entities.spawn/despawn`, `frontier.player.grant`,
-  `frontier.pushLog`, `frontier.pushChatter`, and a small event-emit
-  helper so scripts can react without touching JS internals.
-- All writes go through a validation layer that clamps values and
-  refuses invalid entity kinds — a bad script can crash itself, never
-  the engine.
+- Add `frontier.entities.spawn(kind, opts)`, `frontier.entities.despawn(id)`,
+  `frontier.entities.get(id)`, `frontier.entities.list(filter)`.
+- Add `frontier.player.grant({ credits, xp, ore, ... })` for guarded
+  reward payouts (server-side clamps prevent unbounded exploits).
+- Add `frontier.world.seed`, `frontier.world.time`, and a small event
+  emit helper so scripts can trigger `pushLog`-style broadcasts.
+- Every write goes through a validation layer that clamps values and
+  refuses invalid entity kinds. A misbehaving script crashes itself,
+  never the engine.
 
 **M3 — Mod bundles**
 
-- Define a `mod.json` manifest (`{ id, name, version, entry, hooks,
-  permissions }`) and let the launcher accept a folder or zipped
-  bundle drag-dropped onto the title screen.
-- Persist installed mods in IndexedDB (localStorage is too small for
-  multi-file bundles). Show them in an Options ▸ Mods submenu with
-  enable/disable toggles.
-- Load order is deterministic (alphabetical by id, with an optional
-  `priority` field). Save files record the active mod set so a save
-  loaded without its mods warns instead of silently missing content.
+- Define a `mod.json` manifest: `{ id, name, version, entry, hooks,
+  permissions, gameVersion }`.
+- Accept a folder or zipped bundle drag-dropped onto the title screen.
+  Persist installed mods in **IndexedDB** — localStorage is too small
+  for multi-file bundles.
+- Options ▸ Mods submenu (new) with per-mod enable/disable, a load-
+  order list (deterministic alphabetical by id, overridable via
+  `priority`), and a "Reveal load errors" pane.
+- Save files record the active mod set so a save loaded without its
+  mods warns rather than silently missing content.
+- Introduce an in-canvas file picker (reuses the existing save/load
+  file-picker plumbing) so mods can be added without opening devtools.
 
-**M4 — Content packs**
+**M4 — Content packs (data-only mods)**
 
-- Data-only mods: JSON packs that extend `WEAPONS`, `CREW_ROLE_INFO`,
-  `TEMPLATES` (chatter), station stock tables, and planet name
-  fragments — no Lua required, so non-programmers can ship content.
-- Reserved namespaces (`mod:<id>/…`) prevent id collisions on custom
-  weapons, ship hulls, and crew roles.
+- JSON packs extend existing tables without any Lua:
+  - `WEAPONS` — new weapon ids, damage/range/cooldown tuning.
+  - `SHIP_HULLS` — new hulls with unlock conditions.
+  - `CREW_ROLE_INFO` — new roles + wage tiers + chatter templates.
+  - `TEMPLATES` (`chatter.ts`) — new speaker kinds and line pools.
+  - `SPECIES` — new species with bonus/drawback/affinity.
+  - `MODULES` — new outfitting modules.
+  - Station stock tables, planet name fragments, mission text pools.
+- Reserved namespace `mod:<id>/…` for all new ids so packs can never
+  collide with core content or each other.
+- Data-only mods pass through the same manifest and load-order system
+  as Lua bundles; the loader is a schema validator + merger, no VM.
 
 **M5 — Debug / authoring**
 
-- In-game console (backtick) that evals Lua against the sandbox and
-  prints results into the Comms panel with a `Script` speaker tag.
-- `frontier.debug.dumpEntity(id)` and `frontier.debug.time()` helpers.
-- Optional per-hook timing overlay in Options ▸ Scripting so authors
-  can spot heavy handlers.
+- **In-game console** — backtick opens a one-line Lua REPL that evals
+  against the sandbox and prints results with a `Script` speaker tag.
+- `frontier.debug.dumpEntity(id)`, `frontier.debug.time()`,
+  `frontier.debug.trace(on)`.
+- **Per-hook timing overlay** under Options ▸ Scripting so authors can
+  spot heavy handlers (>1ms).
+- **Mod docs bundle** — generate an offline HTML reference of every
+  hook payload, `frontier.*` binding, and moddable table by
+  introspecting the same TS types used at build time.
 
-Hook payload shapes are frozen. Any new hook must land as a no-op
-dispatcher first (like `onPlanetLand` did this pass) so scripts
-written against a newer build don't crash on an older one — see the
-"Payload shapes are stable" note in `src/game/README.md`.
+**What's needed to open the engine to modders without touching JS**
+
+Concretely, the pieces still to build before a non-programmer can ship
+content are:
+
+1. **Data-driven tables** — a small set of exported "extension points"
+   (`WEAPONS`, `SHIP_HULLS`, `CREW_ROLE_INFO`, `TEMPLATES`,
+   `SPECIES`, `MODULES`, station stock, planet name fragments). Each
+   needs a JSON schema and a merge helper that folds mod entries in
+   after the core tables load. Design bias: **new rows only**; core
+   rows are frozen so mods can't silently break the vanilla balance.
+2. **Manifest + loader** — `mod.json` parser, ordered mod list in
+   IndexedDB, Options ▸ Mods UI. M3 above.
+3. **File picker + drag-drop surface** — reuse the save/load file
+   picker so mods land without devtools. Zip support via `fflate`
+   (~10KB) — WASM-free, works offline.
+4. **Save compatibility** — persist active mod ids in the save blob
+   and warn on load when a mod is missing. Already partially in place
+   via the version field; extend with a `mods: string[]`.
+5. **Public API docs** — the M5 doc bundle. Without it, only script
+   authors who read TS can find every hook payload.
+6. **Sandbox permission model** — per-mod permission gates (e.g.
+   `network`, `storage`, `mutate:entities`) surfaced in the enable
+   prompt. Prevents a drag-drop bundle from silently doing things the
+   player didn't consent to.
+
+Hook payload shapes remain frozen. Any new hook must land as a no-op
+dispatcher first (like `onPlanetLand` did in 0.5.3) so scripts written
+against a newer build don't crash on an older one — see the "Payload
+shapes are stable" note in `src/game/README.md`.
+
+### Recommended next round (0.5.6+)
+
+Ranked by ROI:
+
+1. **Roche-limit irregular shapes** — cheap render tweak; boosts
+   visual polish near planets. Piggy-backs on 0.5.2 wreckage work.
+2. **M2 mutation API** — `frontier.entities.spawn/despawn`,
+   `frontier.player.grant`. Unlocks meaningful gameplay mods on top
+   of the Lua host that just shipped.
+3. **Colony flavor polish** — glyph/ring + market jitter.
+4. **Tactical crit + morale consequences** — closes the two remaining
+   crew-backlog items so the crew system reads as "done" before we
+   move to mods.
+5. **M3 mod bundles** — the moment M2 lands, ship the manifest and
+   IndexedDB loader so authors can distribute multi-file mods.
+
 
 
 
