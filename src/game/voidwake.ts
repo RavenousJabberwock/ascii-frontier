@@ -8798,6 +8798,7 @@ export class Voidwake {
       { id: "all",      label: "All" },
       { id: "crew",     label: "Crew" },
       { id: "external", label: "Ext" },
+      { id: "system",   label: "Sys" },
     ];
     let tx = commsX + commsTitle.length + 1;
     for (const t of tabs) {
@@ -8870,11 +8871,11 @@ export class Voidwake {
       const shown = Math.min(commsRows, total - this.chatterScroll);
       const from = this.chatterScroll + 1;
       const to   = this.chatterScroll + shown;
-      putText(g, commsX, hintY, `▲/▼ ${from}-${to} / ${total}  (\\ tab · PgUp/Dn scroll)`, "#557");
+      putText(g, commsX, hintY, `▲/▼ ${from}-${to} / ${total}  (\\ tab · PgUp/Dn or wheel)`, "#557");
     } else if (rendered.length === 0) {
-      putText(g, commsX, hintY, `(quiet)  \\ tab · PgUp/Dn scroll`, "#446");
+      putText(g, commsX, hintY, `(quiet)  \\ tab · wheel scroll · Home newest`, "#446");
     } else {
-      putText(g, commsX, hintY, `\\ tab · PgUp/Dn scroll · Home newest`, "#446");
+      putText(g, commsX, hintY, `\\ tab · wheel/PgUp/Dn scroll · Home newest`, "#446");
     }
 
 
