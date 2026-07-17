@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.11";
+const VERSION = "0.5.12";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -6679,13 +6679,18 @@ export class Voidwake {
 
 
   // --- Save / Load screens -------------------------------------------------
+  // Save slots always show all three (slot-1..3) with their most-recent save
+  // timestamp — an empty slot renders "(empty)" so the player can see at a
+  // glance which slots are free. The trailing "Export to JSON" action dumps
+  // the current in-memory game to a downloadable .json file.
   updateSave() {
     if (!this.player) { this.screen = "menu"; return; }
-    const slots = ["slot-1", "slot-2", "slot-3", "Back"];
-    this.menuNav(slots.length);
+    const items = ["slot-1", "slot-2", "slot-3", "Export to JSON", "Back"];
+    this.menuNav(items.length);
     if (this.input.consume("enter")) {
-      const c = slots[this.menuCursor];
+      const c = items[this.menuCursor];
       if (c === "Back") { this.screen = "menu"; return; }
+      if (c === "Export to JSON") { this.exportCurrentSave(); return; }
       const blob: SaveBlob = {
         version: VERSION, seed: this.seed,
         player: this.player, entities: this.entities,
@@ -6704,26 +6709,99 @@ export class Voidwake {
     }
   }
   updateLoad() {
-    const slots = listSaves().map((s) => s.slot);
-    const items = [...slots, "Back"];
+    const saves = listSaves();
+    const slotNames = saves.map((s) => s.slot);
+    const items = [...slotNames, "Import from JSON", "Back"];
     this.menuNav(items.length);
     if (this.input.consume("enter")) {
       const c = items[this.menuCursor];
       if (c === "Back") { this.screen = this.player ? "menu" : "title"; return; }
+      if (c === "Import from JSON") { this.importSaveFromFile(); return; }
       const blob = loadGame(c);
       if (!blob) { this.pushLog("Load failed."); return; }
-      this.seed = blob.seed;
-      this.rng = mulberry32(this.seed);
-      this.entities = blob.entities;
-      this.player = blob.player;
-      this.options = blob.options;
-      // Restore comms feed if the save carries one (older saves omit it).
-      this.chatter = Array.isArray(blob.chatter) ? blob.chatter.slice(0, 250) : [];
-      this.chatterScroll = 0;
-      this.screen = "playing";
-      this.pushLog(`Loaded ${c}.`);
-      this.syncRadio();
-      dispatchHook("onLoad", { slot: c, blob });
+      this.applyLoadedBlob(blob, `Loaded ${c}.`, c);
+    }
+  }
+
+  // Shared restore path used by disk loads and JSON imports.
+  private applyLoadedBlob(blob: SaveBlob, logMsg: string, slotLabel: string) {
+    this.seed = blob.seed;
+    this.rng = mulberry32(this.seed);
+    this.entities = blob.entities;
+    this.player = blob.player;
+    this.options = blob.options;
+    this.chatter = Array.isArray(blob.chatter) ? blob.chatter.slice(0, 250) : [];
+    this.chatterScroll = 0;
+    this.screen = "playing";
+    this.pushLog(logMsg);
+    this.syncRadio();
+    dispatchHook("onLoad", { slot: slotLabel, blob });
+  }
+
+  // Download the current in-memory game as a .json blob. Uses a transient <a>
+  // element with a data URL so the browser's usual "Save As" dialog fires.
+  private exportCurrentSave() {
+    if (!this.player) return;
+    try {
+      const blob: SaveBlob = {
+        version: VERSION, seed: this.seed,
+        player: this.player, entities: this.entities,
+        options: this.options, savedAt: Date.now(),
+        chatter: this.chatter.slice(0, 250),
+      };
+      const json = JSON.stringify(blob, null, 2);
+      const file = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(file);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ascii-frontier-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke on next tick — some browsers race the click otherwise.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.pushLog("Exported save to JSON.");
+    } catch (e) {
+      console.warn("[ASCII Frontier] exportCurrentSave failed:", e);
+      this.pushLog("Export failed.");
+    }
+  }
+
+  // Prompt for a .json file and adopt it as the live game state.
+  private importSaveFromFile() {
+    try {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json,.json";
+      input.style.display = "none";
+      input.onchange = () => {
+        const f = input.files?.[0];
+        if (!f) { input.remove(); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(String(reader.result)) as SaveBlob;
+            parsed.options = { ...defaultOptions(), ...(parsed.options ?? {}) } as Options;
+            this.applyLoadedBlob(parsed, "Imported save from JSON.", "(import)");
+          } catch (err) {
+            console.warn("[ASCII Frontier] importSaveFromFile parse failed:", err);
+            this.pushLog("Import failed — invalid JSON.");
+          } finally {
+            input.remove();
+          }
+        };
+        reader.onerror = () => {
+          this.pushLog("Import failed — could not read file.");
+          input.remove();
+        };
+        reader.readAsText(f);
+      };
+      document.body.appendChild(input);
+      input.click();
+    } catch (e) {
+      console.warn("[ASCII Frontier] importSaveFromFile failed:", e);
+      this.pushLog("Import failed.");
     }
   }
 
@@ -7559,11 +7637,28 @@ export class Voidwake {
       putText(g, Math.max(2, Math.floor((cols - msg.length) / 2)), Math.floor(g.length / 2), msg, "#7CFC00");
     }
   }
-  renderSave(g: Cell[][]) { this.renderListMenu(g, "SAVE GAME", ["slot-1", "slot-2", "slot-3", "Back"]); }
+  renderSave(g: Cell[][]) {
+    const saves = listSaves();
+    const stamp = (slot: string) => {
+      const s = saves.find((x) => x.slot === slot);
+      return s ? `— ${new Date(s.savedAt).toLocaleString()}` : "— (empty)";
+    };
+    const labels = [
+      `slot-1  ${stamp("slot-1")}`,
+      `slot-2  ${stamp("slot-2")}`,
+      `slot-3  ${stamp("slot-3")}`,
+      "Export to JSON",
+      "Back",
+    ];
+    this.renderListMenu(g, "SAVE GAME", labels);
+  }
   renderLoad(g: Cell[][]) {
-    const slots = listSaves().map((s) => `${s.slot}  (${new Date(s.savedAt).toLocaleString()})`);
-    if (slots.length === 0) slots.push("(no saves)");
-    this.renderListMenu(g, "LOAD GAME", [...slots, "Back"]);
+    const saves = listSaves();
+    const slots = saves.map((s) => `${s.slot}  — ${new Date(s.savedAt).toLocaleString()}`);
+    const labels = slots.length === 0
+      ? ["(no saves)", "Import from JSON", "Back"]
+      : [...slots, "Import from JSON", "Back"];
+    this.renderListMenu(g, "LOAD GAME", labels);
   }
   renderStation(g: Cell[][]) {
     const p = this.player!;
