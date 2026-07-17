@@ -7655,10 +7655,11 @@ export class Voidwake {
   renderLoad(g: Cell[][]) {
     const saves = listSaves();
     const slots = saves.map((s) => `${s.slot}  — ${new Date(s.savedAt).toLocaleString()}`);
-    const labels = slots.length === 0
-      ? ["(no saves)", "Import from JSON", "Back"]
-      : [...slots, "Import from JSON", "Back"];
+    const labels = [...slots, "Import from JSON", "Back"];
     this.renderListMenu(g, "LOAD GAME", labels);
+    if (slots.length === 0) {
+      putText(g, 4, g.length - 5, "(no saves on disk — Import loads a .json file)", "#888");
+    }
   }
   renderStation(g: Cell[][]) {
     const p = this.player!;
