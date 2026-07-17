@@ -733,38 +733,59 @@ VERSION bump
 
 - 0.5.8 → 0.5.9, offline bundle rebuilt.
 
+## 0.5.10 pass — Chatter pool expansion, System tab, wheel-scroll on Comms
+
+Chatter (primary ask)
+
+- **Broad pool expansion.** Added 5–13 new lines to every speaker pool
+  that has one: `hostile` (+9), `boss_hostile` (+7), `friendly` (+9),
+  `neutral` (+8), `station` (+9), `planet` (+6), `planet_populated`
+  (+8), `patrol` (+9), `patrol_tow` (+5), `patrol_arrest` (+5),
+  `stranded_mayday` (+7), `crit_hit` (+6), `npc_crit` (+5), `walkout`
+  (+6), `stranded_thanks` (+5), `gunner_idle` (+6), `pilot_idle` (+6),
+  `engineer_idle` (+6), `merchant_idle` (+6), `navigator_idle` (+5),
+  `quartermaster_idle` (+5), `recruiter_idle` (+5), `tactical_idle`
+  (+5), and `banter` (+13). Every entity capable of chatter has a
+  meaningfully deeper pool now, so long sessions repeat far less.
+
+Low-hanging fruit (from wishlist)
+
+- **Comms `System` tab.** Fourth tab (`Sys`) added to the Comms panel
+  after `Ext`. Filters `channel === "system"` — the ship computer
+  (`Sensors`, `Radio`) already routes there, so this is pure UI
+  surface. `\` cycle order is now All → Crew → Ext → Sys. Clears the
+  0.4/0.5 backlog `System` tab item.
+- **Mouse-wheel scroll on Comms panel.** The wheel handler now checks
+  the cursor's cell position against the panel rect published each
+  render (`_commsRect`). When the cursor is over the panel, the wheel
+  scrolls the feed (2 lines per notch); otherwise it still adjusts
+  throttle. No new keybind, no regression to existing throttle
+  behavior. Clears the 0.4 backlog wheel-scroll item.
+- **Panel hint updated** to mention wheel scroll alongside PgUp/PgDn.
+
+VERSION bump
+
+- 0.5.9 → 0.5.10, offline bundle rebuilt.
+
 ## Long-term wishlist (deferred, no ETA)
 
 Items explicitly on hold for a future release (or an outside mod).
 
-- **Player-to-NPC comms with template replies.** New rebindable
-  "Hail target" key with a Comms composer (intent menu: Greet /
-  Request status / Warn off / Surrender demand / Trade ping /
-  Distress). Reply generator classifies the target — ships,
-  stations, and populated planets can reply; asteroids, stars,
-  wrecks, and bullets cannot (ship computer explains why). Reply
-  pool keyed by `(faction, intent, reputationBucket, hostilityState)`
-  and seeded off entity id + tick for coherence. Side effects on
-  intent: "Warn off" de-aggros low-threat raiders, "Surrender
-  demand" against near-dead pirates awards a bounty, "Trade ping"
-  previews station prices, "Distress" broadcasts a mayday. Lua
-  `onHail` hook exposes `{ targetKind, faction, intent, replyDraft }`
-  so scripts can override the reply. Feasibility notes captured
-  earlier: ~1 focused release for template-based replies, ~2 for an
-  LLM-backed dialogue arc. Explicitly waiting on either a later
-  in-house pass or a community mod on top of M3.
+- **Player-to-NPC comms with template replies.** Hail-target key, intent
+  menu, reply generator keyed by `(faction, intent, reputation,
+  hostility)`, Lua `onHail` hook. ~1 focused release for templates,
+  ~2 for an LLM-backed arc.
+- **Click-to-select Comms tabs.** Wheel scroll now lands; click routing
+  on the tab strip is the remaining half of the 0.4 mouse-comms item.
 - **Rebindable rescue prompt at station menus.** Complements the
   existing hail-proximity rescue (0.5.7).
-- **In-canvas multi-line Lua editor.** `prompt()` still truncates
-  at ~2KB in some browsers; drag-drop `.lua` loading ships with M3
-  of the modding roadmap.
-- **`System` tab for Sensors/Radio** on the Comms panel — 0.4
-  backlog, deferred until noise rises.
-- **Chat Windows submenu** — nested Options subsection for the
-  three inline Comms controls under Gameplay.
+- **In-canvas multi-line Lua editor.** `prompt()` still truncates at
+  ~2KB in some browsers; drag-drop `.lua` loading ships with M3 of the
+  modding roadmap.
+- **Chat Windows submenu** — nested Options subsection for the three
+  inline Comms controls under Gameplay.
 - **Distinct patrol silhouettes** — 0.3 backlog, still open.
-- **Mouse-wheel scroll + click-to-select tabs on Comms** — 0.4
-  backlog, still open.
+
 
 
 
