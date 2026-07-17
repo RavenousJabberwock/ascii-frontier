@@ -8807,6 +8807,9 @@ export class Voidwake {
       putText(g, tx, commsY, lbl, active ? "#ffe066" : "#7aa");
       tx += lbl.length + 1;
     }
+    // Publish the comms rect so the wheel handler can route scroll here
+    // when the cursor is over the panel (header + rows + hint row).
+    this._commsRect = { x: commsX, y: commsY, w: commsW, h: commsRows + 2 };
     // Filter feed to the active tab.
     const feed = this.chatter.filter((c) =>
       this.chatterTab === "all" ? true : c.channel === this.chatterTab);
