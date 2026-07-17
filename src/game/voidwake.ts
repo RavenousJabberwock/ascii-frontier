@@ -4416,11 +4416,24 @@ export class Voidwake {
       this._disengageAutopilot("stick");
     }
 
-    // Mouse wheel throttle: each notch nudges throttle by ~5%.
+    // Mouse wheel: routes to the Comms panel when the cursor is over it
+    // (scroll the feed), otherwise adjusts throttle by ~5% per notch.
     if (this.input.wheelDelta !== 0) {
-      const step = -this.input.wheelDelta * 0.001; // scroll up = throttle up
-      p.throttle = Math.max(0, Math.min(1, p.throttle + step));
-      this._disengageAutopilot("stick");
+      const rect = this._commsRect;
+      const gx = this.input.mouseCX / CELL_W;
+      const gy = this.input.mouseCY / CELL_H;
+      const overComms = !!rect && this.input.mouseInside
+        && gx >= rect.x && gx < rect.x + rect.w
+        && gy >= rect.y && gy < rect.y + rect.h;
+      if (overComms) {
+        // Wheel up (negative deltaY) = scroll toward older lines (higher scroll idx).
+        const notch = this.input.wheelDelta > 0 ? -2 : 2;
+        this.chatterScroll = Math.max(0, Math.min(this.chatterScroll + notch, 999));
+      } else {
+        const step = -this.input.wheelDelta * 0.001; // scroll up = throttle up
+        p.throttle = Math.max(0, Math.min(1, p.throttle + step));
+        this._disengageAutopilot("stick");
+      }
     }
 
 
