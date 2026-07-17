@@ -783,6 +783,29 @@ VERSION bump
   a fresh load always shows the full panel.
 - VERSION bump 0.5.10 → 0.5.11; offline bundle rebuilt.
 
+## 0.5.12 pass — Save UX polish, richer nebula, chatter expansion
+
+- **Timestamped save/load slots.** The Save screen always shows all
+  three slots with the most recent write time (or `(empty)`) so
+  players can see at a glance which slot to overwrite. The Load
+  screen lists only occupied slots with timestamps.
+- **Export to JSON / Import from JSON.** New Save-screen action
+  serialises the current in-memory game to a downloadable `.json`
+  file; new Load-screen action opens a file picker and adopts the
+  parsed blob as the live state (shares `applyLoadedBlob` with the
+  disk-load path). Both go through `defaultOptions()` backfill.
+- **Nebula wash overlay.** When `_inNebula` is true the renderer
+  now paints a density-scaled multi-tint gas haze over the viewport
+  (three glyph bands, five purple/violet tints) plus a pulsing
+  `▒ NEBULA WASH — sensors degraded ▒` tag near the bottom of the
+  viewport. Reads much more clearly than the old 30-speckle veil.
+- **Crew idle chatter expansion.** ~80 new idle lines across
+  Gunner / Pilot / Engineer / Merchant / Navigator / Quartermaster /
+  Recruiter / Tactical pools to blunt the "hearing the same three
+  lines" complaint. All use existing `chatterCtx` placeholders.
+- VERSION bump 0.5.11 → 0.5.12; offline bundle rebuilt.
+
+
 ## Long-term wishlist (deferred, no ETA)
 
 Items explicitly on hold for a future release (or an outside mod).
