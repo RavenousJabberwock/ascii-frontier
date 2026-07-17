@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.10";
+const VERSION = "0.5.11";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -3307,6 +3307,9 @@ export class Voidwake {
   // handler to route mouse-wheel scroll to the panel when the cursor is
   // over it (falls through to throttle otherwise).
   _commsRect: { x: number; y: number; w: number; h: number } | null = null;
+  // Whether the comms panel is collapsed to a single "Show Comms" button.
+  // Transient (per-session); toggled via the [Hide]/[Show] header button.
+  commsHidden = false;
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
