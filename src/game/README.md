@@ -642,3 +642,25 @@ Everything else — entities, missions, universe seed — remains read-only
 until M3 (mod bundles + entity mutation). Bridge mutators are optional
 so older host code keeps loading unchanged.
 
+## Comms panel — System tab & wheel scroll (0.5.10)
+
+The Comms panel now has four tabs, cycled by `\`:
+
+- **All** — everything.
+- **Crew** — crew-labeled voices (`Gunner`, `Pilot`, `Computer`, …).
+- **Ext** — external (hostiles, patrol, stations, colonies, banter).
+- **Sys** — ship computer output (`Sensors`, `Radio`).
+
+Scrolling: mouse wheel scrolls the panel when the cursor is inside its
+rect; anywhere else on the canvas the wheel still adjusts throttle.
+PgUp / PgDn and Home keep working as before.
+
+## Chatter pool depth (0.5.10)
+
+Every speaker pool with lines received a broad expansion — hostiles,
+boss captains, friendlies, neutrals, stations, planets, colonies,
+patrol, patrol-tow, patrol-arrest, mayday, crit-hit, npc-crit,
+walkout, stranded-thanks, every crew role's `*_idle`, and `banter`.
+Aim: no repeats within a single long session at `Lively` frequency.
+
+
