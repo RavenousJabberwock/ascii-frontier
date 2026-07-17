@@ -767,6 +767,22 @@ VERSION bump
 
 - 0.5.9 → 0.5.10, offline bundle rebuilt.
 
+## 0.5.11 pass — Clickable Comms tabs + Hide/Show toggle
+
+- **Clickable tabs.** All / Crew / Ext / Sys labels in the Comms
+  header are now click hitboxes; selecting one sets `chatterTab` and
+  resets `chatterScroll` to 0 (same as `\`).
+- **[Hide] button.** New right-aligned `[Hide]` control on the header
+  row collapses the entire panel to a single `[+] Show Comms` pill in
+  the top-left. Clicking the pill restores the full panel.
+- **Wheel routing respects the collapsed state.** `_commsRect` now
+  covers just the pill when hidden, so mouse-wheel-over-pill won't
+  scroll a hidden feed and the wheel falls back to throttle everywhere
+  else on the canvas.
+- **Transient state.** `commsHidden` is per-session, not persisted, so
+  a fresh load always shows the full panel.
+- VERSION bump 0.5.10 → 0.5.11; offline bundle rebuilt.
+
 ## Long-term wishlist (deferred, no ETA)
 
 Items explicitly on hold for a future release (or an outside mod).
