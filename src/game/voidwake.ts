@@ -3302,7 +3302,11 @@ export class Voidwake {
   // top-left Comms panel can scroll back through recent traffic.
   chatter: ChatterLine[] = [];
   // Active tab in the top-left Comms panel. Cycled with '\' (see updatePlaying).
-  chatterTab: "all" | "crew" | "external" = "all";
+  chatterTab: "all" | "crew" | "external" | "system" = "all";
+  // Comms panel rect in cell coords, updated each render. Used by the wheel
+  // handler to route mouse-wheel scroll to the panel when the cursor is
+  // over it (falls through to throttle otherwise).
+  _commsRect: { x: number; y: number; w: number; h: number } | null = null;
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
