@@ -791,8 +791,6 @@ Items explicitly on hold for a future release (or an outside mod).
   menu, reply generator keyed by `(faction, intent, reputation,
   hostility)`, Lua `onHail` hook. ~1 focused release for templates,
   ~2 for an LLM-backed arc.
-- **Click-to-select Comms tabs.** Wheel scroll now lands; click routing
-  on the tab strip is the remaining half of the 0.4 mouse-comms item.
 - **Rebindable rescue prompt at station menus.** Complements the
   existing hail-proximity rescue (0.5.7).
 - **In-canvas multi-line Lua editor.** `prompt()` still truncates at
