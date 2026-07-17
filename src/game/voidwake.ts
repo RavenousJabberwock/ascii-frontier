@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.11";
+const VERSION = "0.5.12";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -513,6 +513,17 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Rumor mill from the last dock: {rumor}. Take it or don't.",
     "Half my scars are from taking the second shot. Take the first one, {cmdr}.",
     "Star's flaring. Good day to mine coronas, bad day to loiter.",
+    "You know what I miss? Real coffee. This synth stuff tastes like {coffee}.",
+    "Reminds me of a run through {sector} — three raiders, one crit, zero paperwork.",
+    "Tag anything with a † glyph, Cmdr. Derelicts don't shoot back.",
+    "Cargo hold's at {cargo}%. We could squeeze one more asteroid before dock.",
+    "I keep a lucky spent casing from my first kill. Weird? Sure. Works? Absolutely.",
+    "Cmdr, if I go quiet mid-fight it's because I'm concentrating, not sulking.",
+    "Old gunner's rule: never trust a raider who hails you first.",
+    "This scope's got a hairline crack. Doesn't matter — I aim by feel anyway.",
+    "You should hear the songs the crew sing when you're not on comms.",
+    "Reload cycle's smoother than my last three ships. Whoever tuned it — respect.",
+    "Cmdr, remember: patrols scan cargo, not intentions. Keep the hold clean.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
@@ -607,6 +618,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Grav well ahead — I'll bank us wide, saves the fuel curve.",
     "This lane rides smoother at low throttle. Just an observation.",
     "Ancient beacon a few clicks out. Sends nothing useful. Still charming.",
+    "Cmdr, you're drifting two degrees off ideal. I won't nag. Much.",
+    "Ever tried threading a wormhole at full burn? Don't. Trust me.",
+    "The {ship} has a lovely trim if you feather the pitch on approach.",
+    "Nav chair's warm, my mug's full. This is what promotion looks like.",
+    "I filed the last three sector transits. Charts are getting handsome.",
+    "Cmdr — if you tag a comet I'll match rotation. Free ice water for the crew.",
+    "Weird gravity ripple two clicks portside. Probably a small black hole. Probably.",
+    "Space is mostly empty. Doesn't stop me watching every pixel of it.",
+    "Cleanest lane home right now is heading rimward. Just so you know.",
+    "I trained on a hulk that couldn't turn without groaning. This {ship}'s a dream.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
@@ -653,6 +674,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Coolant's steady. Fuel filter's a bit tired but nothing critical.",
     "That last hit shook a panel loose in the mess. Already re-seated.",
     "Every good tour I've flown, the engineer's chatter is boring. Take the hint.",
+    "Reactor talks to me, Cmdr. Today it said 'thanks'.",
+    "I could tune the shield emitter tighter, but you'd feel the throttle lag.",
+    "Cooling loop's happy. Fuel's honest. It's a good day.",
+    "Cmdr, if the lights flicker twice on the bridge — that's me swapping a relay.",
+    "Old habit: I torque every bolt on the reactor by hand once a week.",
+    "Your last dock rattled a mount. I quietly welded it. You're welcome.",
+    "Reactor's older than half this crew. Runs like it isn't. Good design.",
+    "There's a coffee ring on my main console. I refuse to clean it. Superstition.",
+    "Shield harmonics love a lazy throttle. Fast bursts, slow rebuilds.",
+    "Cmdr — I keep three spare emitters. Two are for optimism.",
   ],
   engineer_greet: [
     "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
@@ -698,6 +729,14 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Guild's tightening quotas. Move product before the freeze.",
     "Long-hauler tip: never sell a full hold at the first station you dock.",
     "I could turn {credits}cr into more if we swung by {sector}.",
+    "Ore price index is jittery this cycle. Perfect for a quick flip.",
+    "Cmdr, I've been keeping a private ledger. Suspiciously green.",
+    "Cargo insurance on this run would cost more than the cargo. Skip it.",
+    "Colonies pay in credits and gossip. Both are useful.",
+    "A Guild scow tried to lowball me last dock. I laughed until they folded.",
+    "Rare-metal futures in {sector} are looking twitchy. Watch that market.",
+    "Cmdr, if we dock at a Fed hub, let me handle the bill. Trust me.",
+    "Half of trading is patience. The other half is knowing when to leave.",
   ],
   merchant_greet: [
     "Merchant aboard, Cmdr. I'll shave 15% off the buy sheet and pad the sell.",
@@ -736,6 +775,12 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Two wormholes and a scoop pass — that's your cheapest tour home.",
     "Star charts logged for this rotation. Cleanest lane looks like the north arc.",
     "Colony pings at bearing… hold, adjusting. There. Cheap ore, warm bar.",
+    "Cmdr, if you're patient I can chain three wormholes into a scenic tour.",
+    "I read a nebula the way farmers read clouds. Trust me on the reroute.",
+    "That derelict icon on the plot? I can drop you within docking range.",
+    "Cmdr — every navigator worth the chair keeps a mental map. Mine's a good one.",
+    "Sector {sector}'s pulsar makes for a lovely chronograph. And a worse jump gate.",
+    "Give me a destination and a fuel margin, I'll give you three routes.",
   ],
   navigator_greet: [
     "Navigator aboard. I'll shave a jump off every long haul, Cmdr.",
@@ -760,6 +805,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I could squeeze another 5% out of the next module refit if you let me talk.",
     "Wage bill's tidy. Recruiter earns his keep by keeping mine down.",
     "Manifest looks clean for a patrol scan. No contraband flags this time.",
+    "Cmdr, if we ever run bulk ore I'd like to renegotiate the fuel line.",
+    "I re-lashed the aft crates. If they rattle again it's ghosts, not physics.",
+    "Kept the spares inventory current. Engineer'll thank me eventually.",
+    "Every kilo of cargo has a story on my ledger. Some are boring stories.",
   ],
   quartermaster_greet: [
     "Quartermaster reporting. I'll squeeze margin out of every dock, Cmdr.",
@@ -784,6 +833,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I've got two candidates lined up for the next hire — one gunner, one merc.",
     "Bar in {sector} always has good talent. Bad prices, good talent.",
     "Cmdr, if you ever fire a crew, do it dockside. Space walkouts are ugly.",
+    "Wages on time keep everything else forgivable. Just saying.",
+    "I hear the {sector} guild is bleeding staff. Poach season.",
+    "Morale's a slow burn, Cmdr — a single hot meal buys a week of loyalty.",
+    "Cmdr, next dock let me buy the crew a round on the ship's tab.",
   ],
   recruiter_greet: [
     "Recruiter aboard. I'll trim hire fees and keep the bunk happy, Cmdr.",
@@ -808,6 +861,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr, when I run guns, I want two crits per engagement. Don't slow me down.",
     "Wing tactics beat lone guns nine times out of ten. Remember that.",
     "Shield harmonics timed to your throttle. Try boosting — you'll feel it.",
+    "Cmdr — a raider captain rarely fires first. Read the pause before the pop.",
+    "I ran the numbers on our last kill. Ninety percent efficiency. Not enough.",
+    "Threat plot's a poem, Cmdr. Ugly, honest, and always right on the ending.",
+    "Tactical is patience with a gun in its hand.",
   ],
   tactical_greet: [
     "Tactical officer reporting. I run the guns, {cmdr} — Gunner's redundant with me aboard.",
@@ -6679,13 +6736,18 @@ export class Voidwake {
 
 
   // --- Save / Load screens -------------------------------------------------
+  // Save slots always show all three (slot-1..3) with their most-recent save
+  // timestamp — an empty slot renders "(empty)" so the player can see at a
+  // glance which slots are free. The trailing "Export to JSON" action dumps
+  // the current in-memory game to a downloadable .json file.
   updateSave() {
     if (!this.player) { this.screen = "menu"; return; }
-    const slots = ["slot-1", "slot-2", "slot-3", "Back"];
-    this.menuNav(slots.length);
+    const items = ["slot-1", "slot-2", "slot-3", "Export to JSON", "Back"];
+    this.menuNav(items.length);
     if (this.input.consume("enter")) {
-      const c = slots[this.menuCursor];
+      const c = items[this.menuCursor];
       if (c === "Back") { this.screen = "menu"; return; }
+      if (c === "Export to JSON") { this.exportCurrentSave(); return; }
       const blob: SaveBlob = {
         version: VERSION, seed: this.seed,
         player: this.player, entities: this.entities,
@@ -6704,26 +6766,99 @@ export class Voidwake {
     }
   }
   updateLoad() {
-    const slots = listSaves().map((s) => s.slot);
-    const items = [...slots, "Back"];
+    const saves = listSaves();
+    const slotNames = saves.map((s) => s.slot);
+    const items = [...slotNames, "Import from JSON", "Back"];
     this.menuNav(items.length);
     if (this.input.consume("enter")) {
       const c = items[this.menuCursor];
       if (c === "Back") { this.screen = this.player ? "menu" : "title"; return; }
+      if (c === "Import from JSON") { this.importSaveFromFile(); return; }
       const blob = loadGame(c);
       if (!blob) { this.pushLog("Load failed."); return; }
-      this.seed = blob.seed;
-      this.rng = mulberry32(this.seed);
-      this.entities = blob.entities;
-      this.player = blob.player;
-      this.options = blob.options;
-      // Restore comms feed if the save carries one (older saves omit it).
-      this.chatter = Array.isArray(blob.chatter) ? blob.chatter.slice(0, 250) : [];
-      this.chatterScroll = 0;
-      this.screen = "playing";
-      this.pushLog(`Loaded ${c}.`);
-      this.syncRadio();
-      dispatchHook("onLoad", { slot: c, blob });
+      this.applyLoadedBlob(blob, `Loaded ${c}.`, c);
+    }
+  }
+
+  // Shared restore path used by disk loads and JSON imports.
+  private applyLoadedBlob(blob: SaveBlob, logMsg: string, slotLabel: string) {
+    this.seed = blob.seed;
+    this.rng = mulberry32(this.seed);
+    this.entities = blob.entities;
+    this.player = blob.player;
+    this.options = blob.options;
+    this.chatter = Array.isArray(blob.chatter) ? blob.chatter.slice(0, 250) : [];
+    this.chatterScroll = 0;
+    this.screen = "playing";
+    this.pushLog(logMsg);
+    this.syncRadio();
+    dispatchHook("onLoad", { slot: slotLabel, blob });
+  }
+
+  // Download the current in-memory game as a .json blob. Uses a transient <a>
+  // element with a data URL so the browser's usual "Save As" dialog fires.
+  private exportCurrentSave() {
+    if (!this.player) return;
+    try {
+      const blob: SaveBlob = {
+        version: VERSION, seed: this.seed,
+        player: this.player, entities: this.entities,
+        options: this.options, savedAt: Date.now(),
+        chatter: this.chatter.slice(0, 250),
+      };
+      const json = JSON.stringify(blob, null, 2);
+      const file = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(file);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ascii-frontier-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke on next tick — some browsers race the click otherwise.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.pushLog("Exported save to JSON.");
+    } catch (e) {
+      console.warn("[ASCII Frontier] exportCurrentSave failed:", e);
+      this.pushLog("Export failed.");
+    }
+  }
+
+  // Prompt for a .json file and adopt it as the live game state.
+  private importSaveFromFile() {
+    try {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json,.json";
+      input.style.display = "none";
+      input.onchange = () => {
+        const f = input.files?.[0];
+        if (!f) { input.remove(); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(String(reader.result)) as SaveBlob;
+            parsed.options = { ...defaultOptions(), ...(parsed.options ?? {}) } as Options;
+            this.applyLoadedBlob(parsed, "Imported save from JSON.", "(import)");
+          } catch (err) {
+            console.warn("[ASCII Frontier] importSaveFromFile parse failed:", err);
+            this.pushLog("Import failed — invalid JSON.");
+          } finally {
+            input.remove();
+          }
+        };
+        reader.onerror = () => {
+          this.pushLog("Import failed — could not read file.");
+          input.remove();
+        };
+        reader.readAsText(f);
+      };
+      document.body.appendChild(input);
+      input.click();
+    } catch (e) {
+      console.warn("[ASCII Frontier] importSaveFromFile failed:", e);
+      this.pushLog("Import failed.");
     }
   }
 
@@ -7559,11 +7694,29 @@ export class Voidwake {
       putText(g, Math.max(2, Math.floor((cols - msg.length) / 2)), Math.floor(g.length / 2), msg, "#7CFC00");
     }
   }
-  renderSave(g: Cell[][]) { this.renderListMenu(g, "SAVE GAME", ["slot-1", "slot-2", "slot-3", "Back"]); }
+  renderSave(g: Cell[][]) {
+    const saves = listSaves();
+    const stamp = (slot: string) => {
+      const s = saves.find((x) => x.slot === slot);
+      return s ? `— ${new Date(s.savedAt).toLocaleString()}` : "— (empty)";
+    };
+    const labels = [
+      `slot-1  ${stamp("slot-1")}`,
+      `slot-2  ${stamp("slot-2")}`,
+      `slot-3  ${stamp("slot-3")}`,
+      "Export to JSON",
+      "Back",
+    ];
+    this.renderListMenu(g, "SAVE GAME", labels);
+  }
   renderLoad(g: Cell[][]) {
-    const slots = listSaves().map((s) => `${s.slot}  (${new Date(s.savedAt).toLocaleString()})`);
-    if (slots.length === 0) slots.push("(no saves)");
-    this.renderListMenu(g, "LOAD GAME", [...slots, "Back"]);
+    const saves = listSaves();
+    const slots = saves.map((s) => `${s.slot}  — ${new Date(s.savedAt).toLocaleString()}`);
+    const labels = [...slots, "Import from JSON", "Back"];
+    this.renderListMenu(g, "LOAD GAME", labels);
+    if (slots.length === 0) {
+      putText(g, 4, g.length - 5, "(no saves on disk — Import loads a .json file)", "#888");
+    }
   }
   renderStation(g: Cell[][]) {
     const p = this.player!;
@@ -9027,15 +9180,38 @@ export class Voidwake {
         tag, tagBlink ? "#ffe066" : "#ff3322");
     }
 
-    // Nebula fog overlay — softens viewport with scattered dim glyphs.
+    // Nebula fog overlay — pronounced coloured haze whenever the ship is
+    // physically inside a nebula cloud. Uses three glyph/tint bands so it
+    // looks like layered gas rather than a single flat speckle, and includes
+    // a pulsing corner tag so the player knows why sensors are misbehaving.
     const inNeb2 = (this as unknown as { _inNebula?: boolean })._inNebula;
     if (inNeb2) {
-      for (let i = 0; i < 30; i++) {
+      const glyphs = ["░", "▒", "·", "∴", "▓"];
+      const tints = ["#5a3a7a", "#7a4aa0", "#9a6acc", "#3a5aa0", "#c47afc"];
+      // Density scales with viewport area so the effect reads on any canvas.
+      const density = Math.min(220, Math.floor((vw * vh) / 22));
+      for (let i = 0; i < density; i++) {
         const x = vpLeft + 1 + Math.floor(Math.random() * (vw - 2));
         const y = vpTop + 1 + Math.floor(Math.random() * (vh - 2));
-        if (g[y][x].ch === " ") g[y][x] = { ch: "░", color: "#5a3a7a" };
+        const row = g[y]; if (!row) continue;
+        const cell = row[x]; if (!cell) continue;
+        // Overwrite empties and softly veil dim glyphs; leave bright HUD alone.
+        if (cell.ch === " " || Math.random() < 0.15) {
+          row[x] = {
+            ch: glyphs[(Math.random() * glyphs.length) | 0],
+            color: tints[(Math.random() * tints.length) | 0],
+          };
+        }
       }
+      // Pulsing status tag lower-centre of viewport.
+      const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 260);
+      const tag = "▒ NEBULA WASH — sensors degraded ▒";
+      const tx = vpLeft + Math.floor(vw / 2 - tag.length / 2);
+      const ty = vpTop + vh - 2;
+      const col = pulse > 0.75 ? "#c47afc" : "#7a4aa0";
+      putText(g, tx, ty, tag, col);
     }
+
 
     // Pause banner (big, centered, obvious)
     if (this.paused) {
