@@ -8917,6 +8917,7 @@ export class Voidwake {
     } else {
       putText(g, commsX, hintY, `\\ tab · wheel/PgUp/Dn scroll · Home newest`, "#446");
     }
+    } // end !commsHidden
 
 
     // Log (mission / system events; separate from chatter).
