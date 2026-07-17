@@ -767,6 +767,22 @@ VERSION bump
 
 - 0.5.9 → 0.5.10, offline bundle rebuilt.
 
+## 0.5.11 pass — Clickable Comms tabs + Hide/Show toggle
+
+- **Clickable tabs.** All / Crew / Ext / Sys labels in the Comms
+  header are now click hitboxes; selecting one sets `chatterTab` and
+  resets `chatterScroll` to 0 (same as `\`).
+- **[Hide] button.** New right-aligned `[Hide]` control on the header
+  row collapses the entire panel to a single `[+] Show Comms` pill in
+  the top-left. Clicking the pill restores the full panel.
+- **Wheel routing respects the collapsed state.** `_commsRect` now
+  covers just the pill when hidden, so mouse-wheel-over-pill won't
+  scroll a hidden feed and the wheel falls back to throttle everywhere
+  else on the canvas.
+- **Transient state.** `commsHidden` is per-session, not persisted, so
+  a fresh load always shows the full panel.
+- VERSION bump 0.5.10 → 0.5.11; offline bundle rebuilt.
+
 ## Long-term wishlist (deferred, no ETA)
 
 Items explicitly on hold for a future release (or an outside mod).
@@ -775,8 +791,6 @@ Items explicitly on hold for a future release (or an outside mod).
   menu, reply generator keyed by `(faction, intent, reputation,
   hostility)`, Lua `onHail` hook. ~1 focused release for templates,
   ~2 for an LLM-backed arc.
-- **Click-to-select Comms tabs.** Wheel scroll now lands; click routing
-  on the tab strip is the remaining half of the 0.4 mouse-comms item.
 - **Rebindable rescue prompt at station menus.** Complements the
   existing hail-proximity rescue (0.5.7).
 - **In-canvas multi-line Lua editor.** `prompt()` still truncates at

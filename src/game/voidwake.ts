@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.10";
+const VERSION = "0.5.11";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -3307,6 +3307,9 @@ export class Voidwake {
   // handler to route mouse-wheel scroll to the panel when the cursor is
   // over it (falls through to throttle otherwise).
   _commsRect: { x: number; y: number; w: number; h: number } | null = null;
+  // Whether the comms panel is collapsed to a single "Show Comms" button.
+  // Transient (per-session); toggled via the [Hide]/[Show] header button.
+  commsHidden = false;
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
@@ -8779,10 +8782,10 @@ export class Voidwake {
     if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
 
     // --- COMMS / chatter panel ---
-    // Top-left overlay with All / Crew / External tabs. Filtered by
+    // Top-left overlay with All / Crew / External / System tabs. Filtered by
     // this.chatterTab, scrolled by this.chatterScroll (0 = newest pinned).
-    // Overlays the star viewport corner intentionally so the feed is always
-    // visible without hunting for it on the HUD.
+    // Header exposes clickable tabs and a [Hide] toggle that collapses the
+    // whole panel to a single "[+] Show Comms" button.
     const inNeb = (this as unknown as { _inNebula?: boolean })._inNebula === true;
     const nowS = performance.now() / 1000;
     const commsX = 2;
@@ -8790,6 +8793,29 @@ export class Voidwake {
     const commsW = Math.max(28, Math.min(120, this.options.commsCols ?? 54));
     const commsRows = Math.max(4, Math.min(30, this.options.commsRows ?? 12));
     const wrap = !!this.options.commsWrap;
+
+    // Mouse-click helpers. We resolve the cursor to a cell once and consume
+    // mouseClicked when we hit any of our hotspots so downstream UI (codex
+    // link, etc.) doesn't double-process it.
+    const mgx = this.input.mouseCX / CELL_W;
+    const mgy = this.input.mouseCY / CELL_H;
+    const clickIn = (x: number, y: number, w: number, h = 1): boolean => {
+      if (!this.input.mouseClicked || !this.input.mouseInside) return false;
+      if (mgx < x || mgx >= x + w || mgy < y || mgy >= y + h) return false;
+      this.input.mouseClicked = false;
+      return true;
+    };
+
+    // Collapsed state — draw only the "Show Comms" pill and bail out.
+    if (this.commsHidden) {
+      const pill = "[+] Show Comms";
+      putText(g, commsX, commsY, pill, "#7CFC00");
+      if (clickIn(commsX, commsY, pill.length)) {
+        this.commsHidden = false;
+      }
+      this._commsRect = { x: commsX, y: commsY, w: pill.length, h: 1 };
+    } else {
+
     // Header row with tabs.
     const titleCol = inNeb ? "#c47afc" : "#7CFC00";
     const commsTitle = inNeb ? "[ CO▓M░S ]" : "[ COMMS ]";
@@ -8805,7 +8831,18 @@ export class Voidwake {
       const active = this.chatterTab === t.id;
       const lbl = active ? `[${t.label}]` : ` ${t.label} `;
       putText(g, tx, commsY, lbl, active ? "#ffe066" : "#7aa");
+      if (clickIn(tx, commsY, lbl.length)) {
+        this.chatterTab = t.id;
+        this.chatterScroll = 0;
+      }
       tx += lbl.length + 1;
+    }
+    // [Hide] button — right side of the header row within the panel width.
+    const hideLbl = "[Hide]";
+    const hideX = commsX + Math.max(tx - commsX, commsW - hideLbl.length);
+    putText(g, hideX, commsY, hideLbl, "#fc6");
+    if (clickIn(hideX, commsY, hideLbl.length)) {
+      this.commsHidden = true;
     }
     // Publish the comms rect so the wheel handler can route scroll here
     // when the cursor is over the panel (header + rows + hint row).
@@ -8880,6 +8917,7 @@ export class Voidwake {
     } else {
       putText(g, commsX, hintY, `\\ tab · wheel/PgUp/Dn scroll · Home newest`, "#446");
     }
+    } // end !commsHidden
 
 
     // Log (mission / system events; separate from chatter).

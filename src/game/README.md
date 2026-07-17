@@ -655,6 +655,12 @@ Scrolling: mouse wheel scrolls the panel when the cursor is inside its
 rect; anywhere else on the canvas the wheel still adjusts throttle.
 PgUp / PgDn and Home keep working as before.
 
+Clicking a tab label selects it (and resets scroll to newest).
+The header also carries a `[Hide]` button that collapses the whole
+panel to a single `[+] Show Comms` pill; clicking the pill restores
+it. The collapsed state is per-session (not saved).
+
+
 ## Chatter pool depth (0.5.10)
 
 Every speaker pool with lines received a broad expansion — hostiles,
