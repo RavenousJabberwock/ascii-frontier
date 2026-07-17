@@ -9123,15 +9123,38 @@ export class Voidwake {
         tag, tagBlink ? "#ffe066" : "#ff3322");
     }
 
-    // Nebula fog overlay — softens viewport with scattered dim glyphs.
+    // Nebula fog overlay — pronounced coloured haze whenever the ship is
+    // physically inside a nebula cloud. Uses three glyph/tint bands so it
+    // looks like layered gas rather than a single flat speckle, and includes
+    // a pulsing corner tag so the player knows why sensors are misbehaving.
     const inNeb2 = (this as unknown as { _inNebula?: boolean })._inNebula;
     if (inNeb2) {
-      for (let i = 0; i < 30; i++) {
+      const glyphs = ["░", "▒", "·", "∴", "▓"];
+      const tints = ["#5a3a7a", "#7a4aa0", "#9a6acc", "#3a5aa0", "#c47afc"];
+      // Density scales with viewport area so the effect reads on any canvas.
+      const density = Math.min(220, Math.floor((vw * vh) / 22));
+      for (let i = 0; i < density; i++) {
         const x = vpLeft + 1 + Math.floor(Math.random() * (vw - 2));
         const y = vpTop + 1 + Math.floor(Math.random() * (vh - 2));
-        if (g[y][x].ch === " ") g[y][x] = { ch: "░", color: "#5a3a7a" };
+        const row = g[y]; if (!row) continue;
+        const cell = row[x]; if (!cell) continue;
+        // Overwrite empties and softly veil dim glyphs; leave bright HUD alone.
+        if (cell.ch === " " || Math.random() < 0.15) {
+          row[x] = {
+            ch: glyphs[(Math.random() * glyphs.length) | 0],
+            color: tints[(Math.random() * tints.length) | 0],
+          };
+        }
       }
+      // Pulsing status tag lower-centre of viewport.
+      const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 260);
+      const tag = "▒ NEBULA WASH — sensors degraded ▒";
+      const tx = vpLeft + Math.floor(vw / 2 - tag.length / 2);
+      const ty = vpTop + vh - 2;
+      const col = pulse > 0.75 ? "#c47afc" : "#7a4aa0";
+      putText(g, tx, ty, tag, col);
     }
+
 
     // Pause banner (big, centered, obvious)
     if (this.paused) {
