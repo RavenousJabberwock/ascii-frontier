@@ -3443,7 +3443,52 @@ function starSizeMul(e: Entity): number {
   return out;
 }
 
-// Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
+// 0.6.1 — per-planet size jitter (0.5x-2.2x) so worlds range from small
+// moons to gas giants without changing base gameplay (collision + dock
+// radius stay pegged to the constant 30u). Deterministic per-id.
+const _planetSizeCache = new WeakMap<Entity, number>();
+function planetSizeMul(e: Entity): number {
+  const cached = _planetSizeCache.get(e);
+  if (cached !== undefined) return cached;
+  // Weighted: most are 0.7-1.3x; ~15% are true giants (up to 2.2x); ~15%
+  // are dwarfs (down to 0.5x). Read from two hashes so the distribution
+  // biases toward normal without being flat.
+  const h1 = hash01(e.id * 761 + 17);
+  const h2 = hash01(e.id * 233 + 53);
+  let out: number;
+  if (h1 < 0.15) out = 0.50 + h2 * 0.30;       // dwarf world
+  else if (h1 < 0.85) out = 0.75 + h2 * 0.65;  // normal
+  else out = 1.55 + h2 * 0.70;                 // giant
+  _planetSizeCache.set(e, out);
+  return out;
+}
+// 0.6.1 — deterministic ring system for a subset of planets. Larger
+// planets are more likely to have rings; giants almost always do.
+type PlanetRings = { hasRings: boolean; inner: number; outer: number; tiltCos: number; tiltSin: number; density: number; color: string };
+const _planetRingCache = new WeakMap<Entity, PlanetRings>();
+const RING_COLORS = ["#d8c090", "#a89078", "#e8d8b0", "#c8a888", "#b8a068", "#f0e0c0", "#a0b8c8", "#c88860"];
+function planetRings(e: Entity): PlanetRings {
+  const cached = _planetRingCache.get(e);
+  if (cached) return cached;
+  const size = planetSizeMul(e);
+  // Base 22% chance, giants (>1.55) 78%, dwarfs (<0.75) 6%.
+  const roll = hash01(e.id * 419 + 71);
+  let chance = 0.22;
+  if (size >= 1.55) chance = 0.78;
+  else if (size < 0.75) chance = 0.06;
+  const hasRings = roll < chance;
+  const inner = 1.25 + hash01(e.id * 191 + 3) * 0.20;    // 1.25-1.45x planet
+  const outer = inner + 0.35 + hash01(e.id * 277 + 5) * 0.55; // width 0.35-0.90
+  // Tilt: -80° .. +80° around the horizontal axis (screen).
+  const tilt = (hash01(e.id * 353 + 11) - 0.5) * 2.7;
+  const tiltCos = Math.cos(tilt);
+  const tiltSin = Math.sin(tilt);
+  const density = 0.35 + hash01(e.id * 613 + 13) * 0.45;
+  const color = RING_COLORS[Math.floor(hash01(e.id * 887 + 19) * RING_COLORS.length)];
+  const out: PlanetRings = { hasRings, inner, outer, tiltCos, tiltSin, density, color };
+  _planetRingCache.set(e, out);
+  return out;
+}
 // [core, mid, edge] so the noise-driven fill can layer three glyph shades.
 const NEBULA_PALETTES: [string, string, string][] = [
   ["#e6b8ff", "#c47afc", "#5a2a8a"], // classic violet
