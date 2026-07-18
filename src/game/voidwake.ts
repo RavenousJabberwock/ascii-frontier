@@ -2793,6 +2793,16 @@ function getCrew(p: PlayerState, role: CrewRole): CrewMember | undefined {
 function crewCount(p: PlayerState): number {
   return (p.gunner ? 1 : 0) + (p.crew ? p.crew.length : 0);
 }
+// 0.6.2 — crew XP → level. floor(xp/50), clamped 0..9. Accepts CrewMember
+// or the legacy Gunner shape (both carry an optional `xp` today).
+function crewLevel(c: { xp?: number }): number {
+  return Math.max(0, Math.min(9, Math.floor((c.xp ?? 0) / 50)));
+}
+function grantCrewXP(p: PlayerState, amount: number) {
+  if (amount <= 0) return;
+  if (p.gunner) p.gunner.xp = (p.gunner.xp ?? 0) + amount;
+  if (p.crew) for (const c of p.crew) c.xp = (c.xp ?? 0) + amount;
+}
 
 // Crew hiring fee per role.
 const CREW_ROLE_INFO: Record<CrewRole, { title: string; baseFee: number; blurb: string; color: string }> = {
