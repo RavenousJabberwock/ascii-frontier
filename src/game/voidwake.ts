@@ -3860,6 +3860,9 @@ export class Voidwake {
   // Pinned quest tracker: when true, render a compact mission panel anchored
   // to the top-right of the viewport during play. Toggled with K.
   questPinned = true;
+  // 0.6.2 — toggleable compact reputation panel on the top-right of the
+  // viewport (below the quest tracker when both are on). Off by default.
+  repPinned = false;
   // Snap timer for targeting brackets — brackets "tighten in" from a wide
   // box to a tight one over a few frames when a new target is acquired.
   private _bracketTargetId: number | null = null;
