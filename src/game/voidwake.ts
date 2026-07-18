@@ -4576,8 +4576,8 @@ export class Voidwake {
     // around a fixed up axis. Applies to keyboard/touch/mouse — not AI slew,
     // which already works from world-space target angles.
     const yawSign = Math.cos(p.heading.pitch) < 0 ? -1 : 1;
-    if (keys.has(k.yawLeft)) { p.heading.yaw -= yawSign * dt * 1.2; this._disengageAutopilot("stick"); }
-    if (keys.has(k.yawRight)) { p.heading.yaw += yawSign * dt * 1.2; this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawLeft)) { p.heading.yaw = wrapPi(p.heading.yaw - yawSign * dt * 1.2); this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawRight)) { p.heading.yaw = wrapPi(p.heading.yaw + yawSign * dt * 1.2); this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchUp))   { p.heading.pitch = wrapPi(p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchDown)) { p.heading.pitch = wrapPi(p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
@@ -4587,7 +4587,7 @@ export class Voidwake {
     // the two don't fight each other.
     const ts = this._touchStick;
     if ((ts.yaw !== 0 || ts.pitch !== 0) && !autopilotOn) {
-      p.heading.yaw += yawSign * ts.yaw * dt * 1.4;
+      p.heading.yaw = wrapPi(p.heading.yaw + yawSign * ts.yaw * dt * 1.4);
       p.heading.pitch = wrapPi(p.heading.pitch + ts.pitch * dt * 1.1);
       this._disengageAutopilot("stick");
     }
@@ -5984,15 +5984,18 @@ export class Voidwake {
     // Turn toward target: convert rel to yaw/pitch and slew toward it.
     const targetYaw = Math.atan2(rel.x, rel.z);
     const targetPitch = Math.atan2(rel.y, Math.hypot(rel.x, rel.z));
-    // Shortest-arc yaw diff
+    // Shortest-arc diffs on both axes so autopilot rights the ship the short
+    // way when the player engaged it while inverted (pitch beyond ±π/2 is now
+    // legal thanks to continuous pitch — we can't just clamp anymore).
     let dy = targetYaw - p.heading.yaw;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
-    const dp = targetPitch - p.heading.pitch;
+    let dp = targetPitch - p.heading.pitch;
+    while (dp > Math.PI) dp -= Math.PI * 2;
+    while (dp < -Math.PI) dp += Math.PI * 2;
     const slew = 2.0 * dt;
-    p.heading.yaw += Math.max(-slew, Math.min(slew, dy));
-    p.heading.pitch += Math.max(-slew, Math.min(slew, dp));
-    p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch));
+    p.heading.yaw = wrapPi(p.heading.yaw + Math.max(-slew, Math.min(slew, dy)));
+    p.heading.pitch = wrapPi(p.heading.pitch + Math.max(-slew, Math.min(slew, dp)));
     // Approach-throttle: full when far, ease down on final approach so we
     // don't cannonball into the dock.
     let dockR = 180;
