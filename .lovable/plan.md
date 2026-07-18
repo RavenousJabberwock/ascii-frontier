@@ -882,3 +882,22 @@ Deferred (still open): player-to-NPC comms, in-canvas Lua editor.
 Deferred (still open): player-to-NPC comms, in-canvas Lua editor,
 optional radius-gated AI tick for very large universes.
 
+## 0.5.15 — Deep-space halo
+
+- Added `DEEP_SPACE_RADIUS = 10 × WORLD_RADIUS` and a `randPosShell()`
+  sampler so entities can be placed strictly OUTSIDE the core play area.
+- Sparse deep-space scatter appended in `generateUniverse()` past the
+  core shell: 220 far suns, 320 rogue asteroids (richer ore rolls),
+  90 comets, 120 thin nebulae, 60 ancient wrecks (richer loot),
+  60 wandering UFOs, 24 rogue pirate raiders, and 18 pure-rescue
+  distress beacons. Total ≈ 910 entities across ~999× the core volume
+  → density ~1000× lower than the core.
+- Deliberately kept out of deep space: colonies, pirate bases,
+  wormholes, ruins, bosses, patrols, wormhole gate stations, dyson
+  swarms. Every quest-anchoring, faction, and economy entity stays in
+  the core so quests keep working exactly as before.
+- No new despawn logic needed — existing tick already has a 3500-unit
+  distance gate around the player, so far-away deep-space entities are
+  effectively free when the player is in the core.
+- VERSION bump 0.5.14 → 0.5.15.
+
