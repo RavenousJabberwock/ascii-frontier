@@ -1653,6 +1653,12 @@ function defaultOptions(): Options {
 // fixed range so distant entities just appear faint.
 // =============================================================================
 const WORLD_RADIUS = 54000;
+// Deep-space halo: a 10x-radius shell around the core universe seeded with
+// FAR fewer entities. Gives long-range explorers something to find past the
+// edge of the "civilised" map. Quests, factions, bases, wormholes and
+// colonies are intentionally kept in the core — deep space is meant to feel
+// desolate and unowned.
+const DEEP_SPACE_RADIUS = WORLD_RADIUS * 10;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
@@ -1660,6 +1666,25 @@ function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
     y: (rng() * 2 - 1) * radius,
     z: (rng() * 2 - 1) * radius,
   };
+}
+
+// Sample a point in the shell between `inner` and `outer` (uniform on the
+// cube shell via rejection). Used to place deep-space content strictly
+// OUTSIDE the core play area.
+function randPosShell(rng: () => number, inner: number, outer: number): Vec3 {
+  for (let i = 0; i < 8; i++) {
+    const p = randPos(rng, outer);
+    if (Math.max(Math.abs(p.x), Math.abs(p.y), Math.abs(p.z)) >= inner) return p;
+  }
+  // Fallback: force onto a random face of the inner cube.
+  const p = randPos(rng, outer);
+  const axis = Math.floor(rng() * 3);
+  const sign = rng() < 0.5 ? -1 : 1;
+  const v = inner + rng() * (outer - inner);
+  if (axis === 0) p.x = sign * v;
+  else if (axis === 1) p.y = sign * v;
+  else p.z = sign * v;
+  return p;
 }
 
 function nameFrom(rng: () => number, prefix: string): string {
