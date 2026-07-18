@@ -3963,9 +3963,25 @@ export class Voidwake {
 
 
   fit() {
+    // 0.6.2 — HiDPI backing store. Previously the canvas was sized to CSS
+    // pixels, which on a fractional / >1 DPR display forces the browser to
+    // upscale the bitmap and text goes soft. Now the backing store is
+    // (CSS × devicePixelRatio) and the 2D context is scaled by DPR so all
+    // draw coordinates stay in CSS pixels (no other math needs to change).
+    // Capped at 2 to keep 4K displays from tanking the fillText loop.
     const r = this.canvas.getBoundingClientRect();
-    this.canvas.width = Math.floor(r.width);
-    this.canvas.height = Math.floor(r.height);
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    this._dpr = dpr;
+    this._cssW = Math.max(1, Math.floor(r.width));
+    this._cssH = Math.max(1, Math.floor(r.height));
+    this.canvas.width = Math.floor(this._cssW * dpr);
+    this.canvas.height = Math.floor(this._cssH * dpr);
+    // Explicit CSS size so the element doesn't grow with the backing store.
+    this.canvas.style.width = this._cssW + "px";
+    this.canvas.style.height = this._cssH + "px";
+    // Reset transform so the render() setTransform below always applies
+    // against a clean identity.
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   start() {
