@@ -5427,9 +5427,22 @@ export class Voidwake {
           options: this.options, savedAt: Date.now(),
           chatter: this.chatter.slice(0, 250),
         };
-        const res = saveGame("autosave", blob);
+        let res = saveGame("autosave", blob);
+        if (!res.ok && res.reason === "quota") {
+          // Quota exceeded — free the old slot and retry without chatter
+          // history (usually the biggest single contributor to save size).
+          try { localStorage.removeItem(SAVE_PREFIX + "autosave"); } catch { /* ignore */ }
+          const slim: SaveBlob = { ...blob, chatter: [] };
+          res = saveGame("autosave", slim);
+        }
         if (!res.ok) {
-          this.pushLog(res.reason === "quota" ? "⚠ Autosave failed: browser storage full." : "⚠ Autosave failed.");
+          if (res.reason === "quota") {
+            this.options.autosave = false;
+            this.pushLog("⚠ Autosave off: browser storage full.");
+            this.pushLog("Clear old saves or export to JSON to free space.");
+          } else {
+            this.pushLog("⚠ Autosave failed (see console).");
+          }
         } else {
           p.lastSaveAt = Date.now();
           this.pushLog("◉ Autosaved.");
@@ -5437,7 +5450,9 @@ export class Voidwake {
         }
       } catch (err) {
         console.warn("Autosave failed", err);
+        this.pushLog("⚠ Autosave failed (see console).");
       }
+
     }
 
     // Collision damage vs large bodies (planets / stars / stations / rocks).
