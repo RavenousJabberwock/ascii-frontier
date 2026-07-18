@@ -8965,6 +8965,57 @@ export class Voidwake {
         }
       }
 
+      // 0.6.1 — Planetary rings. Roughly 1-in-5 planets (weighted toward
+      // giants) get a tilted, colored ring plane. Draws a ring annulus in
+      // the planet's local plane, sheared vertically by the ring tilt so
+      // it visibly loops behind and in front of the disc. Cells inside the
+      // planet radius are skipped so the front-of-planet band is
+      // occluded by the planet body itself (already drawn above), and
+      // cells behind the planet are drawn onto empty space — the effect
+      // reads as a partially eclipsed ring without a real depth buffer.
+      if (e.kind === "planet") {
+        const rings = planetRings(e);
+        if (rings.hasRings && rx >= 3) {
+          const outerX = Math.round(rx * rings.outer);
+          const outerY = Math.max(1, Math.round(ry * rings.outer * Math.abs(rings.tiltCos) + 0.5));
+          const innerRatio = rings.inner / rings.outer;
+          const ringGlyphs = ["·", "-", "=", "~"];
+          for (let dy = -outerY; dy <= outerY; dy++) {
+            for (let dx = -outerX; dx <= outerX; dx++) {
+              // Un-shear: map screen (dx,dy) back to the planet's ring
+              // plane. Ring plane is horizontal, tilted by (tiltCos on Y,
+              // tiltSin adds a slight horizontal skew for asymmetry).
+              const nx = dx / (rx * rings.outer);
+              const cosT = rings.tiltCos === 0 ? 0.01 : rings.tiltCos;
+              const ny = (dy / (ry * rings.outer) - nx * rings.tiltSin * 0.15) / cosT;
+              const rad = nx * nx + ny * ny;
+              if (rad > 1 || rad < innerRatio * innerRatio) continue;
+              // Skip cells strictly inside the planet body silhouette
+              // AND on the "front" half (dy > 0 in screen space when
+              // tiltCos > 0). Back-half cells fall outside the planet
+              // disc thanks to the tilt, so this simple test looks 3D.
+              const pnx = dx / rx, pny = dy / ry;
+              const insidePlanet = (pnx * pnx + pny * pny) < 1;
+              const frontHalf = (dy * (rings.tiltCos >= 0 ? 1 : -1)) > 0;
+              if (insidePlanet && !frontHalf) continue;
+              // Density thinning + a small radial gap (Cassini-ish) at
+              // ~65% of the ring width so the ring doesn't read as a solid
+              // band.
+              const cellH = hash01(e.id * 907 + dx * 613 + dy * 419);
+              if (cellH > rings.density) continue;
+              const t = (Math.sqrt(rad) - innerRatio) / (1 - innerRatio);
+              if (t > 0.55 && t < 0.68) continue;
+              const gx = sx + dx, gy = sy2 + dy;
+              if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+              if (g[gy][gx].ch !== " ") continue;
+              const gi = Math.min(3, Math.floor(cellH * 4));
+              g[gy][gx] = { ch: ringGlyphs[gi], color: rings.color, glow: false };
+            }
+          }
+        }
+      }
+
+
       // 0.5.6 — Colony overlay ring: populated planets get a faint dotted
       // orbital ring (`·`) just outside the sprite and a small `◈` beacon
       // tag at the top, so they read as inhabited at a glance without
