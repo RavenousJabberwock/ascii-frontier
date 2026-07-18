@@ -9374,6 +9374,52 @@ export class Voidwake {
       }
     }
 
+    // 0.6.2 — Toggleable Rep Panel. Compact reputation + crew XP readout
+    // anchored top-right of the viewport, below the quest tracker when
+    // both are on. Off by default; press R to pin (see updatePlaying).
+    if (this.repPinned) {
+      const rw = 28;
+      const rx = Math.max(vpLeft + 2, vpRight - rw - 1);
+      // If quest tracker is showing, drop below its 3-row block; else hug top.
+      const questShown = this.questPinned && !!p.mission;
+      const ry = vpTop + 1 + (questShown ? 4 : 0);
+      const rep = p.reputation ?? {};
+      putText(g, rx, ry, "[ STANDINGS ]", "#cf6", vpRight);
+      const fedV = rep.federation ?? 0;
+      const gldV = rep.guild ?? 0;
+      const pirV = rep.pirate ?? 0;
+      const repCol = (v: number) => v >= 20 ? "#7CFC00" : v <= -20 ? "#ff7a7a" : "#aef";
+      const pad = (s: string, n: number) => s.length >= n ? s : s + " ".repeat(n - s.length);
+      putText(g, rx, ry + 1, `Fed  ${pad(repLabel(fedV), 10)} ${fedV >= 0 ? "+" : ""}${fedV}`, repCol(fedV), vpRight);
+      putText(g, rx, ry + 2, `Gld  ${pad(repLabel(gldV), 10)} ${gldV >= 0 ? "+" : ""}${gldV}`, repCol(gldV), vpRight);
+      putText(g, rx, ry + 3, `Pir  ${pad(repLabel(pirV), 10)} ${pirV >= 0 ? "+" : ""}${pirV}`, repCol(pirV), vpRight);
+      // Crew XP summary — up to 4 rows so we don't crowd the flight view.
+      let ryc = ry + 4;
+      const crewRows: [string, string, number, string][] = [];
+      if (p.gunner) crewRows.push(["Gun", p.gunner.name.split(" ")[0], crewLevel(p.gunner), "#fc6"]);
+      if (p.crew) for (const c of p.crew) {
+        crewRows.push([CREW_ROLE_INFO[c.role].title.slice(0, 3), c.name.split(" ")[0], crewLevel(c), CREW_ROLE_INFO[c.role].color]);
+      }
+      if (crewRows.length) {
+        putText(g, rx, ryc, "[ CREW XP ]", "#cf6", vpRight);
+        ryc++;
+        for (const [ttl, nm, lvl, col] of crewRows.slice(0, 4)) {
+          const xpTotal = lvl * 50; // approximate — cap-hidden but enough for the pill
+          const bar = "▮".repeat(Math.min(9, lvl)) + "▯".repeat(Math.max(0, 9 - lvl));
+          putText(g, rx, ryc, `${ttl} ${pad(nm, 8)} L${lvl}`, col, vpRight);
+          putText(g, rx + 15, ryc, bar, col, vpRight);
+          void xpTotal;
+          ryc++;
+        }
+        if (crewRows.length > 4) putText(g, rx, ryc, `+${crewRows.length - 4} more`, "#888", vpRight);
+      }
+    }
+
+
+
+
+
+
 
 
 
