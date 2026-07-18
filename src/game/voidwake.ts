@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.12";
+const VERSION = "0.5.13";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -247,6 +247,17 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "That transponder's about to be someone else's souvenir.",
     "Hail the wing — {cmdr}'s hull is on the menu.",
     "Nothing personal, {cmdr}. Just quarterly numbers.",
+    "Your beacon sings prey, {cmdr}. Loud and clear.",
+    "Wing, mark the fuel — hulls burn better dry.",
+    "You fly a {ship} like it owes you money. It doesn't. I do.",
+    "Every lane's got a price. Yours came due.",
+    "Cmdr — pop that transponder or I pop your hull. Either way, I win.",
+    "That's a lot of paint for a coffin. Pretty though.",
+    "Say your callsign one more time, {cmdr}. Want it on the ledger right.",
+    "Fed patrol's a sector out. Won't matter to you.",
+    "I've eaten commanders tougher than you for breakfast. Literally, once.",
+    "Boys, the {ship}'s running hot — she'll cook herself if we're patient.",
+    "You want a shot at me, {cmdr}? Try aiming. Cute either way.",
   ],
   boss_hostile: [
     "So THIS is the {cmdr} the bounty board's been screaming about.",
@@ -292,6 +303,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Reputation panel says you're welcome home, {cmdr}.",
     "That's a courier's burn if I ever saw one. Safe lanes.",
     "Convoy leader hails the {ship} — thanks for keeping the lane clean.",
+    "Cmdr, we logged your last mayday assist. Coffee's on us at any Fed dock.",
+    "Escort wing says the {ship} flies like it grew up in the black.",
+    "Federation dispatch marks you as friend-of-lane. Fly proud.",
+    "Cmdr, we heard about the pirate wing you thinned out in {sector}. Nice work.",
+    "Convoy medic waves — we still have your blood type stocked. Just in case.",
+    "Rookie in the wing wants your autograph, {cmdr}. Don't laugh, he's serious.",
+    "If the lane goes hot, squawk on 121.5 — we're always listening.",
+    "Wing runs quiet on this shift. Company's welcome if you want to formation up.",
+    "Cmdr — the {ship}'s trim looks perfect from here. Textbook.",
+    "Fed comms says the {sector} beat is running smooth. Rare and nice.",
   ],
   neutral: [
     "{ship}, mind your wake.",
@@ -317,6 +338,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Fly under someone's colors long enough and you forget your own.",
     "Slow burn, low overhead, home before shift end. That's the trade.",
     "Guild says a new lane's opening near {sector}. Grain of salt.",
+    "Cmdr, we haul for anyone who pays and doesn't ask. Includes you.",
+    "Rocks aren't glamorous, but they're honest cargo. Unlike some captains.",
+    "You ever try selling ore during a colony strike? Don't. It's grim.",
+    "Guild dispatcher tried to reroute me three times today. Told 'em I'm busy.",
+    "Fuel gauge says home, wallet says one more haul. Wallet wins.",
+    "If a Fed patrol scans us, {cmdr}, back me up on 'that crate is spinach'.",
+    "The lane's a job, not a poem, {cmdr}. Some hulls forget that.",
+    "You look like a captain who tips. Am I right or am I right?",
+    "Long haulers age in dog years. Look at me — I'm forty and eighty.",
+    "Cargo insurance says one thing, cargo hold says another. Same as always.",
   ],
   station: [
     "...automated beacon, {sector}: dock fees waived this cycle.",
@@ -340,6 +371,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Long-range comms picked up mayday traffic near {sector}. Patrol's rolling.",
     "Recruiter's in the bar taking sign-ons. Just so you know, Cmdr.",
     "Station chapel's open this cycle if you need a quiet room.",
+    "Cmdr, docking bay four just had a spill. Approach on bay three instead.",
+    "Beacon operator here — my shift's twenty hours in and my coffee's ice. Fly safe.",
+    "Bay chief says the {ship} handles nicer than his last three tenants combined.",
+    "Automated dispatch: cargo tally reads {cargo}%. Manifest office ready.",
+    "Cmdr, the tradehouse just posted a rush order. Talk to the broker.",
+    "Station lights dimmed one bar for a moment. Reactor hiccup. Nothing to worry about.",
+    "New arrival: {ship} on final. Docking clamps warming.",
+    "Cmdr, our shipwright wants a look at your emitter. Says he can hear it from here.",
+    "Beacon calibration complete. Approach lanes reading clean.",
+    "Lost-and-found has a data slate from a Cmdr matching your description. Come collect.",
   ],
   planet: [
     "Surface comms crackle: {weather}.",
@@ -403,6 +444,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "SPD to {ship}: keep clear of the beacon lattice, {cmdr}.",
     "Any captain running from us today is running toward us tomorrow.",
     "Patrol wing signing off shift — replacements inbound, coverage seamless.",
+    "SPD advisory to {ship}: reduce closing speed, {cmdr}. Just a friendly nudge.",
+    "Patrol cruiser rolling {sector}. Squawk hostile, we roll faster.",
+    "Cmdr, we ran your transponder — all clear. Fly on.",
+    "SPD to any hull: mayday within thirty units? Squawk once, we're on it.",
+    "Patrol log: this shift, four tows, zero arrests. Slow day. Good day.",
+    "Cmdr, if you see a hull marked 'H' running dark, sing out.",
+    "SPD to lane: any grief on approach, we answer. That's the whole job.",
+    "Patrol wing's got fuel, guns, and time. Just how we like it.",
+    "Cmdr — the {ship}'s reading nominal on our scope. Carry on.",
+    "SPD comms: another quiet lane makes another paid shift. Long may it last.",
   ],
   patrol_tow: [
     "SPD to {target}: sit tight, tractor locking on.",
@@ -524,6 +575,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You should hear the songs the crew sing when you're not on comms.",
     "Reload cycle's smoother than my last three ships. Whoever tuned it — respect.",
     "Cmdr, remember: patrols scan cargo, not intentions. Keep the hold clean.",
+    "You know what a full mag sounds like? Nothing. That's the point.",
+    "I used to name every kill. Ran out of names in {sector}. Now I just count.",
+    "Bounty board's got a new mark I might chase after this contract. Don't tell.",
+    "Cmdr, when you jink starboard I miss high. When you jink port I miss low. Do the math.",
+    "Miner ship on the plot. Pretty sight. Boring gunnery.",
+    "One of these days I'll fire a shot I don't second-guess. Not today.",
+    "Reticle's clean. Guns are warm. That's all a gunner asks for.",
+    "You ever notice hostiles fly better after they've fed? Weird pattern.",
+    "I count three ways to peel a raider's shields. Only one's legal.",
+    "Cmdr — good gunnery is 80% patience, 15% timing, 5% luck. Some days it's all luck.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
@@ -628,6 +689,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Space is mostly empty. Doesn't stop me watching every pixel of it.",
     "Cleanest lane home right now is heading rimward. Just so you know.",
     "I trained on a hulk that couldn't turn without groaning. This {ship}'s a dream.",
+    "Cmdr, you fly like you were born owing the black money.",
+    "Autopilot's cheap. Sitting your own stick is cheaper. Just saying.",
+    "Watch the yaw on approach — you drift six degrees late every time.",
+    "Space is empty till it isn't. Then it's very much not.",
+    "Wormholes chew fuel, but they save days. Trade you like for like.",
+    "Cmdr, I've flown three of these before. This one likes you best.",
+    "Old pilot's rule: never dock hot, never brake late, never drink at the stick.",
+    "You'd think comets are pretty. They are. Right up till one clips your paint.",
+    "Every lane's got a rhythm. This one's a waltz. Fly it three-count.",
+    "Nav display's happy. I'm happy. Somewhere, a merchant is not. Balance.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
@@ -684,6 +755,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "There's a coffee ring on my main console. I refuse to clean it. Superstition.",
     "Shield harmonics love a lazy throttle. Fast bursts, slow rebuilds.",
     "Cmdr — I keep three spare emitters. Two are for optimism.",
+    "Reactor purring, coolant humming, coffee cold. Perfect balance.",
+    "I re-tapped the aft manifold. If it whines again, it's personal.",
+    "Cmdr, next dock I want two hours in the shipwright bay. Preventative.",
+    "You want more shield uptime? Ease off the throttle spikes. Physics, not magic.",
+    "This hull's older than my daughter and holds together twice as well.",
+    "I dream in reactor tones now, Cmdr. Not sure that's healthy.",
+    "Fuel efficiency's up 3% this shift. Buy me lunch and I'll get you 4%.",
+    "Cmdr, if you ever lose a shield emitter mid-fight, don't panic — panic wastes air.",
+    "Every good engineer keeps a mystery bolt in her toolbox. Mine's saved this ship twice.",
+    "Reactor's fine. Coupler's fine. The crew, however, is a work in progress.",
   ],
   engineer_greet: [
     "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
@@ -3257,6 +3338,14 @@ const SHIP_SPRITES: Record<string, string[][]> = {
     [" ^ ", "[=>", " v "],
     ["/^\\", "<O>", "\\v/"],
     [" . ", "(=]", " ' "],
+  ],
+  // SPD Patrol cruisers — deliberately blockier / more armored-looking than a
+  // civilian friendly so the player can eyeball law enforcement at a glance.
+  patrol: [
+    ["[^]", "|#|", "[v]"],
+    ["/T\\", "[@]", "\\T/"],
+    [".T.", "{#}", "'T'"],
+    ["|^|", "[X]", "|v|"],
   ],
   neutral: [
     [" . ", "(o)", " ' "],
@@ -8288,7 +8377,8 @@ export class Voidwake {
             g[sy2][sx] = { ch: glyph, color: tint.fill };
           }
         } else {
-          const variants = SHIP_SPRITES[e.kind];
+          const spriteKey = (e.kind === "friendly" && e.faction === "patrol") ? "patrol" : e.kind;
+          const variants = SHIP_SPRITES[spriteKey] ?? SHIP_SPRITES[e.kind];
           const sprite = variants[Math.floor(hash01(e.id) * variants.length)];
           for (let dy = -1; dy <= 1; dy++) {
             const row = sprite[dy + 1];
