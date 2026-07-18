@@ -7531,6 +7531,102 @@ export class Voidwake {
     // ahead of the ship so the field never empties out as we fly.
     const fwd = { x: sy * cp, y: sp, z: cy * cp };
 
+    // ---- Deep-sky pass (galactic disk + core + BH) -----------------------
+    // Fixed points in world space treated as if they lived at infinity —
+    // only the camera rotation applies, translation is ignored. This lets
+    // us paint a "background sky" that always sits behind everything else.
+    const projectDir = (dx: number, dy: number, dz: number) => {
+      const x1 = cy * dx - sy * dz;
+      const z1 = sy * dx + cy * dz;
+      const y1 = cp * dy - sp * z1;
+      const z2 = sp * dy + cp * z1;
+      if (z2 <= 0.05) return null;
+      const sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
+      const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
+      if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) return null;
+      return { sx, sy: sy2 };
+    };
+    if (this._galaxyDirs.length === 0) {
+      // 180 points spread around the disk. Slight thickness (dy) so the band
+      // reads as a faint smear rather than a pixel-thin line.
+      for (let i = 0; i < 180; i++) {
+        const th = (i / 180) * Math.PI * 2 + Math.random() * 0.02;
+        const r = 0.85 + Math.random() * 0.15;
+        const dx = Math.cos(th) * r;
+        const dz = Math.sin(th) * r;
+        const dy = (Math.random() - 0.5) * 0.08; // thin disk
+        const b = Math.floor(Math.random() * 3);
+        // Normalize.
+        const L = Math.hypot(dx, dy, dz) || 1;
+        this._galaxyDirs.push({ x: dx / L, y: dy / L, z: dz / L, b });
+      }
+    }
+    const DISK_PAL = ["#241a2c", "#3a2740", "#4d3358"];
+    const DISK_CH = [".", ".", "·"];
+    for (const d of this._galaxyDirs) {
+      const pt = projectDir(d.x, d.y, d.z);
+      if (!pt) continue;
+      const cell = g[pt.sy][pt.sx];
+      if (cell.ch === " ") g[pt.sy][pt.sx] = { ch: DISK_CH[d.b], color: DISK_PAL[d.b] };
+    }
+    // Galactic core: direction to world origin. Bright center with a faint
+    // halo, and a black-hole disk at the very core.
+    const toCoreLen = Math.hypot(p.pos.x, p.pos.y, p.pos.z) || 1;
+    const cxDir = -p.pos.x / toCoreLen, cyDir = -p.pos.y / toCoreLen, czDir = -p.pos.z / toCoreLen;
+    const core = projectDir(cxDir, cyDir, czDir);
+    if (core) {
+      // Halo (2-cell radius) in warm dust colors.
+      const HALO = ["#3a2440", "#553055", "#77406a", "#a05680"];
+      for (let oy = -2; oy <= 2; oy++) {
+        for (let ox = -3; ox <= 3; ox++) {
+          const rad = Math.hypot(ox * 0.6, oy);
+          if (rad < 0.5 || rad > 3.2) continue;
+          const sx = core.sx + ox, sy2 = core.sy + oy;
+          if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
+          if (g[sy2][sx].ch !== " ") continue;
+          const tier = Math.min(3, Math.floor(rad));
+          g[sy2][sx] = { ch: "·", color: HALO[3 - tier] };
+        }
+      }
+      // Bright galactic-center glyph, then black hole overlay.
+      if (g[core.sy][core.sx].ch === " " || g[core.sy][core.sx].ch === "·")
+        g[core.sy][core.sx] = { ch: "*", color: "#f4c67a", glow: true };
+      // BH: single darkened cell right beside the core so the core reads as
+      // "bright halo with a dark eye". Only draw if inside viewport.
+      if (core.sx + 1 < vpRight)
+        g[core.sy][core.sx + 1] = { ch: "●", color: "#0a0508" };
+    }
+
+    // ---- Colorful gas cloud puffs ---------------------------------------
+    // Sparse and dim — meant to add a splash of color without obscuring the
+    // starfield or entities. Same reject-and-respawn scheme as the stars.
+    if (this.gasClouds.length === 0) {
+      const CLOUD_TINTS = ["#2a1a3a", "#3a1a2a", "#1a2a3a", "#1a3a2a", "#3a2a1a", "#301538"];
+      for (let i = 0; i < 60; i++) {
+        const seed = this.spawnWorldStar(R * 1.4, false);
+        this.gasClouds.push({ x: seed.x, y: seed.y, z: seed.z, c: CLOUD_TINTS[i % CLOUD_TINTS.length] });
+      }
+    }
+    for (const c of this.gasClouds) {
+      const rx = c.x - p.pos.x, ry = c.y - p.pos.y, rz = c.z - p.pos.z;
+      const x1 = cy * rx - sy * rz;
+      const z1 = sy * rx + cy * rz;
+      const y1 = cp * ry - sp * z1;
+      const z2 = sp * ry + cp * z1;
+      if (z2 <= 1) {
+        // Behind camera — reposition ahead.
+        const ahead = 0.5 * R + Math.random() * R;
+        c.x = p.pos.x + fwd.x * ahead + (Math.random() - 0.5) * R;
+        c.y = p.pos.y + fwd.y * ahead + (Math.random() - 0.5) * R;
+        c.z = p.pos.z + fwd.z * ahead + (Math.random() - 0.5) * R;
+        continue;
+      }
+      const sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
+      const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
+      if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
+      if (g[sy2][sx].ch === " ") g[sy2][sx] = { ch: "·", color: c.c };
+    }
+
     // Three brightness tiers; gray, low-alpha-feeling palette.
     const PAL = ["#1a1f2a", "#2b3346", "#3d4a66"];
     const CH = [".", ".", "·"];
