@@ -1621,6 +1621,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   cycleTypeNext: "}",    // cycle to next in-range target of the current target's type
   autopilot: "o",        // toggle hired Pilot's autopilot to current target
   questLog: "u",         // open the toggle-able Quest Log popup
+  pinRep: "r",           // toggle the compact reputation panel
 };
 
 // User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
