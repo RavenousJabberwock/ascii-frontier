@@ -907,6 +907,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I re-lashed the aft crates. If they rattle again it's ghosts, not physics.",
     "Kept the spares inventory current. Engineer'll thank me eventually.",
     "Every kilo of cargo has a story on my ledger. Some are boring stories.",
+    // Sci-fi flavor.
+    "Cargo manifest reads like a shopping list for a very strange wizard.",
+    "I inventory the towel last. Never travel without one, {cmdr}.",
+    "One crate is labeled 'DO NOT OPEN'. I labeled it. I forget why.",
   ],
   quartermaster_greet: [
     "Quartermaster reporting. I'll squeeze margin out of every dock, Cmdr.",
