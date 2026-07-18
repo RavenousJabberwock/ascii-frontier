@@ -7822,21 +7822,37 @@ export class Voidwake {
           if (V.len(V.sub(e.pos, this.player.pos)) < 2000) { thargoidNear = 1; break; }
         }
       }
-      const intensity = Math.max(hullPulse > 0 ? 0.6 : 0, thargoidNear ? 0.85 : 0);
+      const self = this as unknown as { _wormholeFx?: number; _boosting?: boolean; _supercruise?: boolean };
+      const wormholeFx = Math.max(0, self._wormholeFx ?? 0);
+      // Occasional micro-glitch while afterburning or supercruising.
+      let travelFx = 0;
+      if (self._boosting && Math.random() < 0.06) travelFx = 0.35;
+      if (self._supercruise && Math.random() < 0.10) travelFx = Math.max(travelFx, 0.5);
+      const intensity = Math.max(
+        hullPulse > 0 ? 0.6 : 0,
+        thargoidNear ? 0.85 : 0,
+        wormholeFx > 0 ? Math.min(1, wormholeFx / 2.8) * 1.1 : 0,
+        travelFx,
+      );
       if (intensity > 0) {
         // Cheap band-shift: pick 2-3 random horizontal slices and copy them
         // sideways by a few pixels. Uses drawImage(canvas,...) which the
         // 2D context supports on its own canvas.
-        const bands = 2 + Math.floor(Math.random() * 3);
+        const bands = 2 + Math.floor(Math.random() * 3) + (wormholeFx > 0 ? 3 : 0);
         for (let b = 0; b < bands; b++) {
           const by = Math.floor(Math.random() * h);
           const bh = 3 + Math.floor(Math.random() * 12);
           const dx = Math.floor((Math.random() - 0.5) * 40 * intensity);
           try { ctx.drawImage(this.canvas, 0, by, w, bh, dx, by, w, bh); } catch { /* ignore */ }
         }
-        // Green/magenta chroma tick to sell the alien signal.
-        ctx.fillStyle = thargoidNear
+        // Chroma tick: nebula-purple for wormholes, green for Thargoids,
+        // amber for travel bursts, red otherwise.
+        ctx.fillStyle = wormholeFx > 0
+          ? `rgba(180, 120, 255, ${(0.14 * intensity).toFixed(3)})`
+          : thargoidNear
           ? `rgba(160, 255, 60, ${(0.09 * intensity).toFixed(3)})`
+          : travelFx > 0
+          ? `rgba(255, 200, 90, ${(0.08 * intensity).toFixed(3)})`
           : `rgba(255, 80, 80, ${(0.10 * intensity).toFixed(3)})`;
         ctx.fillRect(0, 0, w, h);
       }
