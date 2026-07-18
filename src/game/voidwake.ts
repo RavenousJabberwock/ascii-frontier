@@ -5264,6 +5264,13 @@ export class Voidwake {
     (this as unknown as { _inNebula: boolean })._inNebula = insideNebula;
     // Block fire while super-cruising (preserved in fire block below via flag).
     (this as unknown as { _supercruise: boolean })._supercruise = supercruise;
+    (this as unknown as { _boosting: boolean; _boostMul: number })._boosting = boosting;
+    (this as unknown as { _boostMul: number })._boostMul = boostMul;
+    // Decay wormhole traversal FX timer (used by glitch renderer).
+    {
+      const self = this as unknown as { _wormholeFx?: number };
+      if (self._wormholeFx && self._wormholeFx > 0) self._wormholeFx = Math.max(0, self._wormholeFx - dt);
+    }
 
     // --- EMP: if a Thargoid field is active, disable ship systems -----------
     const empActive = (this._empUntil ?? 0) > now;
