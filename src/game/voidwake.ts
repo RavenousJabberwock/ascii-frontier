@@ -1685,7 +1685,7 @@ function generateUniverse(seed: number): Entity[] {
   // shows a variety of stellar classes (red giants, blue supergiants, white
   // dwarves, etc — see stellarClassOf()).
   out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sol"), pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
-  for (let i = 0; i < 47; i++) {
+  for (let i = 0; i < 376; i++) {
     out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sun"), pos: randPos(rng, WORLD_RADIUS * 0.95), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
   }
 
@@ -1756,7 +1756,7 @@ function generateUniverse(seed: number): Entity[] {
   // and tractor-tow stranded ships to the nearest non-hostile station.
   // See tickAI's "patrol" branch. Faction is `patrol` so the AI can key on it
   // without a new EntityKind (colored cyan-blue by tintFor / colorFor).
-  const patrolCount = 5 + Math.floor(rng() * 3);
+  const patrolCount = 40 + Math.floor(rng() * 24);
   for (let i = 0; i < patrolCount; i++) {
     out.push({
       id: nextId(), kind: "friendly",
@@ -1773,7 +1773,7 @@ function generateUniverse(seed: number): Entity[] {
   // Derelict ships: static, silent wrecks scattered across the frontier.
   // Fly within 40u to salvage credits + ore. No AI, no weapons — just loot
   // and a bit of environmental storytelling.
-  for (let i = 0; i < 41; i++) {
+  for (let i = 0; i < 328; i++) {
     out.push({
       id: nextId(), kind: "derelict",
       name: nameFrom(rng, rng() < 0.5 ? "Wreck" : "Hulk"),
@@ -1825,7 +1825,7 @@ function generateUniverse(seed: number): Entity[] {
   // UFOs: a handful of enigmatic wanderers. They ignore factions and drift
   // between random survey points; if the player gets close they linger
   // ("observe") briefly then boost away.
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 112; i++) {
     out.push({
       id: nextId(), kind: "ufo", name: nameFrom(rng, "UAP"),
       pos: randPos(rng, WORLD_RADIUS),
@@ -1860,7 +1860,7 @@ function generateUniverse(seed: number): Entity[] {
   // 0.5: 5% of rifts have a Federation station orbiting one mouth; a
   // rarer subset (~30% of those) have stations at BOTH ends, useful for
   // long-haul trading loops.
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 56; i++) {
     const a: Entity = {
       id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
       pos: randPos(rng, WORLD_RADIUS * 0.85),
