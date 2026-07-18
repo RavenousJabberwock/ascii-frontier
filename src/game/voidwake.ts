@@ -5427,9 +5427,22 @@ export class Voidwake {
           options: this.options, savedAt: Date.now(),
           chatter: this.chatter.slice(0, 250),
         };
-        const res = saveGame("autosave", blob);
+        let res = saveGame("autosave", blob);
+        if (!res.ok && res.reason === "quota") {
+          // Quota exceeded — free the old slot and retry without chatter
+          // history (usually the biggest single contributor to save size).
+          try { localStorage.removeItem(SAVE_PREFIX + "autosave"); } catch { /* ignore */ }
+          const slim: SaveBlob = { ...blob, chatter: [] };
+          res = saveGame("autosave", slim);
+        }
         if (!res.ok) {
-          this.pushLog(res.reason === "quota" ? "⚠ Autosave failed: browser storage full." : "⚠ Autosave failed.");
+          if (res.reason === "quota") {
+            this.options.autosave = false;
+            this.pushLog("⚠ Autosave off: browser storage full.");
+            this.pushLog("Clear old saves or export to JSON to free space.");
+          } else {
+            this.pushLog("⚠ Autosave failed (see console).");
+          }
         } else {
           p.lastSaveAt = Date.now();
           this.pushLog("◉ Autosaved.");
@@ -5437,7 +5450,9 @@ export class Voidwake {
         }
       } catch (err) {
         console.warn("Autosave failed", err);
+        this.pushLog("⚠ Autosave failed (see console).");
       }
+
     }
 
     // Collision damage vs large bodies (planets / stars / stations / rocks).
@@ -9803,11 +9818,34 @@ export class Voidwake {
 
 
     // Log (mission / system events; separate from chatter).
+    // The log column is only ~24 cells wide (cols-52 .. cols-28); word-wrap
+    // long entries onto continuation lines so messages like
+    // "⚠ Autosave off: browser storage full." aren't clipped to "…bro".
+    const logX = cols - 52;
+    const logWidth = Math.max(8, logRight - logX);
+    const wrapLog = (text: string, width: number): string[] => {
+      const out: string[] = [];
+      const words = text.split(/\s+/);
+      let line = "";
+      for (const w of words) {
+        if (!line.length) { line = w.length > width ? w.slice(0, width) : w; continue; }
+        if (line.length + 1 + w.length <= width) line += " " + w;
+        else { out.push(line); line = w.length > width ? w.slice(0, width) : w; }
+      }
+      if (line.length) out.push(line);
+      return out.length ? out : [text.slice(0, width)];
+    };
     let ly = rTop;
     for (let i = this.log.length - 1; i >= 0; i--) {
-      putText(g, cols - 52, ly++, "» " + this.log[i].msg, "#cfd", cols - 28);
+      const first = "» " + this.log[i].msg;
+      const lines = wrapLog(first, logWidth);
+      for (let k = 0; k < lines.length; k++) {
+        putText(g, logX, ly++, k === 0 ? lines[k] : "  " + lines[k], "#cfd", logRight);
+        if (ly > rows - 2) break;
+      }
       if (ly > rows - 2) break;
     }
+
 
     // Keys hint
     const gunnerHint = p.gunner ? `  G ${p.gunner.enabled ? "gunner ON" : "gunner off"}` : "";
