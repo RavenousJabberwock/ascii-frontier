@@ -585,6 +585,15 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You ever notice hostiles fly better after they've fed? Weird pattern.",
     "I count three ways to peel a raider's shields. Only one's legal.",
     "Cmdr — good gunnery is 80% patience, 15% timing, 5% luck. Some days it's all luck.",
+    // Sci-fi tips of the hat (light homage — no direct quotes).
+    "I've seen shots you people wouldn't believe. Tracer fire off the shoulder of a gas giant.",
+    "In space, no one hears you miss. Lucky for me.",
+    "Never tell me the odds, {cmdr}. Just tell me where the {target} is.",
+    "Rule one of gunnery, {cmdr}: don't get cocky.",
+    "Boarding party? I've got a very particular set of skills.",
+    "It's a good day to fire — someone else's day, ideally.",
+    "Set phasers to 'we're being polite'. Then don't be polite.",
+    "The Gratuitous Space Battles forum would call that shot 'artistic'. I call it Tuesday.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
