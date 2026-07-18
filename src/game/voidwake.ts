@@ -963,6 +963,12 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I ran the numbers on our last kill. Ninety percent efficiency. Not enough.",
     "Threat plot's a poem, Cmdr. Ugly, honest, and always right on the ending.",
     "Tactical is patience with a gun in its hand.",
+    // Sci-fi flavor.
+    "Threat assessment: nominal. Threat vibe: unsettling. Recommending caution, {cmdr}.",
+    "Rules of Acquisition aside, {cmdr}, a live merchant beats a dead one at haggling.",
+    "By the book? The book's a rough draft, {cmdr}. I write the appendix.",
+    "The needs of the many outweigh the fuel margin of the few. Usually.",
+    "One does not simply broadside a Federation cruiser. Except when one does.",
   ],
   tactical_greet: [
     "Tactical officer reporting. I run the guns, {cmdr} — Gunner's redundant with me aboard.",
