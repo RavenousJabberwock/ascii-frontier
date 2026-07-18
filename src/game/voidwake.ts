@@ -5362,6 +5362,12 @@ export class Voidwake {
       this.questPinned = !this.questPinned;
       this.pushLog(this.questPinned ? "Quest tracker pinned." : "Quest tracker hidden.");
     }
+    // 0.6.2 — toggle the compact reputation / crew panel (R by default).
+    if (this.input.consume(k.pinRep)) {
+      this.repPinned = !this.repPinned;
+      this.pushLog(this.repPinned ? "Reputation panel pinned." : "Reputation panel hidden.");
+    }
+
 
     // Comms panel controls. '\' cycles the tab (All → Crew → External),
     // PageUp/PageDown scroll the filtered feed. Scroll is clamped in the
