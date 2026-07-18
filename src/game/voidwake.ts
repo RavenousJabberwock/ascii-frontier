@@ -9524,15 +9524,21 @@ export class Voidwake {
 
 
     // --- Bottom: radar + status ---
+    // 0.6.2: right-clip all bottom-strip text at cols-54 so the SYSTEM
+    // column can't overrun into the log column (cols-52..), and clip the
+    // log column at cols-28 so it can't overrun into the right cockpit
+    // panel. Also clip warning ⚠ line the same way.
     const rTop = vpBottom + 1;
+    const sysRight = cols - 54;
+    const logRight = cols - 28;
     this.renderRadar(g, 2, rTop, 22, 7);
-    putText(g, 28, rTop, "[ SYSTEM ]", "#7CFC00");
-    putText(g, 28, rTop + 1, `Seed ${this.seed}`, "#9fe");
-    putText(g, 28, rTop + 2, `Pos ${p.pos.x.toFixed(0)},${p.pos.y.toFixed(0)},${p.pos.z.toFixed(0)}`, "#9fe");
-    putText(g, 28, rTop + 3, `Heading yaw ${(p.heading.yaw).toFixed(2)} pitch ${(p.heading.pitch).toFixed(2)}`, "#9fe");
-    putText(g, 28, rTop + 4, `Mission: ${p.mission ? p.mission.description : "(none)"}`, "#fb6");
+    putText(g, 28, rTop, "[ SYSTEM ]", "#7CFC00", sysRight);
+    putText(g, 28, rTop + 1, `Seed ${this.seed}`, "#9fe", sysRight);
+    putText(g, 28, rTop + 2, `Pos ${p.pos.x.toFixed(0)},${p.pos.y.toFixed(0)},${p.pos.z.toFixed(0)}`, "#9fe", sysRight);
+    putText(g, 28, rTop + 3, `Heading yaw ${(p.heading.yaw).toFixed(2)} pitch ${(p.heading.pitch).toFixed(2)}`, "#9fe", sysRight);
+    putText(g, 28, rTop + 4, `Mission: ${p.mission ? p.mission.description : "(none)"}`, "#fb6", sysRight);
     if (p.mission?.done) {
-      putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6");
+      putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6", sysRight);
     } else if (p.mission) {
       // Mission guidance: bearing + distance to objective.
       const m = p.mission;
@@ -9563,12 +9569,16 @@ export class Voidwake {
           else arrow = y1 > 0 ? "↓ DOWN" : "↑ UP";
         }
         const label = m.kind === "deliver" ? `nearest station ${mt.name}` : mt.name;
-        putText(g, 28, rTop + 5, `→ ${label}  ${d.toFixed(0)}u  ${arrow}`, "#cf6");
+        putText(g, 28, rTop + 5, `→ ${label}  ${d.toFixed(0)}u  ${arrow}`, "#cf6", sysRight);
       } else if (m.kind === "deliver") {
-        putText(g, 28, rTop + 5, `→ Collect ${m.cargoQty} ${m.cargoItem} then dock at any station`, "#cf6");
+        putText(g, 28, rTop + 5, `→ Collect ${m.cargoQty} ${m.cargoItem} then dock at any station`, "#cf6", sysRight);
       }
     }
-    if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
+    if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6", sysRight);
+    // Track logRight for the log column below (declared here so the
+    // renderer can reuse it without recomputing at 60fps).
+    void logRight;
+
 
     // --- COMMS / chatter panel ---
     // Top-left overlay with All / Crew / External / System tabs. Filtered by
