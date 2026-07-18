@@ -3258,6 +3258,14 @@ const SHIP_SPRITES: Record<string, string[][]> = {
     ["/^\\", "<O>", "\\v/"],
     [" . ", "(=]", " ' "],
   ],
+  // SPD Patrol cruisers — deliberately blockier / more armored-looking than a
+  // civilian friendly so the player can eyeball law enforcement at a glance.
+  patrol: [
+    ["[^]", "|#|", "[v]"],
+    ["/T\\", "[@]", "\\T/"],
+    [".T.", "{#}", "'T'"],
+    ["|^|", "[X]", "|v|"],
+  ],
   neutral: [
     [" . ", "(o)", " ' "],
     [" ~ ", "[=]", " ~ "],
