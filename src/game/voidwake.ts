@@ -9552,8 +9552,19 @@ export class Voidwake {
     putText(g, panelX, vpTop + 6, `Hull   ${bar(p.ship.hull, p.ship.hullMax)}`, hullCol);
     putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, shieldCol);
     putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, fuelCol);
-    putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%`, "#9fe");
-    putText(g, panelX, vpTop + 10, `Speed ${(effectiveTopSpeed(p) * p.throttle).toFixed(0)} u/s`, "#9fe");
+    {
+      const self = this as unknown as { _boosting?: boolean; _supercruise?: boolean; _boostMul?: number };
+      const bm = self._boostMul ?? 1;
+      const eff = effectiveTopSpeed(p) * p.throttle * bm;
+      const tags: string[] = [];
+      if (self._boosting) tags.push("AB");
+      if (self._supercruise) tags.push("SC");
+      const mulTag = bm > 1.001 ? `  ×${bm.toFixed(2)}` : "";
+      const flagTag = tags.length ? `  [${tags.join("+")}]` : "";
+      const thrCol = self._boosting || self._supercruise ? (blinkOn ? "#ffe680" : "#ffb84d") : "#9fe";
+      putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%${flagTag}`, thrCol);
+      putText(g, panelX, vpTop + 10, `Speed ${eff.toFixed(0)} u/s${mulTag}`, thrCol);
+    }
     putText(g, panelX, vpTop + 12, `Cargo ${cargoTotal(p)}/${p.ship.cargoMax}`, "#9fe");
     let cy2 = vpTop + 13;
     for (const [k, v] of Object.entries(p.cargo)) putText(g, panelX + 1, cy2++, `· ${k}: ${v}`, "#aea");
