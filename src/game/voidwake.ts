@@ -585,6 +585,15 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You ever notice hostiles fly better after they've fed? Weird pattern.",
     "I count three ways to peel a raider's shields. Only one's legal.",
     "Cmdr — good gunnery is 80% patience, 15% timing, 5% luck. Some days it's all luck.",
+    // Sci-fi tips of the hat (light homage — no direct quotes).
+    "I've seen shots you people wouldn't believe. Tracer fire off the shoulder of a gas giant.",
+    "In space, no one hears you miss. Lucky for me.",
+    "Never tell me the odds, {cmdr}. Just tell me where the {target} is.",
+    "Rule one of gunnery, {cmdr}: don't get cocky.",
+    "Boarding party? I've got a very particular set of skills.",
+    "It's a good day to fire — someone else's day, ideally.",
+    "Set phasers to 'we're being polite'. Then don't be polite.",
+    "The Gratuitous Space Battles forum would call that shot 'artistic'. I call it Tuesday.",
   ],
   gunner_hostile: [
     "On {target}! Firing!",
@@ -699,6 +708,14 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You'd think comets are pretty. They are. Right up till one clips your paint.",
     "Every lane's got a rhythm. This one's a waltz. Fly it three-count.",
     "Nav display's happy. I'm happy. Somewhere, a merchant is not. Balance.",
+    // Pilot's little sci-fi shelf.
+    "Punch it, {cmdr}? I've always wanted to say that with a straight face.",
+    "This ship? She may not look like much, but she's got it where it counts.",
+    "Course laid in. It's not the fall that kills you — it's the sudden rendezvous with a moon.",
+    "I've flown worse. Once. It was a shuttle. It was on fire. Don't ask.",
+    "Somewhere, another pilot is having a worse day. Statistically.",
+    "Autopilot's a fine copilot. Doesn't hum, doesn't complain, doesn't try to fly upside down for fun.",
+    "You know pitch loops both ways now, {cmdr}? Try not to make the engineer nauseous.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
@@ -765,6 +782,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr, if you ever lose a shield emitter mid-fight, don't panic — panic wastes air.",
     "Every good engineer keeps a mystery bolt in her toolbox. Mine's saved this ship twice.",
     "Reactor's fine. Coupler's fine. The crew, however, is a work in progress.",
+    // Sci-fi engineer classics.
+    "I'm givin' her all she's got, {cmdr}! She cannae take much more!",
+    "Reversed the polarity of the neutron flow. Don't ask which neutrons.",
+    "Have you tried turning the reactor off and on again? …I'm joking. Mostly.",
+    "This bulkhead's held together with hope, epoxy, and one very specific curse word.",
+    "The ship's fine. The universe is what worries me.",
+    "I dream in schematics, {cmdr}. Last night's was a really elegant plasma coil.",
   ],
   engineer_greet: [
     "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
@@ -818,6 +842,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Rare-metal futures in {sector} are looking twitchy. Watch that market.",
     "Cmdr, if we dock at a Fed hub, let me handle the bill. Trust me.",
     "Half of trading is patience. The other half is knowing when to leave.",
+    // Sci-fi merchant flavor.
+    "Rule of Acquisition #9: opportunity plus instinct equals profit. Or a hangover. Sometimes both.",
+    "I once sold ice to a comet miner. Not proud. Not un-proud, either.",
+    "Every hold's got room for one more crate, {cmdr}. That's not physics, that's philosophy.",
+    "A merchant who won't haggle is just an accountant with a ship.",
   ],
   merchant_greet: [
     "Merchant aboard, Cmdr. I'll shave 15% off the buy sheet and pad the sell.",
@@ -862,6 +891,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr — every navigator worth the chair keeps a mental map. Mine's a good one.",
     "Sector {sector}'s pulsar makes for a lovely chronograph. And a worse jump gate.",
     "Give me a destination and a fuel margin, I'll give you three routes.",
+    // Sci-fi nav talk.
+    "Route plotted. Not the fastest — but the fastest one goes through a Roche field, and I like the ship intact.",
+    "The spice must flow, {cmdr}. So must our fuel budget. Related, in my head.",
+    "Second star to the right, then straight on till morning. Poetic. Terrible nav.",
+    "I could plot a course through a Dyson swarm blindfolded. Please don't test me.",
   ],
   navigator_greet: [
     "Navigator aboard. I'll shave a jump off every long haul, Cmdr.",
@@ -890,6 +924,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I re-lashed the aft crates. If they rattle again it's ghosts, not physics.",
     "Kept the spares inventory current. Engineer'll thank me eventually.",
     "Every kilo of cargo has a story on my ledger. Some are boring stories.",
+    // Sci-fi flavor.
+    "Cargo manifest reads like a shopping list for a very strange wizard.",
+    "I inventory the towel last. Never travel without one, {cmdr}.",
+    "One crate is labeled 'DO NOT OPEN'. I labeled it. I forget why.",
   ],
   quartermaster_greet: [
     "Quartermaster reporting. I'll squeeze margin out of every dock, Cmdr.",
@@ -918,6 +956,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I hear the {sector} guild is bleeding staff. Poach season.",
     "Morale's a slow burn, Cmdr — a single hot meal buys a week of loyalty.",
     "Cmdr, next dock let me buy the crew a round on the ship's tab.",
+    // Sci-fi hires talk.
+    "Interviewed a pilot last dock. Kessel-run braggart. Passed.",
+    "Best hire I ever made talked to plants. Turned out great. Don't ask about the plants.",
+    "Bene Gesserit training's overrated in a recruiter — but boy, do the references check out.",
   ],
   recruiter_greet: [
     "Recruiter aboard. I'll trim hire fees and keep the bunk happy, Cmdr.",
@@ -946,6 +988,12 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I ran the numbers on our last kill. Ninety percent efficiency. Not enough.",
     "Threat plot's a poem, Cmdr. Ugly, honest, and always right on the ending.",
     "Tactical is patience with a gun in its hand.",
+    // Sci-fi flavor.
+    "Threat assessment: nominal. Threat vibe: unsettling. Recommending caution, {cmdr}.",
+    "Rules of Acquisition aside, {cmdr}, a live merchant beats a dead one at haggling.",
+    "By the book? The book's a rough draft, {cmdr}. I write the appendix.",
+    "The needs of the many outweigh the fuel margin of the few. Usually.",
+    "One does not simply broadside a Federation cruiser. Except when one does.",
   ],
   tactical_greet: [
     "Tactical officer reporting. I run the guns, {cmdr} — Gunner's redundant with me aboard.",
@@ -1005,6 +1053,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{a}: Cmdr's log entries get shorter every week.  ||  {b}: That's how you know it's going well. Or badly. One of those.",
     "{a}: Ever miss dirtside, {b}?  ||  {b}: Only the gravity. And the sky. And the coffee. Otherwise no.",
     "{a}: Guild recruiter tried to poach me at the last dock.  ||  {b}: What'd you say?  ||  {a}: I said the coupler needs me.",
+    // Sci-fi banter — light nods to the classics.
+    "{a}: Do these thargoid encounters ever get less unsettling?  ||  {b}: No, {a}. That's the point.",
+    "{a}: I've decided the ship's computer is our best crew member.  ||  {b}: I heard that.  ||  {a}: You were meant to.",
+    "{a}: If we make it out of this sector I'm writing a book.  ||  {b}: Title?  ||  {a}: 'So Long, and Thanks for All the Ore.'",
+    "{a}: My hab back on {sector} had a garden.  ||  {b}: What'd you grow?  ||  {a}: Regrets, mostly.",
+    "{a}: Ever notice hostiles always monologue?  ||  {b}: Only until we fire. Then they get concise.",
+    "{a}: Cmdr wants us to loop the ship pitch-wise for morale.  ||  {b}: Cmdr thinks morale is a barrel roll.  ||  {a}: To be fair — it kind of is.",
+    "{a}: I found the Gratuitous Space Battles forum in the ship's log cache.  ||  {b}: Anything useful?  ||  {a}: Mostly people arguing about frigate loadouts. So — yes.",
+    "{a}: If the reactor whines like that at home, you replace it.  ||  {b}: If it whines like that here, you name it and hope it stays.",
+    "{a}: Ever wonder if we're just NPCs in someone else's log?  ||  {b}: Only when the dialogue gets suspiciously good.",
   ],
 };
 
