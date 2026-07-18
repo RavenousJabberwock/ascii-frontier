@@ -4959,8 +4959,9 @@ export class Voidwake {
     if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn && !this.input.stickActive) {
       const sens = this.options.mouseSensitivity;
       const dz = 0.08;
-      const cols = Math.max(40, Math.floor(this.canvas.width / CELL_W));
-      const rows = Math.max(20, Math.floor(this.canvas.height / CELL_H));
+      // 0.6.2 — use CSS-px logical dims (canvas.width is now DPR-scaled).
+      const cols = Math.max(40, Math.floor((this._cssW || this.canvas.width) / CELL_W));
+      const rows = Math.max(20, Math.floor((this._cssH || this.canvas.height) / CELL_H));
       const vpLeftPx = 1 * CELL_W;
       const vpRightPx = (cols - 28) * CELL_W;
       const vpTopPx = 1 * CELL_H;
