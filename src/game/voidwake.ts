@@ -3831,6 +3831,12 @@ export class Voidwake {
   // Title-screen drifting stars (camera-local 2D, no player required).
   private titleStars: { x: number; y: number; z: number; t: number }[] = [];
   private _lastRenderTs = 0;
+  // 0.6.2 — HiDPI backing store bookkeeping. cssW/H are the logical CSS
+  // pixel dimensions the render pipeline draws against; dpr is the scale
+  // factor applied to the 2D transform in render().
+  private _dpr = 1;
+  private _cssW = 0;
+  private _cssH = 0;
   private _frameNo = 0;
   private _lastRecorderAt = 0;
   private _lastRecordedScreen: Screen = "title";
