@@ -258,6 +258,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I've eaten commanders tougher than you for breakfast. Literally, once.",
     "Boys, the {ship}'s running hot — she'll cook herself if we're patient.",
     "You want a shot at me, {cmdr}? Try aiming. Cute either way.",
+    "That {ship}? Looks like it flew out of a scrap catalog.",
+    "I've picked ore-boats cleaner than your paint job, {cmdr}.",
+    "Kill you now, sell your beacon to a rival at {sector}. Neat trade.",
+    "Your shields flicker like they know what's coming.",
+    "Cmdr — the void has a shape tonight, and it's yours.",
+    "Every hull's got a seam. Yours is showing.",
+    "You want fair? Wrong lane, wrong life, wrong captain.",
   ],
   boss_hostile: [
     "So THIS is the {cmdr} the bounty board's been screaming about.",
