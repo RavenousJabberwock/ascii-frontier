@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.6.0";
+const VERSION = "0.6.1";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -258,6 +258,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I've eaten commanders tougher than you for breakfast. Literally, once.",
     "Boys, the {ship}'s running hot — she'll cook herself if we're patient.",
     "You want a shot at me, {cmdr}? Try aiming. Cute either way.",
+    "That {ship}? Looks like it flew out of a scrap catalog.",
+    "I've picked ore-boats cleaner than your paint job, {cmdr}.",
+    "Kill you now, sell your beacon to a rival at {sector}. Neat trade.",
+    "Your shields flicker like they know what's coming.",
+    "Cmdr — the void has a shape tonight, and it's yours.",
+    "Every hull's got a seam. Yours is showing.",
+    "You want fair? Wrong lane, wrong life, wrong captain.",
   ],
   boss_hostile: [
     "So THIS is the {cmdr} the bounty board's been screaming about.",
@@ -313,6 +320,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Wing runs quiet on this shift. Company's welcome if you want to formation up.",
     "Cmdr — the {ship}'s trim looks perfect from here. Textbook.",
     "Fed comms says the {sector} beat is running smooth. Rare and nice.",
+    "Fair skies and empty scopes to you, {cmdr}. That's the highest wish.",
+    "Cmdr, your callsign made the wing bulletin. Nothing bad, promise.",
+    "Cruiser to {ship}: nice line through those rocks. Not everyone gets it right.",
+    "Federation traffic advises: cargo tags green, lane green, mood green.",
+    "The lane's ours today, {cmdr}. Might not be tomorrow. Enjoy it.",
   ],
   neutral: [
     "{ship}, mind your wake.",
@@ -348,6 +360,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You look like a captain who tips. Am I right or am I right?",
     "Long haulers age in dog years. Look at me — I'm forty and eighty.",
     "Cargo insurance says one thing, cargo hold says another. Same as always.",
+    "Sensor return says giant with rings ahead — nice postcard, terrible dock.",
+    "Cmdr, we haul rocks not favors. Unless you're paying, in which case, favors.",
+    "You're on the guild ledger as 'polite'. That's the best rating we hand out.",
+    "Hauler's rule: never trust a fuel gauge or a captain who quotes them.",
+    "Lane's got fewer patrols this shift. Fly like grownups anyway.",
   ],
   station: [
     "...automated beacon, {sector}: dock fees waived this cycle.",
@@ -396,6 +413,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Automated telemetry reports crustal tremors on the day side.",
     "Auroras coming in strong. Comms will crackle for the next few ticks.",
     "Ancient relay still whispering. No one's listened in a long time.",
+    "Ring-shine catches the terminator — that's a real sight, Cmdr.",
+    "Ice-cap albedo's off the charts this rotation. Bright little world.",
+    "Terminator glow's dazzling from up here — colors go on for kilometers.",
+    "Cloud bands moving retrograde. Weatherfolk down there earn their pay.",
+    "Sensor mast tags a moon shadow crossing the day side.",
+    "Old orbital debris tumbles past — pre-Federation, by the alloys.",
+    "Storm system the size of a continent, and no one to complain about it.",
+    "This world hums on the mag-band. Something down there is listening back.",
+    "Volcano plume punching through the mesosphere. Beautiful and awful.",
+    "Ring gap between shepherd moons — clean as a knife-cut, Cmdr.",
   ],
   planet_populated: [
     "Colony control to {ship} — landing pads clear, welcome down, Cmdr {cmdr}.",
@@ -417,6 +444,15 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Kids running dockside races again. Watch your approach, {cmdr}.",
     "Manifest office short-staffed today. Bring patience, not just credits.",
     "Fresh medics on shift. If you're hurting, we're stitching.",
+    "Bazaar caller announcing lot 47: {ore} at market. Bid or drift.",
+    "Colony choir's tuning up on the promenade. Come dockside for dusk hymn.",
+    "New arrivals dispensary is open. Real coffee, {cmdr}, if you can believe it.",
+    "Downwell ferry launching in ten. Anyone with cargo, tag your crate.",
+    "Colony bulletin: lost dog on B-deck. Answers to 'Astrometrics'.",
+    "Cmdr, the mayor's kid wants to know if you've killed a thargoid. Say yes.",
+    "Farmside reports rain on schedule. Miracle every rotation.",
+    "Tradehouse: buying scrap, selling stew, brokering rumors.",
+    "Mag-lev to the north hab is running local, not express. Sorry, Cmdr.",
   ],
   patrol: [
     "SPD Patrol to {ship} — maintain course, {cmdr}.",
@@ -637,6 +673,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Last captain owed me three jumps' wage. You won't, right?",
     "{praise}, that's what I want to see. Let's burn some {curse} types.",
     "Quiet bunk, working guns — that's all I ask. G to wake me up.",
+    "Reactor's warm, mag racks are fed. That's a good watch.",
+    "Cmdr, I saw a ringed giant last shift. Made me forget the bill for two whole seconds.",
+    "Ever wonder if the gunners on those hostiles feel this bored between fights? Nah, me neither.",
+    "You keep the {ship} clean and I keep the mag rack loud. Fair trade.",
+    "Coffee, ammo, silence. In that order. Best watch in the fleet.",
+    "Gun crew rule three: never trust a Cmdr who talks about their K/D ratio.",
+    "Old Fed vet on my last tour used to say: 'a slow trigger is a live captain'. Fits.",
   ],
   gunner_farewell_good: [
     "Been an honor, Cmdr. {praise} out there.",
@@ -716,6 +759,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Somewhere, another pilot is having a worse day. Statistically.",
     "Autopilot's a fine copilot. Doesn't hum, doesn't complain, doesn't try to fly upside down for fun.",
     "You know pitch loops both ways now, {cmdr}? Try not to make the engineer nauseous.",
+    "Ringed planet at nine o'clock, Cmdr. Nudge two degrees and you'll skim the shepherd moons — pretty as anything.",
+    "That system with the pink cloud giant? Filed it under 'come back with a camera'.",
+    "Cmdr — I count three suns on the long scope. That's a new record for me.",
+    "Space is bigger than the brochure, isn't it, {cmdr}?",
+    "Every hull hums a note. This one's a low B-flat. Comforting.",
+    "Pilot's rule seventeen: if the reticle looks upside down, you probably are.",
+    "Cmdr, plot a lazy pass around that giant's rings. Nav chair's request, not orders.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
@@ -3322,12 +3372,37 @@ const PLANET_FILLS  = [
   "#8a5a3a", // rust
   "#ffb3c8", // pink cloud gas giant
   "#5a86c9", // stormy jovian
+  // 0.6.1 — wider palette so systems don't repeat the same 12 hues.
+  "#3a2a5a", // deep indigo dwarf
+  "#e8ffb3", // sulphurous yellow
+  "#ff5a5a", // hellworld / crimson
+  "#a0f0ff", // pale cyan ice-giant
+  "#c4a878", // dust-tan mesa world
+  "#5a8a3a", // olive jungle
+  "#2a5a4a", // abyssal turquoise
+  "#f0e0ff", // pale lilac cloud
+  "#4a2a10", // char / burnt cinder
+  "#ff9ac8", // salmon storm
+  "#a878ff", // amethyst gas giant
+  "#c0ffc0", // pale mint sea
+  "#402a2a", // volcanic obsidian
+  "#e8c890", // ochre veldt
+  "#88bcd8", // haze-blue oceanic
+  "#d84a30", // rust-storm giant
+  "#ffe0f0", // bone-white ice
+  "#4a8890", // deep ocean world
+  "#a89060", // savannah tan
+  "#3a5a20", // moss / bog
 ];
 const PLANET_EDGES  = [
   "#3d6d9b", "#5a8a5a", "#8b6038", "#7a4eb0", "#a98a48", "#3d8a82",
   "#a04520", "#6a9aa2", "#606070", "#4a3020", "#a4536a", "#2b4a78",
+  "#1a103a", "#8a9a3a", "#7a1010", "#508090", "#7a5a3a", "#2a5010",
+  "#0a2a20", "#8060a8", "#200a04", "#a04a70", "#5a3aa8", "#508a58",
+  "#100404", "#7a5a30", "#405a70", "#6a1a08", "#7a6070", "#204048",
+  "#5a4830", "#1a2a10",
 ];
-const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0", "8", "%", "&"];
+const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0", "8", "%", "&", "◍", "◉", "θ", "◐", "◑"];
 const STATION_FILLS = ["#c2c2ff", "#a8ffd0", "#ffc8a0", "#cfe8ff"];
 const STATION_TEX   = ["#", "H", "X", "=", "8"];
 const ASTEROID_FILLS= ["#a6886a", "#8a7656", "#b89a78", "#7a6650"];
@@ -3415,6 +3490,53 @@ function starSizeMul(e: Entity): number {
   const jitter = 0.55 + hash01(e.id * 613 + 91) * 1.20;
   const out = base * jitter;
   _starSizeCache.set(e, out);
+  return out;
+}
+
+// 0.6.1 — per-planet size jitter (0.5x-2.2x) so worlds range from small
+// moons to gas giants without changing base gameplay (collision + dock
+// radius stay pegged to the constant 30u). Deterministic per-id.
+const _planetSizeCache = new WeakMap<Entity, number>();
+function planetSizeMul(e: Entity): number {
+  const cached = _planetSizeCache.get(e);
+  if (cached !== undefined) return cached;
+  // Weighted: most are 0.7-1.3x; ~15% are true giants (up to 2.2x); ~15%
+  // are dwarfs (down to 0.5x). Read from two hashes so the distribution
+  // biases toward normal without being flat.
+  const h1 = hash01(e.id * 761 + 17);
+  const h2 = hash01(e.id * 233 + 53);
+  let out: number;
+  if (h1 < 0.15) out = 0.50 + h2 * 0.30;       // dwarf world
+  else if (h1 < 0.85) out = 0.75 + h2 * 0.65;  // normal
+  else out = 1.55 + h2 * 0.70;                 // giant
+  _planetSizeCache.set(e, out);
+  return out;
+}
+// 0.6.1 — deterministic ring system for a subset of planets. Larger
+// planets are more likely to have rings; giants almost always do.
+type PlanetRings = { hasRings: boolean; inner: number; outer: number; tiltCos: number; tiltSin: number; density: number; color: string };
+const _planetRingCache = new WeakMap<Entity, PlanetRings>();
+const RING_COLORS = ["#d8c090", "#a89078", "#e8d8b0", "#c8a888", "#b8a068", "#f0e0c0", "#a0b8c8", "#c88860"];
+function planetRings(e: Entity): PlanetRings {
+  const cached = _planetRingCache.get(e);
+  if (cached) return cached;
+  const size = planetSizeMul(e);
+  // Base 22% chance, giants (>1.55) 78%, dwarfs (<0.75) 6%.
+  const roll = hash01(e.id * 419 + 71);
+  let chance = 0.22;
+  if (size >= 1.55) chance = 0.78;
+  else if (size < 0.75) chance = 0.06;
+  const hasRings = roll < chance;
+  const inner = 1.25 + hash01(e.id * 191 + 3) * 0.20;    // 1.25-1.45x planet
+  const outer = inner + 0.35 + hash01(e.id * 277 + 5) * 0.55; // width 0.35-0.90
+  // Tilt: -80° .. +80° around the horizontal axis (screen).
+  const tilt = (hash01(e.id * 353 + 11) - 0.5) * 2.7;
+  const tiltCos = Math.cos(tilt);
+  const tiltSin = Math.sin(tilt);
+  const density = 0.35 + hash01(e.id * 613 + 13) * 0.45;
+  const color = RING_COLORS[Math.floor(hash01(e.id * 887 + 19) * RING_COLORS.length)];
+  const out: PlanetRings = { hasRings, inner, outer, tiltCos, tiltSin, density, color };
+  _planetRingCache.set(e, out);
   return out;
 }
 
@@ -8632,6 +8754,7 @@ export class Voidwake {
       const far = dist2 > FAR_DOT * FAR_DOT && e.kind !== "star";
       let wr = worldRadius[e.kind] ?? 1;
       if (e.kind === "star") wr *= starSizeMul(e);
+      if (e.kind === "planet") wr *= planetSizeMul(e);
       if (e.kind === "nebula") wr *= 0.8 + hash01(e.id * 251) * 0.9; // varied cloud sizes
       // Far entities collapse to a single colored period regardless of true size.
       const rCells = far ? 0 : (wr / z2) * vw * 0.7;
@@ -8891,6 +9014,57 @@ export class Voidwake {
           g[gy][gx] = { ch, color, glow: e.kind === "star" };
         }
       }
+
+      // 0.6.1 — Planetary rings. Roughly 1-in-5 planets (weighted toward
+      // giants) get a tilted, colored ring plane. Draws a ring annulus in
+      // the planet's local plane, sheared vertically by the ring tilt so
+      // it visibly loops behind and in front of the disc. Cells inside the
+      // planet radius are skipped so the front-of-planet band is
+      // occluded by the planet body itself (already drawn above), and
+      // cells behind the planet are drawn onto empty space — the effect
+      // reads as a partially eclipsed ring without a real depth buffer.
+      if (e.kind === "planet") {
+        const rings = planetRings(e);
+        if (rings.hasRings && rx >= 3) {
+          const outerX = Math.round(rx * rings.outer);
+          const outerY = Math.max(1, Math.round(ry * rings.outer * Math.abs(rings.tiltCos) + 0.5));
+          const innerRatio = rings.inner / rings.outer;
+          const ringGlyphs = ["·", "-", "=", "~"];
+          for (let dy = -outerY; dy <= outerY; dy++) {
+            for (let dx = -outerX; dx <= outerX; dx++) {
+              // Un-shear: map screen (dx,dy) back to the planet's ring
+              // plane. Ring plane is horizontal, tilted by (tiltCos on Y,
+              // tiltSin adds a slight horizontal skew for asymmetry).
+              const nx = dx / (rx * rings.outer);
+              const cosT = rings.tiltCos === 0 ? 0.01 : rings.tiltCos;
+              const ny = (dy / (ry * rings.outer) - nx * rings.tiltSin * 0.15) / cosT;
+              const rad = nx * nx + ny * ny;
+              if (rad > 1 || rad < innerRatio * innerRatio) continue;
+              // Skip cells strictly inside the planet body silhouette
+              // AND on the "front" half (dy > 0 in screen space when
+              // tiltCos > 0). Back-half cells fall outside the planet
+              // disc thanks to the tilt, so this simple test looks 3D.
+              const pnx = dx / rx, pny = dy / ry;
+              const insidePlanet = (pnx * pnx + pny * pny) < 1;
+              const frontHalf = (dy * (rings.tiltCos >= 0 ? 1 : -1)) > 0;
+              if (insidePlanet && !frontHalf) continue;
+              // Density thinning + a small radial gap (Cassini-ish) at
+              // ~65% of the ring width so the ring doesn't read as a solid
+              // band.
+              const cellH = hash01(e.id * 907 + dx * 613 + dy * 419);
+              if (cellH > rings.density) continue;
+              const t = (Math.sqrt(rad) - innerRatio) / (1 - innerRatio);
+              if (t > 0.55 && t < 0.68) continue;
+              const gx = sx + dx, gy = sy2 + dy;
+              if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+              if (g[gy][gx].ch !== " ") continue;
+              const gi = Math.min(3, Math.floor(cellH * 4));
+              g[gy][gx] = { ch: ringGlyphs[gi], color: rings.color, glow: false };
+            }
+          }
+        }
+      }
+
 
       // 0.5.6 — Colony overlay ring: populated planets get a faint dotted
       // orbital ring (`·`) just outside the sprite and a small `◈` beacon

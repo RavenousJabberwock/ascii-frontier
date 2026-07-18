@@ -938,3 +938,39 @@ Deferred (still open, will pick up in 0.6.x):
 - Crew XP progression (design sketch only; not yet in code).
 
 
+
+## 0.6.1 — Ringed worlds, planet variety, more chatter
+
+- **Planetary rings** — Deterministic per-planet ring system. Base chance
+  22%; gas giants (`planetSizeMul` ≥ 1.55) hit ~78%; dwarf worlds ~6%.
+  Each ring gets an inner/outer radius (1.25–2.35× planet), a tilt
+  (-77°..+77°), a density roll (0.35–0.80), and one of 8 dust/ice
+  colors. Rendered as a screen-space annulus in the planet's tilted
+  plane, with a Cassini-style gap at ~65% of the ring width, sparse
+  glyph mix (`·`, `-`, `=`, `~`). Front-of-planet cells that fall
+  inside the disc are occluded; back-half cells fall outside the disc
+  thanks to the tilt, so the pass reads as 3D without a real z-buffer.
+- **Planet size variability** — New `planetSizeMul(e)` returns a
+  weighted per-planet size jitter: ~15% dwarfs (0.50–0.80×), ~70%
+  normal (0.75–1.40×), ~15% giants (1.55–2.25×). Applied to the render
+  world radius only — collision radius and dock hold radius stay at
+  the 30u constant, so gameplay is unchanged.
+- **Wider planet palettes** — `PLANET_FILLS` 12 → 32 colors (crimson
+  hellworlds, indigo dwarfs, sulphurous yellows, amethyst gas giants,
+  mint seas, cinder chars, moss/bog worlds, etc.); matching
+  `PLANET_EDGES` extended to 32 shadow tones; `PLANET_TEX` gained
+  `◍ ◉ θ ◐ ◑` for more surface pattern variety. All keyed by `hash01(e.id)`
+  so seeds stay stable across saves.
+- **Chatter expansion** — Added ~55 new lines across `hostile`,
+  `friendly`, `neutral`, `station`, `planet`, `planet_populated`,
+  `gunner_idle`, and `pilot_idle`. Several new lines reference the new
+  ringed / pink-cloud / hellworld visuals so the flavor tracks the
+  visual variety.
+- **VERSION bump** — 0.6.0 → 0.6.1; offline bundle rebuilt (456 KB).
+
+Deferred (still open, will pick up in 0.6.x):
+- Player-to-NPC comms with template replies.
+- In-canvas multi-line Lua editor.
+- Faction reputation panel expansion (data exists; UI is minimal).
+- Crew XP progression (design sketch only).
+- Optional radius-gated AI tick for very large universes.
