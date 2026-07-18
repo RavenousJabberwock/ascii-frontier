@@ -759,6 +759,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Somewhere, another pilot is having a worse day. Statistically.",
     "Autopilot's a fine copilot. Doesn't hum, doesn't complain, doesn't try to fly upside down for fun.",
     "You know pitch loops both ways now, {cmdr}? Try not to make the engineer nauseous.",
+    "Ringed planet at nine o'clock, Cmdr. Nudge two degrees and you'll skim the shepherd moons — pretty as anything.",
+    "That system with the pink cloud giant? Filed it under 'come back with a camera'.",
+    "Cmdr — I count three suns on the long scope. That's a new record for me.",
+    "Space is bigger than the brochure, isn't it, {cmdr}?",
+    "Every hull hums a note. This one's a low B-flat. Comforting.",
+    "Pilot's rule seventeen: if the reticle looks upside down, you probably are.",
+    "Cmdr, plot a lazy pass around that giant's rings. Nav chair's request, not orders.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
