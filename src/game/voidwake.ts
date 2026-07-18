@@ -3489,6 +3489,8 @@ function planetRings(e: Entity): PlanetRings {
   _planetRingCache.set(e, out);
   return out;
 }
+
+// Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
 // [core, mid, edge] so the noise-driven fill can layer three glyph shades.
 const NEBULA_PALETTES: [string, string, string][] = [
   ["#e6b8ff", "#c47afc", "#5a2a8a"], // classic violet
