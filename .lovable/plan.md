@@ -899,5 +899,42 @@ optional radius-gated AI tick for very large universes.
 - No new despawn logic needed — existing tick already has a 3500-unit
   distance gate around the player, so far-away deep-space entities are
   effectively free when the player is in the core.
-- VERSION bump 0.5.14 → 0.5.15.
+
+## 0.6.0 — Physics audit + mouse-steer yaw drift fix
+
+Bug hunt pass across the flight/positioning code before shipping the 0.6
+milestone. Every player-driven heading mutation now round-trips through
+`wrapPi()` so yaw and pitch stay bounded in `(-π, π]` regardless of
+input path (keyboard, touch stick, mouse-steer, autopilot).
+
+- **Mouse-steer yaw drift (fix).** The mouse-steer branch was the only
+  remaining callsite that mutated `p.heading.yaw` with a bare `+=`, so
+  long mouse sessions could accumulate an unbounded yaw magnitude. Over
+  hours this drifts into large floating-point values where `Math.cos` /
+  `Math.sin` lose precision, which shows up as a subtle wobble in the
+  reticle heading and NPC bearing calculations. Now uses
+  `wrapPi(p.heading.yaw + …)` to match the keyboard and touch paths.
+  Pitch on the same branch already wrapped.
+- **Physics audit — clean.** Verified with `grep` that every heading
+  write across player and autopilot paths is `wrapPi`-wrapped (see 7
+  callsites at lines 4747–4759, 4818–4819, 6165–6166). NPC AI does not
+  store per-ship yaw/pitch (it steers by direct velocity vectors), so
+  the drift class does not apply there.
+- **Projection re-verified.** `renderPlaying`'s camera transform and
+  `headingToVec` are pure trig against yaw/pitch and remain valid at
+  any pitch, including continuously-looped values from 0.5.14. No
+  clamping was reintroduced by mistake.
+- **Autopilot shortest-arc re-verified.** `driveAutopilot` still
+  normalizes both `dy` (yaw) and `dp` (pitch) to `(-π, π]` before
+  slewing, so it never takes the long way around when engaged from an
+  inverted attitude.
+- VERSION bump 0.5.15 → 0.6.0; offline bundle rebuilt.
+
+Deferred (still open, will pick up in 0.6.x):
+- Player-to-NPC comms with template replies (long-term wishlist).
+- In-canvas multi-line Lua editor (long-term wishlist).
+- Faction reputation panel expansion (data exists on
+  `PlayerState.reputation`; UI treatment is minimal today).
+- Crew XP progression (design sketch only; not yet in code).
+
 

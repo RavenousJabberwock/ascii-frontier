@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.15";
+const VERSION = "0.6.0";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -4815,7 +4815,7 @@ export class Voidwake {
       // strays into the HUD panel (mx/my can exceed 1 there).
       const cax = Math.max(-1, Math.min(1, ax));
       const cay = Math.max(-1, Math.min(1, ay));
-      p.heading.yaw += yawSign * cax * dt * 1.4 * sens;
+      p.heading.yaw = wrapPi(p.heading.yaw + yawSign * cax * dt * 1.4 * sens);
       p.heading.pitch = wrapPi(p.heading.pitch + cay * dt * 1.1 * sens);
     }
 
