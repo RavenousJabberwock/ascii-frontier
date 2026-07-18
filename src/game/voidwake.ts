@@ -4570,8 +4570,14 @@ export class Voidwake {
     // this frame; user keys still override — press anything to take back the stick.
     if (keys.has(k.throttleUp)) { p.throttle = Math.min(1, p.throttle + dt * 0.7); this._disengageAutopilot("stick"); }
     if (keys.has(k.throttleDown)) { p.throttle = Math.max(0, p.throttle - dt * 0.7); this._disengageAutopilot("stick"); }
-    if (keys.has(k.yawLeft)) { p.heading.yaw -= dt * 1.2; this._disengageAutopilot("stick"); }
-    if (keys.has(k.yawRight)) { p.heading.yaw += dt * 1.2; this._disengageAutopilot("stick"); }
+    // Yaw sign flips when the ship is inverted (|pitch| > π/2, i.e.
+    // cos(pitch) < 0). Without this, "yaw left" from the pilot's seat feels
+    // reversed after looping over the top because world-space yaw is measured
+    // around a fixed up axis. Applies to keyboard/touch/mouse — not AI slew,
+    // which already works from world-space target angles.
+    const yawSign = Math.cos(p.heading.pitch) < 0 ? -1 : 1;
+    if (keys.has(k.yawLeft)) { p.heading.yaw -= yawSign * dt * 1.2; this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawRight)) { p.heading.yaw += yawSign * dt * 1.2; this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchUp))   { p.heading.pitch = wrapPi(p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchDown)) { p.heading.pitch = wrapPi(p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
