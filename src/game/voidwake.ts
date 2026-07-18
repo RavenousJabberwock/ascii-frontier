@@ -879,6 +879,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr — every navigator worth the chair keeps a mental map. Mine's a good one.",
     "Sector {sector}'s pulsar makes for a lovely chronograph. And a worse jump gate.",
     "Give me a destination and a fuel margin, I'll give you three routes.",
+    // Sci-fi nav talk.
+    "Route plotted. Not the fastest — but the fastest one goes through a Roche field, and I like the ship intact.",
+    "The spice must flow, {cmdr}. So must our fuel budget. Related, in my head.",
+    "Second star to the right, then straight on till morning. Poetic. Terrible nav.",
+    "I could plot a course through a Dyson swarm blindfolded. Please don't test me.",
   ],
   navigator_greet: [
     "Navigator aboard. I'll shave a jump off every long haul, Cmdr.",
