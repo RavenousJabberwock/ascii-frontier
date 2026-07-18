@@ -673,6 +673,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Last captain owed me three jumps' wage. You won't, right?",
     "{praise}, that's what I want to see. Let's burn some {curse} types.",
     "Quiet bunk, working guns — that's all I ask. G to wake me up.",
+    "Reactor's warm, mag racks are fed. That's a good watch.",
+    "Cmdr, I saw a ringed giant last shift. Made me forget the bill for two whole seconds.",
+    "Ever wonder if the gunners on those hostiles feel this bored between fights? Nah, me neither.",
+    "You keep the {ship} clean and I keep the mag rack loud. Fair trade.",
+    "Coffee, ammo, silence. In that order. Best watch in the fleet.",
+    "Gun crew rule three: never trust a Cmdr who talks about their K/D ratio.",
+    "Old Fed vet on my last tour used to say: 'a slow trigger is a live captain'. Fits.",
   ],
   gunner_farewell_good: [
     "Been an honor, Cmdr. {praise} out there.",
