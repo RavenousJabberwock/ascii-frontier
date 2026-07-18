@@ -782,6 +782,13 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr, if you ever lose a shield emitter mid-fight, don't panic — panic wastes air.",
     "Every good engineer keeps a mystery bolt in her toolbox. Mine's saved this ship twice.",
     "Reactor's fine. Coupler's fine. The crew, however, is a work in progress.",
+    // Sci-fi engineer classics.
+    "I'm givin' her all she's got, {cmdr}! She cannae take much more!",
+    "Reversed the polarity of the neutron flow. Don't ask which neutrons.",
+    "Have you tried turning the reactor off and on again? …I'm joking. Mostly.",
+    "This bulkhead's held together with hope, epoxy, and one very specific curse word.",
+    "The ship's fine. The universe is what worries me.",
+    "I dream in schematics, {cmdr}. Last night's was a really elegant plasma coil.",
   ],
   engineer_greet: [
     "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
