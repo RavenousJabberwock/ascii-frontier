@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.13";
+const VERSION = "0.5.14";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1594,7 +1594,7 @@ function defaultOptions(): Options {
 // cube. Coordinates are in arbitrary units; the cockpit radar is sized to a
 // fixed range so distant entities just appear faint.
 // =============================================================================
-const WORLD_RADIUS = 27000;
+const WORLD_RADIUS = 54000;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
@@ -1649,24 +1649,30 @@ function nextId() { return _entityIdSeq++; }
 // toward them. Populations scale with volume (radius^3, ≈3.375x per 1.5x
 // bump) to keep the on-screen density of stars, traffic, and rocks roughly
 // constant as the play area grows.
+// World scale + entity counts. Universe radius has been expanded 9k → 18k →
+// 27k → 54k. Renderer still fades anything past 5k to a colored period and
+// culls past 10k, so most bodies remain distant pinpricks until you cruise
+// toward them. Populations scale with volume (radius^3, ≈8x per 2x bump)
+// to keep the on-screen density of stars, traffic, and rocks roughly
+// constant as the play area grows.
 const WORLD = {
   starRadius: 0,
-  planetRadius: 27000,
-  asteroidRadius: 22500,
-  stationRadius: 25500,
-  shipRadius: 28500,
-  cometRadius: 31500,
-  nebulaRadius: 40000,
-  beaconRadius: 27000,
-  baseRadius: 28500,
-  planets: 142,
-  asteroids: 1755,
-  stations: 68,
-  ships: 506,
-  comets: 95,
-  nebulae: 140,
-  beacons: 68,
-  pirateBases: 37,
+  planetRadius: 54000,
+  asteroidRadius: 45000,
+  stationRadius: 51000,
+  shipRadius: 57000,
+  cometRadius: 63000,
+  nebulaRadius: 80000,
+  beaconRadius: 54000,
+  baseRadius: 57000,
+  planets: 1136,
+  asteroids: 14040,
+  stations: 544,
+  ships: 4048,
+  comets: 760,
+  nebulae: 1120,
+  beacons: 544,
+  pirateBases: 296,
 };
 
 
@@ -1679,7 +1685,7 @@ function generateUniverse(seed: number): Entity[] {
   // shows a variety of stellar classes (red giants, blue supergiants, white
   // dwarves, etc — see stellarClassOf()).
   out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sol"), pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
-  for (let i = 0; i < 47; i++) {
+  for (let i = 0; i < 376; i++) {
     out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sun"), pos: randPos(rng, WORLD_RADIUS * 0.95), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
   }
 
@@ -1750,7 +1756,7 @@ function generateUniverse(seed: number): Entity[] {
   // and tractor-tow stranded ships to the nearest non-hostile station.
   // See tickAI's "patrol" branch. Faction is `patrol` so the AI can key on it
   // without a new EntityKind (colored cyan-blue by tintFor / colorFor).
-  const patrolCount = 5 + Math.floor(rng() * 3);
+  const patrolCount = 40 + Math.floor(rng() * 24);
   for (let i = 0; i < patrolCount; i++) {
     out.push({
       id: nextId(), kind: "friendly",
@@ -1767,7 +1773,7 @@ function generateUniverse(seed: number): Entity[] {
   // Derelict ships: static, silent wrecks scattered across the frontier.
   // Fly within 40u to salvage credits + ore. No AI, no weapons — just loot
   // and a bit of environmental storytelling.
-  for (let i = 0; i < 41; i++) {
+  for (let i = 0; i < 328; i++) {
     out.push({
       id: nextId(), kind: "derelict",
       name: nameFrom(rng, rng() < 0.5 ? "Wreck" : "Hulk"),
@@ -1819,7 +1825,7 @@ function generateUniverse(seed: number): Entity[] {
   // UFOs: a handful of enigmatic wanderers. They ignore factions and drift
   // between random survey points; if the player gets close they linger
   // ("observe") briefly then boost away.
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 112; i++) {
     out.push({
       id: nextId(), kind: "ufo", name: nameFrom(rng, "UAP"),
       pos: randPos(rng, WORLD_RADIUS),
@@ -1854,7 +1860,7 @@ function generateUniverse(seed: number): Entity[] {
   // 0.5: 5% of rifts have a Federation station orbiting one mouth; a
   // rarer subset (~30% of those) have stations at BOTH ends, useful for
   // long-haul trading loops.
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 56; i++) {
     const a: Entity = {
       id: nextId(), kind: "wormhole", name: nameFrom(rng, "Rift"),
       pos: randPos(rng, WORLD_RADIUS * 0.85),
@@ -2052,6 +2058,19 @@ export function drainAiEvents(): AiEvent[] {
 
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson" || e.kind === "derelict") return;
+  // Distance gate: with the 2× universe expansion (0.5.14) there are far
+  // too many active ships/bases to run every tickAI branch every frame.
+  // Anything more than ~3500u from the player skips the expensive per-tick
+  // scans; it still coasts on its last-set velocity so the world feels
+  // alive on the map, we just don't spend cycles doing target selection
+  // for entities the player will never see.
+  {
+    const _dx = e.pos.x - player.pos.x, _dy = e.pos.y - player.pos.y, _dz = e.pos.z - player.pos.z;
+    if (_dx * _dx + _dy * _dy + _dz * _dz > 3500 * 3500) {
+      e.pos.x += e.vel.x * dt; e.pos.y += e.vel.y * dt; e.pos.z += e.vel.z * dt;
+      return;
+    }
+  }
   // Stranded lawful ships coast in place waiting for a Patrol tow.
   if (e.stranded && e.towById == null && (e.kind === "friendly" || e.kind === "neutral")) {
     e.vel = { x: 0, y: 0, z: 0 };
@@ -3377,7 +3396,7 @@ export class Voidwake {
   // Options screen has been split into a small hub with three subsections
   // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
   // "root" is the hub itself.
-  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" = "root";
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "chat" = "root";
   // Lua scripting (0.5.5): source is edited via a browser prompt from the
   // Options ▸ Scripting page and persisted in localStorage. The runtime
   // (LuaHost) is created lazily on the first enable so users who never open
@@ -3496,6 +3515,12 @@ export class Voidwake {
   // visceral sense of velocity and heading. Lazily seeded on first render.
   // Each star carries a brightness "tier" so the field has depth.
   private stars: { x: number; y: number; z: number; t: number }[] = [];
+  // Sparse colorful gas puffs — small drifting cloud dots in world space.
+  private gasClouds: { x: number; y: number; z: number; c: string }[] = [];
+  // Direction samples along the galactic disk (unit vectors, fixed in world
+  // space). Rendered at infinity — only the camera rotation applies. Lazily
+  // built on first frame.
+  private _galaxyDirs: { x: number; y: number; z: number; b: number }[] = [];
   // Title-screen drifting stars (camera-local 2D, no player required).
   private titleStars: { x: number; y: number; z: number; t: number }[] = [];
   private _lastRenderTs = 0;
@@ -4223,6 +4248,7 @@ export class Voidwake {
           // Bounce a subsection back to the Options hub. Keybinds goes back
           // to Controls (its parent), not straight to root.
           if (this.optionsSection === "keybinds") this.optionsSection = "controls";
+          else if (this.optionsSection === "chat") { this.optionsSection = "gameplay"; this.menuCursor = 13; }
           else this.optionsSection = "root";
           this.menuCursor = 0;
         } else {
@@ -4546,8 +4572,8 @@ export class Voidwake {
     if (keys.has(k.throttleDown)) { p.throttle = Math.max(0, p.throttle - dt * 0.7); this._disengageAutopilot("stick"); }
     if (keys.has(k.yawLeft)) { p.heading.yaw -= dt * 1.2; this._disengageAutopilot("stick"); }
     if (keys.has(k.yawRight)) { p.heading.yaw += dt * 1.2; this._disengageAutopilot("stick"); }
-    if (keys.has(k.pitchUp)) { p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
-    if (keys.has(k.pitchDown)) { p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchUp))   { p.heading.pitch = wrapPi(p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchDown)) { p.heading.pitch = wrapPi(p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
     // Virtual touch stick: analog yaw/pitch scaled by same rates as keyboard.
     // Applies alongside keys so the pilot can hold "boost" on a button while
@@ -4556,7 +4582,7 @@ export class Voidwake {
     const ts = this._touchStick;
     if ((ts.yaw !== 0 || ts.pitch !== 0) && !autopilotOn) {
       p.heading.yaw += ts.yaw * dt * 1.4;
-      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ts.pitch * dt * 1.1));
+      p.heading.pitch = wrapPi(p.heading.pitch + ts.pitch * dt * 1.1);
       this._disengageAutopilot("stick");
     }
     // Touch throttle slider — direct absolute value, not relative.
@@ -4616,7 +4642,7 @@ export class Voidwake {
       const cax = Math.max(-1, Math.min(1, ax));
       const cay = Math.max(-1, Math.min(1, ay));
       p.heading.yaw += cax * dt * 1.4 * sens;
-      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + cay * dt * 1.1 * sens));
+      p.heading.pitch = wrapPi(p.heading.pitch + cay * dt * 1.1 * sens);
     }
 
     // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
@@ -6464,6 +6490,7 @@ export class Voidwake {
     if (this.optionsSection === "controls")  { this.updateOptionsControls();  return; }
     if (this.optionsSection === "keybinds")  { this.updateOptionsKeybinds();  return; }
     if (this.optionsSection === "scripting") { this.updateOptionsScripting(); return; }
+    if (this.optionsSection === "chat")      { this.updateOptionsChat();      return; }
   }
 
   // Root Options hub. Scripting became a real subsection in 0.5.5; the
@@ -6533,17 +6560,13 @@ export class Voidwake {
       const n = modes.length;
       this.options.reticleShape = modes[(idx + (right ? 1 : -1) + n) % n];
     }
-    // Comms window sub-controls (kept inline under Gameplay; a nested
-    // submenu is in the 0.5 backlog).
-    if (i === 13) {
-      const delta = right ? 2 : left ? -2 : 0;
-      this.options.commsCols = Math.max(28, Math.min(120, (this.options.commsCols ?? 54) + delta));
+    // "Chat Windows" opens a nested sub-page with the three comms controls
+    // (width, height, word-wrap). Kept out of the flat Gameplay list so the
+    // list stays scannable and there's room for future per-tab options.
+    if (i === 13 && this.input.consume("enter")) {
+      this.optionsSection = "chat"; this.menuCursor = 0;
+      return;
     }
-    if (i === 14) {
-      const delta = right ? 1 : left ? -1 : 0;
-      this.options.commsRows = Math.max(4, Math.min(30, (this.options.commsRows ?? 12) + delta));
-    }
-    if (i === 15 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
     }
@@ -6565,6 +6588,36 @@ export class Voidwake {
       `HUD Color: ${this.options.hudScheme ?? "green"}`,
       `Reticle Color: ${this.options.reticleColor ?? "green"}`,
       `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
+      `Chat Windows ▸`,
+      "Back",
+    ];
+  }
+
+  // --- Options ▸ Gameplay ▸ Chat Windows -----------------------------------
+  // Nested sub-page for the Comms panel controls (width, height, word-wrap).
+  // Kept as its own section so future per-tab colors / timestamp format /
+  // auto-hide-in-combat toggles have somewhere obvious to land.
+  private updateOptionsChat() {
+    const items = this.optionsChatItems();
+    this.menuNav(items.length);
+    const left = this.input.consume("arrowleft");
+    const right = this.input.consume("arrowright");
+    const i = this.menuCursor;
+    if (i === 0) {
+      const delta = right ? 2 : left ? -2 : 0;
+      this.options.commsCols = Math.max(28, Math.min(120, (this.options.commsCols ?? 54) + delta));
+    }
+    if (i === 1) {
+      const delta = right ? 1 : left ? -1 : 0;
+      this.options.commsRows = Math.max(4, Math.min(30, (this.options.commsRows ?? 12) + delta));
+    }
+    if (i === 2 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
+    if (this.input.consume("enter") && items[i] === "Back") {
+      this.optionsSection = "gameplay"; this.menuCursor = 13;
+    }
+  }
+  private optionsChatItems(): string[] {
+    return [
       `Comms Width: ${this.options.commsCols ?? 54} cols`,
       `Comms Height: ${this.options.commsRows ?? 12} rows`,
       `Comms Word Wrap: ${this.options.commsWrap ? "ON" : "OFF"}`,
@@ -7491,6 +7544,102 @@ export class Voidwake {
     // ahead of the ship so the field never empties out as we fly.
     const fwd = { x: sy * cp, y: sp, z: cy * cp };
 
+    // ---- Deep-sky pass (galactic disk + core + BH) -----------------------
+    // Fixed points in world space treated as if they lived at infinity —
+    // only the camera rotation applies, translation is ignored. This lets
+    // us paint a "background sky" that always sits behind everything else.
+    const projectDir = (dx: number, dy: number, dz: number) => {
+      const x1 = cy * dx - sy * dz;
+      const z1 = sy * dx + cy * dz;
+      const y1 = cp * dy - sp * z1;
+      const z2 = sp * dy + cp * z1;
+      if (z2 <= 0.05) return null;
+      const sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
+      const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
+      if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) return null;
+      return { sx, sy: sy2 };
+    };
+    if (this._galaxyDirs.length === 0) {
+      // 180 points spread around the disk. Slight thickness (dy) so the band
+      // reads as a faint smear rather than a pixel-thin line.
+      for (let i = 0; i < 180; i++) {
+        const th = (i / 180) * Math.PI * 2 + Math.random() * 0.02;
+        const r = 0.85 + Math.random() * 0.15;
+        const dx = Math.cos(th) * r;
+        const dz = Math.sin(th) * r;
+        const dy = (Math.random() - 0.5) * 0.08; // thin disk
+        const b = Math.floor(Math.random() * 3);
+        // Normalize.
+        const L = Math.hypot(dx, dy, dz) || 1;
+        this._galaxyDirs.push({ x: dx / L, y: dy / L, z: dz / L, b });
+      }
+    }
+    const DISK_PAL = ["#241a2c", "#3a2740", "#4d3358"];
+    const DISK_CH = [".", ".", "·"];
+    for (const d of this._galaxyDirs) {
+      const pt = projectDir(d.x, d.y, d.z);
+      if (!pt) continue;
+      const cell = g[pt.sy][pt.sx];
+      if (cell.ch === " ") g[pt.sy][pt.sx] = { ch: DISK_CH[d.b], color: DISK_PAL[d.b] };
+    }
+    // Galactic core: direction to world origin. Bright center with a faint
+    // halo, and a black-hole disk at the very core.
+    const toCoreLen = Math.hypot(p.pos.x, p.pos.y, p.pos.z) || 1;
+    const cxDir = -p.pos.x / toCoreLen, cyDir = -p.pos.y / toCoreLen, czDir = -p.pos.z / toCoreLen;
+    const core = projectDir(cxDir, cyDir, czDir);
+    if (core) {
+      // Halo (2-cell radius) in warm dust colors.
+      const HALO = ["#3a2440", "#553055", "#77406a", "#a05680"];
+      for (let oy = -2; oy <= 2; oy++) {
+        for (let ox = -3; ox <= 3; ox++) {
+          const rad = Math.hypot(ox * 0.6, oy);
+          if (rad < 0.5 || rad > 3.2) continue;
+          const sx = core.sx + ox, sy2 = core.sy + oy;
+          if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
+          if (g[sy2][sx].ch !== " ") continue;
+          const tier = Math.min(3, Math.floor(rad));
+          g[sy2][sx] = { ch: "·", color: HALO[3 - tier] };
+        }
+      }
+      // Bright galactic-center glyph, then black hole overlay.
+      if (g[core.sy][core.sx].ch === " " || g[core.sy][core.sx].ch === "·")
+        g[core.sy][core.sx] = { ch: "*", color: "#f4c67a", glow: true };
+      // BH: single darkened cell right beside the core so the core reads as
+      // "bright halo with a dark eye". Only draw if inside viewport.
+      if (core.sx + 1 < vpRight)
+        g[core.sy][core.sx + 1] = { ch: "●", color: "#0a0508" };
+    }
+
+    // ---- Colorful gas cloud puffs ---------------------------------------
+    // Sparse and dim — meant to add a splash of color without obscuring the
+    // starfield or entities. Same reject-and-respawn scheme as the stars.
+    if (this.gasClouds.length === 0) {
+      const CLOUD_TINTS = ["#2a1a3a", "#3a1a2a", "#1a2a3a", "#1a3a2a", "#3a2a1a", "#301538"];
+      for (let i = 0; i < 60; i++) {
+        const seed = this.spawnWorldStar(R * 1.4, false);
+        this.gasClouds.push({ x: seed.x, y: seed.y, z: seed.z, c: CLOUD_TINTS[i % CLOUD_TINTS.length] });
+      }
+    }
+    for (const c of this.gasClouds) {
+      const rx = c.x - p.pos.x, ry = c.y - p.pos.y, rz = c.z - p.pos.z;
+      const x1 = cy * rx - sy * rz;
+      const z1 = sy * rx + cy * rz;
+      const y1 = cp * ry - sp * z1;
+      const z2 = sp * ry + cp * z1;
+      if (z2 <= 1) {
+        // Behind camera — reposition ahead.
+        const ahead = 0.5 * R + Math.random() * R;
+        c.x = p.pos.x + fwd.x * ahead + (Math.random() - 0.5) * R;
+        c.y = p.pos.y + fwd.y * ahead + (Math.random() - 0.5) * R;
+        c.z = p.pos.z + fwd.z * ahead + (Math.random() - 0.5) * R;
+        continue;
+      }
+      const sx = vpLeft + Math.floor(vw / 2 + (x1 / z2) * vw * 0.7);
+      const sy2 = vpTop + Math.floor(vh / 2 + (y1 / z2) * vh * 0.7);
+      if (sx <= vpLeft || sx >= vpRight || sy2 <= vpTop || sy2 >= vpBottom) continue;
+      if (g[sy2][sx].ch === " ") g[sy2][sx] = { ch: "·", color: c.c };
+    }
+
     // Three brightness tiers; gray, low-alpha-feeling palette.
     const PAL = ["#1a1f2a", "#2b3346", "#3d4a66"];
     const CH = [".", ".", "·"];
@@ -7769,6 +7918,14 @@ export class Voidwake {
         title = "OPTIONS ▸ SCRIPTING (LUA)";
         items = this.optionsScriptingItems();
         hint = "↑/↓ select   ENTER activate   ESC back";
+        break;
+      case "chat":
+        title = "OPTIONS ▸ GAMEPLAY ▸ CHAT WINDOWS";
+        items = this.optionsChatItems();
+        hint = "←/→ change   ↑/↓ field   ESC back";
+        break;
+      default:
+        items = this.optionsRootItems.slice();
         break;
     }
     this.renderListMenu(g, title, items, this.optionsSection === "root" ? this.optionsRootDisabled : []);
@@ -9473,13 +9630,20 @@ function clamp01(v: number) { return Math.max(0, Math.min(1, v)); }
 function headingToVec(yaw: number, pitch: number): Vec3 {
   // Forward unit vector matching the camera projection in renderPlaying().
   // The camera transform places "ahead" (reticle center) at world direction
-  // (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). Previously this
-  // returned -sp on Y, which made the ship fly opposite to the reticle
-  // whenever the player pitched up or down — the "I'm aimed at him but the
-  // distance is growing" bug.
+  // (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). Valid at any
+  // pitch — including looped-over-the-top values in (-π, π].
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   return { x: sy * cp, y: sp, z: cy * cp };
+}
+
+// Wrap an angle in radians into (-π, π]. Used to let pitch loop over the
+// top / under the bottom continuously instead of clamping at ±π/2 — a real
+// spacecraft has no absolute "up", so a full pitch rotation is expected.
+function wrapPi(a: number): number {
+  const TAU = Math.PI * 2;
+  a = ((a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+  return a;
 }
 
 // Hash function exported for tooling tests; otherwise unused.

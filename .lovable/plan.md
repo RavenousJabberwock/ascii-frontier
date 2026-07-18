@@ -840,5 +840,45 @@ Items explicitly on hold for a future release (or an outside mod).
   reuse the existing `chatterCtx` placeholders (no new fragments).
 - VERSION bump 0.5.12 → 0.5.13.
 
-Deferred (still open): Chat Windows submenu, player-to-NPC comms,
-in-canvas Lua editor.
+Deferred (still open): player-to-NPC comms, in-canvas Lua editor.
+
+## 0.5.14 — Chat Windows submenu, unclamped pitch, deep sky, 2× universe
+
+- **Chat Windows submenu.** The three Comms controls (Width, Height,
+  Word Wrap) are moved out of the flat Gameplay list into a nested
+  Options ▸ Gameplay ▸ Chat Windows sub-page. ESC bounces back to
+  Gameplay with the cursor parked on the entry. `optionsSection` gains
+  a `"chat"` state; `updateOptionsChat` + `optionsChatItems` mirror the
+  Keybinds pattern. Leaves room for future per-tab colors / timestamp
+  format / auto-hide-in-combat toggles.
+- **Continuous pitch.** Player pitch is no longer clamped at ±π/2.
+  Keyboard (`Q`/`E`), touch stick, and mouse-steer paths now push
+  through `wrapPi()` so the ship can loop over the top or under the
+  bottom continuously — a real spacecraft has no absolute "up".
+  `headingToVec` was already trig-based and needs no changes.
+- **Colorful gas puffs.** New `gasClouds` field seeds ~60 dim
+  `·` glyphs in warm/cool tints around the player, projected through
+  the same camera as the starfield. Very sparse so entities/HUD read
+  cleanly.
+- **Galactic disk + core + supermassive black hole.** New `_galaxyDirs`
+  builds 180 unit vectors along the galactic plane (rendered "at
+  infinity" — camera rotation only, no translation) that paint a faint
+  purple band across the sky. Direction to world origin projects a
+  bright `*` galactic center with a warm halo and a `●` black-hole
+  overlay in a deep near-black tone.
+- **2× universe radius, density maintained.** `WORLD_RADIUS` and each
+  sub-radius double (27k → 54k, etc). All population counts scale by
+  ≈8× to preserve current per-volume density: 47 → 376 background suns,
+  142 → 1,136 planets, 1,755 → 14,040 asteroids, 68 → 544 civilian
+  stations, 37 → 296 pirate bases, 506 → 4,048 ships, 95 → 760 comets,
+  140 → 1,120 nebulae, 68 → 544 beacons, 41 → 328 derelicts, 14 → 112
+  UFOs, patrol group 5-7 → 40-63, wormhole pairs 7 → 56. Frame timing
+  budget: renderer only draws entities within its existing culling
+  radius, so far-away populations are cheap; AI ticks touch every
+  ship, so if this proves heavy on lower-end machines we'll add a
+  radius gate around the player in a follow-up.
+- VERSION bump 0.5.13 → 0.5.14.
+
+Deferred (still open): player-to-NPC comms, in-canvas Lua editor,
+optional radius-gated AI tick for very large universes.
+
