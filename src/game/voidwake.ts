@@ -3322,12 +3322,37 @@ const PLANET_FILLS  = [
   "#8a5a3a", // rust
   "#ffb3c8", // pink cloud gas giant
   "#5a86c9", // stormy jovian
+  // 0.6.1 — wider palette so systems don't repeat the same 12 hues.
+  "#3a2a5a", // deep indigo dwarf
+  "#e8ffb3", // sulphurous yellow
+  "#ff5a5a", // hellworld / crimson
+  "#a0f0ff", // pale cyan ice-giant
+  "#c4a878", // dust-tan mesa world
+  "#5a8a3a", // olive jungle
+  "#2a5a4a", // abyssal turquoise
+  "#f0e0ff", // pale lilac cloud
+  "#4a2a10", // char / burnt cinder
+  "#ff9ac8", // salmon storm
+  "#a878ff", // amethyst gas giant
+  "#c0ffc0", // pale mint sea
+  "#402a2a", // volcanic obsidian
+  "#e8c890", // ochre veldt
+  "#88bcd8", // haze-blue oceanic
+  "#d84a30", // rust-storm giant
+  "#ffe0f0", // bone-white ice
+  "#4a8890", // deep ocean world
+  "#a89060", // savannah tan
+  "#3a5a20", // moss / bog
 ];
 const PLANET_EDGES  = [
   "#3d6d9b", "#5a8a5a", "#8b6038", "#7a4eb0", "#a98a48", "#3d8a82",
   "#a04520", "#6a9aa2", "#606070", "#4a3020", "#a4536a", "#2b4a78",
+  "#1a103a", "#8a9a3a", "#7a1010", "#508090", "#7a5a3a", "#2a5010",
+  "#0a2a20", "#8060a8", "#200a04", "#a04a70", "#5a3aa8", "#508a58",
+  "#100404", "#7a5a30", "#405a70", "#6a1a08", "#7a6070", "#204048",
+  "#5a4830", "#1a2a10",
 ];
-const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0", "8", "%", "&"];
+const PLANET_TEX    = ["O", "Q", "@", "o", "Ø", "0", "8", "%", "&", "◍", "◉", "θ", "◐", "◑"];
 const STATION_FILLS = ["#c2c2ff", "#a8ffd0", "#ffc8a0", "#cfe8ff"];
 const STATION_TEX   = ["#", "H", "X", "=", "8"];
 const ASTEROID_FILLS= ["#a6886a", "#8a7656", "#b89a78", "#7a6650"];
