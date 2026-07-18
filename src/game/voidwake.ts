@@ -9512,13 +9512,14 @@ export class Voidwake {
       ["U", "quest log"],
       ["L", "codex"],
       ["K", "pin tracker"],
+      ["R", "pin rep panel"],
       ["P", "pause"],
       ["ESC", "menu"],
     ];
     ctrls.forEach((row, i) => {
-      putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe");
+      putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe", panelX + 26);
     });
-    putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf");
+    putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf", panelX + 26);
 
 
 
