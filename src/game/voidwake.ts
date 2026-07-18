@@ -8296,7 +8296,8 @@ export class Voidwake {
             g[sy2][sx] = { ch: glyph, color: tint.fill };
           }
         } else {
-          const variants = SHIP_SPRITES[e.kind];
+          const spriteKey = (e.kind === "friendly" && e.faction === "patrol") ? "patrol" : e.kind;
+          const variants = SHIP_SPRITES[spriteKey] ?? SHIP_SPRITES[e.kind];
           const sprite = variants[Math.floor(hash01(e.id) * variants.length)];
           for (let dy = -1; dy <= 1; dy++) {
             const row = sprite[dy + 1];
