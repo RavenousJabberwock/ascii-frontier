@@ -4570,8 +4570,14 @@ export class Voidwake {
     // this frame; user keys still override — press anything to take back the stick.
     if (keys.has(k.throttleUp)) { p.throttle = Math.min(1, p.throttle + dt * 0.7); this._disengageAutopilot("stick"); }
     if (keys.has(k.throttleDown)) { p.throttle = Math.max(0, p.throttle - dt * 0.7); this._disengageAutopilot("stick"); }
-    if (keys.has(k.yawLeft)) { p.heading.yaw -= dt * 1.2; this._disengageAutopilot("stick"); }
-    if (keys.has(k.yawRight)) { p.heading.yaw += dt * 1.2; this._disengageAutopilot("stick"); }
+    // Yaw sign flips when the ship is inverted (|pitch| > π/2, i.e.
+    // cos(pitch) < 0). Without this, "yaw left" from the pilot's seat feels
+    // reversed after looping over the top because world-space yaw is measured
+    // around a fixed up axis. Applies to keyboard/touch/mouse — not AI slew,
+    // which already works from world-space target angles.
+    const yawSign = Math.cos(p.heading.pitch) < 0 ? -1 : 1;
+    if (keys.has(k.yawLeft)) { p.heading.yaw -= yawSign * dt * 1.2; this._disengageAutopilot("stick"); }
+    if (keys.has(k.yawRight)) { p.heading.yaw += yawSign * dt * 1.2; this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchUp))   { p.heading.pitch = wrapPi(p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
     if (keys.has(k.pitchDown)) { p.heading.pitch = wrapPi(p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
@@ -4581,7 +4587,7 @@ export class Voidwake {
     // the two don't fight each other.
     const ts = this._touchStick;
     if ((ts.yaw !== 0 || ts.pitch !== 0) && !autopilotOn) {
-      p.heading.yaw += ts.yaw * dt * 1.4;
+      p.heading.yaw += yawSign * ts.yaw * dt * 1.4;
       p.heading.pitch = wrapPi(p.heading.pitch + ts.pitch * dt * 1.1);
       this._disengageAutopilot("stick");
     }
@@ -4641,7 +4647,7 @@ export class Voidwake {
       // strays into the HUD panel (mx/my can exceed 1 there).
       const cax = Math.max(-1, Math.min(1, ax));
       const cay = Math.max(-1, Math.min(1, ay));
-      p.heading.yaw += cax * dt * 1.4 * sens;
+      p.heading.yaw += yawSign * cax * dt * 1.4 * sens;
       p.heading.pitch = wrapPi(p.heading.pitch + cay * dt * 1.1 * sens);
     }
 
