@@ -3383,7 +3383,7 @@ export class Voidwake {
   // Options screen has been split into a small hub with three subsections
   // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
   // "root" is the hub itself.
-  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" = "root";
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "chat" = "root";
   // Lua scripting (0.5.5): source is edited via a browser prompt from the
   // Options ▸ Scripting page and persisted in localStorage. The runtime
   // (LuaHost) is created lazily on the first enable so users who never open
@@ -6470,6 +6470,7 @@ export class Voidwake {
     if (this.optionsSection === "controls")  { this.updateOptionsControls();  return; }
     if (this.optionsSection === "keybinds")  { this.updateOptionsKeybinds();  return; }
     if (this.optionsSection === "scripting") { this.updateOptionsScripting(); return; }
+    if (this.optionsSection === "chat")      { this.updateOptionsChat();      return; }
   }
 
   // Root Options hub. Scripting became a real subsection in 0.5.5; the
