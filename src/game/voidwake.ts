@@ -5250,6 +5250,7 @@ export class Voidwake {
             p.driftVel = { x: 0, y: 0, z: 0 };
             p.throttle = 0;
             this._wormholeCooldown = 3.0;
+            (this as unknown as { _wormholeFx: number })._wormholeFx = 2.8;
             this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
             this.pushChatter("Computer", "Reality just... folded. We're somewhere else.", "#9effd2");
             this.sfx("dock");
