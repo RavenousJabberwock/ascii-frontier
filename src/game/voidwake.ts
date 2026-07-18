@@ -5639,6 +5639,8 @@ export class Voidwake {
                 `Destroyed ${t.name}.`
               );
               awardXP(p, isPirateBase ? 250 : isBoss ? 90 : 25);
+              // 0.6.2 — active crew share a slice of combat XP.
+              grantCrewXP(p, isPirateBase ? 30 : isBoss ? 15 : 4);
               p.credits += isPirateBase ? 1500 : isBoss ? 450 : 50;
               p.kills = (p.kills ?? 0) + 1;
               // Gunner reacts to the kill (when active and not over-talking).
