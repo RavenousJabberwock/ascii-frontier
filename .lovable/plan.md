@@ -974,3 +974,41 @@ Deferred (still open, will pick up in 0.6.x):
 - Faction reputation panel expansion (data exists; UI is minimal).
 - Crew XP progression (design sketch only).
 - Optional radius-gated AI tick for very large universes.
+
+## 0.6.2 — Rep panel, crew XP, bottom-right overlap fix
+
+- **Panel overlap audit (lower right)**: root cause was the mission log
+  column (drawn at `cols-52..cols-1`, `rTop..rows-2`) with no right
+  clip, colliding with the right cockpit panel (`cols-26..`), plus the
+  CONTROLS block whose 19 rows extended two lines below `vpBottom` into
+  the status/log strip. Fixes:
+  - Right-clip every SYSTEM/mission bottom-strip putText call at
+    `cols-54` so it can't bleed into the log column.
+  - Right-clip the mission log column at `cols-28` so it can't bleed
+    into the right panel.
+  - Right-clip every CONTROLS and CREW right-panel line at
+    `panelX+26` so long tags stay inside the panel.
+  - Move `cTop` from `vpBottom-16` to `vpBottom-19` so the controls
+    title + 17 keys + mouse row all sit inside the viewport.
+- **Toggleable Rep Panel (R)**: new `repPinned` state (off by default)
+  plus keybind entry `pinRep` (default R). When on, renders a compact
+  `[ STANDINGS ]` block top-right of the viewport (below the quest
+  tracker when both are pinned) with Fed / Gld / Pir label + numeric
+  standing, color-coded green/red at ±20. Followed by a `[ CREW XP ]`
+  block listing up to 4 crew with `L#` and a 9-cell `▮/▯` progress bar.
+- **Crew XP**: added `CrewMember.xp?` (Gunner mirrors it) plus
+  `crewLevel(c)` = clamp(floor(xp/50), 0..9) and `grantCrewXP(p, n)`
+  helper. Hooked at kill (4 / 15 / 30 XP for regular / boss / pirate
+  base) and dock (3 XP per dock). Cockpit right panel now shows `L#`
+  next to each crew name.
+- **Sci-fi pilot lines**: eight new pilot idle lines referring to the
+  new ringed / multi-star / pink-cloud visuals from 0.6.1.
+- **VERSION bump** — 0.6.1 → 0.6.2; offline bundle rebuilt (458 KB).
+
+Still deferred for later 0.6.x:
+- Player-to-NPC comms with template replies.
+- In-canvas multi-line Lua editor.
+- Full Reputation *Panel* on a dedicated screen (only the pinnable HUD
+  strip is new here).
+- Optional gunner-level crit bonus / pilot-level fuel sipping perks —
+  today crew XP is display-only.

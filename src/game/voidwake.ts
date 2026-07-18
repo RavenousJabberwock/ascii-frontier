@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.6.1";
+const VERSION = "0.6.2";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1391,6 +1391,7 @@ interface Gunner {
   cooldown: number;           // independent fire cadence
   wage: number;               // flat credits paid to this crewmember every dock
   nextBarkAt: number;         // throttle idle barks
+  xp?: number;                // 0.6.2 — mirrors CrewMember.xp for legacy gunner
 }
 
 // Multi-role crew. Roles: "gunner" (auto-fire/mine), "pilot" (autopilot to
@@ -1413,6 +1414,10 @@ interface CrewMember {
   // ties morale <30 to reduced perks / walk-outs; today it just changes the
   // Comms line the crew posts after payroll.
   morale?: number;      // 0..100, defaults to 100
+  // 0.6.2 — crew XP. Ticks up on kills (all active crew) and on docks
+  // (small trickle). Level = floor(xp/50), capped at 9. Purely cosmetic
+  // today except for a small gunner crit bonus on the fire path.
+  xp?: number;
 }
 
 interface PlayerState {
@@ -1616,6 +1621,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   cycleTypeNext: "}",    // cycle to next in-range target of the current target's type
   autopilot: "o",        // toggle hired Pilot's autopilot to current target
   questLog: "u",         // open the toggle-able Quest Log popup
+  pinRep: "r",           // toggle the compact reputation panel
 };
 
 // User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
@@ -1644,6 +1650,7 @@ const KEYBIND_ACTIONS: { id: string; label: string }[] = [
   { id: "toggleGunner", label: "Toggle Gunner" },
   { id: "autopilot",    label: "Autopilot Toggle" },
   { id: "pinQuest",     label: "Pin Quest Tracker" },
+  { id: "pinRep",       label: "Pin Rep Panel" },
   { id: "questLog",     label: "Quest Log" },
   { id: "legend",       label: "Codex / Legend" },
   { id: "pause",        label: "Pause" },
@@ -2789,6 +2796,16 @@ function getCrew(p: PlayerState, role: CrewRole): CrewMember | undefined {
 function crewCount(p: PlayerState): number {
   return (p.gunner ? 1 : 0) + (p.crew ? p.crew.length : 0);
 }
+// 0.6.2 — crew XP → level. floor(xp/50), clamped 0..9. Accepts CrewMember
+// or the legacy Gunner shape (both carry an optional `xp` today).
+function crewLevel(c: { xp?: number }): number {
+  return Math.max(0, Math.min(9, Math.floor((c.xp ?? 0) / 50)));
+}
+function grantCrewXP(p: PlayerState, amount: number) {
+  if (amount <= 0) return;
+  if (p.gunner) p.gunner.xp = (p.gunner.xp ?? 0) + amount;
+  if (p.crew) for (const c of p.crew) c.xp = (c.xp ?? 0) + amount;
+}
 
 // Crew hiring fee per role.
 const CREW_ROLE_INFO: Record<CrewRole, { title: string; baseFee: number; blurb: string; color: string }> = {
@@ -3845,6 +3862,9 @@ export class Voidwake {
   // Pinned quest tracker: when true, render a compact mission panel anchored
   // to the top-right of the viewport during play. Toggled with K.
   questPinned = true;
+  // 0.6.2 — toggleable compact reputation panel on the top-right of the
+  // viewport (below the quest tracker when both are on). Off by default.
+  repPinned = false;
   // Snap timer for targeting brackets — brackets "tighten in" from a wide
   // box to a tight one over a few frames when a new target is acquired.
   private _bracketTargetId: number | null = null;
@@ -5342,6 +5362,12 @@ export class Voidwake {
       this.questPinned = !this.questPinned;
       this.pushLog(this.questPinned ? "Quest tracker pinned." : "Quest tracker hidden.");
     }
+    // 0.6.2 — toggle the compact reputation / crew panel (R by default).
+    if (this.input.consume(k.pinRep)) {
+      this.repPinned = !this.repPinned;
+      this.pushLog(this.repPinned ? "Reputation panel pinned." : "Reputation panel hidden.");
+    }
+
 
     // Comms panel controls. '\' cycles the tab (All → Crew → External),
     // PageUp/PageDown scroll the filtered feed. Scroll is clamped in the
@@ -5613,6 +5639,8 @@ export class Voidwake {
                 `Destroyed ${t.name}.`
               );
               awardXP(p, isPirateBase ? 250 : isBoss ? 90 : 25);
+              // 0.6.2 — active crew share a slice of combat XP.
+              grantCrewXP(p, isPirateBase ? 30 : isBoss ? 15 : 4);
               p.credits += isPirateBase ? 1500 : isBoss ? 450 : 50;
               p.kills = (p.kills ?? 0) + 1;
               // Gunner reacts to the kill (when active and not over-talking).
@@ -5939,6 +5967,8 @@ export class Voidwake {
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.sfx("dock");
+    // 0.6.2 — dock trickle XP for all crew (rest, drills, shore leave).
+    grantCrewXP(p, 3);
     dispatchHook("onPlayerDock", { entity: t, kind: "station" });
     if (p.gunner) {
       this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
@@ -9344,6 +9374,52 @@ export class Voidwake {
       }
     }
 
+    // 0.6.2 — Toggleable Rep Panel. Compact reputation + crew XP readout
+    // anchored top-right of the viewport, below the quest tracker when
+    // both are on. Off by default; press R to pin (see updatePlaying).
+    if (this.repPinned) {
+      const rw = 28;
+      const rx = Math.max(vpLeft + 2, vpRight - rw - 1);
+      // If quest tracker is showing, drop below its 3-row block; else hug top.
+      const questShown = this.questPinned && !!p.mission;
+      const ry = vpTop + 1 + (questShown ? 4 : 0);
+      const rep = p.reputation ?? {};
+      putText(g, rx, ry, "[ STANDINGS ]", "#cf6", vpRight);
+      const fedV = rep.federation ?? 0;
+      const gldV = rep.guild ?? 0;
+      const pirV = rep.pirate ?? 0;
+      const repCol = (v: number) => v >= 20 ? "#7CFC00" : v <= -20 ? "#ff7a7a" : "#aef";
+      const pad = (s: string, n: number) => s.length >= n ? s : s + " ".repeat(n - s.length);
+      putText(g, rx, ry + 1, `Fed  ${pad(repLabel(fedV), 10)} ${fedV >= 0 ? "+" : ""}${fedV}`, repCol(fedV), vpRight);
+      putText(g, rx, ry + 2, `Gld  ${pad(repLabel(gldV), 10)} ${gldV >= 0 ? "+" : ""}${gldV}`, repCol(gldV), vpRight);
+      putText(g, rx, ry + 3, `Pir  ${pad(repLabel(pirV), 10)} ${pirV >= 0 ? "+" : ""}${pirV}`, repCol(pirV), vpRight);
+      // Crew XP summary — up to 4 rows so we don't crowd the flight view.
+      let ryc = ry + 4;
+      const crewRows: [string, string, number, string][] = [];
+      if (p.gunner) crewRows.push(["Gun", p.gunner.name.split(" ")[0], crewLevel(p.gunner), "#fc6"]);
+      if (p.crew) for (const c of p.crew) {
+        crewRows.push([CREW_ROLE_INFO[c.role].title.slice(0, 3), c.name.split(" ")[0], crewLevel(c), CREW_ROLE_INFO[c.role].color]);
+      }
+      if (crewRows.length) {
+        putText(g, rx, ryc, "[ CREW XP ]", "#cf6", vpRight);
+        ryc++;
+        for (const [ttl, nm, lvl, col] of crewRows.slice(0, 4)) {
+          const xpTotal = lvl * 50; // approximate — cap-hidden but enough for the pill
+          const bar = "▮".repeat(Math.min(9, lvl)) + "▯".repeat(Math.max(0, 9 - lvl));
+          putText(g, rx, ryc, `${ttl} ${pad(nm, 8)} L${lvl}`, col, vpRight);
+          putText(g, rx + 15, ryc, bar, col, vpRight);
+          void xpTotal;
+          ryc++;
+        }
+        if (crewRows.length > 4) putText(g, rx, ryc, `+${crewRows.length - 4} more`, "#888", vpRight);
+      }
+    }
+
+
+
+
+
+
 
 
 
@@ -9435,20 +9511,24 @@ export class Voidwake {
     }
 
     // Crew status block — shows gunner + hired crew (pilot/engineer/merchant).
+    // Right-clipped to the panel so long tags can't spill into other columns.
+    const crewRightLimit = panelX + 26;
     if (p.gunner || (p.crew && p.crew.length > 0)) {
       let gy0 = cy2 + 6;
-      putText(g, panelX, gy0, `[ CREW ${crewCount(p)}/${effectiveCrewMax(p)} ]`, "#7CFC00");
+      putText(g, panelX, gy0, `[ CREW ${crewCount(p)}/${effectiveCrewMax(p)} ]`, "#7CFC00", crewRightLimit);
       gy0++;
       if (p.gunner) {
-        putText(g, panelX, gy0, `Gun ${p.gunner.name.split(" ")[0]}`, "#fff");
-        putText(g, panelX + 12, gy0, p.gunner.enabled ? "AUTO" : "STANDBY", p.gunner.enabled ? "#fc6" : "#888");
+        const lvl = crewLevel(p.gunner);
+        putText(g, panelX, gy0, `Gun ${p.gunner.name.split(" ")[0]} L${lvl}`, "#fff", crewRightLimit);
+        putText(g, panelX + 15, gy0, p.gunner.enabled ? "AUTO" : "STANDBY", p.gunner.enabled ? "#fc6" : "#888", crewRightLimit);
         gy0++;
       }
       if (p.crew) for (const c of p.crew) {
         const info = CREW_ROLE_INFO[c.role];
         const tag = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "ready") : "on watch";
-        putText(g, panelX, gy0, `${info.title.slice(0, 3)} ${c.name.split(" ")[0]}`, "#fff");
-        putText(g, panelX + 12, gy0, tag, info.color);
+        const lvl = crewLevel(c);
+        putText(g, panelX, gy0, `${info.title.slice(0, 3)} ${c.name.split(" ")[0]} L${lvl}`, "#fff", crewRightLimit);
+        putText(g, panelX + 15, gy0, tag, info.color, crewRightLimit);
         gy0++;
       }
     }
@@ -9456,7 +9536,10 @@ export class Voidwake {
 
     // --- Controls reminder, anchored to the bottom of the right panel ------
     // Always visible so new pilots aren't stranded looking for the keymap.
-    const cTop = vpBottom - 16;
+    // 0.6.2: nudged up 3 rows so the block (title + 17 keys + mouse row = 19
+    // rows) sits entirely inside vpTop..vpBottom-1 and can't spill into the
+    // status/log strip beneath the viewport.
+    const cTop = vpBottom - 19;
     putText(g, panelX, cTop, "[ CONTROLS ]", "#7CFC00");
     const mouseLine = this.options.mouseSteer ? "Mouse  steer (toggle in Opts)" : "Mouse  off";
     const ctrls: [string, string][] = [
@@ -9475,26 +9558,33 @@ export class Voidwake {
       ["U", "quest log"],
       ["L", "codex"],
       ["K", "pin tracker"],
+      ["R", "pin rep panel"],
       ["P", "pause"],
       ["ESC", "menu"],
     ];
     ctrls.forEach((row, i) => {
-      putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe");
+      putText(g, panelX, cTop + 1 + i, row[0].padEnd(7) + row[1], "#9fe", panelX + 26);
     });
-    putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf");
+    putText(g, panelX, cTop + 1 + ctrls.length, mouseLine, "#8cf", panelX + 26);
 
 
 
     // --- Bottom: radar + status ---
+    // 0.6.2: right-clip all bottom-strip text at cols-54 so the SYSTEM
+    // column can't overrun into the log column (cols-52..), and clip the
+    // log column at cols-28 so it can't overrun into the right cockpit
+    // panel. Also clip warning ⚠ line the same way.
     const rTop = vpBottom + 1;
+    const sysRight = cols - 54;
+    const logRight = cols - 28;
     this.renderRadar(g, 2, rTop, 22, 7);
-    putText(g, 28, rTop, "[ SYSTEM ]", "#7CFC00");
-    putText(g, 28, rTop + 1, `Seed ${this.seed}`, "#9fe");
-    putText(g, 28, rTop + 2, `Pos ${p.pos.x.toFixed(0)},${p.pos.y.toFixed(0)},${p.pos.z.toFixed(0)}`, "#9fe");
-    putText(g, 28, rTop + 3, `Heading yaw ${(p.heading.yaw).toFixed(2)} pitch ${(p.heading.pitch).toFixed(2)}`, "#9fe");
-    putText(g, 28, rTop + 4, `Mission: ${p.mission ? p.mission.description : "(none)"}`, "#fb6");
+    putText(g, 28, rTop, "[ SYSTEM ]", "#7CFC00", sysRight);
+    putText(g, 28, rTop + 1, `Seed ${this.seed}`, "#9fe", sysRight);
+    putText(g, 28, rTop + 2, `Pos ${p.pos.x.toFixed(0)},${p.pos.y.toFixed(0)},${p.pos.z.toFixed(0)}`, "#9fe", sysRight);
+    putText(g, 28, rTop + 3, `Heading yaw ${(p.heading.yaw).toFixed(2)} pitch ${(p.heading.pitch).toFixed(2)}`, "#9fe", sysRight);
+    putText(g, 28, rTop + 4, `Mission: ${p.mission ? p.mission.description : "(none)"}`, "#fb6", sysRight);
     if (p.mission?.done) {
-      putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6");
+      putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6", sysRight);
     } else if (p.mission) {
       // Mission guidance: bearing + distance to objective.
       const m = p.mission;
@@ -9525,12 +9615,16 @@ export class Voidwake {
           else arrow = y1 > 0 ? "↓ DOWN" : "↑ UP";
         }
         const label = m.kind === "deliver" ? `nearest station ${mt.name}` : mt.name;
-        putText(g, 28, rTop + 5, `→ ${label}  ${d.toFixed(0)}u  ${arrow}`, "#cf6");
+        putText(g, 28, rTop + 5, `→ ${label}  ${d.toFixed(0)}u  ${arrow}`, "#cf6", sysRight);
       } else if (m.kind === "deliver") {
-        putText(g, 28, rTop + 5, `→ Collect ${m.cargoQty} ${m.cargoItem} then dock at any station`, "#cf6");
+        putText(g, 28, rTop + 5, `→ Collect ${m.cargoQty} ${m.cargoItem} then dock at any station`, "#cf6", sysRight);
       }
     }
-    if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6");
+    if (this.warnText) putText(g, 28, rTop + 6, `⚠ ${this.warnText}`, "#fb6", sysRight);
+    // Track logRight for the log column below (declared here so the
+    // renderer can reuse it without recomputing at 60fps).
+    void logRight;
+
 
     // --- COMMS / chatter panel ---
     // Top-left overlay with All / Crew / External / System tabs. Filtered by
@@ -9674,7 +9768,7 @@ export class Voidwake {
     // Log (mission / system events; separate from chatter).
     let ly = rTop;
     for (let i = this.log.length - 1; i >= 0; i--) {
-      putText(g, cols - 52, ly++, "» " + this.log[i].msg, "#cfd");
+      putText(g, cols - 52, ly++, "» " + this.log[i].msg, "#cfd", cols - 28);
       if (ly > rows - 2) break;
     }
 
