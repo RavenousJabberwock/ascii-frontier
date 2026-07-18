@@ -708,6 +708,14 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You'd think comets are pretty. They are. Right up till one clips your paint.",
     "Every lane's got a rhythm. This one's a waltz. Fly it three-count.",
     "Nav display's happy. I'm happy. Somewhere, a merchant is not. Balance.",
+    // Pilot's little sci-fi shelf.
+    "Punch it, {cmdr}? I've always wanted to say that with a straight face.",
+    "This ship? She may not look like much, but she's got it where it counts.",
+    "Course laid in. It's not the fall that kills you — it's the sudden rendezvous with a moon.",
+    "I've flown worse. Once. It was a shuttle. It was on fire. Don't ask.",
+    "Somewhere, another pilot is having a worse day. Statistically.",
+    "Autopilot's a fine copilot. Doesn't hum, doesn't complain, doesn't try to fly upside down for fun.",
+    "You know pitch loops both ways now, {cmdr}? Try not to make the engineer nauseous.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
