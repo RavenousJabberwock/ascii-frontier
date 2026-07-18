@@ -3502,6 +3502,12 @@ export class Voidwake {
   // visceral sense of velocity and heading. Lazily seeded on first render.
   // Each star carries a brightness "tier" so the field has depth.
   private stars: { x: number; y: number; z: number; t: number }[] = [];
+  // Sparse colorful gas puffs — small drifting cloud dots in world space.
+  private gasClouds: { x: number; y: number; z: number; c: string }[] = [];
+  // Direction samples along the galactic disk (unit vectors, fixed in world
+  // space). Rendered at infinity — only the camera rotation applies. Lazily
+  // built on first frame.
+  private _galaxyDirs: { x: number; y: number; z: number; b: number }[] = [];
   // Title-screen drifting stars (camera-local 2D, no player required).
   private titleStars: { x: number; y: number; z: number; t: number }[] = [];
   private _lastRenderTs = 0;
