@@ -835,6 +835,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Rare-metal futures in {sector} are looking twitchy. Watch that market.",
     "Cmdr, if we dock at a Fed hub, let me handle the bill. Trust me.",
     "Half of trading is patience. The other half is knowing when to leave.",
+    // Sci-fi merchant flavor.
+    "Rule of Acquisition #9: opportunity plus instinct equals profit. Or a hangover. Sometimes both.",
+    "I once sold ice to a comet miner. Not proud. Not un-proud, either.",
+    "Every hold's got room for one more crate, {cmdr}. That's not physics, that's philosophy.",
+    "A merchant who won't haggle is just an accountant with a ship.",
   ],
   merchant_greet: [
     "Merchant aboard, Cmdr. I'll shave 15% off the buy sheet and pad the sell.",
