@@ -1413,6 +1413,10 @@ interface CrewMember {
   // ties morale <30 to reduced perks / walk-outs; today it just changes the
   // Comms line the crew posts after payroll.
   morale?: number;      // 0..100, defaults to 100
+  // 0.6.2 — crew XP. Ticks up on kills (all active crew) and on docks
+  // (small trickle). Level = floor(xp/50), capped at 9. Purely cosmetic
+  // today except for a small gunner crit bonus on the fire path.
+  xp?: number;
 }
 
 interface PlayerState {
