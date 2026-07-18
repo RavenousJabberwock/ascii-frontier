@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.5.13";
+const VERSION = "0.5.14";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1594,7 +1594,7 @@ function defaultOptions(): Options {
 // cube. Coordinates are in arbitrary units; the cockpit radar is sized to a
 // fixed range so distant entities just appear faint.
 // =============================================================================
-const WORLD_RADIUS = 27000;
+const WORLD_RADIUS = 54000;
 
 function randPos(rng: () => number, radius = WORLD_RADIUS): Vec3 {
   return {
