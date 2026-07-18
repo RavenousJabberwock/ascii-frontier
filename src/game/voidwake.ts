@@ -4815,7 +4815,7 @@ export class Voidwake {
       // strays into the HUD panel (mx/my can exceed 1 there).
       const cax = Math.max(-1, Math.min(1, ax));
       const cay = Math.max(-1, Math.min(1, ay));
-      p.heading.yaw += yawSign * cax * dt * 1.4 * sens;
+      p.heading.yaw = wrapPi(p.heading.yaw + yawSign * cax * dt * 1.4 * sens);
       p.heading.pitch = wrapPi(p.heading.pitch + cay * dt * 1.1 * sens);
     }
 
