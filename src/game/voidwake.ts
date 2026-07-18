@@ -7667,7 +7667,21 @@ export class Voidwake {
   // ---------------------------------------------------------------------------
   render() {
     const ctx = this.ctx;
-    const w = this.canvas.width, h = this.canvas.height;
+    // 0.6.2 — draw in CSS-pixel coordinates against a DPR-scaled backing
+    // store. setTransform every frame is cheap and self-corrects if the
+    // browser resets the context (tab restore, printing, etc.). Enable
+    // font hinting hints so text stays crisp on non-integer DPR displays.
+    const dpr = this._dpr || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Cast: textRendering / fontKerning aren't in the older TS DOM lib.
+    const anyCtx = ctx as unknown as {
+      textRendering?: string; fontKerning?: string; imageSmoothingEnabled?: boolean;
+    };
+    anyCtx.textRendering = "geometricPrecision";
+    anyCtx.fontKerning = "none";
+    anyCtx.imageSmoothingEnabled = false;
+    const w = this._cssW || this.canvas.width;
+    const h = this._cssH || this.canvas.height;
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
     const cols = Math.max(40, Math.floor(w / CELL_W));
