@@ -935,6 +935,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "I hear the {sector} guild is bleeding staff. Poach season.",
     "Morale's a slow burn, Cmdr — a single hot meal buys a week of loyalty.",
     "Cmdr, next dock let me buy the crew a round on the ship's tab.",
+    // Sci-fi hires talk.
+    "Interviewed a pilot last dock. Kessel-run braggart. Passed.",
+    "Best hire I ever made talked to plants. Turned out great. Don't ask about the plants.",
+    "Bene Gesserit training's overrated in a recruiter — but boy, do the references check out.",
   ],
   recruiter_greet: [
     "Recruiter aboard. I'll trim hire fees and keep the bunk happy, Cmdr.",
