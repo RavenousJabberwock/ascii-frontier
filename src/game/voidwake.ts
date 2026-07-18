@@ -7803,6 +7803,14 @@ export class Voidwake {
         items = this.optionsScriptingItems();
         hint = "↑/↓ select   ENTER activate   ESC back";
         break;
+      case "chat":
+        title = "OPTIONS ▸ GAMEPLAY ▸ CHAT WINDOWS";
+        items = this.optionsChatItems();
+        hint = "←/→ change   ↑/↓ field   ESC back";
+        break;
+      default:
+        items = this.optionsRootItems.slice();
+        break;
     }
     this.renderListMenu(g, title, items, this.optionsSection === "root" ? this.optionsRootDisabled : []);
     // Extra hint sits one row above renderListMenu's footer so the two
