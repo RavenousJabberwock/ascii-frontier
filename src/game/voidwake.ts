@@ -4587,7 +4587,7 @@ export class Voidwake {
     // the two don't fight each other.
     const ts = this._touchStick;
     if ((ts.yaw !== 0 || ts.pitch !== 0) && !autopilotOn) {
-      p.heading.yaw += ts.yaw * dt * 1.4;
+      p.heading.yaw += yawSign * ts.yaw * dt * 1.4;
       p.heading.pitch = wrapPi(p.heading.pitch + ts.pitch * dt * 1.1);
       this._disengageAutopilot("stick");
     }
