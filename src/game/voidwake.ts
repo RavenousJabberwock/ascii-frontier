@@ -9465,20 +9465,24 @@ export class Voidwake {
     }
 
     // Crew status block — shows gunner + hired crew (pilot/engineer/merchant).
+    // Right-clipped to the panel so long tags can't spill into other columns.
+    const crewRightLimit = panelX + 26;
     if (p.gunner || (p.crew && p.crew.length > 0)) {
       let gy0 = cy2 + 6;
-      putText(g, panelX, gy0, `[ CREW ${crewCount(p)}/${effectiveCrewMax(p)} ]`, "#7CFC00");
+      putText(g, panelX, gy0, `[ CREW ${crewCount(p)}/${effectiveCrewMax(p)} ]`, "#7CFC00", crewRightLimit);
       gy0++;
       if (p.gunner) {
-        putText(g, panelX, gy0, `Gun ${p.gunner.name.split(" ")[0]}`, "#fff");
-        putText(g, panelX + 12, gy0, p.gunner.enabled ? "AUTO" : "STANDBY", p.gunner.enabled ? "#fc6" : "#888");
+        const lvl = crewLevel(p.gunner);
+        putText(g, panelX, gy0, `Gun ${p.gunner.name.split(" ")[0]} L${lvl}`, "#fff", crewRightLimit);
+        putText(g, panelX + 15, gy0, p.gunner.enabled ? "AUTO" : "STANDBY", p.gunner.enabled ? "#fc6" : "#888", crewRightLimit);
         gy0++;
       }
       if (p.crew) for (const c of p.crew) {
         const info = CREW_ROLE_INFO[c.role];
         const tag = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "ready") : "on watch";
-        putText(g, panelX, gy0, `${info.title.slice(0, 3)} ${c.name.split(" ")[0]}`, "#fff");
-        putText(g, panelX + 12, gy0, tag, info.color);
+        const lvl = crewLevel(c);
+        putText(g, panelX, gy0, `${info.title.slice(0, 3)} ${c.name.split(" ")[0]} L${lvl}`, "#fff", crewRightLimit);
+        putText(g, panelX + 15, gy0, tag, info.color, crewRightLimit);
         gy0++;
       }
     }
@@ -9486,7 +9490,10 @@ export class Voidwake {
 
     // --- Controls reminder, anchored to the bottom of the right panel ------
     // Always visible so new pilots aren't stranded looking for the keymap.
-    const cTop = vpBottom - 16;
+    // 0.6.2: nudged up 3 rows so the block (title + 17 keys + mouse row = 19
+    // rows) sits entirely inside vpTop..vpBottom-1 and can't spill into the
+    // status/log strip beneath the viewport.
+    const cTop = vpBottom - 19;
     putText(g, panelX, cTop, "[ CONTROLS ]", "#7CFC00");
     const mouseLine = this.options.mouseSteer ? "Mouse  steer (toggle in Opts)" : "Mouse  off";
     const ctrls: [string, string][] = [
