@@ -360,6 +360,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You look like a captain who tips. Am I right or am I right?",
     "Long haulers age in dog years. Look at me — I'm forty and eighty.",
     "Cargo insurance says one thing, cargo hold says another. Same as always.",
+    "Sensor return says giant with rings ahead — nice postcard, terrible dock.",
+    "Cmdr, we haul rocks not favors. Unless you're paying, in which case, favors.",
+    "You're on the guild ledger as 'polite'. That's the best rating we hand out.",
+    "Hauler's rule: never trust a fuel gauge or a captain who quotes them.",
+    "Lane's got fewer patrols this shift. Fly like grownups anyway.",
   ],
   station: [
     "...automated beacon, {sector}: dock fees waived this cycle.",
