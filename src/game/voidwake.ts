@@ -6540,17 +6540,13 @@ export class Voidwake {
       const n = modes.length;
       this.options.reticleShape = modes[(idx + (right ? 1 : -1) + n) % n];
     }
-    // Comms window sub-controls (kept inline under Gameplay; a nested
-    // submenu is in the 0.5 backlog).
-    if (i === 13) {
-      const delta = right ? 2 : left ? -2 : 0;
-      this.options.commsCols = Math.max(28, Math.min(120, (this.options.commsCols ?? 54) + delta));
+    // "Chat Windows" opens a nested sub-page with the three comms controls
+    // (width, height, word-wrap). Kept out of the flat Gameplay list so the
+    // list stays scannable and there's room for future per-tab options.
+    if (i === 13 && this.input.consume("enter")) {
+      this.optionsSection = "chat"; this.menuCursor = 0;
+      return;
     }
-    if (i === 14) {
-      const delta = right ? 1 : left ? -1 : 0;
-      this.options.commsRows = Math.max(4, Math.min(30, (this.options.commsRows ?? 12) + delta));
-    }
-    if (i === 15 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
     }
@@ -6572,6 +6568,36 @@ export class Voidwake {
       `HUD Color: ${this.options.hudScheme ?? "green"}`,
       `Reticle Color: ${this.options.reticleColor ?? "green"}`,
       `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
+      `Chat Windows ▸`,
+      "Back",
+    ];
+  }
+
+  // --- Options ▸ Gameplay ▸ Chat Windows -----------------------------------
+  // Nested sub-page for the Comms panel controls (width, height, word-wrap).
+  // Kept as its own section so future per-tab colors / timestamp format /
+  // auto-hide-in-combat toggles have somewhere obvious to land.
+  private updateOptionsChat() {
+    const items = this.optionsChatItems();
+    this.menuNav(items.length);
+    const left = this.input.consume("arrowleft");
+    const right = this.input.consume("arrowright");
+    const i = this.menuCursor;
+    if (i === 0) {
+      const delta = right ? 2 : left ? -2 : 0;
+      this.options.commsCols = Math.max(28, Math.min(120, (this.options.commsCols ?? 54) + delta));
+    }
+    if (i === 1) {
+      const delta = right ? 1 : left ? -1 : 0;
+      this.options.commsRows = Math.max(4, Math.min(30, (this.options.commsRows ?? 12) + delta));
+    }
+    if (i === 2 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
+    if (this.input.consume("enter") && items[i] === "Back") {
+      this.optionsSection = "gameplay"; this.menuCursor = 13;
+    }
+  }
+  private optionsChatItems(): string[] {
+    return [
       `Comms Width: ${this.options.commsCols ?? 54} cols`,
       `Comms Height: ${this.options.commsRows ?? 12} rows`,
       `Comms Word Wrap: ${this.options.commsWrap ? "ON" : "OFF"}`,
