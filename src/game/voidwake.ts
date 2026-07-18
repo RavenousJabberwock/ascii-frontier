@@ -1391,6 +1391,7 @@ interface Gunner {
   cooldown: number;           // independent fire cadence
   wage: number;               // flat credits paid to this crewmember every dock
   nextBarkAt: number;         // throttle idle barks
+  xp?: number;                // 0.6.2 — mirrors CrewMember.xp for legacy gunner
 }
 
 // Multi-role crew. Roles: "gunner" (auto-fire/mine), "pilot" (autopilot to
