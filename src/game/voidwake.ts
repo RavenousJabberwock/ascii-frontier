@@ -1022,6 +1022,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{a}: Cmdr's log entries get shorter every week.  ||  {b}: That's how you know it's going well. Or badly. One of those.",
     "{a}: Ever miss dirtside, {b}?  ||  {b}: Only the gravity. And the sky. And the coffee. Otherwise no.",
     "{a}: Guild recruiter tried to poach me at the last dock.  ||  {b}: What'd you say?  ||  {a}: I said the coupler needs me.",
+    // Sci-fi banter — light nods to the classics.
+    "{a}: Do these thargoid encounters ever get less unsettling?  ||  {b}: No, {a}. That's the point.",
+    "{a}: I've decided the ship's computer is our best crew member.  ||  {b}: I heard that.  ||  {a}: You were meant to.",
+    "{a}: If we make it out of this sector I'm writing a book.  ||  {b}: Title?  ||  {a}: 'So Long, and Thanks for All the Ore.'",
+    "{a}: My hab back on {sector} had a garden.  ||  {b}: What'd you grow?  ||  {a}: Regrets, mostly.",
+    "{a}: Ever notice hostiles always monologue?  ||  {b}: Only until we fire. Then they get concise.",
+    "{a}: Cmdr wants us to loop the ship pitch-wise for morale.  ||  {b}: Cmdr thinks morale is a barrel roll.  ||  {a}: To be fair — it kind of is.",
+    "{a}: I found the Gratuitous Space Battles forum in the ship's log cache.  ||  {b}: Anything useful?  ||  {a}: Mostly people arguing about frigate loadouts. So — yes.",
+    "{a}: If the reactor whines like that at home, you replace it.  ||  {b}: If it whines like that here, you name it and hope it stays.",
+    "{a}: Ever wonder if we're just NPCs in someone else's log?  ||  {b}: Only when the dialogue gets suspiciously good.",
   ],
 };
 
