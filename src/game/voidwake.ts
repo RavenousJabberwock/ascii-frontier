@@ -320,6 +320,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Wing runs quiet on this shift. Company's welcome if you want to formation up.",
     "Cmdr — the {ship}'s trim looks perfect from here. Textbook.",
     "Fed comms says the {sector} beat is running smooth. Rare and nice.",
+    "Fair skies and empty scopes to you, {cmdr}. That's the highest wish.",
+    "Cmdr, your callsign made the wing bulletin. Nothing bad, promise.",
+    "Cruiser to {ship}: nice line through those rocks. Not everyone gets it right.",
+    "Federation traffic advises: cargo tags green, lane green, mood green.",
+    "The lane's ours today, {cmdr}. Might not be tomorrow. Enjoy it.",
   ],
   neutral: [
     "{ship}, mind your wake.",
