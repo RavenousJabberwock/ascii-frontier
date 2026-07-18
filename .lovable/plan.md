@@ -1012,3 +1012,19 @@ Still deferred for later 0.6.x:
   strip is new here).
 - Optional gunner-level crit bonus / pilot-level fuel sipping perks —
   today crew XP is display-only.
+
+### 0.6.2 addendum — HiDPI + crisper text
+
+- **HiDPI backing store**: `fit()` now sizes `canvas.width/height` to
+  `CSS × devicePixelRatio` (capped at 2x) and sets an explicit CSS
+  width/height so the element geometry is stable. `render()` calls
+  `setTransform(dpr, 0, 0, dpr, 0, 0)` each frame so all draw code
+  keeps writing in CSS-pixel coordinates — no other math changes.
+- **Text hinting**: enable `textRendering = "geometricPrecision"`,
+  disable kerning, and force `imageSmoothingEnabled = false` so
+  drawImage-based glitch band copies stay pixel-aligned.
+- **Mouse-steer**: updated the one non-render site that read
+  `canvas.width` to use the new `_cssW/_cssH` fields so viewport
+  math still matches the drawn cell grid.
+- **Cap at 2×**: prevents fillText loops on 4K displays from doubling
+  the paint cost for very little visible gain past 2× on ASCII glyphs.
