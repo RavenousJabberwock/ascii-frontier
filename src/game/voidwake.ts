@@ -1650,6 +1650,7 @@ const KEYBIND_ACTIONS: { id: string; label: string }[] = [
   { id: "toggleGunner", label: "Toggle Gunner" },
   { id: "autopilot",    label: "Autopilot Toggle" },
   { id: "pinQuest",     label: "Pin Quest Tracker" },
+  { id: "pinRep",       label: "Pin Rep Panel" },
   { id: "questLog",     label: "Quest Log" },
   { id: "legend",       label: "Codex / Legend" },
   { id: "pause",        label: "Pause" },
