@@ -2100,6 +2100,91 @@ function generateUniverse(seed: number): Entity[] {
     });
   }
 
+  // ---- Deep-space halo -------------------------------------------------
+  // Sparse scattering out to 10x WORLD_RADIUS. Nothing that anchors a quest
+  // or economy lives out here — no colonies, no pirate bases, no wormholes,
+  // no ruins, no bosses. Just distant stars, drifting rocks & ice, faint
+  // nebulae, a handful of ancient wrecks, wandering UFOs, and the rare
+  // rogue raider that strayed too far from the shipping lanes. Total
+  // additional entities: ~900 across a volume ~999x the core, so density
+  // is roughly 1000x lower than the core — genuinely desolate.
+  const DEEP_INNER = WORLD_RADIUS * 1.05;
+  const DEEP_OUTER = DEEP_SPACE_RADIUS;
+  const rp = () => randPosShell(rng, DEEP_INNER, DEEP_OUTER);
+  // Far suns — visual only, mostly rendered as coloured pinpricks.
+  for (let i = 0; i < 220; i++) {
+    out.push({ id: nextId(), kind: "star", name: nameFrom(rng, "Sun"), pos: rp(), vel: { x: 0, y: 0, z: 0 }, faction: "nature" });
+  }
+  // Rogue rocks & ice.
+  for (let i = 0; i < 320; i++) {
+    out.push({
+      id: nextId(), kind: "asteroid", name: "Rock", pos: rp(),
+      vel: { x: (rng() - 0.5) * 1.5, y: (rng() - 0.5) * 1.5, z: (rng() - 0.5) * 1.5 },
+      faction: "nature", ore: 8 + Math.floor(rng() * 30),
+    });
+  }
+  for (let i = 0; i < 90; i++) {
+    const dir = V.norm({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 });
+    out.push({
+      id: nextId(), kind: "comet", name: nameFrom(rng, "Comet"),
+      pos: rp(), vel: V.scale(dir, 30 + rng() * 25), faction: "nature",
+    });
+  }
+  // Thin, cold nebulae.
+  for (let i = 0; i < 120; i++) {
+    out.push({
+      id: nextId(), kind: "nebula", name: nameFrom(rng, "Neb"),
+      pos: rp(), vel: { x: 0, y: 0, z: 0 }, faction: "nature",
+    });
+  }
+  // Ancient wrecks — richer loot to reward the long haul.
+  for (let i = 0; i < 60; i++) {
+    out.push({
+      id: nextId(), kind: "derelict",
+      name: nameFrom(rng, rng() < 0.5 ? "Hulk" : "Wreck"),
+      pos: rp(),
+      vel: { x: (rng() - 0.5) * 1.0, y: (rng() - 0.5) * 1.0, z: (rng() - 0.5) * 1.0 },
+      faction: "wreck",
+      loot: {
+        credits: 200 + Math.floor(rng() * 500),
+        ore: 8 + Math.floor(rng() * 24),
+      },
+    });
+  }
+  // Wandering UFOs — the deep dark is where they roam most.
+  for (let i = 0; i < 60; i++) {
+    out.push({
+      id: nextId(), kind: "ufo", name: nameFrom(rng, "UAP"),
+      pos: rp(),
+      vel: { x: (rng() - 0.5) * 8, y: (rng() - 0.5) * 8, z: (rng() - 0.5) * 8 },
+      faction: "alien", state: "wander",
+    });
+  }
+  // A handful of rogue raiders that strayed off the shipping lanes. No
+  // bases out here to respawn them, so they're finite and rare.
+  for (let i = 0; i < 24; i++) {
+    out.push({
+      id: nextId(), kind: "hostile",
+      name: nameFrom(rng, "Raider"),
+      pos: rp(),
+      vel: { x: (rng() - 0.5) * 8, y: (rng() - 0.5) * 8, z: (rng() - 0.5) * 8 },
+      faction: "pirate",
+      hull: 60, shield: 35,
+      state: "wander", cooldown: 0, weaponId: "pulse",
+      pilotName: rng() < 0.5 ? pilotNameFor(rng, "hostile") : undefined,
+    });
+  }
+  // A few silent distress beacons — pure rescue rewards, no traps (traps
+  // imply a nearby ambush party, and the deep dark has none staged).
+  for (let i = 0; i < 18; i++) {
+    out.push({
+      id: nextId(), kind: "beacon", name: "Distress",
+      pos: rp(), vel: { x: 0, y: 0, z: 0 },
+      faction: "wreck", state: "rescue",
+      loot: { credits: 300 + Math.floor(rng() * 400) },
+    });
+  }
+
   dispatchHook("onWorldGenerate", { seed, entities: out });
   return out;
 }
