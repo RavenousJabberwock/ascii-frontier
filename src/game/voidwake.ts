@@ -5250,6 +5250,7 @@ export class Voidwake {
             p.driftVel = { x: 0, y: 0, z: 0 };
             p.throttle = 0;
             this._wormholeCooldown = 3.0;
+            (this as unknown as { _wormholeFx: number })._wormholeFx = 2.8;
             this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
             this.pushChatter("Computer", "Reality just... folded. We're somewhere else.", "#9effd2");
             this.sfx("dock");
@@ -5263,6 +5264,13 @@ export class Voidwake {
     (this as unknown as { _inNebula: boolean })._inNebula = insideNebula;
     // Block fire while super-cruising (preserved in fire block below via flag).
     (this as unknown as { _supercruise: boolean })._supercruise = supercruise;
+    (this as unknown as { _boosting: boolean; _boostMul: number })._boosting = boosting;
+    (this as unknown as { _boostMul: number })._boostMul = boostMul;
+    // Decay wormhole traversal FX timer (used by glitch renderer).
+    {
+      const self = this as unknown as { _wormholeFx?: number };
+      if (self._wormholeFx && self._wormholeFx > 0) self._wormholeFx = Math.max(0, self._wormholeFx - dt);
+    }
 
     // --- EMP: if a Thargoid field is active, disable ship systems -----------
     const empActive = (this._empUntil ?? 0) > now;
@@ -7814,21 +7822,37 @@ export class Voidwake {
           if (V.len(V.sub(e.pos, this.player.pos)) < 2000) { thargoidNear = 1; break; }
         }
       }
-      const intensity = Math.max(hullPulse > 0 ? 0.6 : 0, thargoidNear ? 0.85 : 0);
+      const self = this as unknown as { _wormholeFx?: number; _boosting?: boolean; _supercruise?: boolean };
+      const wormholeFx = Math.max(0, self._wormholeFx ?? 0);
+      // Occasional micro-glitch while afterburning or supercruising.
+      let travelFx = 0;
+      if (self._boosting && Math.random() < 0.06) travelFx = 0.35;
+      if (self._supercruise && Math.random() < 0.10) travelFx = Math.max(travelFx, 0.5);
+      const intensity = Math.max(
+        hullPulse > 0 ? 0.6 : 0,
+        thargoidNear ? 0.85 : 0,
+        wormholeFx > 0 ? Math.min(1, wormholeFx / 2.8) * 1.1 : 0,
+        travelFx,
+      );
       if (intensity > 0) {
         // Cheap band-shift: pick 2-3 random horizontal slices and copy them
         // sideways by a few pixels. Uses drawImage(canvas,...) which the
         // 2D context supports on its own canvas.
-        const bands = 2 + Math.floor(Math.random() * 3);
+        const bands = 2 + Math.floor(Math.random() * 3) + (wormholeFx > 0 ? 3 : 0);
         for (let b = 0; b < bands; b++) {
           const by = Math.floor(Math.random() * h);
           const bh = 3 + Math.floor(Math.random() * 12);
           const dx = Math.floor((Math.random() - 0.5) * 40 * intensity);
           try { ctx.drawImage(this.canvas, 0, by, w, bh, dx, by, w, bh); } catch { /* ignore */ }
         }
-        // Green/magenta chroma tick to sell the alien signal.
-        ctx.fillStyle = thargoidNear
+        // Chroma tick: nebula-purple for wormholes, green for Thargoids,
+        // amber for travel bursts, red otherwise.
+        ctx.fillStyle = wormholeFx > 0
+          ? `rgba(180, 120, 255, ${(0.14 * intensity).toFixed(3)})`
+          : thargoidNear
           ? `rgba(160, 255, 60, ${(0.09 * intensity).toFixed(3)})`
+          : travelFx > 0
+          ? `rgba(255, 200, 90, ${(0.08 * intensity).toFixed(3)})`
           : `rgba(255, 80, 80, ${(0.10 * intensity).toFixed(3)})`;
         ctx.fillRect(0, 0, w, h);
       }
@@ -9544,8 +9568,19 @@ export class Voidwake {
     putText(g, panelX, vpTop + 6, `Hull   ${bar(p.ship.hull, p.ship.hullMax)}`, hullCol);
     putText(g, panelX, vpTop + 7, `Shield ${bar(p.ship.shield, p.ship.shieldMax)}`, shieldCol);
     putText(g, panelX, vpTop + 8, `Fuel   ${bar(p.ship.fuel, p.ship.fuelMax)}`, fuelCol);
-    putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%`, "#9fe");
-    putText(g, panelX, vpTop + 10, `Speed ${(effectiveTopSpeed(p) * p.throttle).toFixed(0)} u/s`, "#9fe");
+    {
+      const self = this as unknown as { _boosting?: boolean; _supercruise?: boolean; _boostMul?: number };
+      const bm = self._boostMul ?? 1;
+      const eff = effectiveTopSpeed(p) * p.throttle * bm;
+      const tags: string[] = [];
+      if (self._boosting) tags.push("AB");
+      if (self._supercruise) tags.push("SC");
+      const mulTag = bm > 1.001 ? `  ×${bm.toFixed(2)}` : "";
+      const flagTag = tags.length ? `  [${tags.join("+")}]` : "";
+      const thrCol = self._boosting || self._supercruise ? (blinkOn ? "#ffe680" : "#ffb84d") : "#9fe";
+      putText(g, panelX, vpTop + 9, `Throttle ${(p.throttle * 100).toFixed(0)}%${flagTag}`, thrCol);
+      putText(g, panelX, vpTop + 10, `Speed ${eff.toFixed(0)} u/s${mulTag}`, thrCol);
+    }
     putText(g, panelX, vpTop + 12, `Cargo ${cargoTotal(p)}/${p.ship.cargoMax}`, "#9fe");
     let cy2 = vpTop + 13;
     for (const [k, v] of Object.entries(p.cargo)) putText(g, panelX + 1, cy2++, `· ${k}: ${v}`, "#aea");
