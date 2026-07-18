@@ -3831,6 +3831,12 @@ export class Voidwake {
   // Title-screen drifting stars (camera-local 2D, no player required).
   private titleStars: { x: number; y: number; z: number; t: number }[] = [];
   private _lastRenderTs = 0;
+  // 0.6.2 — HiDPI backing store bookkeeping. cssW/H are the logical CSS
+  // pixel dimensions the render pipeline draws against; dpr is the scale
+  // factor applied to the 2D transform in render().
+  private _dpr = 1;
+  private _cssW = 0;
+  private _cssH = 0;
   private _frameNo = 0;
   private _lastRecorderAt = 0;
   private _lastRecordedScreen: Screen = "title";
@@ -3963,9 +3969,25 @@ export class Voidwake {
 
 
   fit() {
+    // 0.6.2 — HiDPI backing store. Previously the canvas was sized to CSS
+    // pixels, which on a fractional / >1 DPR display forces the browser to
+    // upscale the bitmap and text goes soft. Now the backing store is
+    // (CSS × devicePixelRatio) and the 2D context is scaled by DPR so all
+    // draw coordinates stay in CSS pixels (no other math needs to change).
+    // Capped at 2 to keep 4K displays from tanking the fillText loop.
     const r = this.canvas.getBoundingClientRect();
-    this.canvas.width = Math.floor(r.width);
-    this.canvas.height = Math.floor(r.height);
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    this._dpr = dpr;
+    this._cssW = Math.max(1, Math.floor(r.width));
+    this._cssH = Math.max(1, Math.floor(r.height));
+    this.canvas.width = Math.floor(this._cssW * dpr);
+    this.canvas.height = Math.floor(this._cssH * dpr);
+    // Explicit CSS size so the element doesn't grow with the backing store.
+    this.canvas.style.width = this._cssW + "px";
+    this.canvas.style.height = this._cssH + "px";
+    // Reset transform so the render() setTransform below always applies
+    // against a clean identity.
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   start() {
@@ -4937,8 +4959,9 @@ export class Voidwake {
     if (this.options.mouseSteer && this.input.mouseInside && !autopilotOn && !this.input.stickActive) {
       const sens = this.options.mouseSensitivity;
       const dz = 0.08;
-      const cols = Math.max(40, Math.floor(this.canvas.width / CELL_W));
-      const rows = Math.max(20, Math.floor(this.canvas.height / CELL_H));
+      // 0.6.2 — use CSS-px logical dims (canvas.width is now DPR-scaled).
+      const cols = Math.max(40, Math.floor((this._cssW || this.canvas.width) / CELL_W));
+      const rows = Math.max(20, Math.floor((this._cssH || this.canvas.height) / CELL_H));
       const vpLeftPx = 1 * CELL_W;
       const vpRightPx = (cols - 28) * CELL_W;
       const vpTopPx = 1 * CELL_H;
@@ -7645,7 +7668,21 @@ export class Voidwake {
   // ---------------------------------------------------------------------------
   render() {
     const ctx = this.ctx;
-    const w = this.canvas.width, h = this.canvas.height;
+    // 0.6.2 — draw in CSS-pixel coordinates against a DPR-scaled backing
+    // store. setTransform every frame is cheap and self-corrects if the
+    // browser resets the context (tab restore, printing, etc.). Enable
+    // font hinting hints so text stays crisp on non-integer DPR displays.
+    const dpr = this._dpr || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Cast: textRendering / fontKerning aren't in the older TS DOM lib.
+    const anyCtx = ctx as unknown as {
+      textRendering?: string; fontKerning?: string; imageSmoothingEnabled?: boolean;
+    };
+    anyCtx.textRendering = "geometricPrecision";
+    anyCtx.fontKerning = "none";
+    anyCtx.imageSmoothingEnabled = false;
+    const w = this._cssW || this.canvas.width;
+    const h = this._cssH || this.canvas.height;
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
     const cols = Math.max(40, Math.floor(w / CELL_W));
