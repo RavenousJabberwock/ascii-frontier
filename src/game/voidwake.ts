@@ -2058,6 +2058,19 @@ export function drainAiEvents(): AiEvent[] {
 
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson" || e.kind === "derelict") return;
+  // Distance gate: with the 2× universe expansion (0.5.14) there are far
+  // too many active ships/bases to run every tickAI branch every frame.
+  // Anything more than ~3500u from the player skips the expensive per-tick
+  // scans; it still coasts on its last-set velocity so the world feels
+  // alive on the map, we just don't spend cycles doing target selection
+  // for entities the player will never see.
+  {
+    const _dx = e.pos.x - player.pos.x, _dy = e.pos.y - player.pos.y, _dz = e.pos.z - player.pos.z;
+    if (_dx * _dx + _dy * _dy + _dz * _dz > 3500 * 3500) {
+      e.pos.x += e.vel.x * dt; e.pos.y += e.vel.y * dt; e.pos.z += e.vel.z * dt;
+      return;
+    }
+  }
   // Stranded lawful ships coast in place waiting for a Patrol tow.
   if (e.stranded && e.towById == null && (e.kind === "friendly" || e.kind === "neutral")) {
     e.vel = { x: 0, y: 0, z: 0 };
