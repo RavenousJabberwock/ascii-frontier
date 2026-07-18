@@ -1649,24 +1649,30 @@ function nextId() { return _entityIdSeq++; }
 // toward them. Populations scale with volume (radius^3, ≈3.375x per 1.5x
 // bump) to keep the on-screen density of stars, traffic, and rocks roughly
 // constant as the play area grows.
+// World scale + entity counts. Universe radius has been expanded 9k → 18k →
+// 27k → 54k. Renderer still fades anything past 5k to a colored period and
+// culls past 10k, so most bodies remain distant pinpricks until you cruise
+// toward them. Populations scale with volume (radius^3, ≈8x per 2x bump)
+// to keep the on-screen density of stars, traffic, and rocks roughly
+// constant as the play area grows.
 const WORLD = {
   starRadius: 0,
-  planetRadius: 27000,
-  asteroidRadius: 22500,
-  stationRadius: 25500,
-  shipRadius: 28500,
-  cometRadius: 31500,
-  nebulaRadius: 40000,
-  beaconRadius: 27000,
-  baseRadius: 28500,
-  planets: 142,
-  asteroids: 1755,
-  stations: 68,
-  ships: 506,
-  comets: 95,
-  nebulae: 140,
-  beacons: 68,
-  pirateBases: 37,
+  planetRadius: 54000,
+  asteroidRadius: 45000,
+  stationRadius: 51000,
+  shipRadius: 57000,
+  cometRadius: 63000,
+  nebulaRadius: 80000,
+  beaconRadius: 54000,
+  baseRadius: 57000,
+  planets: 1136,
+  asteroids: 14040,
+  stations: 544,
+  ships: 4048,
+  comets: 760,
+  nebulae: 1120,
+  beacons: 544,
+  pirateBases: 296,
 };
 
 
