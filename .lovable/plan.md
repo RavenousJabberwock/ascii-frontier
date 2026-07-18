@@ -827,3 +827,18 @@ Items explicitly on hold for a future release (or an outside mod).
 
 
 
+
+## 0.5.13 — Distinct patrols + chatter refresh
+
+- **Distinct patrol silhouettes.** `SHIP_SPRITES.patrol` now provides
+  four blockier, armored 3×3 hulls used whenever an entity is a
+  `friendly` with `faction: "patrol"`. Renderer branches at the
+  sprite pick so civilian friendlies keep their softer silhouettes.
+- **Chatter expansion.** ~60 additional lines seeded across
+  `hostile`, `friendly`, `neutral`, `station`, `patrol`,
+  `gunner_idle`, `pilot_idle`, and `engineer_idle` pools. All lines
+  reuse the existing `chatterCtx` placeholders (no new fragments).
+- VERSION bump 0.5.12 → 0.5.13.
+
+Deferred (still open): Chat Windows submenu, player-to-NPC comms,
+in-canvas Lua editor.
