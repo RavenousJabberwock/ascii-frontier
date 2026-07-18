@@ -4552,8 +4552,8 @@ export class Voidwake {
     if (keys.has(k.throttleDown)) { p.throttle = Math.max(0, p.throttle - dt * 0.7); this._disengageAutopilot("stick"); }
     if (keys.has(k.yawLeft)) { p.heading.yaw -= dt * 1.2; this._disengageAutopilot("stick"); }
     if (keys.has(k.yawRight)) { p.heading.yaw += dt * 1.2; this._disengageAutopilot("stick"); }
-    if (keys.has(k.pitchUp)) { p.heading.pitch = Math.max(-Math.PI / 2, p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
-    if (keys.has(k.pitchDown)) { p.heading.pitch = Math.min(Math.PI / 2, p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchUp))   { p.heading.pitch = wrapPi(p.heading.pitch - dt * 1.0); this._disengageAutopilot("stick"); }
+    if (keys.has(k.pitchDown)) { p.heading.pitch = wrapPi(p.heading.pitch + dt * 1.0); this._disengageAutopilot("stick"); }
 
     // Virtual touch stick: analog yaw/pitch scaled by same rates as keyboard.
     // Applies alongside keys so the pilot can hold "boost" on a button while
@@ -4562,7 +4562,7 @@ export class Voidwake {
     const ts = this._touchStick;
     if ((ts.yaw !== 0 || ts.pitch !== 0) && !autopilotOn) {
       p.heading.yaw += ts.yaw * dt * 1.4;
-      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + ts.pitch * dt * 1.1));
+      p.heading.pitch = wrapPi(p.heading.pitch + ts.pitch * dt * 1.1);
       this._disengageAutopilot("stick");
     }
     // Touch throttle slider — direct absolute value, not relative.
@@ -4622,7 +4622,7 @@ export class Voidwake {
       const cax = Math.max(-1, Math.min(1, ax));
       const cay = Math.max(-1, Math.min(1, ay));
       p.heading.yaw += cax * dt * 1.4 * sens;
-      p.heading.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.heading.pitch + cay * dt * 1.1 * sens));
+      p.heading.pitch = wrapPi(p.heading.pitch + cay * dt * 1.1 * sens);
     }
 
     // Afterburner: hold boost for +60% speed at 4x fuel cost. Disabled when dry.
@@ -9479,13 +9479,20 @@ function clamp01(v: number) { return Math.max(0, Math.min(1, v)); }
 function headingToVec(yaw: number, pitch: number): Vec3 {
   // Forward unit vector matching the camera projection in renderPlaying().
   // The camera transform places "ahead" (reticle center) at world direction
-  // (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). Previously this
-  // returned -sp on Y, which made the ship fly opposite to the reticle
-  // whenever the player pitched up or down — the "I'm aimed at him but the
-  // distance is growing" bug.
+  // (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch)). Valid at any
+  // pitch — including looped-over-the-top values in (-π, π].
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   return { x: sy * cp, y: sp, z: cy * cp };
+}
+
+// Wrap an angle in radians into (-π, π]. Used to let pitch loop over the
+// top / under the bottom continuously instead of clamping at ±π/2 — a real
+// spacecraft has no absolute "up", so a full pitch rotation is expected.
+function wrapPi(a: number): number {
+  const TAU = Math.PI * 2;
+  a = ((a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+  return a;
 }
 
 // Hash function exported for tooling tests; otherwise unused.
