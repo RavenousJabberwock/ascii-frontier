@@ -9722,7 +9722,7 @@ export class Voidwake {
     // Log (mission / system events; separate from chatter).
     let ly = rTop;
     for (let i = this.log.length - 1; i >= 0; i--) {
-      putText(g, cols - 52, ly++, "» " + this.log[i].msg, "#cfd");
+      putText(g, cols - 52, ly++, "» " + this.log[i].msg, "#cfd", cols - 28);
       if (ly > rows - 2) break;
     }
 
