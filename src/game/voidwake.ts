@@ -680,6 +680,14 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Coffee, ammo, silence. In that order. Best watch in the fleet.",
     "Gun crew rule three: never trust a Cmdr who talks about their K/D ratio.",
     "Old Fed vet on my last tour used to say: 'a slow trigger is a live captain'. Fits.",
+    // 0.6.3 additions — crew-XP flavor, level pride, more sci-fi.
+    "Cmdr, my last three shots grouped inside a meter. That's practice, not luck.",
+    "The magazine knows my hands now. Trust me — that matters.",
+    "I've fired enough rounds this tour I can hear the mag misalign. Fixed it before you noticed.",
+    "Reload rhythm's second nature. Chain-fire's cleaner than it was last week.",
+    "Cmdr — call it a crit or call it earned. Same hole, either way.",
+    "Rating board back at Jeddah owes me a gold pip. They'll survive without knowing.",
+    "Every hostile down is another line on the résumé no one'll ever read.",
   ],
   gunner_farewell_good: [
     "Been an honor, Cmdr. {praise} out there.",
