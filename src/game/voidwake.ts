@@ -766,6 +766,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Every hull hums a note. This one's a low B-flat. Comforting.",
     "Pilot's rule seventeen: if the reticle looks upside down, you probably are.",
     "Cmdr, plot a lazy pass around that giant's rings. Nav chair's request, not orders.",
+    // 0.6.3 additions — crew-XP flavor + more sci-fi shelf.
+    "Been in this chair long enough the {ship} finishes my turns for me, {cmdr}.",
+    "Every stick-hour is a coin in the bank. Bank's getting heavy.",
+    "Cmdr, that reticle drift you had last week? Gone. You're smoother.",
+    "I fly by numbers. The numbers keep getting kinder.",
+    "Old spacer told me: 'the ship teaches you if you let it'. I'm letting it.",
+    "Somewhere between the last dock and now, I stopped counting jumps. Good sign.",
+    "Cmdr — coordinates locked, coffee poured, conscience clear. Rare trifecta.",
+    "I could fly this lane blindfolded. Don't tempt me.",
+    "New rating chit came through. Not that anyone hangs those on a nav chair.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
