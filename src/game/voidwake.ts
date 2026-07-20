@@ -7537,6 +7537,88 @@ export class Voidwake {
     return this.mods.filter((m) => m.enabled).map((m) => m.id).sort();
   }
 
+  // 0.7.0 modding polish — shared install path for both the "Add Mod... (paste JSON)"
+  // menu action and the drag-drop file handler. Accepts either a `{ id, name, script }`
+  // JSON manifest or a bare Lua source string when `fallbackId` is supplied
+  // (used by `.lua` file drops — the file name becomes the mod id).
+  private installModFromJSON(src: string, fallbackId?: string): boolean {
+    try {
+      const parsed = JSON.parse(src);
+      const id = String(parsed.id ?? "").trim();
+      const name = String(parsed.name ?? id).trim() || id;
+      const script = String(parsed.script ?? "");
+      if (!id) { this.pushLog("Mod add failed: missing id."); return false; }
+      if (this.mods.some((m) => m.id === id)) {
+        this.pushLog(`Mod add failed: id '${id}' already installed.`);
+        return false;
+      }
+      this.mods.push({ id, name, enabled: true, script });
+      this.saveMods();
+      this.pushLog(`Mod installed: ${id}`);
+      if (this.scriptEnabled) this.reloadScript();
+      return true;
+    } catch (e) {
+      if (fallbackId) {
+        // Treat the input as raw Lua and wrap into a synthetic manifest.
+        const id = fallbackId.replace(/[^a-z0-9._-]+/gi, "-").slice(0, 48) || "dropped-mod";
+        if (this.mods.some((m) => m.id === id)) {
+          this.pushLog(`Mod add failed: id '${id}' already installed.`);
+          return false;
+        }
+        this.mods.push({ id, name: id, enabled: true, script: src });
+        this.saveMods();
+        this.pushLog(`Mod installed from Lua drop: ${id}`);
+        if (this.scriptEnabled) this.reloadScript();
+        return true;
+      }
+      this.pushLog(`Mod add failed: ${String(e)}`);
+      return false;
+    }
+  }
+
+  // Attach drag-and-drop listeners to the canvas so users can install mods
+  // or load a Lua script without hitting the 2KB browser prompt() cap. Drop
+  // a `.json` manifest → new mod entry. Drop a `.lua` file → depending on the
+  // Shift key at drop time, either replaces the user script (default) or
+  // installs as a new mod using the file basename as its id (with Shift).
+  private attachModDrop(canvas: HTMLCanvasElement, sig: AbortSignal) {
+    const stop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
+    canvas.addEventListener("dragenter", stop, { signal: sig });
+    canvas.addEventListener("dragover", (e) => {
+      stop(e);
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    }, { signal: sig });
+    canvas.addEventListener("drop", async (e) => {
+      stop(e);
+      const files = e.dataTransfer?.files;
+      if (!files || !files.length) return;
+      const asMod = !!e.shiftKey;
+      for (const f of Array.from(files)) {
+        try {
+          const text = await f.text();
+          const lower = f.name.toLowerCase();
+          if (lower.endsWith(".json")) {
+            this.installModFromJSON(text);
+          } else if (lower.endsWith(".lua")) {
+            if (asMod) {
+              const base = f.name.replace(/\.lua$/i, "");
+              this.installModFromJSON(text, base);
+            } else {
+              this.scriptSource = text;
+              this.saveScriptSettings();
+              this.pushLog(`Script loaded from ${f.name} (${text.length} chars).`);
+              if (this.scriptEnabled) this.reloadScript();
+            }
+          } else {
+            this.pushLog(`Ignored ${f.name}: expected .lua or .json.`);
+          }
+        } catch (err) {
+          this.pushLog(`Drop failed for ${f.name}: ${String(err)}`);
+        }
+      }
+    }, { signal: sig });
+  }
+
 
 
 
