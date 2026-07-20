@@ -297,14 +297,14 @@ export class LuaHost {
     const loadStatus = lauxlib.luaL_loadstring(L, to_luastring(source));
     if (loadStatus !== lua.LUA_OK) {
       const err = lua.lua_tojsstring(L, -1) ?? "(load error)";
-      this.lastError = `load: ${err}`;
+      this.lastError = `load: ${this.bridge.remapError?.(err) ?? err}`;
       this.dispose();
       return { ok: false, error: this.lastError };
     }
     const runStatus = lua.lua_pcall(L, 0, 0, 0);
     if (runStatus !== lua.LUA_OK) {
       const err = lua.lua_tojsstring(L, -1) ?? "(run error)";
-      this.lastError = `run: ${err}`;
+      this.lastError = `run: ${this.bridge.remapError?.(err) ?? err}`;
       this.dispose();
       return { ok: false, error: this.lastError };
     }
