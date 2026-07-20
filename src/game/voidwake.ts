@@ -1698,6 +1698,7 @@ const KEYBIND_ACTIONS: { id: string; label: string }[] = [
   { id: "pinQuest",     label: "Pin Quest Tracker" },
   { id: "pinRep",       label: "Pin Rep Panel" },
   { id: "questLog",     label: "Quest Log" },
+  { id: "characterSheet", label: "Character Sheet" },
   { id: "legend",       label: "Codex / Legend" },
   { id: "pause",        label: "Pause" },
   { id: "menu",         label: "Main Menu / Back" },
