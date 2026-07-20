@@ -177,7 +177,7 @@ export class LuaHost {
     // frontier.entities.list{ kind=?, faction=?, max=? } / frontier.entities.get(idx)
     lua.lua_newtable(L);
     lua.lua_pushjsfunction(L, (Ls: L) => {
-      let filter: { kind?: string; faction?: string; max?: number } | undefined;
+      let filter: { kind?: string; faction?: string; max?: number; radius?: number; nearX?: number; nearY?: number; nearZ?: number } | undefined;
       if (lua.lua_type(Ls, 1) === lua.LUA_TTABLE) {
         const readStr = (f: string) => {
           lua.lua_getfield(Ls, 1, to_luastring(f));
@@ -189,7 +189,10 @@ export class LuaHost {
           const n = lua.lua_type(Ls, -1) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, -1)) : undefined;
           lua.lua_pop(Ls, 1); return n;
         };
-        filter = { kind: readStr("kind"), faction: readStr("faction"), max: readNum("max") };
+        filter = {
+          kind: readStr("kind"), faction: readStr("faction"), max: readNum("max"),
+          radius: readNum("radius"), nearX: readNum("nearX"), nearY: readNum("nearY"), nearZ: readNum("nearZ"),
+        };
       }
       const arr = this.bridge.listEntities?.(filter) ?? [];
       pushJsAsLua(Ls, arr, 0);
