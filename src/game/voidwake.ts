@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.6.3";
+const VERSION = "0.7.0";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1595,6 +1595,11 @@ interface SaveBlob {
   // Optional: persisted comms feed (last ~250 lines). Optional so older saves
   // still load; we backfill to [] on load.
   chatter?: ChatterLine[];
+  // 0.7.0 — enabled mod ids at save time. On load, we compare against the
+  // currently-enabled mod list and warn if the sets differ, so a save built
+  // against a mod that has since been disabled is flagged rather than silently
+  // desynced. Optional so older saves keep loading.
+  mods?: string[];
 }
 
 interface FlightRecorder {
