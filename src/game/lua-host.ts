@@ -47,6 +47,15 @@ export interface LuaHostBridge {
   addCredits?: (delta: number) => number | null;   // returns new balance, or null if no player
   addFuel?:    (delta: number) => number | null;   // returns new fuel, or null if no player
   getPlayerSnapshot?: () => Record<string, unknown> | null;
+  // 0.7.0 — expanded M2 surface + M3/M4 read-only content hooks.
+  addXp?:      (delta: number) => number | null;
+  addOre?:     (delta: number) => number | null;
+  worldTime?:  () => number;                       // seconds since engine start (or Date.now/1000)
+  worldSeed?:  () => number;
+  listEntities?: (filter?: { kind?: string; faction?: string; max?: number }) => Array<Record<string, unknown>>;
+  getEntity?:  (idx: number) => Record<string, unknown> | null;
+  chatterAdd?: (kind: string, line: string) => boolean;   // append a template line; returns true if kind is known
+  installedMods?: () => Array<{ id: string; name: string; enabled: boolean }>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
