@@ -8123,7 +8123,7 @@ export class Voidwake {
       this.screen === "title" || this.screen === "create-char" ||
       this.screen === "create-ship" || this.screen === "load" ||
       this.screen === "options" || this.screen === "destroyed" ||
-      this.screen === "crashed" || this.screen === "quit-confirm" || this.screen === "howto"
+      this.screen === "crashed" || this.screen === "quit-confirm" || this.screen === "howto" || this.screen === "character"
     ) {
       this.drawTitleStarfield(grid, sdt);
     }
