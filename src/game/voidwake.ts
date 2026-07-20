@@ -6819,7 +6819,7 @@ export class Voidwake {
     const weapon = WEAPONS.find((w) => w.id === p.ship.weaponId);
     const gunnerW = p.ship.gunnerWeaponId ? WEAPONS.find((w) => w.id === p.ship.gunnerWeaponId) : undefined;
     putText(g, sx, sry++, `Hull ${Math.round(p.ship.hull)}/${p.ship.hullMax}   Shield ${Math.round(p.ship.shield)}/${p.ship.shieldMax}   Fuel ${Math.round(p.ship.fuel)}/${p.ship.fuelMax}`, "#9fe");
-    putText(g, sx, sry++, `Cargo ${cargoUsed(p)}/${effectiveCargoMax(p)}   Speed ${effectiveTopSpeed(p).toFixed(0)}   Slots ${effectiveCrewSlots(p)}   Radar ${effectiveRadarRange(p).toFixed(0)}u`, "#9fe");
+    putText(g, sx, sry++, `Cargo ${cargoTotal(p)}/${effectiveCargoMax(p)}   Speed ${effectiveTopSpeed(p).toFixed(0)}   Berths ${effectiveCrewMax(p)}   Radar ${effectiveRadarRange(p).toFixed(0)}u`, "#9fe");
     putText(g, sx, sry++, `Weapon: ${weapon ? `${weapon.name} (dmg ${weapon.dmg}, cd ${weapon.cooldown}s, ${weapon.range}u)` : p.ship.weaponId}`, "#ffe066");
     if (gunnerW) putText(g, sx, sry++, `Gunner rig: ${gunnerW.name} (dmg ${gunnerW.dmg}, cd ${gunnerW.cooldown}s)`, "#fc6");
     if (hull.blurb) putText(g, sx, sry++, `Frame: ${hull.blurb}`, "#888");
