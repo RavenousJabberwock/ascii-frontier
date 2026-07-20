@@ -202,9 +202,46 @@ frontier.log("mod: +" .. #lines .. " gunner lines")
 ## Mods vs user scripts
 
 The 0.7.0 **Options ▸ Mods** submenu accepts multi-script bundles as
-JSON `{ id, name, script }`. Every enabled mod is concatenated ahead of
-the "Edit Script..." user source and loaded into the same sandbox, so
-the snippets above work equally well as a mod script or a user script.
-Wrap `local` state you want private to a mod in a `do ... end` block —
-the loader already does this per-mod, but doubling up is safe.
+JSON `{ id, name, script?, chatter? }`. Every enabled mod is
+concatenated ahead of the "Edit Script..." user source and loaded into
+the same sandbox, so the snippets above work equally well as a mod
+script or a user script. Wrap `local` state you want private to a mod
+in a `do ... end` block — the loader already does this per-mod, but
+doubling up is safe.
+
+Editing:
+- **Edit Script...** and **Edit Highlighted Mod...** open a full-canvas
+  textarea overlay. Ctrl+S saves and reloads the Lua host; Esc cancels.
+  There is no 2 KB paste limit — drop a `.lua` file or paste a full
+  bundle.
+- **Remove Highlighted Mod** deletes whichever mod row your cursor last
+  touched, even if you have scrolled down to the action rows.
+
+## 11. Data-only content pack (no Lua) (0.7.0)
+
+A mod with only a `chatter` block adds lines to existing crew/NPC pools
+without any script. Save this as `.json` and drop it on the game window
+(or paste it into **Add Mod...**):
+
+```json
+{
+  "id": "salty-gunner",
+  "name": "Salty Gunner Voice Pack",
+  "chatter": {
+    "gunner_idle": [
+      "Reticle wants blood.",
+      "Ammunition: yes.",
+      "I've named the guns. Left one bites."
+    ],
+    "pilot_idle": [
+      "Nav's clear. Suspiciously clear."
+    ]
+  }
+}
+```
+
+Enabled data-only packs are applied on install, on **Reload All Mods**,
+and every time the Lua host reloads — a script-only mod set does not
+strip these lines.
+
 
