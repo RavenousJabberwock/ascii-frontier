@@ -7323,10 +7323,24 @@ export class Voidwake {
         listEntities: (filter) => {
           const max = Math.max(1, Math.min(500, filter?.max ?? 128));
           const out: Array<Record<string, unknown>> = [];
+          // 0.7.0 addendum — optional radius gate. If `radius` is set, filter
+          // by distance from (nearX,nearY,nearZ) or the player's position
+          // when no center is provided. Skips entries with no `pos`.
+          const p = this.player;
+          const cx = filter?.nearX ?? p?.pos.x ?? 0;
+          const cy = filter?.nearY ?? p?.pos.y ?? 0;
+          const cz = filter?.nearZ ?? p?.pos.z ?? 0;
+          const r = filter?.radius;
+          const r2 = r != null && r > 0 ? r * r : null;
           for (let i = 0; i < this.entities.length && out.length < max; i++) {
             const e = this.entities[i];
             if (filter?.kind && e.kind !== filter.kind) continue;
             if (filter?.faction && e.faction !== filter.faction) continue;
+            if (r2 != null) {
+              if (!e.pos) continue;
+              const dx = e.pos.x - cx, dy = e.pos.y - cy, dz = e.pos.z - cz;
+              if (dx * dx + dy * dy + dz * dz > r2) continue;
+            }
             out.push({
               idx: i, kind: e.kind, name: e.name, faction: e.faction,
               x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
