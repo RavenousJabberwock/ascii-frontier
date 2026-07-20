@@ -3952,6 +3952,9 @@ export class Voidwake {
   // How-To-Play overlay: same return-screen pattern as Codex.
   private _howtoReturn: Screen = "title";
   private _howtoPage = 0;
+  // Character Sheet overlay: opened with C in flight, or from the pause menu.
+  // ESC returns to whichever screen the player was on.
+  private _characterReturn: Screen = "playing";
   // Fuel-scoop chatter throttle. When set, we're actively scooping a star;
   // reused by the HUD to render a "SCOOPING" badge.
   private _scoopingUntil = 0;
