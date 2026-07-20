@@ -3779,7 +3779,15 @@ export class Voidwake {
   // is concatenated (in id-sorted order) BEFORE the user script and loaded
   // into the same Lua host. Mods share the sandbox — a misbehaving mod
   // scripts crashes its own hook, never the engine (see LuaHost.load).
-  private mods: Array<{ id: string; name: string; enabled: boolean; script: string }> = [];
+  private mods: Array<{ id: string; name: string; enabled: boolean; script: string; chatter?: Record<string, string[]> }> = [];
+  // Last cursor position while it was on an actual mod row. Used by the
+  // "Edit / Remove Highlighted Mod" actions so the user can highlight a mod,
+  // scroll down to the action row, and still act on the highlighted mod.
+  private _modRowCursor = 0;
+  // Active in-canvas <textarea> editor overlay (0.7.0 completion). Non-null
+  // while the multi-line editor is open; input is paused while it exists so
+  // WASD/keyboard don't leak into gameplay.
+  private _editorOverlay: HTMLDivElement | null = null;
   // While non-null, the Keybinds screen is capturing the next pressed key
   // as the new binding for this action id (a key in Options.keybinds).
   private _rebindAction: string | null = null;
@@ -7451,19 +7459,14 @@ export class Voidwake {
       if (this.scriptEnabled) this.reloadScript();
       else this.disposeScript();
     } else if (row.startsWith("Edit Script")) {
-      // Browser prompt is the simplest cross-target editor. Truncated at
-      // ~2KB in most browsers — a drag-drop .lua file picker is on the mod
-      // roadmap (M3).
-      if (typeof window !== "undefined" && typeof window.prompt === "function") {
-        const next = window.prompt("Paste Lua source (or drop a .lua file on the game window):", this.scriptSource);
-        if (next != null) {
-          this.scriptSource = next;
-          this.saveScriptSettings();
-          if (this.scriptEnabled) this.reloadScript();
-        }
-      } else {
-        this.pushLog("No prompt() available — edit via localStorage 'voidwake.script.source'.");
-      }
+      // 0.7.0 — in-canvas multi-line textarea overlay; falls back to
+      // window.prompt() only when DOM isn't available.
+      this.openTextEditor("Edit Lua source (Ctrl+S = save, Esc = cancel)", this.scriptSource, (next) => {
+        this.scriptSource = next;
+        this.saveScriptSettings();
+        if (this.scriptEnabled) this.reloadScript();
+      });
+
     } else if (row.startsWith("Reload Script")) {
       if (this.scriptEnabled) this.reloadScript();
       else this.pushLog("Enable Scripting first.");
@@ -7590,7 +7593,12 @@ export class Voidwake {
     } catch (e) {
       this.pushLog(`[script] runtime unavailable: ${String(e)}`);
     }
+    // Apply data-only content packs (chatter) regardless of Lua host state;
+    // a pack with no `script` should still take effect.
+    const added = this.applyModChatterPacks();
+    if (added) this.pushLog(`[mods] +${added} chatter line${added === 1 ? "" : "s"}.`);
   }
+
 
   // Concatenate enabled mod scripts (id-sorted) before the user script. Each
   // mod is wrapped in a `do ... end` block so `local` declarations don't leak
@@ -7661,10 +7669,17 @@ export class Voidwake {
     for (const m of this.mods) {
       const kb = (m.script.length / 1024).toFixed(1);
       const flag = m.enabled ? "[X]" : "[ ]";
-      rows.push(`${flag} ${m.id} — ${m.name} (${kb}KB)`);
+      const extras: string[] = [];
+      if (m.chatter && Object.keys(m.chatter).length) {
+        const n = Object.values(m.chatter).reduce((a, b) => a + (b?.length ?? 0), 0);
+        extras.push(`+${n} chat`);
+      }
+      const tail = extras.length ? ` {${extras.join(", ")}}` : "";
+      rows.push(`${flag} ${m.id} — ${m.name} (${kb}KB)${tail}`);
     }
     if (!this.mods.length) rows.push("(no mods installed)");
     rows.push("Add Mod... (paste JSON)");
+    rows.push("Edit Highlighted Mod...");
     rows.push("Remove Highlighted Mod");
     rows.push("Reload All Mods");
     rows.push("Clear All Mods");
@@ -7674,28 +7689,41 @@ export class Voidwake {
   private updateOptionsMods() {
     const items = this.optionsModsItems();
     this.menuNav(items.length);
+    // Remember the last cursor position while it hovered an actual mod row.
+    if (this.menuCursor >= 0 && this.menuCursor < this.mods.length) {
+      this._modRowCursor = this.menuCursor;
+    }
     if (!this.input.consume("enter")) return;
     const i = this.menuCursor;
     const row = items[i];
     if (row === "Back") { this.optionsSection = "root"; this.menuCursor = 0; return; }
     if (row === "Add Mod... (paste JSON)") {
-      if (typeof window === "undefined" || typeof window.prompt !== "function") {
-        this.pushLog("No prompt() available — set localStorage 'voidwake.mods' directly.");
-        return;
-      }
-      const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")"}';
-      const src = window.prompt("Paste mod JSON  { id, name, script }:  (or drop a .json file on the game)", example);
-      if (!src) return;
-      this.installModFromJSON(src);
+      const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")","chatter":{"gunner_idle":["extra line"]}}';
+      this.openTextEditor("Paste mod JSON  { id, name, script, chatter? }", example, (src) => {
+        if (src.trim()) this.installModFromJSON(src);
+      });
+      return;
+    }
+    if (row === "Edit Highlighted Mod...") {
+      const idx = this._modRowCursor;
+      if (idx < 0 || idx >= this.mods.length) { this.pushLog("No mod highlighted."); return; }
+      const m = this.mods[idx];
+      this.openTextEditor(`Edit ${m.id} — Lua source`, m.script, (next) => {
+        m.script = next;
+        this.saveMods();
+        this.pushLog(`${m.id}: script updated (${next.length} chars).`);
+        if (this.scriptEnabled) this.reloadScript();
+      });
       return;
     }
     if (row === "Remove Highlighted Mod") {
-      // Highlighted mod is whichever list row (0..mods.length-1) the cursor
-      // most recently sat on before landing on this action row. Since our
-      // cursor may currently point AT this action, fall back to the last
-      // mod-row cursor position. Simpler: interpret "highlighted" as index
-      // 0 when only one mod exists, otherwise no-op.
-      this.pushLog("Move cursor onto a mod row and press ENTER on it to toggle; use Clear All to reset.");
+      const idx = this._modRowCursor;
+      if (idx < 0 || idx >= this.mods.length) { this.pushLog("No mod highlighted."); return; }
+      const removed = this.mods.splice(idx, 1)[0];
+      this._modRowCursor = Math.max(0, Math.min(this._modRowCursor, this.mods.length - 1));
+      this.saveMods();
+      this.pushLog(`Mod removed: ${removed.id}`);
+      if (this.scriptEnabled) this.reloadScript();
       return;
     }
     if (row === "Reload All Mods") {
@@ -7710,7 +7738,7 @@ export class Voidwake {
       if (this.scriptEnabled) this.reloadScript();
       return;
     }
-    // Otherwise: cursor is on a mod row (index < this.mods.length). Toggle.
+    // Otherwise: cursor is on a mod row — toggle enable.
     if (i >= 0 && i < this.mods.length) {
       this.mods[i].enabled = !this.mods[i].enabled;
       this.saveMods();
@@ -7735,6 +7763,7 @@ export class Voidwake {
             name: String(m.name ?? m.id ?? ""),
             enabled: !!m.enabled,
             script: String(m.script ?? ""),
+            chatter: this._sanitizeChatterPack(m.chatter),
           }))
           .filter((m) => m.id.length > 0);
       }
@@ -7744,25 +7773,61 @@ export class Voidwake {
     return this.mods.filter((m) => m.enabled).map((m) => m.id).sort();
   }
 
+  // Validate & shallow-clone a mod's `chatter` field. Accepts
+  // `{ [kind: string]: string[] }`. Non-string / non-array values are
+  // dropped silently so a malformed pack can't crash the loader.
+  private _sanitizeChatterPack(raw: unknown): Record<string, string[]> | undefined {
+    if (!raw || typeof raw !== "object") return undefined;
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (!Array.isArray(v)) continue;
+      const lines = v.filter((s) => typeof s === "string").map((s) => String(s).slice(0, 200)).filter((s) => s.length > 0);
+      if (lines.length) out[String(k).slice(0, 48)] = lines;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  // Apply the `chatter` blocks of every enabled mod. Called by reloadScript
+  // AFTER the Lua host has loaded so a script-only reload also refreshes
+  // data-only additions. Returns the number of lines added.
+  private applyModChatterPacks(): number {
+    let added = 0;
+    for (const m of this.mods) {
+      if (!m.enabled || !m.chatter) continue;
+      for (const [kind, lines] of Object.entries(m.chatter)) {
+        for (const line of lines) {
+          if (this.registerChatterLine(kind, line)) added++;
+        }
+      }
+    }
+    return added;
+  }
+
   // 0.7.0 modding polish — shared install path for both the "Add Mod... (paste JSON)"
-  // menu action and the drag-drop file handler. Accepts either a `{ id, name, script }`
-  // JSON manifest or a bare Lua source string when `fallbackId` is supplied
-  // (used by `.lua` file drops — the file name becomes the mod id).
+  // menu action and the drag-drop file handler. Accepts either a
+  // `{ id, name, script?, chatter? }` JSON manifest or a bare Lua source
+  // string when `fallbackId` is supplied (used by `.lua` file drops — the
+  // file name becomes the mod id). A manifest with only a `chatter` block
+  // and no `script` is a valid data-only content pack.
   private installModFromJSON(src: string, fallbackId?: string): boolean {
     try {
       const parsed = JSON.parse(src);
       const id = String(parsed.id ?? "").trim();
       const name = String(parsed.name ?? id).trim() || id;
       const script = String(parsed.script ?? "");
+      const chatter = this._sanitizeChatterPack(parsed.chatter);
       if (!id) { this.pushLog("Mod add failed: missing id."); return false; }
+      if (!script && !chatter) { this.pushLog("Mod add failed: needs `script` and/or `chatter`."); return false; }
       if (this.mods.some((m) => m.id === id)) {
         this.pushLog(`Mod add failed: id '${id}' already installed.`);
         return false;
       }
-      this.mods.push({ id, name, enabled: true, script });
+      this.mods.push({ id, name, enabled: true, script, chatter });
       this.saveMods();
-      this.pushLog(`Mod installed: ${id}`);
+      const chatN = chatter ? Object.values(chatter).reduce((a, b) => a + b.length, 0) : 0;
+      this.pushLog(`Mod installed: ${id}${chatN ? ` (+${chatN} chatter)` : ""}`);
       if (this.scriptEnabled) this.reloadScript();
+      else if (chatN) this.applyModChatterPacks();
       return true;
     } catch (e) {
       if (fallbackId) {
@@ -7783,11 +7848,108 @@ export class Voidwake {
     }
   }
 
+
   // Attach drag-and-drop listeners to the canvas so users can install mods
   // or load a Lua script without hitting the 2KB browser prompt() cap. Drop
   // a `.json` manifest → new mod entry. Drop a `.lua` file → depending on the
   // Shift key at drop time, either replaces the user script (default) or
   // installs as a new mod using the file basename as its id (with Shift).
+  // 0.7.0 completion — in-canvas multi-line text editor. Replaces the tiny
+  // browser prompt() for editing user scripts and mods. Uses an absolutely
+  // positioned <textarea> stretched over the canvas rect; Ctrl+S saves,
+  // Esc cancels. Only one editor at a time (subsequent opens close the
+  // prior overlay without saving).
+  private openTextEditor(title: string, initial: string, onSave: (value: string) => void): void {
+    if (typeof document === "undefined") {
+      // SSR / no-DOM fallback.
+      if (typeof window !== "undefined" && typeof window.prompt === "function") {
+        const v = window.prompt(title, initial);
+        if (v != null) onSave(v);
+      }
+      return;
+    }
+    // Close any previous editor without saving.
+    if (this._editorOverlay) {
+      try { this._editorOverlay.remove(); } catch { /* noop */ }
+      this._editorOverlay = null;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    const wrap = document.createElement("div");
+    wrap.style.cssText = [
+      `position:fixed`,
+      `left:${Math.round(rect.left)}px`,
+      `top:${Math.round(rect.top)}px`,
+      `width:${Math.round(rect.width)}px`,
+      `height:${Math.round(rect.height)}px`,
+      `z-index:9999`,
+      `background:rgba(0,10,4,0.94)`,
+      `color:#9fe`,
+      `font:13px/1.4 ui-monospace, Menlo, Consolas, monospace`,
+      `display:flex`,
+      `flex-direction:column`,
+      `padding:8px`,
+      `box-sizing:border-box`,
+      `border:1px solid #094`,
+    ].join(";");
+    const header = document.createElement("div");
+    header.textContent = title;
+    header.style.cssText = "padding:4px 2px 6px;color:#7fd0ff;flex:0 0 auto;";
+    const ta = document.createElement("textarea");
+    ta.value = initial;
+    ta.spellcheck = false;
+    ta.style.cssText = [
+      `flex:1 1 auto`,
+      `background:#020`,
+      `color:#dfe`,
+      `border:1px solid #063`,
+      `padding:6px`,
+      `font:13px/1.35 ui-monospace, Menlo, Consolas, monospace`,
+      `resize:none`,
+      `outline:none`,
+      `white-space:pre`,
+      `overflow:auto`,
+    ].join(";");
+    const bar = document.createElement("div");
+    bar.style.cssText = "display:flex;gap:8px;padding:6px 2px 0;flex:0 0 auto;";
+    const mkBtn = (label: string, cb: () => void, bg: string) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.style.cssText = `background:${bg};color:#000;border:0;padding:6px 12px;font:12px ui-monospace,monospace;cursor:pointer;`;
+      b.addEventListener("click", (e) => { e.preventDefault(); cb(); });
+      return b;
+    };
+    const hint = document.createElement("div");
+    hint.textContent = "Ctrl+S save · Esc cancel · Tab inserts 2 spaces";
+    hint.style.cssText = "margin-left:auto;color:#4a7;font-size:11px;align-self:center;";
+    const cleanup = () => {
+      try { wrap.remove(); } catch { /* noop */ }
+      if (this._editorOverlay === wrap) this._editorOverlay = null;
+      try { this.canvas.focus(); } catch { /* noop */ }
+    };
+    const doSave = () => { const v = ta.value; cleanup(); onSave(v); };
+    bar.appendChild(mkBtn("Save (Ctrl+S)", doSave, "#7fd0ff"));
+    bar.appendChild(mkBtn("Cancel (Esc)", cleanup, "#c66"));
+    bar.appendChild(hint);
+    ta.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); doSave(); }
+      else if (e.key === "Escape") { e.preventDefault(); cleanup(); }
+      else if (e.key === "Tab") {
+        e.preventDefault();
+        const s = ta.selectionStart, en = ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + "  " + ta.value.slice(en);
+        ta.selectionStart = ta.selectionEnd = s + 2;
+      }
+      // Stop keys from leaking into the game canvas key handlers.
+      e.stopPropagation();
+    });
+    wrap.appendChild(header);
+    wrap.appendChild(ta);
+    wrap.appendChild(bar);
+    document.body.appendChild(wrap);
+    this._editorOverlay = wrap;
+    setTimeout(() => ta.focus(), 0);
+  }
+
   private attachModDrop(canvas: HTMLCanvasElement, sig: AbortSignal) {
     const stop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
     canvas.addEventListener("dragenter", stop, { signal: sig });
