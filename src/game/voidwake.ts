@@ -8144,6 +8144,7 @@ export class Voidwake {
       case "codex": this.renderCodex(grid); break;
       case "howto": this.renderHowto(grid); break;
       case "quest-log": this.renderQuestLog(grid); break;
+      case "character": this.renderCharacterSheet(grid); break;
     }
 
 
