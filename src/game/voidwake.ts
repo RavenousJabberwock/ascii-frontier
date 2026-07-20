@@ -6929,10 +6929,10 @@ export class Voidwake {
     if (this.optionsSection === "chat")      { this.updateOptionsChat();      return; }
   }
 
-  // Root Options hub. Scripting became a real subsection in 0.5.5; the
-  // greyed-out placeholder is gone.
-  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Back"];
-  // Reserved for future greyed-out rows. Empty in 0.5.5.
+  // Root Options hub. Scripting became a real subsection in 0.5.5; Mods
+  // followed in 0.7.0. No greyed-out placeholders remain.
+  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Mods", "Back"];
+  // Reserved for future greyed-out rows. Empty in 0.7.0.
   private optionsRootDisabled: number[] = [];
   private updateOptionsRoot() {
     this.menuNav(this.optionsRootItems.length);
@@ -6943,6 +6943,7 @@ export class Voidwake {
     else if (c === "Audio")     { this.optionsSection = "audio";     this.menuCursor = 0; }
     else if (c === "Controls")  { this.optionsSection = "controls";  this.menuCursor = 0; }
     else if (c === "Scripting") { this.optionsSection = "scripting"; this.menuCursor = 0; }
+    else if (c === "Mods")      { this.optionsSection = "mods";      this.menuCursor = 0; }
     else if (c === "Back")      { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
   }
 
