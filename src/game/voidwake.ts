@@ -542,19 +542,6 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Fuel gauge redlined an hour ago. We are officially begging, {sector} lane.",
     "Broadcasting mayday on {sector} — any tug, any faction, we don't care anymore.",
   ],
-  stranded_thanks: [
-    "Bless you, {cmdr}. Fuel in the tanks and stars in my sights.",
-    "That top-up saved the crew. We owe you a round in {sector}.",
-    "You didn't have to stop — but you did. Fly safe.",
-    "Reactor's warm again. Thank you kindly, {ship}.",
-    "The lanes remember kindness. So do we. Safe vectors.",
-    "Kids say hi, Cmdr. Fuel's a miracle. So are you.",
-    "We'll pay it forward on the next mayday we hear.",
-    "You bought us another cycle, {cmdr}. Won't forget it.",
-    "Squawking your callsign as friend-of-lane. Fly true.",
-    "Reactor's spinning up. You just bought us a future, Cmdr.",
-    "Filing your transponder under 'friend' on every board we hit.",
-    "Coffee's on us, forever, at any dock in {sector}. Don't argue.",
 
   crit_hit: [
     "★ CRIT — {target} rocked.",
