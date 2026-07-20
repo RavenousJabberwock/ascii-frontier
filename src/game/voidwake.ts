@@ -7598,7 +7598,12 @@ export class Voidwake {
     } catch (e) {
       this.pushLog(`[script] runtime unavailable: ${String(e)}`);
     }
+    // Apply data-only content packs (chatter) regardless of Lua host state;
+    // a pack with no `script` should still take effect.
+    const added = this.applyModChatterPacks();
+    if (added) this.pushLog(`[mods] +${added} chatter line${added === 1 ? "" : "s"}.`);
   }
+
 
   // Concatenate enabled mod scripts (id-sorted) before the user script. Each
   // mod is wrapped in a `do ... end` block so `local` declarations don't leak
