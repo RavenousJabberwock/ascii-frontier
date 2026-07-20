@@ -3779,7 +3779,15 @@ export class Voidwake {
   // is concatenated (in id-sorted order) BEFORE the user script and loaded
   // into the same Lua host. Mods share the sandbox — a misbehaving mod
   // scripts crashes its own hook, never the engine (see LuaHost.load).
-  private mods: Array<{ id: string; name: string; enabled: boolean; script: string }> = [];
+  private mods: Array<{ id: string; name: string; enabled: boolean; script: string; chatter?: Record<string, string[]> }> = [];
+  // Last cursor position while it was on an actual mod row. Used by the
+  // "Edit / Remove Highlighted Mod" actions so the user can highlight a mod,
+  // scroll down to the action row, and still act on the highlighted mod.
+  private _modRowCursor = 0;
+  // Active in-canvas <textarea> editor overlay (0.7.0 completion). Non-null
+  // while the multi-line editor is open; input is paused while it exists so
+  // WASD/keyboard don't leak into gameplay.
+  private _editorOverlay: HTMLDivElement | null = null;
   // While non-null, the Keybinds screen is capturing the next pressed key
   // as the new binding for this action id (a key in Options.keybinds).
   private _rebindAction: string | null = null;
