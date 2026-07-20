@@ -6926,6 +6926,7 @@ export class Voidwake {
     if (this.optionsSection === "controls")  { this.updateOptionsControls();  return; }
     if (this.optionsSection === "keybinds")  { this.updateOptionsKeybinds();  return; }
     if (this.optionsSection === "scripting") { this.updateOptionsScripting(); return; }
+    if (this.optionsSection === "mods")      { this.updateOptionsMods();      return; }
     if (this.optionsSection === "chat")      { this.updateOptionsChat();      return; }
   }
 
