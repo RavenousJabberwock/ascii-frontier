@@ -627,22 +627,64 @@ of your own fuel remaining, so the interaction can't strand *you*.
 SPD Patrols still auto-tow stranded lawful hulls (unchanged) — the
 player rescue is an additional path, not a replacement.
 
-## M2 mutation API (0.5.7)
+## Scripting API (0.7.0)
 
-The Lua host bridge now exposes a small, audited write surface:
+The Lua host bridge exposes an audited read + write surface. Reads are
+depth-2 tables of primitives; writes go through narrow validators.
 
 ```lua
-local bal  = frontier.addCredits(500)   -- returns new balance, nil if no player
-local fuel = frontier.addFuel(-10)      -- returns new fuel amount
-local snap = frontier.player()          -- read-only snapshot table
-if snap and snap.hull / snap.hullMax < 0.25 then
-  frontier.chat("Script", "Hull critical: " .. snap.hull, "#ff5555")
+-- Player state
+local snap = frontier.player()               -- read-only snapshot
+frontier.grant{ credits = 500, xp = 20,      -- batched mutation
+                fuel = -10, ore = 3 }
+frontier.addCredits(500)                     -- individual writers still work
+frontier.addFuel(-10)
+
+-- World / entity introspection
+print(frontier.world.seed, frontier.world.time())
+for _, e in ipairs(frontier.entities.list{ kind = "hostile", max = 32 }) do
+  frontier.log(e.name .. " at " .. tostring(e.x))
+end
+local e = frontier.entities.get(0)           -- by array index
+
+-- Content pack (append template lines)
+frontier.chatter.add("gunner_idle", "Coffee's cold. Guns aren't.")
+
+-- Mod introspection
+for _, m in ipairs(frontier.mods.installed()) do
+  frontier.log(m.id .. (m.enabled and " ON" or " off"))
 end
 ```
 
-Everything else — entities, missions, universe seed — remains read-only
-until M3 (mod bundles + entity mutation). Bridge mutators are optional
-so older host code keeps loading unchanged.
+Every mutator returns the resulting value (or `nil` when no player is
+active) so scripts can react. Entities are surfaced as `{ idx, kind,
+name, faction, x, y, z, hull, shield }` — mutation of live entities is
+still deferred to a future 0.7.x pass.
+
+## Mods (0.7.0)
+
+Mods live in `localStorage` under `voidwake.mods` as a JSON array of
+`{ id, name, enabled, script }` entries. Manage them from **Options ▸
+Mods**:
+
+- Each installed mod renders as `[X] id — name (n.nKB)`. ENTER on a
+  mod row toggles its enabled flag.
+- `Add Mod... (paste JSON)` prompts for a `{ id, name, script }` JSON
+  blob and installs it. Duplicate ids are rejected.
+- `Reload All Mods` re-runs the combined script (all enabled mods,
+  id-sorted, followed by the user script). Fires automatically on
+  toggle / add / clear when Scripting is ON.
+- `Clear All Mods` wipes the mod list.
+
+Each mod's script is wrapped in `do ... end` so `local` declarations
+don't leak between mods. Mods share the same Lua host as the user
+script and see the same `frontier.*` API; a hook thrown by a mod is
+caught and logged, never a tick-killer.
+
+Save files record the enabled mod ids in `SaveBlob.mods?: string[]`.
+On load, `applyLoadedBlob` diffs against the currently-enabled set and
+posts a warning line for each missing or newly-added mod so
+save/mod-set drift is visible rather than silent.
 
 ## Comms panel — System tab & wheel scroll (0.5.10)
 
