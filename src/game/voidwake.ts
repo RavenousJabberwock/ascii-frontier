@@ -7459,19 +7459,14 @@ export class Voidwake {
       if (this.scriptEnabled) this.reloadScript();
       else this.disposeScript();
     } else if (row.startsWith("Edit Script")) {
-      // Browser prompt is the simplest cross-target editor. Truncated at
-      // ~2KB in most browsers — a drag-drop .lua file picker is on the mod
-      // roadmap (M3).
-      if (typeof window !== "undefined" && typeof window.prompt === "function") {
-        const next = window.prompt("Paste Lua source (or drop a .lua file on the game window):", this.scriptSource);
-        if (next != null) {
-          this.scriptSource = next;
-          this.saveScriptSettings();
-          if (this.scriptEnabled) this.reloadScript();
-        }
-      } else {
-        this.pushLog("No prompt() available — edit via localStorage 'voidwake.script.source'.");
-      }
+      // 0.7.0 — in-canvas multi-line textarea overlay; falls back to
+      // window.prompt() only when DOM isn't available.
+      this.openTextEditor("Edit Lua source (Ctrl+S = save, Esc = cancel)", this.scriptSource, (next) => {
+        this.scriptSource = next;
+        this.saveScriptSettings();
+        if (this.scriptEnabled) this.reloadScript();
+      });
+
     } else if (row.startsWith("Reload Script")) {
       if (this.scriptEnabled) this.reloadScript();
       else this.pushLog("Enable Scripting first.");
