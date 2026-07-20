@@ -443,7 +443,7 @@ sensor alert announces them when they spawn.
   Universe section, an AI handler in the AI section, and a glyph in
   `GLYPHS`.
 
-## Scripting (0.5.7 — Lua host + M2 mutation API)
+## Scripting (0.7.0 — Lua host + M2/M3/M4 slice)
 
 A sandboxed Lua 5.3 runtime (fengari-web, ~200KB, bundled into the
 offline HTML lazily on first enable) lives at `src/game/lua-host.ts`. It
@@ -456,11 +456,13 @@ Enable it from **Options ▸ Scripting**:
   persist in `localStorage` (`voidwake.script.source` /
   `voidwake.script.enabled`).
 - `Edit Script...` — opens a browser `prompt()` with the current
-  source. Drag-drop `.lua` file loading arrives with M3 of the modding
-  roadmap.
+  source. Drag-drop `.lua` file loading remains deferred to a future
+  0.7.x pass.
 - `Reload Script` — re-runs the source (creates a fresh Lua state so
-  every hook re-registers cleanly).
-- `Clear Script` — wipes source and disposes the runtime.
+  every hook re-registers cleanly). All enabled **mods** are
+  concatenated ahead of the user script — see the **Mods** section
+  below.
+- `Clear Script` — wipes the user source and disposes the runtime.
 - `Status:` — surfaces the last load or per-hook error.
 
 The sandbox nulls `io`, `package`, `debug`, `require`, `dofile`,
