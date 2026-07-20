@@ -276,12 +276,14 @@ export class LuaHost {
           const rc = lua.lua_pcall(this.L, 1, 0, 0);
           if (rc !== lua.LUA_OK) {
             const err = lua.lua_tojsstring(this.L, -1) ?? "(unknown lua error)";
-            this.lastError = `hook ${name}: ${err}`;
+            const mapped = this.bridge.remapError?.(err) ?? err;
+            this.lastError = `hook ${name}: ${mapped}`;
             this.bridge.pushLog(`[script] ${this.lastError}`);
             lua.lua_pop(this.L, 1);
           }
         } catch (e) {
-          this.lastError = `hook ${name}: ${String(e)}`;
+          const raw = String(e);
+          this.lastError = `hook ${name}: ${this.bridge.remapError?.(raw) ?? raw}`;
         }
       });
       this.unsubs.push(off);
