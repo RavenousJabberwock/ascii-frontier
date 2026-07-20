@@ -8568,6 +8568,11 @@ export class Voidwake {
         items = this.optionsScriptingItems();
         hint = "↑/↓ select   ENTER activate   ESC back";
         break;
+      case "mods":
+        title = "OPTIONS ▸ MODS";
+        items = this.optionsModsItems();
+        hint = "↑/↓ select   ENTER toggle/apply   ESC back";
+        break;
       case "chat":
         title = "OPTIONS ▸ GAMEPLAY ▸ CHAT WINDOWS";
         items = this.optionsChatItems();
