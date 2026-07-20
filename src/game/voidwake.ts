@@ -7477,25 +7477,9 @@ export class Voidwake {
         return;
       }
       const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")"}';
-      const src = window.prompt("Paste mod JSON  { id, name, script }:", example);
+      const src = window.prompt("Paste mod JSON  { id, name, script }:  (or drop a .json file on the game)", example);
       if (!src) return;
-      try {
-        const parsed = JSON.parse(src);
-        const id = String(parsed.id ?? "").trim();
-        const name = String(parsed.name ?? id).trim() || id;
-        const script = String(parsed.script ?? "");
-        if (!id) { this.pushLog("Mod add failed: missing id."); return; }
-        if (this.mods.some((m) => m.id === id)) {
-          this.pushLog(`Mod add failed: id '${id}' already installed.`);
-          return;
-        }
-        this.mods.push({ id, name, enabled: true, script });
-        this.saveMods();
-        this.pushLog(`Mod installed: ${id}`);
-        if (this.scriptEnabled) this.reloadScript();
-      } catch (e) {
-        this.pushLog(`Mod add failed: ${String(e)}`);
-      }
+      this.installModFromJSON(src);
       return;
     }
     if (row === "Remove Highlighted Mod") {
