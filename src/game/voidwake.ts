@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.6.2";
+const VERSION = "0.6.3";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -680,6 +680,14 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Coffee, ammo, silence. In that order. Best watch in the fleet.",
     "Gun crew rule three: never trust a Cmdr who talks about their K/D ratio.",
     "Old Fed vet on my last tour used to say: 'a slow trigger is a live captain'. Fits.",
+    // 0.6.3 additions — crew-XP flavor, level pride, more sci-fi.
+    "Cmdr, my last three shots grouped inside a meter. That's practice, not luck.",
+    "The magazine knows my hands now. Trust me — that matters.",
+    "I've fired enough rounds this tour I can hear the mag misalign. Fixed it before you noticed.",
+    "Reload rhythm's second nature. Chain-fire's cleaner than it was last week.",
+    "Cmdr — call it a crit or call it earned. Same hole, either way.",
+    "Rating board back at Jeddah owes me a gold pip. They'll survive without knowing.",
+    "Every hostile down is another line on the résumé no one'll ever read.",
   ],
   gunner_farewell_good: [
     "Been an honor, Cmdr. {praise} out there.",
@@ -766,6 +774,16 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Every hull hums a note. This one's a low B-flat. Comforting.",
     "Pilot's rule seventeen: if the reticle looks upside down, you probably are.",
     "Cmdr, plot a lazy pass around that giant's rings. Nav chair's request, not orders.",
+    // 0.6.3 additions — crew-XP flavor + more sci-fi shelf.
+    "Been in this chair long enough the {ship} finishes my turns for me, {cmdr}.",
+    "Every stick-hour is a coin in the bank. Bank's getting heavy.",
+    "Cmdr, that reticle drift you had last week? Gone. You're smoother.",
+    "I fly by numbers. The numbers keep getting kinder.",
+    "Old spacer told me: 'the ship teaches you if you let it'. I'm letting it.",
+    "Somewhere between the last dock and now, I stopped counting jumps. Good sign.",
+    "Cmdr — coordinates locked, coffee poured, conscience clear. Rare trifecta.",
+    "I could fly this lane blindfolded. Don't tempt me.",
+    "New rating chit came through. Not that anyone hangs those on a nav chair.",
   ],
   pilot_greet: [
     "Pilot reporting, Cmdr {cmdr}. Tag a target, hit O, and I'll fly it.",
@@ -839,6 +857,12 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "This bulkhead's held together with hope, epoxy, and one very specific curse word.",
     "The ship's fine. The universe is what worries me.",
     "I dream in schematics, {cmdr}. Last night's was a really elegant plasma coil.",
+    // 0.6.3 additions — engineer XP flavor.
+    "Cmdr, I've heard every noise this reactor makes. Nothing surprises me anymore.",
+    "Every dock, my shield tune gets a hair tighter. That's not luck.",
+    "Fuel efficiency's up again. Levels don't lie.",
+    "I've rebuilt this coupler enough times I could sculpt one blindfolded.",
+    "New apprentice on the last station wanted my job. Sweet kid. No chance.",
   ],
   engineer_greet: [
     "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
@@ -2729,6 +2753,9 @@ function effectiveRadarRange(p: PlayerState): number {
   if (hasCrew(p, "pilot")) r += 150;
   if (hasCrew(p, "engineer")) r += 150;
   if (hasCrew(p, "navigator")) r += 400;
+  // 0.6.3 — navigator XP: +40u per level (0..360u), sharpening the plot as
+  // they accumulate hours on the chair. Cheap, felt, no runaway scaling.
+  r += 40 * roleLevel(p, "navigator");
   if (p.ship.modules.includes("sensor-array")) r += 600;
   if (p.ship.modules.includes("long-range-scanner")) r += 1000;
   // Player-species passive: Aquilan / Sylph get an innate scope bonus.
@@ -2769,13 +2796,17 @@ function merchantSellMult(p: PlayerState): number {
   const base = hasCrew(p, "merchant") ? 1.15 : 1.0;
   const qm = hasCrew(p, "quartermaster") ? 1.05 : 1.0;
   const affinity = crewAffinityBonus(p, "merchant");
-  return base * qm * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
+  // 0.6.3 — 0.4% extra sell margin per merchant or quartermaster level
+  // (caps at ~+7% combined at max XP). Stacks multiplicatively with base.
+  const xp = 1 + 0.004 * (roleLevel(p, "merchant") + roleLevel(p, "quartermaster"));
+  return base * qm * xp * (speciesOf(p.char.species).sellMul ?? 1) * (1 + affinity);
 }
 function merchantBuyMult(p: PlayerState): number {
   const base = hasCrew(p, "merchant") ? 0.90 : 1.0;
   const qm = hasCrew(p, "quartermaster") ? 0.95 : 1.0;
   const affinity = crewAffinityBonus(p, "merchant");
-  return base * qm * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
+  const xp = 1 - 0.004 * (roleLevel(p, "merchant") + roleLevel(p, "quartermaster"));
+  return base * qm * xp * (speciesOf(p.char.species).buyMul ?? 1) * (1 - affinity);
 }
 // Small bonus when the on-crew member of `role` is a species with an
 // affinity for that role. Returns 0..0.05 range (roughly +5%).
@@ -2805,6 +2836,13 @@ function grantCrewXP(p: PlayerState, amount: number) {
   if (amount <= 0) return;
   if (p.gunner) p.gunner.xp = (p.gunner.xp ?? 0) + amount;
   if (p.crew) for (const c of p.crew) c.xp = (c.xp ?? 0) + amount;
+}
+// 0.6.3 — returns the on-crew member's level for a given role, or 0 when
+// unstaffed. Callers use this to derive small per-level gameplay perks so
+// crew XP is felt in play, not just displayed. Gunner uses the legacy slot.
+function roleLevel(p: PlayerState, role: CrewRole): number {
+  const c = role === "gunner" ? p.gunner : getCrew(p, role);
+  return c ? crewLevel(c) : 0;
 }
 
 // Crew hiring fee per role.
@@ -4990,9 +5028,12 @@ export class Voidwake {
     // but locks weapons (no fire while super-cruising) so it stays a travel tool.
     const supercruise = keys.has(k.supercruise) && p.ship.fuel > 0;
     const boostMul = (boosting ? effectiveBoostMul(p) : 1.0) * (supercruise ? 3.0 : 1.0);
-    // Engineer perk: -20% fuel burn.
+    // Engineer perk: -20% fuel burn. 0.6.3 — pilot & engineer XP sip an
+    // extra 1% per level each (up to −9% each), rewarding tenured crews.
     const engineerMul = (hasCrew(p, "engineer") ? 0.80 : 1.0) * (hasCrew(p, "navigator") ? 0.90 : 1.0);
-    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * speciesFuelMul(p);
+    const xpSipMul = Math.max(0.5,
+      1 - 0.01 * roleLevel(p, "pilot") - 0.01 * roleLevel(p, "engineer"));
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * xpSipMul * speciesFuelMul(p);
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
@@ -5037,6 +5078,8 @@ export class Voidwake {
     // Engineer perk: +75% shield recharge rate.
     let shieldRegen = hasCrew(p, "engineer") ? 7.0 : 4.0;
     if (hasCrew(p, "tactical")) shieldRegen *= 1.25;
+    // 0.6.3 — +2% shield regen per engineer or tactical level (up to +36%).
+    shieldRegen *= 1 + 0.02 * (roleLevel(p, "engineer") + roleLevel(p, "tactical"));
     p.ship.shield = Math.min(p.ship.shieldMax, p.ship.shield + dt * shieldRegen);
     // Engineer perk: slow hull regen while throttle is light and not on fire.
     if (hasCrew(p, "engineer") && p.throttle < 0.35 && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
@@ -5657,6 +5700,13 @@ export class Voidwake {
             let critChance = 0.08;
             if (this.player?.gunner) critChance += 0.05;
             if (tacticalFired) critChance = Math.max(critChance, 0.23);
+            // 0.6.3 — +0.5% crit per level of the crew firing (Gunner for
+            // auto-fire, Tactical for auto-fire); nudges seasoned crews
+            // toward reliably better hit results without capping the game.
+            if (this.player) {
+              critChance += 0.005 * roleLevel(this.player, "gunner");
+              if (tacticalFired) critChance += 0.005 * roleLevel(this.player, "tactical");
+            }
             if (Math.random() < critChance) {
               dmg *= 2;
               crit = true;

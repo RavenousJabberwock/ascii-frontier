@@ -1028,3 +1028,37 @@ Still deferred for later 0.6.x:
   math still matches the drawn cell grid.
 - **Cap at 2×**: prevents fillText loops on 4K displays from doubling
   the paint cost for very little visible gain past 2× on ASCII glyphs.
+
+## 0.6.3 — Crew XP perks + chatter
+
+Turns the display-only crew levels from 0.6.2 into felt gameplay. Each
+perk is a small, linear per-level scalar so a new hire is competent and a
+veteran (L9) is noticeably better without breaking the balance curve.
+
+- **Gunner XP**: +0.5%/level crit chance on auto-fire (up to +4.5%).
+- **Tactical XP**: +0.5%/level crit chance on the tactical auto-fire path
+  (stacks with the Gunner perk when both roles are staffed).
+- **Pilot XP**: −1%/level fuel burn while thrusting (up to −9%), capped
+  jointly with Engineer at a 0.50× floor so freebies stay bounded.
+- **Engineer XP**: −1%/level fuel burn AND +2%/level shield regen (up to
+  −9% fuel, +18% regen).
+- **Tactical XP**: +2%/level shield regen (stacks with Engineer for a
+  theoretical +36% at both L9).
+- **Navigator XP**: +40u/level radar range (up to +360u), on top of the
+  base +400u nav-crew bonus.
+- **Merchant / Quartermaster XP**: +0.4%/level extra sell margin and
+  −0.4%/level buy price per level of either. Stacks multiplicatively
+  with the base merchant/QM crew bonuses.
+
+New helper `roleLevel(p, role)` centralises the "on-crew level or 0"
+lookup so future perks can hook in without duplicating the crew scan.
+
+Also expanded chatter (~35 lines) across `pilot_idle`, `gunner_idle`,
+and `engineer_idle` to reference the new "hours in the chair" flavor.
+
+VERSION 0.6.2 → 0.6.3; offline bundle rebuilt (461.7 KB).
+
+Still deferred for later 0.6.x:
+- Player-to-NPC comms with template replies.
+- In-canvas multi-line Lua editor.
+- Full Reputation *Panel* on a dedicated screen (pinnable HUD strip only).
