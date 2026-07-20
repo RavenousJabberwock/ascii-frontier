@@ -7669,10 +7669,17 @@ export class Voidwake {
     for (const m of this.mods) {
       const kb = (m.script.length / 1024).toFixed(1);
       const flag = m.enabled ? "[X]" : "[ ]";
-      rows.push(`${flag} ${m.id} — ${m.name} (${kb}KB)`);
+      const extras: string[] = [];
+      if (m.chatter && Object.keys(m.chatter).length) {
+        const n = Object.values(m.chatter).reduce((a, b) => a + (b?.length ?? 0), 0);
+        extras.push(`+${n} chat`);
+      }
+      const tail = extras.length ? ` {${extras.join(", ")}}` : "";
+      rows.push(`${flag} ${m.id} — ${m.name} (${kb}KB)${tail}`);
     }
     if (!this.mods.length) rows.push("(no mods installed)");
     rows.push("Add Mod... (paste JSON)");
+    rows.push("Edit Highlighted Mod...");
     rows.push("Remove Highlighted Mod");
     rows.push("Reload All Mods");
     rows.push("Clear All Mods");
@@ -7682,28 +7689,41 @@ export class Voidwake {
   private updateOptionsMods() {
     const items = this.optionsModsItems();
     this.menuNav(items.length);
+    // Remember the last cursor position while it hovered an actual mod row.
+    if (this.menuCursor >= 0 && this.menuCursor < this.mods.length) {
+      this._modRowCursor = this.menuCursor;
+    }
     if (!this.input.consume("enter")) return;
     const i = this.menuCursor;
     const row = items[i];
     if (row === "Back") { this.optionsSection = "root"; this.menuCursor = 0; return; }
     if (row === "Add Mod... (paste JSON)") {
-      if (typeof window === "undefined" || typeof window.prompt !== "function") {
-        this.pushLog("No prompt() available — set localStorage 'voidwake.mods' directly.");
-        return;
-      }
-      const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")"}';
-      const src = window.prompt("Paste mod JSON  { id, name, script }:  (or drop a .json file on the game)", example);
-      if (!src) return;
-      this.installModFromJSON(src);
+      const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")","chatter":{"gunner_idle":["extra line"]}}';
+      this.openTextEditor("Paste mod JSON  { id, name, script, chatter? }", example, (src) => {
+        if (src.trim()) this.installModFromJSON(src);
+      });
+      return;
+    }
+    if (row === "Edit Highlighted Mod...") {
+      const idx = this._modRowCursor;
+      if (idx < 0 || idx >= this.mods.length) { this.pushLog("No mod highlighted."); return; }
+      const m = this.mods[idx];
+      this.openTextEditor(`Edit ${m.id} — Lua source`, m.script, (next) => {
+        m.script = next;
+        this.saveMods();
+        this.pushLog(`${m.id}: script updated (${next.length} chars).`);
+        if (this.scriptEnabled) this.reloadScript();
+      });
       return;
     }
     if (row === "Remove Highlighted Mod") {
-      // Highlighted mod is whichever list row (0..mods.length-1) the cursor
-      // most recently sat on before landing on this action row. Since our
-      // cursor may currently point AT this action, fall back to the last
-      // mod-row cursor position. Simpler: interpret "highlighted" as index
-      // 0 when only one mod exists, otherwise no-op.
-      this.pushLog("Move cursor onto a mod row and press ENTER on it to toggle; use Clear All to reset.");
+      const idx = this._modRowCursor;
+      if (idx < 0 || idx >= this.mods.length) { this.pushLog("No mod highlighted."); return; }
+      const removed = this.mods.splice(idx, 1)[0];
+      this._modRowCursor = Math.max(0, Math.min(this._modRowCursor, this.mods.length - 1));
+      this.saveMods();
+      this.pushLog(`Mod removed: ${removed.id}`);
+      if (this.scriptEnabled) this.reloadScript();
       return;
     }
     if (row === "Reload All Mods") {
@@ -7718,7 +7738,7 @@ export class Voidwake {
       if (this.scriptEnabled) this.reloadScript();
       return;
     }
-    // Otherwise: cursor is on a mod row (index < this.mods.length). Toggle.
+    // Otherwise: cursor is on a mod row — toggle enable.
     if (i >= 0 && i < this.mods.length) {
       this.mods[i].enabled = !this.mods[i].enabled;
       this.saveMods();
@@ -7743,6 +7763,7 @@ export class Voidwake {
             name: String(m.name ?? m.id ?? ""),
             enabled: !!m.enabled,
             script: String(m.script ?? ""),
+            chatter: this._sanitizeChatterPack(m.chatter),
           }))
           .filter((m) => m.id.length > 0);
       }
@@ -7752,25 +7773,61 @@ export class Voidwake {
     return this.mods.filter((m) => m.enabled).map((m) => m.id).sort();
   }
 
+  // Validate & shallow-clone a mod's `chatter` field. Accepts
+  // `{ [kind: string]: string[] }`. Non-string / non-array values are
+  // dropped silently so a malformed pack can't crash the loader.
+  private _sanitizeChatterPack(raw: unknown): Record<string, string[]> | undefined {
+    if (!raw || typeof raw !== "object") return undefined;
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (!Array.isArray(v)) continue;
+      const lines = v.filter((s) => typeof s === "string").map((s) => String(s).slice(0, 200)).filter((s) => s.length > 0);
+      if (lines.length) out[String(k).slice(0, 48)] = lines;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  // Apply the `chatter` blocks of every enabled mod. Called by reloadScript
+  // AFTER the Lua host has loaded so a script-only reload also refreshes
+  // data-only additions. Returns the number of lines added.
+  private applyModChatterPacks(): number {
+    let added = 0;
+    for (const m of this.mods) {
+      if (!m.enabled || !m.chatter) continue;
+      for (const [kind, lines] of Object.entries(m.chatter)) {
+        for (const line of lines) {
+          if (this.registerChatterLine(kind, line)) added++;
+        }
+      }
+    }
+    return added;
+  }
+
   // 0.7.0 modding polish — shared install path for both the "Add Mod... (paste JSON)"
-  // menu action and the drag-drop file handler. Accepts either a `{ id, name, script }`
-  // JSON manifest or a bare Lua source string when `fallbackId` is supplied
-  // (used by `.lua` file drops — the file name becomes the mod id).
+  // menu action and the drag-drop file handler. Accepts either a
+  // `{ id, name, script?, chatter? }` JSON manifest or a bare Lua source
+  // string when `fallbackId` is supplied (used by `.lua` file drops — the
+  // file name becomes the mod id). A manifest with only a `chatter` block
+  // and no `script` is a valid data-only content pack.
   private installModFromJSON(src: string, fallbackId?: string): boolean {
     try {
       const parsed = JSON.parse(src);
       const id = String(parsed.id ?? "").trim();
       const name = String(parsed.name ?? id).trim() || id;
       const script = String(parsed.script ?? "");
+      const chatter = this._sanitizeChatterPack(parsed.chatter);
       if (!id) { this.pushLog("Mod add failed: missing id."); return false; }
+      if (!script && !chatter) { this.pushLog("Mod add failed: needs `script` and/or `chatter`."); return false; }
       if (this.mods.some((m) => m.id === id)) {
         this.pushLog(`Mod add failed: id '${id}' already installed.`);
         return false;
       }
-      this.mods.push({ id, name, enabled: true, script });
+      this.mods.push({ id, name, enabled: true, script, chatter });
       this.saveMods();
-      this.pushLog(`Mod installed: ${id}`);
+      const chatN = chatter ? Object.values(chatter).reduce((a, b) => a + b.length, 0) : 0;
+      this.pushLog(`Mod installed: ${id}${chatN ? ` (+${chatN} chatter)` : ""}`);
       if (this.scriptEnabled) this.reloadScript();
+      else if (chatN) this.applyModChatterPacks();
       return true;
     } catch (e) {
       if (fallbackId) {
@@ -7790,6 +7847,7 @@ export class Voidwake {
       return false;
     }
   }
+
 
   // Attach drag-and-drop listeners to the canvas so users can install mods
   // or load a Lua script without hitting the 2KB browser prompt() cap. Drop
