@@ -3982,6 +3982,7 @@ export class Voidwake {
     const sig = this._abort.signal;
     window.addEventListener("resize", () => this.fit(), { signal: sig });
     this.input.attach(canvas, sig);
+    this.attachModDrop(canvas, sig);
     canvas.focus();
     // Global error trap so async/uncaught errors during gameplay show on the
     // crash screen instead of vanishing into the console.
