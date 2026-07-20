@@ -6704,6 +6704,193 @@ export class Voidwake {
     putText(g, 4, g.length - 2, "U or ESC to close", "#888");
   }
 
+  // ---------------- Character Sheet overlay ------------------------------
+  // Opened with C in flight or from the pause menu. Shows the commander
+  // portrait (built from species + eye color), full attributes, the ship
+  // silhouette + installed modules with their effects, and a portrait +
+  // stat line for every crew member (including the legacy gunner slot).
+  // Escape or C closes and restores the previous screen.
+  updateCharacterSheet() {
+    if (this.input.consume(this.options.keybinds.characterSheet)) {
+      this.screen = this._characterReturn;
+      this.menuCursor = 0;
+    }
+  }
+
+  // 5-line, 7-wide portrait keyed by species + eyes. The top row hints at
+  // silhouette (crest / helm / halo), the middle row's eye glyph reflects
+  // the character's eye color. Purely cosmetic — same palette works for
+  // commander and crew.
+  private portraitFor(species: string, eyes?: string): string[] {
+    const crest: Record<string, string> = {
+      Human:        ".-----.",
+      Android:      "[|===|]",
+      Reptilian:    "<~vvv~>",
+      Aquilan:      " >-A-< ",
+      "Drift-born": ".~~~~~.",
+      Sylph:        " .^^^. ",
+      Voidkin:      " .===. ",
+      Chorus:       " .***. ",
+    };
+    const e = (eyes ?? "").toLowerCase();
+    const eyeCh =
+      e.includes("green")  ? "o" :
+      e.includes("blue")   ? "8" :
+      e.includes("brown")  ? "0" :
+      e.includes("amber")  ? "@" :
+      e.includes("red")    ? "x" :
+      e.includes("violet") ? "*" :
+      e.includes("black")  ? "." :
+      e.includes("silver") ? "^" :
+      e.includes("gold")   ? "@" : "o";
+    const top = crest[species] ?? crest.Human;
+    return [
+      top,
+      "|     |",
+      `| ${eyeCh} ${eyeCh} |`,
+      "|  v  |",
+      "| \\_/ |",
+      "'-----'",
+    ];
+  }
+
+  // 3-line silhouette per hull id. Falls back to a generic frigate.
+  private shipArtFor(hullId: string): string[] {
+    const art: Record<string, string[]> = {
+      scout:      ["    /\\    ", " <==][==> ", "    \\/    "],
+      trader:     ["  __________  ", " [_o_o_o_o_]=>", "   \"\"    \"\"  "],
+      fighter:    ["     ^      ", "  <>[X]<>   ", "     v      "],
+      miner:      ["   ___      ", "  |[#]|~~~> ", "   ###      "],
+      warhawk:    ["  \\  ^  /   ", "  [==X==]   ", "   |||||    "],
+      skyeye:     ["  .-<O>-.   ", " (=======)  ", "    \\_/     "],
+      nomad:      ["   .-*-.    ", "  ( 000 )   ", "   `---'    "],
+      driftbarge: ["  [######]  ", "  [######]=>", "  [######]  "],
+      explorer:   ["     /\\     ", "    /  \\    ", "  <==**==>  "],
+      veteran:    ["    ^^^     ", "  <=[X]=>   ", "    vvv     "],
+      phoenix:    ["    /|\\     ", "  <=[P]=>   ", "    \\|/     "],
+    };
+    return art[hullId] ?? ["    /\\     ", "  <=[.]=>  ", "    \\/     "];
+  }
+
+  renderCharacterSheet(g: Cell[][]) {
+    const p = this.player;
+    const cols = g[0].length;
+    const rows = g.length;
+    putText(g, 4, 1, "[ CHARACTER SHEET ]   C or ESC close", "#7CFC00");
+    if (!p) {
+      putText(g, 4, 4, "No active commander. Start or load a game first.", "#aef");
+      putText(g, 4, rows - 2, "ESC to close", "#888");
+      return;
+    }
+
+    // ---- Commander block (top-left) --------------------------------------
+    const cs = p.char;
+    const portrait = this.portraitFor(cs.species, cs.eyes);
+    const px = 4;
+    const py = 3;
+    for (let i = 0; i < portrait.length; i++) {
+      putText(g, px, py + i, portrait[i], "#cf6");
+    }
+    // Right of portrait: identity + attributes.
+    const ix = px + 10;
+    let iy = py;
+    const sinfo = speciesOf(cs.species);
+    putText(g, ix, iy++, `Cmdr ${cs.name}`, "#fff");
+    putText(g, ix, iy++, `${cs.species}, ${cs.gender}`, "#aef");
+    putText(g, ix, iy++, `${cs.height}cm  ${cs.weight}kg  skin:${cs.skin}  eyes:${cs.eyes}`, "#9fe");
+    putText(g, ix, iy++, `Trait: ${sinfo.bonus}`, "#7CFC00");
+    putText(g, ix, iy++, `Cost:  ${sinfo.drawback}`, "#f88");
+    putText(g, ix, iy++, `Credits ${p.credits}cr    XP ${p.xp}    Rank ${p.rank}    Kills ${p.kills ?? 0}`, "#ffe066");
+
+    // Reputation strip.
+    const rep = p.reputation ?? {};
+    putText(g, ix, iy++, `Rep — Fed:${repLabel(rep.federation ?? 0)} (${rep.federation ?? 0})  Guild:${repLabel(rep.guild ?? 0)} (${rep.guild ?? 0})  Pirate:${repLabel(rep.pirate ?? 0)} (${rep.pirate ?? 0})`, "#aef");
+
+    // ---- Ship block (below commander) ------------------------------------
+    const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
+    const sy = Math.max(py + portrait.length + 1, iy + 1);
+    putText(g, 4, sy, `[ SHIP — ${hull.name} ]`, "#7CFC00");
+    const shipArt = this.shipArtFor(p.ship.hullId);
+    for (let i = 0; i < shipArt.length; i++) {
+      putText(g, 4, sy + 1 + i, shipArt[i], "#8cf");
+    }
+    const sx = 4 + 16;
+    let sry = sy + 1;
+    const weapon = WEAPONS.find((w) => w.id === p.ship.weaponId);
+    const gunnerW = p.ship.gunnerWeaponId ? WEAPONS.find((w) => w.id === p.ship.gunnerWeaponId) : undefined;
+    putText(g, sx, sry++, `Hull ${Math.round(p.ship.hull)}/${p.ship.hullMax}   Shield ${Math.round(p.ship.shield)}/${p.ship.shieldMax}   Fuel ${Math.round(p.ship.fuel)}/${p.ship.fuelMax}`, "#9fe");
+    putText(g, sx, sry++, `Cargo ${cargoUsed(p)}/${effectiveCargoMax(p)}   Speed ${effectiveTopSpeed(p).toFixed(0)}   Slots ${effectiveCrewSlots(p)}   Radar ${effectiveRadarRange(p).toFixed(0)}u`, "#9fe");
+    putText(g, sx, sry++, `Weapon: ${weapon ? `${weapon.name} (dmg ${weapon.dmg}, cd ${weapon.cooldown}s, ${weapon.range}u)` : p.ship.weaponId}`, "#ffe066");
+    if (gunnerW) putText(g, sx, sry++, `Gunner rig: ${gunnerW.name} (dmg ${gunnerW.dmg}, cd ${gunnerW.cooldown}s)`, "#fc6");
+    if (hull.blurb) putText(g, sx, sry++, `Frame: ${hull.blurb}`, "#888");
+
+    // Installed modules list, right column.
+    const mx = Math.min(cols - 46, Math.max(56, cols / 2));
+    let my = sy;
+    putText(g, mx, my++, "[ INSTALLED MODULES ]", "#7CFC00");
+    const counts = new Map<string, number>();
+    for (const id of p.ship.modules) counts.set(id, (counts.get(id) ?? 0) + 1);
+    if (counts.size === 0) {
+      putText(g, mx, my++, "(none — buy at station Module Shop)", "#888");
+    } else {
+      for (const [id, n] of counts) {
+        const def = MODULE_CATALOG.find((m) => m.id === id);
+        const name = def?.name ?? id;
+        const desc = def?.desc ?? "custom module";
+        const stack = n > 1 ? ` x${n}` : "";
+        putText(g, mx, my++, `- ${name}${stack}`, "#cf6", cols - 2);
+        putText(g, mx + 2, my++, desc, "#9fe", cols - 2);
+      }
+    }
+
+    // ---- Crew roster (bottom, wraps to two columns) ----------------------
+    const cyStart = Math.max(sy + Math.max(shipArt.length + 2, sry - sy) + 1, my + 1);
+    let cy = cyStart;
+    putText(g, 4, cy++, "[ CREW ]", "#7CFC00");
+    const roster: Array<{ role: string; name: string; species: string; gender: string; state: string; xp: number; morale: number; color: string; wage: number }> = [];
+    if (p.gunner) {
+      roster.push({
+        role: "Gunner", name: p.gunner.name, species: p.gunner.species, gender: p.gunner.gender,
+        state: p.gunner.enabled ? "AUTO" : "STANDBY",
+        xp: p.gunner.xp ?? 0, morale: 100, color: "#fc6", wage: p.gunner.wage,
+      });
+    }
+    if (p.crew) for (const c of p.crew) {
+      const info = CREW_ROLE_INFO[c.role];
+      const state = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "READY") :
+                    !c.enabled ? "STANDBY" : "ACTIVE";
+      roster.push({
+        role: info.title, name: c.name, species: c.species, gender: c.gender,
+        state, xp: c.xp ?? 0, morale: c.morale ?? 100, color: info.color, wage: c.wage ?? 0,
+      });
+    }
+    if (!roster.length) {
+      putText(g, 6, cy, "(no hires — visit a station's Crew Bay)", "#888");
+    } else {
+      const colW = Math.floor((cols - 8) / 2);
+      for (let i = 0; i < roster.length; i++) {
+        const r = roster[i];
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const bx = 4 + col * colW;
+        const by = cy + row * 7;
+        if (by + 5 >= rows - 1) break;
+        const port = this.portraitFor(r.species);
+        for (let k = 0; k < port.length; k++) putText(g, bx, by + k, port[k], r.color, bx + colW - 1);
+        const tx = bx + 10;
+        const lv = Math.min(9, Math.max(0, Math.floor(r.xp / 50)));
+        putText(g, tx, by,     `${r.role} · ${r.name}`, "#fff", bx + colW - 1);
+        putText(g, tx, by + 1, `${r.species}, ${r.gender}`, "#aef", bx + colW - 1);
+        putText(g, tx, by + 2, `State: ${r.state}   Lv ${lv}  (xp ${r.xp})`, "#9fe", bx + colW - 1);
+        putText(g, tx, by + 3, `Morale: ${r.morale}   Wage: ${r.wage}cr/dock`, r.morale < 40 ? "#f88" : "#9fe", bx + colW - 1);
+      }
+    }
+
+    putText(g, 4, rows - 2, "C or ESC to close", "#888");
+    void cols;
+  }
+
+
   // Sweep loot canisters near the player and absorb their contents.
   // Pickup radius widens if a "loot-magnet" module is installed.
   pickupLoot() {
