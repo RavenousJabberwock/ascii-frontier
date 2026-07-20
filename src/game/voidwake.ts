@@ -5480,6 +5480,14 @@ export class Voidwake {
       this.repPinned = !this.repPinned;
       this.pushLog(this.repPinned ? "Reputation panel pinned." : "Reputation panel hidden.");
     }
+    // Character Sheet overlay (C by default). Full-screen popup with the
+    // commander portrait, ship silhouette + module list, and crew roster.
+    if (this.input.consume(k.characterSheet)) {
+      this._characterReturn = "playing";
+      this.screen = "character";
+      this.menuCursor = 0;
+      return;
+    }
 
 
     // Comms panel controls. '\' cycles the tab (All → Crew → External),
