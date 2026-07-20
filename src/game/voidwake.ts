@@ -857,6 +857,12 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "This bulkhead's held together with hope, epoxy, and one very specific curse word.",
     "The ship's fine. The universe is what worries me.",
     "I dream in schematics, {cmdr}. Last night's was a really elegant plasma coil.",
+    // 0.6.3 additions — engineer XP flavor.
+    "Cmdr, I've heard every noise this reactor makes. Nothing surprises me anymore.",
+    "Every dock, my shield tune gets a hair tighter. That's not luck.",
+    "Fuel efficiency's up again. Levels don't lie.",
+    "I've rebuilt this coupler enough times I could sculpt one blindfolded.",
+    "New apprentice on the last station wanted my job. Sweet kid. No chance.",
   ],
   engineer_greet: [
     "Engineer reporting. I'll keep the {ship} together, you keep it pointed.",
