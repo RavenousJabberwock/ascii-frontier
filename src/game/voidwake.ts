@@ -7854,6 +7854,102 @@ export class Voidwake {
   // a `.json` manifest → new mod entry. Drop a `.lua` file → depending on the
   // Shift key at drop time, either replaces the user script (default) or
   // installs as a new mod using the file basename as its id (with Shift).
+  // 0.7.0 completion — in-canvas multi-line text editor. Replaces the tiny
+  // browser prompt() for editing user scripts and mods. Uses an absolutely
+  // positioned <textarea> stretched over the canvas rect; Ctrl+S saves,
+  // Esc cancels. Only one editor at a time (subsequent opens close the
+  // prior overlay without saving).
+  private openTextEditor(title: string, initial: string, onSave: (value: string) => void): void {
+    if (typeof document === "undefined") {
+      // SSR / no-DOM fallback.
+      if (typeof window !== "undefined" && typeof window.prompt === "function") {
+        const v = window.prompt(title, initial);
+        if (v != null) onSave(v);
+      }
+      return;
+    }
+    // Close any previous editor without saving.
+    if (this._editorOverlay) {
+      try { this._editorOverlay.remove(); } catch { /* noop */ }
+      this._editorOverlay = null;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    const wrap = document.createElement("div");
+    wrap.style.cssText = [
+      `position:fixed`,
+      `left:${Math.round(rect.left)}px`,
+      `top:${Math.round(rect.top)}px`,
+      `width:${Math.round(rect.width)}px`,
+      `height:${Math.round(rect.height)}px`,
+      `z-index:9999`,
+      `background:rgba(0,10,4,0.94)`,
+      `color:#9fe`,
+      `font:13px/1.4 ui-monospace, Menlo, Consolas, monospace`,
+      `display:flex`,
+      `flex-direction:column`,
+      `padding:8px`,
+      `box-sizing:border-box`,
+      `border:1px solid #094`,
+    ].join(";");
+    const header = document.createElement("div");
+    header.textContent = title;
+    header.style.cssText = "padding:4px 2px 6px;color:#7fd0ff;flex:0 0 auto;";
+    const ta = document.createElement("textarea");
+    ta.value = initial;
+    ta.spellcheck = false;
+    ta.style.cssText = [
+      `flex:1 1 auto`,
+      `background:#020`,
+      `color:#dfe`,
+      `border:1px solid #063`,
+      `padding:6px`,
+      `font:13px/1.35 ui-monospace, Menlo, Consolas, monospace`,
+      `resize:none`,
+      `outline:none`,
+      `white-space:pre`,
+      `overflow:auto`,
+    ].join(";");
+    const bar = document.createElement("div");
+    bar.style.cssText = "display:flex;gap:8px;padding:6px 2px 0;flex:0 0 auto;";
+    const mkBtn = (label: string, cb: () => void, bg: string) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.style.cssText = `background:${bg};color:#000;border:0;padding:6px 12px;font:12px ui-monospace,monospace;cursor:pointer;`;
+      b.addEventListener("click", (e) => { e.preventDefault(); cb(); });
+      return b;
+    };
+    const hint = document.createElement("div");
+    hint.textContent = "Ctrl+S save · Esc cancel · Tab inserts 2 spaces";
+    hint.style.cssText = "margin-left:auto;color:#4a7;font-size:11px;align-self:center;";
+    const cleanup = () => {
+      try { wrap.remove(); } catch { /* noop */ }
+      if (this._editorOverlay === wrap) this._editorOverlay = null;
+      try { this.canvas.focus(); } catch { /* noop */ }
+    };
+    const doSave = () => { const v = ta.value; cleanup(); onSave(v); };
+    bar.appendChild(mkBtn("Save (Ctrl+S)", doSave, "#7fd0ff"));
+    bar.appendChild(mkBtn("Cancel (Esc)", cleanup, "#c66"));
+    bar.appendChild(hint);
+    ta.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); doSave(); }
+      else if (e.key === "Escape") { e.preventDefault(); cleanup(); }
+      else if (e.key === "Tab") {
+        e.preventDefault();
+        const s = ta.selectionStart, en = ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + "  " + ta.value.slice(en);
+        ta.selectionStart = ta.selectionEnd = s + 2;
+      }
+      // Stop keys from leaking into the game canvas key handlers.
+      e.stopPropagation();
+    });
+    wrap.appendChild(header);
+    wrap.appendChild(ta);
+    wrap.appendChild(bar);
+    document.body.appendChild(wrap);
+    this._editorOverlay = wrap;
+    setTimeout(() => ta.focus(), 0);
+  }
+
   private attachModDrop(canvas: HTMLCanvasElement, sig: AbortSignal) {
     const stop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
     canvas.addEventListener("dragenter", stop, { signal: sig });
