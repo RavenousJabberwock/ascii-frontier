@@ -56,6 +56,11 @@ export interface LuaHostBridge {
   getEntity?:  (idx: number) => Record<string, unknown> | null;
   chatterAdd?: (kind: string, line: string) => boolean;   // append a template line; returns true if kind is known
   installedMods?: () => Array<{ id: string; name: string; enabled: boolean }>;
+  // 0.7.0 — per-mod error attribution. When provided, the host calls this on
+  // every load/run/hook error string before storing it on `lastError`. The
+  // engine implementation maps line numbers in the concatenated source back
+  // to the owning mod id (or "user script"). Optional.
+  remapError?: (err: string) => string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
