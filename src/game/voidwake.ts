@@ -7387,20 +7387,49 @@ export class Voidwake {
 
   // Concatenate enabled mod scripts (id-sorted) before the user script. Each
   // mod is wrapped in a `do ... end` block so `local` declarations don't leak
-  // across mods, and a comment banner marks its start for debug traces.
+  // across mods, and a comment banner marks its start for debug traces. Also
+  // recomputes `_scriptSourceMap` so `remapLuaError` can attribute a line
+  // number in the concatenated source back to the mod (or "user script")
+  // that owns it. Ranges are inclusive of the banner line.
+  private _scriptSourceMap: Array<{ start: number; end: number; id: string }> = [];
   private combinedScriptSource(): string {
     const parts: string[] = [];
+    const map: Array<{ start: number; end: number; id: string }> = [];
+    let line = 1;
+    const push = (chunk: string, id: string) => {
+      const start = line;
+      // join uses "\n\n" between parts, so count LF in the chunk + 2 for the
+      // following blank separator (handled by caller when a next part follows).
+      const lfs = (chunk.match(/\n/g) ?? []).length;
+      const end = start + lfs;
+      map.push({ start, end, id });
+      parts.push(chunk);
+      line = end + 2; // "\n\n" separator adds two newlines before the next chunk
+    };
     const enabled = this.mods.filter((m) => m.enabled && m.script.trim())
                              .sort((a, b) => a.id.localeCompare(b.id));
     for (const m of enabled) {
-      parts.push(`-- >>> mod:${m.id} (${m.name})`);
-      parts.push(`do\n${m.script}\nend`);
+      push(`-- >>> mod:${m.id} (${m.name})\ndo\n${m.script}\nend`, `mod:${m.id}`);
     }
     if (this.scriptSource.trim()) {
-      parts.push(`-- >>> user script`);
-      parts.push(this.scriptSource);
+      push(`-- >>> user script\n${this.scriptSource}`, "user script");
     }
+    this._scriptSourceMap = map;
     return parts.join("\n\n");
+  }
+
+  // Rewrite `[string "..."]:LINE:` prefixes in a Lua error string to prepend
+  // the owning mod id, e.g. `[mod:my-pack] :LINE: bad argument`. Falls back
+  // to the original string when the source map is empty or no line matches.
+  private remapLuaError(err: string): string {
+    if (!this._scriptSourceMap.length) return err;
+    const m = err.match(/:(\d+):/);
+    if (!m) return err;
+    const ln = parseInt(m[1], 10);
+    if (!Number.isFinite(ln)) return err;
+    const owner = this._scriptSourceMap.find((r) => ln >= r.start && ln <= r.end);
+    if (!owner) return err;
+    return `[${owner.id}] ${err}`;
   }
 
   // Append a chatter template line for the given kind. Returns true if the
