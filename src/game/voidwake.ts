@@ -591,6 +591,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "We'll pay it forward on the next mayday we hear.",
     "You bought us another cycle, {cmdr}. Won't forget it.",
     "Squawking your callsign as friend-of-lane. Fly true.",
+    "Reactor's spinning up. You just bought us a future, Cmdr.",
+    "Filing your transponder under 'friend' on every board we hit.",
+    "Coffee's on us, forever, at any dock in {sector}. Don't argue.",
   ],
   gunner_idle: [
     "Quiet out here. {weather}.",
