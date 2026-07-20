@@ -1152,9 +1152,38 @@ Same version tag (0.7.0); no schema bump, additive engine + API only.
   beats that were previously ambient-only.
 - Offline bundle rebuilt (471.6 KB). Typecheck clean.
 
+### 0.7.0 addendum 2 — scripting/mod completion pass
+
+Same version tag; additive engine + API only, no schema bump.
+
+- **In-canvas multi-line editor.** New `openTextEditor(title, initial, save)`
+  helper mounts a `<textarea>` overlay pinned to the canvas rect. Ctrl+S
+  saves, Esc cancels, Tab inserts two spaces. Replaces the 2 KB
+  `window.prompt()` cap for both "Edit Script..." and the new
+  "Edit Highlighted Mod..." action. `prompt()` remains as a no-DOM
+  fallback.
+- **Edit / Remove Highlighted Mod.** The Mods menu now tracks the
+  cursor's last mod-row position (`_modRowCursor`) so scrolling down to
+  the action rows still targets the highlighted mod. Editing opens the
+  new overlay pre-filled with the mod's Lua source; removing pops it
+  and reloads the host in one action.
+- **Content-pack chatter merge (M4).** Mod manifests may now include
+  `chatter: { <kind>: [string, ...] }` — enabled mods with a chatter
+  block append their lines to the matching `TEMPLATES` pool via
+  `registerChatterLine`. Applied on install, reload, and script reload;
+  survives a script-only mod set. Data-only mods (`chatter` with no
+  `script`) are valid.
+- Menu rows now show a `{+N chat}` tag next to any mod carrying a
+  content-pack payload so users can see the extra lines at a glance.
+- Docs: `README.md`, `src/game/lua-samples.md`, and `src/game/README.md`
+  updated with the editor overlay, edit/remove flow, and content-pack
+  manifest shape.
+- Offline bundle rebuilt. Typecheck clean.
+
 Still deferred for 0.7.x:
 - Full Reputation *Panel* on a dedicated screen.
 - Player-to-NPC comms with template replies.
-- In-canvas multi-line Lua editor / REPL.
+- In-game one-line Lua REPL (backtick console).
 - IndexedDB / zip persistence for larger mod bundles.
 - Content-pack surfaces beyond chatter (weapons / hulls / species).
+
