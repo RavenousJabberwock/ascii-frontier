@@ -52,7 +52,7 @@ export interface LuaHostBridge {
   addOre?:     (delta: number) => number | null;
   worldTime?:  () => number;                       // seconds since engine start (or Date.now/1000)
   worldSeed?:  () => number;
-  listEntities?: (filter?: { kind?: string; faction?: string; max?: number }) => Array<Record<string, unknown>>;
+  listEntities?: (filter?: { kind?: string; faction?: string; max?: number; radius?: number; nearX?: number; nearY?: number; nearZ?: number }) => Array<Record<string, unknown>>;
   getEntity?:  (idx: number) => Record<string, unknown> | null;
   chatterAdd?: (kind: string, line: string) => boolean;   // append a template line; returns true if kind is known
   installedMods?: () => Array<{ id: string; name: string; enabled: boolean }>;
