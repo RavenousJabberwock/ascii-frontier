@@ -6892,6 +6892,7 @@ export class Voidwake {
       if (c === "Resume") this.screen = "playing";
       else if (c === "Save Game") { this.screen = "save"; this.menuCursor = 0; }
       else if (c === "Load Game") { this.screen = "load"; this.menuCursor = 0; }
+      else if (c === "Character Sheet") { this._characterReturn = "menu"; this.screen = "character"; this.menuCursor = 0; }
       else if (c === "How To Play") { this._howtoReturn = "menu"; this.screen = "howto"; this.menuCursor = 0; this._howtoPage = 0; }
       else if (c === "Legend (Codex)") { this._codexReturn = "menu"; this.screen = "codex"; this.menuCursor = 0; }
       else if (c === "Options") { this.screen = "options"; this.optionsSection = "root"; this.menuCursor = 0; }
