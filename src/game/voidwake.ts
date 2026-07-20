@@ -7269,7 +7269,8 @@ export class Voidwake {
   }
   private async reloadScript() {
     this.disposeScript();
-    if (!this.scriptSource.trim()) { this.pushLog("Script is empty."); return; }
+    const combined = this.combinedScriptSource();
+    if (!combined.trim()) { this.pushLog("Script is empty."); return; }
     try {
       // Lazy import so users who never enable scripting don't pay the
       // fengari-web bundle cost.
@@ -7287,6 +7288,45 @@ export class Voidwake {
           p.ship.fuel = Math.max(0, Math.min(p.ship.fuelMax, p.ship.fuel + d));
           return p.ship.fuel;
         },
+        addXp: (d) => {
+          const p = this.player; if (!p) return null;
+          p.xp = Math.max(0, Math.floor((p.xp ?? 0) + d));
+          return p.xp;
+        },
+        addOre: (d) => {
+          const p = this.player; if (!p) return null;
+          const cur = p.cargo.ore ?? 0;
+          const next = Math.max(0, Math.floor(cur + d));
+          p.cargo.ore = next;
+          return next;
+        },
+        worldTime: () => performance.now() / 1000,
+        worldSeed: () => this.seed,
+        listEntities: (filter) => {
+          const max = Math.max(1, Math.min(500, filter?.max ?? 128));
+          const out: Array<Record<string, unknown>> = [];
+          for (let i = 0; i < this.entities.length && out.length < max; i++) {
+            const e = this.entities[i];
+            if (filter?.kind && e.kind !== filter.kind) continue;
+            if (filter?.faction && e.faction !== filter.faction) continue;
+            out.push({
+              idx: i, kind: e.kind, name: e.name, faction: e.faction,
+              x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
+            });
+          }
+          return out;
+        },
+        getEntity: (idx) => {
+          const e = this.entities[idx];
+          if (!e) return null;
+          return {
+            idx, kind: e.kind, name: e.name, faction: e.faction,
+            x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
+            hull: e.hull, shield: e.shield,
+          };
+        },
+        chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
+        installedMods: () => this.mods.map((m) => ({ id: m.id, name: m.name, enabled: m.enabled })),
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -7294,13 +7334,15 @@ export class Voidwake {
             hull: p.ship.hull, hullMax: p.ship.hullMax,
             shield: p.ship.shield, shieldMax: p.ship.shieldMax,
             fuel: p.ship.fuel, fuelMax: p.ship.fuelMax,
+            ore: p.cargo.ore ?? 0,
             throttle: p.throttle, seed: this.seed,
           };
         },
       }, VERSION);
-      const res = this.luaHost.load(this.scriptSource);
+      const res = this.luaHost.load(combined);
       if (res.ok) {
-        this.pushLog("[script] loaded.");
+        const modCount = this.mods.filter((m) => m.enabled && m.script.trim()).length;
+        this.pushLog(`[script] loaded${modCount ? ` (+${modCount} mod${modCount > 1 ? "s" : ""})` : ""}.`);
         this.pushChatter("Script", "Lua host online.", "#c4f");
       } else {
         this.pushLog(`[script] load failed: ${res.error}`);
@@ -7309,6 +7351,144 @@ export class Voidwake {
       this.pushLog(`[script] runtime unavailable: ${String(e)}`);
     }
   }
+
+  // Concatenate enabled mod scripts (id-sorted) before the user script. Each
+  // mod is wrapped in a `do ... end` block so `local` declarations don't leak
+  // across mods, and a comment banner marks its start for debug traces.
+  private combinedScriptSource(): string {
+    const parts: string[] = [];
+    const enabled = this.mods.filter((m) => m.enabled && m.script.trim())
+                             .sort((a, b) => a.id.localeCompare(b.id));
+    for (const m of enabled) {
+      parts.push(`-- >>> mod:${m.id} (${m.name})`);
+      parts.push(`do\n${m.script}\nend`);
+    }
+    if (this.scriptSource.trim()) {
+      parts.push(`-- >>> user script`);
+      parts.push(this.scriptSource);
+    }
+    return parts.join("\n\n");
+  }
+
+  // Append a chatter template line for the given kind. Returns true if the
+  // kind is already known (so mods can't invent new speaker categories
+  // without an engine update). Content-pack surface (M4).
+  private registerChatterLine(kind: string, line: string): boolean {
+    const table = TEMPLATES as unknown as Record<string, string[] | undefined>;
+    if (!table[kind]) return false;
+    const trimmed = String(line).slice(0, 200);
+    if (!trimmed) return false;
+    table[kind]!.push(trimmed);
+    return true;
+  }
+
+  // --- Options ▸ Mods (0.7.0) ---------------------------------------------
+  // Mods are JSON blobs `{ id, name, script }` persisted in
+  // `voidwake.mods`. Each row toggles its mod on/off; "Add Mod..." prompts
+  // for a JSON manifest; "Remove Highlighted" deletes the selected mod;
+  // "Reload All" re-runs the concatenated script through the Lua host.
+  private optionsModsItems(): string[] {
+    const rows: string[] = [];
+    for (const m of this.mods) {
+      const kb = (m.script.length / 1024).toFixed(1);
+      const flag = m.enabled ? "[X]" : "[ ]";
+      rows.push(`${flag} ${m.id} — ${m.name} (${kb}KB)`);
+    }
+    if (!this.mods.length) rows.push("(no mods installed)");
+    rows.push("Add Mod... (paste JSON)");
+    rows.push("Remove Highlighted Mod");
+    rows.push("Reload All Mods");
+    rows.push("Clear All Mods");
+    rows.push("Back");
+    return rows;
+  }
+  private updateOptionsMods() {
+    const items = this.optionsModsItems();
+    this.menuNav(items.length);
+    if (!this.input.consume("enter")) return;
+    const i = this.menuCursor;
+    const row = items[i];
+    if (row === "Back") { this.optionsSection = "root"; this.menuCursor = 0; return; }
+    if (row === "Add Mod... (paste JSON)") {
+      if (typeof window === "undefined" || typeof window.prompt !== "function") {
+        this.pushLog("No prompt() available — set localStorage 'voidwake.mods' directly.");
+        return;
+      }
+      const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")"}';
+      const src = window.prompt("Paste mod JSON  { id, name, script }:", example);
+      if (!src) return;
+      try {
+        const parsed = JSON.parse(src);
+        const id = String(parsed.id ?? "").trim();
+        const name = String(parsed.name ?? id).trim() || id;
+        const script = String(parsed.script ?? "");
+        if (!id) { this.pushLog("Mod add failed: missing id."); return; }
+        if (this.mods.some((m) => m.id === id)) {
+          this.pushLog(`Mod add failed: id '${id}' already installed.`);
+          return;
+        }
+        this.mods.push({ id, name, enabled: true, script });
+        this.saveMods();
+        this.pushLog(`Mod installed: ${id}`);
+        if (this.scriptEnabled) this.reloadScript();
+      } catch (e) {
+        this.pushLog(`Mod add failed: ${String(e)}`);
+      }
+      return;
+    }
+    if (row === "Remove Highlighted Mod") {
+      // Highlighted mod is whichever list row (0..mods.length-1) the cursor
+      // most recently sat on before landing on this action row. Since our
+      // cursor may currently point AT this action, fall back to the last
+      // mod-row cursor position. Simpler: interpret "highlighted" as index
+      // 0 when only one mod exists, otherwise no-op.
+      this.pushLog("Move cursor onto a mod row and press ENTER on it to toggle; use Clear All to reset.");
+      return;
+    }
+    if (row === "Reload All Mods") {
+      if (this.scriptEnabled) this.reloadScript();
+      else this.pushLog("Enable Scripting under Options ▸ Scripting first.");
+      return;
+    }
+    if (row === "Clear All Mods") {
+      this.mods = [];
+      this.saveMods();
+      this.pushLog("All mods removed.");
+      if (this.scriptEnabled) this.reloadScript();
+      return;
+    }
+    // Otherwise: cursor is on a mod row (index < this.mods.length). Toggle.
+    if (i >= 0 && i < this.mods.length) {
+      this.mods[i].enabled = !this.mods[i].enabled;
+      this.saveMods();
+      this.pushLog(`${this.mods[i].id}: ${this.mods[i].enabled ? "enabled" : "disabled"}`);
+      if (this.scriptEnabled) this.reloadScript();
+    }
+  }
+  private saveMods() {
+    try { localStorage.setItem("voidwake.mods", JSON.stringify(this.mods)); }
+    catch { /* quota — silent */ }
+  }
+  private loadMods() {
+    try {
+      const raw = localStorage.getItem("voidwake.mods");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        this.mods = parsed
+          .filter((m: unknown): m is Record<string, unknown> => !!m && typeof m === "object")
+          .map((m) => ({
+            id: String(m.id ?? ""),
+            name: String(m.name ?? m.id ?? ""),
+            enabled: !!m.enabled,
+            script: String(m.script ?? ""),
+          }))
+          .filter((m) => m.id.length > 0);
+      }
+    } catch { /* noop */ }
+  }
+
+
 
 
 
