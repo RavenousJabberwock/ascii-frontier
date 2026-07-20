@@ -4045,6 +4045,7 @@ export class Voidwake {
     // 0.5.5 — restore persisted Lua script + enable flag. If it was on last
     // session, boot the host now so hooks are live before New Game / Load.
     this.loadScriptSettings();
+    this.loadMods();
     if (this.scriptEnabled && this.scriptSource.trim()) {
       void this.reloadScript();
     }
