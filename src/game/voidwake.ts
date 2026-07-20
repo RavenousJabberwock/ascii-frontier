@@ -500,6 +500,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Patrol tug to {target}: nice and gentle, we'll have you dockside soon.",
     "Cmdr, tell {target}'s crew we've got water and rations in the hold.",
     "Beacon triangulated. Towing {target} home — no charge, no lecture.",
+    "Tug SPD confirms lock on {target}. Reeling in the slack, Cmdr.",
+    "Tractor stable at 92%. {target}, kill your gyros, we'll fly the line.",
+    "Patrol log: tow #{kills} this rotation. Business is steady, {sector} is grateful.",
+    "SPD to {target}: brace for gentle. Docking clamps have been briefed.",
+    "Reeling {target} in slow, {sector} lane clear. Cmdr, appreciate the eyes on us.",
   ],
   patrol_arrest: [
     "SPD to {ship}: cease fire and stand down. This is your only warning.",
@@ -510,6 +515,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Patrol wing converging on {ship}. Drop weapons or drop hull.",
     "Cmdr {cmdr}, this is your one chance to squawk surrender.",
     "SPD to {ship}: your bounty just tripled. Congratulations.",
+    "Warrant issued mid-flight. {ship}, cut throttle or wear the consequences.",
+    "SPD wing forming on {ship}. Last call before we bill you in hull points.",
+    "Judge, jury, and tractor beam, {ship}. Pick your surrender vector.",
+
   ],
   stranded_mayday: [
     "MAYDAY, MAYDAY — {ship} drifting, no fuel, any vessel please respond.",
