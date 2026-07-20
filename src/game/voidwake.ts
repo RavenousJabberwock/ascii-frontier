@@ -4673,6 +4673,9 @@ export class Voidwake {
       } else if (this.screen === "quest-log") {
         this.screen = this._codexReturn;
         this.menuCursor = 0;
+      } else if (this.screen === "character") {
+        this.screen = this._characterReturn;
+        this.menuCursor = 0;
       }
     }
 
