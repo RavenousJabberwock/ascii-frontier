@@ -5489,6 +5489,7 @@ export class Voidwake {
           player: p, entities: this.entities,
           options: this.options, savedAt: Date.now(),
           chatter: this.chatter.slice(0, 250),
+          mods: this.enabledModIds(),
         };
         let res = saveGame("autosave", blob);
         if (!res.ok && res.reason === "quota") {
@@ -7514,6 +7515,7 @@ export class Voidwake {
         player: this.player, entities: this.entities,
         options: this.options, savedAt: Date.now(),
         chatter: this.chatter.slice(0, 250),
+        mods: this.enabledModIds(),
       };
       const res = saveGame(c, blob);
       if (!res.ok) {
@@ -7566,6 +7568,7 @@ export class Voidwake {
         player: this.player, entities: this.entities,
         options: this.options, savedAt: Date.now(),
         chatter: this.chatter.slice(0, 250),
+        mods: this.enabledModIds(),
       };
       const json = JSON.stringify(blob, null, 2);
       const file = new Blob([json], { type: "application/json" });
