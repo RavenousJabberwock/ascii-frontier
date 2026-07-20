@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.6.3";
+const VERSION = "0.7.0";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1595,6 +1595,11 @@ interface SaveBlob {
   // Optional: persisted comms feed (last ~250 lines). Optional so older saves
   // still load; we backfill to [] on load.
   chatter?: ChatterLine[];
+  // 0.7.0 — enabled mod ids at save time. On load, we compare against the
+  // currently-enabled mod list and warn if the sets differ, so a save built
+  // against a mod that has since been disabled is flagged rather than silently
+  // desynced. Optional so older saves keep loading.
+  mods?: string[];
 }
 
 interface FlightRecorder {
@@ -3741,7 +3746,7 @@ export class Voidwake {
   // Options screen has been split into a small hub with three subsections
   // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
   // "root" is the hub itself.
-  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "chat" = "root";
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "mods" | "chat" = "root";
   // Lua scripting (0.5.5): source is edited via a browser prompt from the
   // Options ▸ Scripting page and persisted in localStorage. The runtime
   // (LuaHost) is created lazily on the first enable so users who never open
@@ -3750,6 +3755,12 @@ export class Voidwake {
   private scriptSource = "";
   private scriptEnabled = false;
   private scriptStatus = "";       // last load result summary shown in the menu
+  // 0.7.0 — mod bundles. Each mod is `{ id, name, enabled, script }` stored
+  // as JSON in `voidwake.mods`. On reloadScript, every enabled mod's script
+  // is concatenated (in id-sorted order) BEFORE the user script and loaded
+  // into the same Lua host. Mods share the sandbox — a misbehaving mod
+  // scripts crashes its own hook, never the engine (see LuaHost.load).
+  private mods: Array<{ id: string; name: string; enabled: boolean; script: string }> = [];
   // While non-null, the Keybinds screen is capturing the next pressed key
   // as the new binding for this action id (a key in Options.keybinds).
   private _rebindAction: string | null = null;
@@ -4034,6 +4045,7 @@ export class Voidwake {
     // 0.5.5 — restore persisted Lua script + enable flag. If it was on last
     // session, boot the host now so hooks are live before New Game / Load.
     this.loadScriptSettings();
+    this.loadMods();
     if (this.scriptEnabled && this.scriptSource.trim()) {
       void this.reloadScript();
     }
@@ -5477,6 +5489,7 @@ export class Voidwake {
           player: p, entities: this.entities,
           options: this.options, savedAt: Date.now(),
           chatter: this.chatter.slice(0, 250),
+          mods: this.enabledModIds(),
         };
         let res = saveGame("autosave", blob);
         if (!res.ok && res.reason === "quota") {
@@ -6915,13 +6928,14 @@ export class Voidwake {
     if (this.optionsSection === "controls")  { this.updateOptionsControls();  return; }
     if (this.optionsSection === "keybinds")  { this.updateOptionsKeybinds();  return; }
     if (this.optionsSection === "scripting") { this.updateOptionsScripting(); return; }
+    if (this.optionsSection === "mods")      { this.updateOptionsMods();      return; }
     if (this.optionsSection === "chat")      { this.updateOptionsChat();      return; }
   }
 
-  // Root Options hub. Scripting became a real subsection in 0.5.5; the
-  // greyed-out placeholder is gone.
-  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Back"];
-  // Reserved for future greyed-out rows. Empty in 0.5.5.
+  // Root Options hub. Scripting became a real subsection in 0.5.5; Mods
+  // followed in 0.7.0. No greyed-out placeholders remain.
+  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Mods", "Back"];
+  // Reserved for future greyed-out rows. Empty in 0.7.0.
   private optionsRootDisabled: number[] = [];
   private updateOptionsRoot() {
     this.menuNav(this.optionsRootItems.length);
@@ -6932,6 +6946,7 @@ export class Voidwake {
     else if (c === "Audio")     { this.optionsSection = "audio";     this.menuCursor = 0; }
     else if (c === "Controls")  { this.optionsSection = "controls";  this.menuCursor = 0; }
     else if (c === "Scripting") { this.optionsSection = "scripting"; this.menuCursor = 0; }
+    else if (c === "Mods")      { this.optionsSection = "mods";      this.menuCursor = 0; }
     else if (c === "Back")      { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
   }
 
@@ -7256,7 +7271,8 @@ export class Voidwake {
   }
   private async reloadScript() {
     this.disposeScript();
-    if (!this.scriptSource.trim()) { this.pushLog("Script is empty."); return; }
+    const combined = this.combinedScriptSource();
+    if (!combined.trim()) { this.pushLog("Script is empty."); return; }
     try {
       // Lazy import so users who never enable scripting don't pay the
       // fengari-web bundle cost.
@@ -7274,6 +7290,45 @@ export class Voidwake {
           p.ship.fuel = Math.max(0, Math.min(p.ship.fuelMax, p.ship.fuel + d));
           return p.ship.fuel;
         },
+        addXp: (d) => {
+          const p = this.player; if (!p) return null;
+          p.xp = Math.max(0, Math.floor((p.xp ?? 0) + d));
+          return p.xp;
+        },
+        addOre: (d) => {
+          const p = this.player; if (!p) return null;
+          const cur = p.cargo.ore ?? 0;
+          const next = Math.max(0, Math.floor(cur + d));
+          p.cargo.ore = next;
+          return next;
+        },
+        worldTime: () => performance.now() / 1000,
+        worldSeed: () => this.seed,
+        listEntities: (filter) => {
+          const max = Math.max(1, Math.min(500, filter?.max ?? 128));
+          const out: Array<Record<string, unknown>> = [];
+          for (let i = 0; i < this.entities.length && out.length < max; i++) {
+            const e = this.entities[i];
+            if (filter?.kind && e.kind !== filter.kind) continue;
+            if (filter?.faction && e.faction !== filter.faction) continue;
+            out.push({
+              idx: i, kind: e.kind, name: e.name, faction: e.faction,
+              x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
+            });
+          }
+          return out;
+        },
+        getEntity: (idx) => {
+          const e = this.entities[idx];
+          if (!e) return null;
+          return {
+            idx, kind: e.kind, name: e.name, faction: e.faction,
+            x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
+            hull: e.hull, shield: e.shield,
+          };
+        },
+        chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
+        installedMods: () => this.mods.map((m) => ({ id: m.id, name: m.name, enabled: m.enabled })),
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -7281,13 +7336,15 @@ export class Voidwake {
             hull: p.ship.hull, hullMax: p.ship.hullMax,
             shield: p.ship.shield, shieldMax: p.ship.shieldMax,
             fuel: p.ship.fuel, fuelMax: p.ship.fuelMax,
+            ore: p.cargo.ore ?? 0,
             throttle: p.throttle, seed: this.seed,
           };
         },
       }, VERSION);
-      const res = this.luaHost.load(this.scriptSource);
+      const res = this.luaHost.load(combined);
       if (res.ok) {
-        this.pushLog("[script] loaded.");
+        const modCount = this.mods.filter((m) => m.enabled && m.script.trim()).length;
+        this.pushLog(`[script] loaded${modCount ? ` (+${modCount} mod${modCount > 1 ? "s" : ""})` : ""}.`);
         this.pushChatter("Script", "Lua host online.", "#c4f");
       } else {
         this.pushLog(`[script] load failed: ${res.error}`);
@@ -7296,6 +7353,147 @@ export class Voidwake {
       this.pushLog(`[script] runtime unavailable: ${String(e)}`);
     }
   }
+
+  // Concatenate enabled mod scripts (id-sorted) before the user script. Each
+  // mod is wrapped in a `do ... end` block so `local` declarations don't leak
+  // across mods, and a comment banner marks its start for debug traces.
+  private combinedScriptSource(): string {
+    const parts: string[] = [];
+    const enabled = this.mods.filter((m) => m.enabled && m.script.trim())
+                             .sort((a, b) => a.id.localeCompare(b.id));
+    for (const m of enabled) {
+      parts.push(`-- >>> mod:${m.id} (${m.name})`);
+      parts.push(`do\n${m.script}\nend`);
+    }
+    if (this.scriptSource.trim()) {
+      parts.push(`-- >>> user script`);
+      parts.push(this.scriptSource);
+    }
+    return parts.join("\n\n");
+  }
+
+  // Append a chatter template line for the given kind. Returns true if the
+  // kind is already known (so mods can't invent new speaker categories
+  // without an engine update). Content-pack surface (M4).
+  private registerChatterLine(kind: string, line: string): boolean {
+    const table = TEMPLATES as unknown as Record<string, string[] | undefined>;
+    if (!table[kind]) return false;
+    const trimmed = String(line).slice(0, 200);
+    if (!trimmed) return false;
+    table[kind]!.push(trimmed);
+    return true;
+  }
+
+  // --- Options ▸ Mods (0.7.0) ---------------------------------------------
+  // Mods are JSON blobs `{ id, name, script }` persisted in
+  // `voidwake.mods`. Each row toggles its mod on/off; "Add Mod..." prompts
+  // for a JSON manifest; "Remove Highlighted" deletes the selected mod;
+  // "Reload All" re-runs the concatenated script through the Lua host.
+  private optionsModsItems(): string[] {
+    const rows: string[] = [];
+    for (const m of this.mods) {
+      const kb = (m.script.length / 1024).toFixed(1);
+      const flag = m.enabled ? "[X]" : "[ ]";
+      rows.push(`${flag} ${m.id} — ${m.name} (${kb}KB)`);
+    }
+    if (!this.mods.length) rows.push("(no mods installed)");
+    rows.push("Add Mod... (paste JSON)");
+    rows.push("Remove Highlighted Mod");
+    rows.push("Reload All Mods");
+    rows.push("Clear All Mods");
+    rows.push("Back");
+    return rows;
+  }
+  private updateOptionsMods() {
+    const items = this.optionsModsItems();
+    this.menuNav(items.length);
+    if (!this.input.consume("enter")) return;
+    const i = this.menuCursor;
+    const row = items[i];
+    if (row === "Back") { this.optionsSection = "root"; this.menuCursor = 0; return; }
+    if (row === "Add Mod... (paste JSON)") {
+      if (typeof window === "undefined" || typeof window.prompt !== "function") {
+        this.pushLog("No prompt() available — set localStorage 'voidwake.mods' directly.");
+        return;
+      }
+      const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")"}';
+      const src = window.prompt("Paste mod JSON  { id, name, script }:", example);
+      if (!src) return;
+      try {
+        const parsed = JSON.parse(src);
+        const id = String(parsed.id ?? "").trim();
+        const name = String(parsed.name ?? id).trim() || id;
+        const script = String(parsed.script ?? "");
+        if (!id) { this.pushLog("Mod add failed: missing id."); return; }
+        if (this.mods.some((m) => m.id === id)) {
+          this.pushLog(`Mod add failed: id '${id}' already installed.`);
+          return;
+        }
+        this.mods.push({ id, name, enabled: true, script });
+        this.saveMods();
+        this.pushLog(`Mod installed: ${id}`);
+        if (this.scriptEnabled) this.reloadScript();
+      } catch (e) {
+        this.pushLog(`Mod add failed: ${String(e)}`);
+      }
+      return;
+    }
+    if (row === "Remove Highlighted Mod") {
+      // Highlighted mod is whichever list row (0..mods.length-1) the cursor
+      // most recently sat on before landing on this action row. Since our
+      // cursor may currently point AT this action, fall back to the last
+      // mod-row cursor position. Simpler: interpret "highlighted" as index
+      // 0 when only one mod exists, otherwise no-op.
+      this.pushLog("Move cursor onto a mod row and press ENTER on it to toggle; use Clear All to reset.");
+      return;
+    }
+    if (row === "Reload All Mods") {
+      if (this.scriptEnabled) this.reloadScript();
+      else this.pushLog("Enable Scripting under Options ▸ Scripting first.");
+      return;
+    }
+    if (row === "Clear All Mods") {
+      this.mods = [];
+      this.saveMods();
+      this.pushLog("All mods removed.");
+      if (this.scriptEnabled) this.reloadScript();
+      return;
+    }
+    // Otherwise: cursor is on a mod row (index < this.mods.length). Toggle.
+    if (i >= 0 && i < this.mods.length) {
+      this.mods[i].enabled = !this.mods[i].enabled;
+      this.saveMods();
+      this.pushLog(`${this.mods[i].id}: ${this.mods[i].enabled ? "enabled" : "disabled"}`);
+      if (this.scriptEnabled) this.reloadScript();
+    }
+  }
+  private saveMods() {
+    try { localStorage.setItem("voidwake.mods", JSON.stringify(this.mods)); }
+    catch { /* quota — silent */ }
+  }
+  private loadMods() {
+    try {
+      const raw = localStorage.getItem("voidwake.mods");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        this.mods = parsed
+          .filter((m: unknown): m is Record<string, unknown> => !!m && typeof m === "object")
+          .map((m) => ({
+            id: String(m.id ?? ""),
+            name: String(m.name ?? m.id ?? ""),
+            enabled: !!m.enabled,
+            script: String(m.script ?? ""),
+          }))
+          .filter((m) => m.id.length > 0);
+      }
+    } catch { /* noop */ }
+  }
+  private enabledModIds(): string[] {
+    return this.mods.filter((m) => m.enabled).map((m) => m.id).sort();
+  }
+
+
 
 
 
@@ -7320,6 +7518,7 @@ export class Voidwake {
         player: this.player, entities: this.entities,
         options: this.options, savedAt: Date.now(),
         chatter: this.chatter.slice(0, 250),
+        mods: this.enabledModIds(),
       };
       const res = saveGame(c, blob);
       if (!res.ok) {
@@ -7358,6 +7557,16 @@ export class Voidwake {
     this.chatterScroll = 0;
     this.screen = "playing";
     this.pushLog(logMsg);
+    // 0.7.0 — warn if the save was built against a different enabled mod
+    // set. We don't auto-toggle mods; the player decides.
+    if (Array.isArray(blob.mods)) {
+      const now = new Set(this.enabledModIds());
+      const then = new Set(blob.mods);
+      const missing = [...then].filter((m) => !now.has(m));
+      const extra = [...now].filter((m) => !then.has(m));
+      if (missing.length) this.pushLog(`⚠ Save used mods no longer enabled: ${missing.join(", ")}`);
+      if (extra.length)   this.pushLog(`⚠ New mods active since save: ${extra.join(", ")}`);
+    }
     this.syncRadio();
     dispatchHook("onLoad", { slot: slotLabel, blob });
   }
@@ -7372,6 +7581,7 @@ export class Voidwake {
         player: this.player, entities: this.entities,
         options: this.options, savedAt: Date.now(),
         chatter: this.chatter.slice(0, 250),
+        mods: this.enabledModIds(),
       };
       const json = JSON.stringify(blob, null, 2);
       const file = new Blob([json], { type: "application/json" });
@@ -8373,6 +8583,11 @@ export class Voidwake {
         title = "OPTIONS ▸ SCRIPTING (LUA)";
         items = this.optionsScriptingItems();
         hint = "↑/↓ select   ENTER activate   ESC back";
+        break;
+      case "mods":
+        title = "OPTIONS ▸ MODS";
+        items = this.optionsModsItems();
+        hint = "↑/↓ select   ENTER toggle/apply   ESC back";
         break;
       case "chat":
         title = "OPTIONS ▸ GAMEPLAY ▸ CHAT WINDOWS";

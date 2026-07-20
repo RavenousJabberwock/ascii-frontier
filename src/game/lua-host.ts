@@ -47,6 +47,15 @@ export interface LuaHostBridge {
   addCredits?: (delta: number) => number | null;   // returns new balance, or null if no player
   addFuel?:    (delta: number) => number | null;   // returns new fuel, or null if no player
   getPlayerSnapshot?: () => Record<string, unknown> | null;
+  // 0.7.0 — expanded M2 surface + M3/M4 read-only content hooks.
+  addXp?:      (delta: number) => number | null;
+  addOre?:     (delta: number) => number | null;
+  worldTime?:  () => number;                       // seconds since engine start (or Date.now/1000)
+  worldSeed?:  () => number;
+  listEntities?: (filter?: { kind?: string; faction?: string; max?: number }) => Array<Record<string, unknown>>;
+  getEntity?:  (idx: number) => Record<string, unknown> | null;
+  chatterAdd?: (kind: string, line: string) => boolean;   // append a template line; returns true if kind is known
+  installedMods?: () => Array<{ id: string; name: string; enabled: boolean }>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,7 +145,103 @@ export class LuaHost {
     });
     lua.lua_setfield(L, -2, to_luastring("addFuel"));
 
+    // --- 0.7.0 extended API: grant / entities / world / chatter / mods ---
+    // frontier.grant{ credits=?, fuel=?, xp=?, ore=? } → resulting snapshot table.
+    // Kept as a top-level function to avoid clobbering `frontier.player()` which
+    // is already a callable snapshot getter (registered below).
     lua.lua_pushjsfunction(L, (Ls: L) => {
+      if (lua.lua_type(Ls, 1) !== lua.LUA_TTABLE) {
+        return lauxlib.luaL_error(Ls, to_luastring("frontier.grant: expected table"));
+      }
+      const readNum = (field: string): number => {
+        lua.lua_getfield(Ls, 1, to_luastring(field));
+        const n = lua.lua_type(Ls, -1) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, -1)) : 0;
+        lua.lua_pop(Ls, 1);
+        return n;
+      };
+      const dc = readNum("credits");
+      const df = readNum("fuel");
+      const dx = readNum("xp");
+      const dor = readNum("ore");
+      if (dc)  this.bridge.addCredits?.(dc);
+      if (df)  this.bridge.addFuel?.(df);
+      if (dx)  this.bridge.addXp?.(dx);
+      if (dor) this.bridge.addOre?.(dor);
+      const snap = this.bridge.getPlayerSnapshot?.() ?? null;
+      pushJsAsLua(Ls, snap, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("grant"));
+
+
+    // frontier.entities.list{ kind=?, faction=?, max=? } / frontier.entities.get(idx)
+    lua.lua_newtable(L);
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      let filter: { kind?: string; faction?: string; max?: number } | undefined;
+      if (lua.lua_type(Ls, 1) === lua.LUA_TTABLE) {
+        const readStr = (f: string) => {
+          lua.lua_getfield(Ls, 1, to_luastring(f));
+          const s = lua.lua_type(Ls, -1) === lua.LUA_TSTRING ? lua.lua_tojsstring(Ls, -1) : undefined;
+          lua.lua_pop(Ls, 1); return s ?? undefined;
+        };
+        const readNum = (f: string) => {
+          lua.lua_getfield(Ls, 1, to_luastring(f));
+          const n = lua.lua_type(Ls, -1) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, -1)) : undefined;
+          lua.lua_pop(Ls, 1); return n;
+        };
+        filter = { kind: readStr("kind"), faction: readStr("faction"), max: readNum("max") };
+      }
+      const arr = this.bridge.listEntities?.(filter) ?? [];
+      pushJsAsLua(Ls, arr, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("list"));
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const i = Math.floor(Number(lua.lua_tonumber(Ls, 1)));
+      const e = this.bridge.getEntity?.(i) ?? null;
+      pushJsAsLua(Ls, e, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("get"));
+    lua.lua_setfield(L, -2, to_luastring("entities"));
+
+    // frontier.world.seed / frontier.world.time()
+    lua.lua_newtable(L);
+    const seedVal = this.bridge.worldSeed?.() ?? 0;
+    lua.lua_pushnumber(L, seedVal);
+    lua.lua_setfield(L, -2, to_luastring("seed"));
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const t = this.bridge.worldTime?.() ?? (Date.now() / 1000);
+      lua.lua_pushnumber(Ls, t);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("time"));
+    lua.lua_setfield(L, -2, to_luastring("world"));
+
+    // frontier.chatter.add(kind, line)  — M4 content pack surface
+    lua.lua_newtable(L);
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const kind = lua.lua_tojsstring(Ls, 1) ?? "";
+      const line = lua.lua_tojsstring(Ls, 2) ?? "";
+      const ok = this.bridge.chatterAdd?.(String(kind), String(line)) ?? false;
+      lua.lua_pushboolean(Ls, ok ? 1 : 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("add"));
+    lua.lua_setfield(L, -2, to_luastring("chatter"));
+
+    // frontier.mods.installed() → { { id, name, enabled }, ... }
+    lua.lua_newtable(L);
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const list = this.bridge.installedMods?.() ?? [];
+      pushJsAsLua(Ls, list, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("installed"));
+    lua.lua_setfield(L, -2, to_luastring("mods"));
+
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+
       const snap = this.bridge.getPlayerSnapshot?.() ?? null;
       pushJsAsLua(Ls, snap, 0);
       return 1;

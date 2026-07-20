@@ -138,6 +138,73 @@ end)
 - Scripts do not persist across a `VERSION` bump if they reference a
   hook name that was removed. Existing hooks are treated as a stable
   API surface — see `src/game/README.md`.
-- The mutation API is intentionally narrow in 0.5.7+: `addCredits`,
-  `addFuel`, and a read-only `player()` snapshot. Entity spawn/despawn
-  and mission mutation ship with M3.
+
+---
+
+## 8. Batched grant (0.7.0)
+
+Reward a mission-style flourish in one call.
+
+```lua
+frontier.on("onPlayerDock", function(evt)
+  if evt.kind == "station" then
+    local snap = frontier.grant{ credits = 250, xp = 10, fuel = 5 }
+    if snap then
+      frontier.chat("Computer",
+        "Docking bonus paid. Balance: " .. tostring(snap.credits) .. "cr.",
+        "#7fd0ff")
+    end
+  end
+end)
+```
+
+---
+
+## 9. Scan the sector (0.7.0)
+
+Poll nearby entities every world tick and log each hostile once.
+
+```lua
+local seen = {}
+frontier.on("onTick", function(_)
+  local hostiles = frontier.entities.list{ kind = "hostile", max = 32 }
+  for _, e in ipairs(hostiles) do
+    if not seen[e.name] then
+      seen[e.name] = true
+      frontier.log("scanner: " .. e.name .. " logged at " ..
+        string.format("%.0f,%.0f,%.0f", e.x or 0, e.y or 0, e.z or 0))
+    end
+  end
+end)
+```
+
+---
+
+## 10. Content pack: extra gunner chatter (0.7.0)
+
+Append flavor lines to the existing `gunner_idle` pool. Ships alongside
+core content — no engine edit required.
+
+```lua
+local lines = {
+  "Reticle's a little sticky today.",
+  "Barrel temp nominal. Barely.",
+  "I taught the autoloader a new trick. Don't ask.",
+}
+for _, l in ipairs(lines) do
+  frontier.chatter.add("gunner_idle", l)
+end
+frontier.log("mod: +" .. #lines .. " gunner lines")
+```
+
+---
+
+## Mods vs user scripts
+
+The 0.7.0 **Options ▸ Mods** submenu accepts multi-script bundles as
+JSON `{ id, name, script }`. Every enabled mod is concatenated ahead of
+the "Edit Script..." user source and loaded into the same sandbox, so
+the snippets above work equally well as a mod script or a user script.
+Wrap `local` state you want private to a mod in a `do ... end` block —
+the loader already does this per-mod, but doubling up is safe.
+

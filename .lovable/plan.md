@@ -1062,3 +1062,69 @@ Still deferred for later 0.6.x:
 - Player-to-NPC comms with template replies.
 - In-canvas multi-line Lua editor.
 - Full Reputation *Panel* on a dedicated screen (pinnable HUD strip only).
+
+## 0.7.0 — Scripting completion & mod support (M2/M3/M4 slice)
+
+The scripting stack ships as a first-class feature. Version-freeze target
+hit; no incompatible schema changes past 0.7.0 without a real migration.
+
+**Lua API expansions (M2 mutation surface + world/entity read)**
+
+- `frontier.grant{ credits=?, fuel=?, xp=?, ore=? }` — batched player
+  mutations; returns the resulting snapshot. Individual `frontier.addCredits`
+  / `frontier.addFuel` remain for compatibility.
+- `frontier.entities.list{ kind=?, faction=?, max=? }` and
+  `frontier.entities.get(idx)` — read-only entity introspection with an
+  optional filter (defaults to a 128-row cap; hard-clamped at 500 so a
+  script can't tarpit a tick).
+- `frontier.world.seed` (number) and `frontier.world.time()` (seconds
+  since engine start).
+- `frontier.chatter.add(kind, line)` — append a template line to any
+  existing chatter pool (M4 content-pack surface). Returns `false` if
+  the kind is unknown so mods can't fabricate new speaker categories
+  without an engine update.
+- `frontier.mods.installed()` — enumerate installed mods `{ id, name,
+  enabled }` so a mod can gate features on peer presence.
+- `LuaHostBridge` gained matching optional hooks: `addXp`, `addOre`,
+  `worldTime`, `worldSeed`, `listEntities`, `getEntity`, `chatterAdd`,
+  `installedMods`. All are optional so older bridge code keeps working.
+
+**Mod bundles (M3 lite)**
+
+- New **Options ▸ Mods** submenu. Each mod is `{ id, name, enabled,
+  script }` persisted to `localStorage` under `voidwake.mods`.
+- Menu rows: per-mod toggle (ENTER on the row flips enabled), `Add
+  Mod... (paste JSON)`, `Reload All Mods`, `Clear All Mods`, `Back`.
+- Add prompts for a JSON manifest and rejects duplicate ids.
+- On `Reload All Mods` (or any script reload) enabled mod scripts are
+  concatenated in id-sorted order into a single Lua source, each wrapped
+  in `do ... end` so `local` declarations don't leak between mods, then
+  loaded ahead of the user script.
+- Save blobs carry `mods?: string[]` (the enabled mod ids at save
+  time). `applyLoadedBlob` diffs against the currently-enabled set and
+  posts warnings for missing / newly-added mods rather than silently
+  desyncing. Older saves without the field still load cleanly.
+- Zip / drag-drop file support and IndexedDB persistence remain
+  deferred — the JSON-paste flow is small enough for text-only mods
+  today and unblocks the whole M3 surface without shipping a file
+  picker in this pass.
+
+**Docs**
+
+- `src/game/README.md ▸ Scripting` updated with the full 0.7.0 API
+  table (grant, entities.list/get, world.seed/time, chatter.add,
+  mods.installed) and a new **Mods** subsection covering the menu
+  flow.
+- `src/game/lua-samples.md` grew three new snippets (`entities.list`
+  scan, `grant` reward payout, `chatter.add` content pack).
+- `.lovable/plan.md` — this changelog.
+
+**Version freeze**
+
+- `VERSION = "0.7.0"`; offline bundle rebuilt (468.5 KB).
+- The M3 milestones still open — file-picker / zip loading, IndexedDB
+  persistence, per-mod permission gates, in-game Lua REPL, and the
+  content-pack surfaces beyond chatter (weapons/hulls/species/etc.) —
+  move to a future 0.7.x pass; 0.7.0 is the "scripting + mods
+  minimally usable" cut-off.
+
