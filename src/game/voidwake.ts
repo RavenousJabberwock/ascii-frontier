@@ -7557,6 +7557,16 @@ export class Voidwake {
     this.chatterScroll = 0;
     this.screen = "playing";
     this.pushLog(logMsg);
+    // 0.7.0 — warn if the save was built against a different enabled mod
+    // set. We don't auto-toggle mods; the player decides.
+    if (Array.isArray(blob.mods)) {
+      const now = new Set(this.enabledModIds());
+      const then = new Set(blob.mods);
+      const missing = [...then].filter((m) => !now.has(m));
+      const extra = [...now].filter((m) => !then.has(m));
+      if (missing.length) this.pushLog(`⚠ Save used mods no longer enabled: ${missing.join(", ")}`);
+      if (extra.length)   this.pushLog(`⚠ New mods active since save: ${extra.join(", ")}`);
+    }
     this.syncRadio();
     dispatchHook("onLoad", { slot: slotLabel, blob });
   }
