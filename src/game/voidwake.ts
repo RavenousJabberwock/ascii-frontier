@@ -3746,7 +3746,7 @@ export class Voidwake {
   // Options screen has been split into a small hub with three subsections
   // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
   // "root" is the hub itself.
-  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "chat" = "root";
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "mods" | "chat" = "root";
   // Lua scripting (0.5.5): source is edited via a browser prompt from the
   // Options ▸ Scripting page and persisted in localStorage. The runtime
   // (LuaHost) is created lazily on the first enable so users who never open
@@ -3755,6 +3755,12 @@ export class Voidwake {
   private scriptSource = "";
   private scriptEnabled = false;
   private scriptStatus = "";       // last load result summary shown in the menu
+  // 0.7.0 — mod bundles. Each mod is `{ id, name, enabled, script }` stored
+  // as JSON in `voidwake.mods`. On reloadScript, every enabled mod's script
+  // is concatenated (in id-sorted order) BEFORE the user script and loaded
+  // into the same Lua host. Mods share the sandbox — a misbehaving mod
+  // scripts crashes its own hook, never the engine (see LuaHost.load).
+  private mods: Array<{ id: string; name: string; enabled: boolean; script: string }> = [];
   // While non-null, the Keybinds screen is capturing the next pressed key
   // as the new binding for this action id (a key in Options.keybinds).
   private _rebindAction: string | null = null;
