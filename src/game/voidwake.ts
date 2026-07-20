@@ -7249,7 +7249,7 @@ export class Voidwake {
       // ~2KB in most browsers — a drag-drop .lua file picker is on the mod
       // roadmap (M3).
       if (typeof window !== "undefined" && typeof window.prompt === "function") {
-        const next = window.prompt("Paste Lua source (M1 sandbox: frontier.on/log/chat):", this.scriptSource);
+        const next = window.prompt("Paste Lua source (or drop a .lua file on the game window):", this.scriptSource);
         if (next != null) {
           this.scriptSource = next;
           this.saveScriptSettings();
