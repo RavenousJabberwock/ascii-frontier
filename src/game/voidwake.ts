@@ -7359,6 +7359,7 @@ export class Voidwake {
         },
         chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
         installedMods: () => this.mods.map((m) => ({ id: m.id, name: m.name, enabled: m.enabled })),
+        remapError: (err) => this.remapLuaError(err),
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
