@@ -6884,7 +6884,7 @@ export class Voidwake {
 
 
   // --- Main menu -----------------------------------------------------------
-  menuItems = ["Resume", "Save Game", "Load Game", "How To Play", "Legend (Codex)", "Options", "Quit"];
+  menuItems = ["Resume", "Save Game", "Load Game", "Character Sheet", "How To Play", "Legend (Codex)", "Options", "Quit"];
   updateMenu() {
     this.menuNav(this.menuItems.length);
     if (this.input.consume("enter")) {
