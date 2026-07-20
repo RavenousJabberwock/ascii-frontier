@@ -1128,3 +1128,33 @@ hit; no incompatible schema changes past 0.7.0 without a real migration.
   move to a future 0.7.x pass; 0.7.0 is the "scripting + mods
   minimally usable" cut-off.
 
+
+### 0.7.0 addendum — modding polish
+
+Same version tag (0.7.0); no schema bump, additive engine + API only.
+
+- **Drag-drop file loader** on the game canvas. Drop `.json` → new mod
+  entry via the same install path the menu uses. Drop `.lua` → replaces
+  the user script (or, with Shift held, installs as a mod using the file
+  basename as the id). Bypasses the browser `prompt()` 2 KB cap and works
+  offline; feedback lands in the system log.
+- **`frontier.entities.list{ radius=?, nearX=?, nearY=?, nearZ=? }`**
+  optional filter. Defaults center to the player position when a radius
+  is supplied and no center is given; skips entries with no `pos`. Fully
+  additive — existing scripts keep working.
+- **Per-mod error attribution.** `combinedScriptSource()` now builds a
+  line-range → owner map, and a new `remapError` bridge on the Lua host
+  rewrites `[string "..."]:LINE:` prefixes on load / run / hook errors to
+  `[mod:<id>] ...` (or `[user script] ...`). Menu Status line now names
+  which mod broke, not just which line.
+- **Chatter pass** (~10 lines) across `patrol_tow`, `patrol_arrest`,
+  `stranded_mayday`, and `stranded_thanks` to sell tow / arrest / mayday
+  beats that were previously ambient-only.
+- Offline bundle rebuilt (471.6 KB). Typecheck clean.
+
+Still deferred for 0.7.x:
+- Full Reputation *Panel* on a dedicated screen.
+- Player-to-NPC comms with template replies.
+- In-canvas multi-line Lua editor / REPL.
+- IndexedDB / zip persistence for larger mod bundles.
+- Content-pack surfaces beyond chatter (weapons / hulls / species).

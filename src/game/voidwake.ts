@@ -500,6 +500,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Patrol tug to {target}: nice and gentle, we'll have you dockside soon.",
     "Cmdr, tell {target}'s crew we've got water and rations in the hold.",
     "Beacon triangulated. Towing {target} home — no charge, no lecture.",
+    "Tug SPD confirms lock on {target}. Reeling in the slack, Cmdr.",
+    "Tractor stable at 92%. {target}, kill your gyros, we'll fly the line.",
+    "Patrol log: tow #{kills} this rotation. Business is steady, {sector} is grateful.",
+    "SPD to {target}: brace for gentle. Docking clamps have been briefed.",
+    "Reeling {target} in slow, {sector} lane clear. Cmdr, appreciate the eyes on us.",
   ],
   patrol_arrest: [
     "SPD to {ship}: cease fire and stand down. This is your only warning.",
@@ -510,6 +515,10 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Patrol wing converging on {ship}. Drop weapons or drop hull.",
     "Cmdr {cmdr}, this is your one chance to squawk surrender.",
     "SPD to {ship}: your bounty just tripled. Congratulations.",
+    "Warrant issued mid-flight. {ship}, cut throttle or wear the consequences.",
+    "SPD wing forming on {ship}. Last call before we bill you in hull points.",
+    "Judge, jury, and tractor beam, {ship}. Pick your surrender vector.",
+
   ],
   stranded_mayday: [
     "MAYDAY, MAYDAY — {ship} drifting, no fuel, any vessel please respond.",
@@ -529,7 +538,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "This is {ship}, we are broadcasting in the blind. Anyone. Please.",
     "Beacon on continuous. Fuel indicator flat. Time indicator against us.",
     "Any patrol on the lane: {ship}, adrift, squawking mayday, please advise.",
+    "This is {ship} — coasting on inertia. If anyone reads, mark our position.",
+    "Fuel gauge redlined an hour ago. We are officially begging, {sector} lane.",
+    "Broadcasting mayday on {sector} — any tug, any faction, we don't care anymore.",
   ],
+
   crit_hit: [
     "★ CRIT — {target} rocked.",
     "★ CRITICAL HIT on {target}.",
@@ -578,6 +591,9 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "We'll pay it forward on the next mayday we hear.",
     "You bought us another cycle, {cmdr}. Won't forget it.",
     "Squawking your callsign as friend-of-lane. Fly true.",
+    "Reactor's spinning up. You just bought us a future, Cmdr.",
+    "Filing your transponder under 'friend' on every board we hit.",
+    "Coffee's on us, forever, at any dock in {sector}. Don't argue.",
   ],
   gunner_idle: [
     "Quiet out here. {weather}.",
@@ -3966,6 +3982,7 @@ export class Voidwake {
     const sig = this._abort.signal;
     window.addEventListener("resize", () => this.fit(), { signal: sig });
     this.input.attach(canvas, sig);
+    this.attachModDrop(canvas, sig);
     canvas.focus();
     // Global error trap so async/uncaught errors during gameplay show on the
     // crash screen instead of vanishing into the console.
@@ -7232,7 +7249,7 @@ export class Voidwake {
       // ~2KB in most browsers — a drag-drop .lua file picker is on the mod
       // roadmap (M3).
       if (typeof window !== "undefined" && typeof window.prompt === "function") {
-        const next = window.prompt("Paste Lua source (M1 sandbox: frontier.on/log/chat):", this.scriptSource);
+        const next = window.prompt("Paste Lua source (or drop a .lua file on the game window):", this.scriptSource);
         if (next != null) {
           this.scriptSource = next;
           this.saveScriptSettings();
@@ -7307,10 +7324,24 @@ export class Voidwake {
         listEntities: (filter) => {
           const max = Math.max(1, Math.min(500, filter?.max ?? 128));
           const out: Array<Record<string, unknown>> = [];
+          // 0.7.0 addendum — optional radius gate. If `radius` is set, filter
+          // by distance from (nearX,nearY,nearZ) or the player's position
+          // when no center is provided. Skips entries with no `pos`.
+          const p = this.player;
+          const cx = filter?.nearX ?? p?.pos.x ?? 0;
+          const cy = filter?.nearY ?? p?.pos.y ?? 0;
+          const cz = filter?.nearZ ?? p?.pos.z ?? 0;
+          const r = filter?.radius;
+          const r2 = r != null && r > 0 ? r * r : null;
           for (let i = 0; i < this.entities.length && out.length < max; i++) {
             const e = this.entities[i];
             if (filter?.kind && e.kind !== filter.kind) continue;
             if (filter?.faction && e.faction !== filter.faction) continue;
+            if (r2 != null) {
+              if (!e.pos) continue;
+              const dx = e.pos.x - cx, dy = e.pos.y - cy, dz = e.pos.z - cz;
+              if (dx * dx + dy * dy + dz * dz > r2) continue;
+            }
             out.push({
               idx: i, kind: e.kind, name: e.name, faction: e.faction,
               x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
@@ -7329,6 +7360,7 @@ export class Voidwake {
         },
         chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
         installedMods: () => this.mods.map((m) => ({ id: m.id, name: m.name, enabled: m.enabled })),
+        remapError: (err) => this.remapLuaError(err),
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -7356,20 +7388,49 @@ export class Voidwake {
 
   // Concatenate enabled mod scripts (id-sorted) before the user script. Each
   // mod is wrapped in a `do ... end` block so `local` declarations don't leak
-  // across mods, and a comment banner marks its start for debug traces.
+  // across mods, and a comment banner marks its start for debug traces. Also
+  // recomputes `_scriptSourceMap` so `remapLuaError` can attribute a line
+  // number in the concatenated source back to the mod (or "user script")
+  // that owns it. Ranges are inclusive of the banner line.
+  private _scriptSourceMap: Array<{ start: number; end: number; id: string }> = [];
   private combinedScriptSource(): string {
     const parts: string[] = [];
+    const map: Array<{ start: number; end: number; id: string }> = [];
+    let line = 1;
+    const push = (chunk: string, id: string) => {
+      const start = line;
+      // join uses "\n\n" between parts, so count LF in the chunk + 2 for the
+      // following blank separator (handled by caller when a next part follows).
+      const lfs = (chunk.match(/\n/g) ?? []).length;
+      const end = start + lfs;
+      map.push({ start, end, id });
+      parts.push(chunk);
+      line = end + 2; // "\n\n" separator adds two newlines before the next chunk
+    };
     const enabled = this.mods.filter((m) => m.enabled && m.script.trim())
                              .sort((a, b) => a.id.localeCompare(b.id));
     for (const m of enabled) {
-      parts.push(`-- >>> mod:${m.id} (${m.name})`);
-      parts.push(`do\n${m.script}\nend`);
+      push(`-- >>> mod:${m.id} (${m.name})\ndo\n${m.script}\nend`, `mod:${m.id}`);
     }
     if (this.scriptSource.trim()) {
-      parts.push(`-- >>> user script`);
-      parts.push(this.scriptSource);
+      push(`-- >>> user script\n${this.scriptSource}`, "user script");
     }
+    this._scriptSourceMap = map;
     return parts.join("\n\n");
+  }
+
+  // Rewrite `[string "..."]:LINE:` prefixes in a Lua error string to prepend
+  // the owning mod id, e.g. `[mod:my-pack] :LINE: bad argument`. Falls back
+  // to the original string when the source map is empty or no line matches.
+  private remapLuaError(err: string): string {
+    if (!this._scriptSourceMap.length) return err;
+    const m = err.match(/:(\d+):/);
+    if (!m) return err;
+    const ln = parseInt(m[1], 10);
+    if (!Number.isFinite(ln)) return err;
+    const owner = this._scriptSourceMap.find((r) => ln >= r.start && ln <= r.end);
+    if (!owner) return err;
+    return `[${owner.id}] ${err}`;
   }
 
   // Append a chatter template line for the given kind. Returns true if the
@@ -7417,25 +7478,9 @@ export class Voidwake {
         return;
       }
       const example = '{"id":"my-mod","name":"My Mod","script":"frontier.log(\\"hi\\")"}';
-      const src = window.prompt("Paste mod JSON  { id, name, script }:", example);
+      const src = window.prompt("Paste mod JSON  { id, name, script }:  (or drop a .json file on the game)", example);
       if (!src) return;
-      try {
-        const parsed = JSON.parse(src);
-        const id = String(parsed.id ?? "").trim();
-        const name = String(parsed.name ?? id).trim() || id;
-        const script = String(parsed.script ?? "");
-        if (!id) { this.pushLog("Mod add failed: missing id."); return; }
-        if (this.mods.some((m) => m.id === id)) {
-          this.pushLog(`Mod add failed: id '${id}' already installed.`);
-          return;
-        }
-        this.mods.push({ id, name, enabled: true, script });
-        this.saveMods();
-        this.pushLog(`Mod installed: ${id}`);
-        if (this.scriptEnabled) this.reloadScript();
-      } catch (e) {
-        this.pushLog(`Mod add failed: ${String(e)}`);
-      }
+      this.installModFromJSON(src);
       return;
     }
     if (row === "Remove Highlighted Mod") {
@@ -7491,6 +7536,88 @@ export class Voidwake {
   }
   private enabledModIds(): string[] {
     return this.mods.filter((m) => m.enabled).map((m) => m.id).sort();
+  }
+
+  // 0.7.0 modding polish — shared install path for both the "Add Mod... (paste JSON)"
+  // menu action and the drag-drop file handler. Accepts either a `{ id, name, script }`
+  // JSON manifest or a bare Lua source string when `fallbackId` is supplied
+  // (used by `.lua` file drops — the file name becomes the mod id).
+  private installModFromJSON(src: string, fallbackId?: string): boolean {
+    try {
+      const parsed = JSON.parse(src);
+      const id = String(parsed.id ?? "").trim();
+      const name = String(parsed.name ?? id).trim() || id;
+      const script = String(parsed.script ?? "");
+      if (!id) { this.pushLog("Mod add failed: missing id."); return false; }
+      if (this.mods.some((m) => m.id === id)) {
+        this.pushLog(`Mod add failed: id '${id}' already installed.`);
+        return false;
+      }
+      this.mods.push({ id, name, enabled: true, script });
+      this.saveMods();
+      this.pushLog(`Mod installed: ${id}`);
+      if (this.scriptEnabled) this.reloadScript();
+      return true;
+    } catch (e) {
+      if (fallbackId) {
+        // Treat the input as raw Lua and wrap into a synthetic manifest.
+        const id = fallbackId.replace(/[^a-z0-9._-]+/gi, "-").slice(0, 48) || "dropped-mod";
+        if (this.mods.some((m) => m.id === id)) {
+          this.pushLog(`Mod add failed: id '${id}' already installed.`);
+          return false;
+        }
+        this.mods.push({ id, name: id, enabled: true, script: src });
+        this.saveMods();
+        this.pushLog(`Mod installed from Lua drop: ${id}`);
+        if (this.scriptEnabled) this.reloadScript();
+        return true;
+      }
+      this.pushLog(`Mod add failed: ${String(e)}`);
+      return false;
+    }
+  }
+
+  // Attach drag-and-drop listeners to the canvas so users can install mods
+  // or load a Lua script without hitting the 2KB browser prompt() cap. Drop
+  // a `.json` manifest → new mod entry. Drop a `.lua` file → depending on the
+  // Shift key at drop time, either replaces the user script (default) or
+  // installs as a new mod using the file basename as its id (with Shift).
+  private attachModDrop(canvas: HTMLCanvasElement, sig: AbortSignal) {
+    const stop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
+    canvas.addEventListener("dragenter", stop, { signal: sig });
+    canvas.addEventListener("dragover", (e) => {
+      stop(e);
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    }, { signal: sig });
+    canvas.addEventListener("drop", async (e) => {
+      stop(e);
+      const files = e.dataTransfer?.files;
+      if (!files || !files.length) return;
+      const asMod = !!e.shiftKey;
+      for (const f of Array.from(files)) {
+        try {
+          const text = await f.text();
+          const lower = f.name.toLowerCase();
+          if (lower.endsWith(".json")) {
+            this.installModFromJSON(text);
+          } else if (lower.endsWith(".lua")) {
+            if (asMod) {
+              const base = f.name.replace(/\.lua$/i, "");
+              this.installModFromJSON(text, base);
+            } else {
+              this.scriptSource = text;
+              this.saveScriptSettings();
+              this.pushLog(`Script loaded from ${f.name} (${text.length} chars).`);
+              if (this.scriptEnabled) this.reloadScript();
+            }
+          } else {
+            this.pushLog(`Ignored ${f.name}: expected .lua or .json.`);
+          }
+        } catch (err) {
+          this.pushLog(`Drop failed for ${f.name}: ${String(err)}`);
+        }
+      }
+    }, { signal: sig });
   }
 
 

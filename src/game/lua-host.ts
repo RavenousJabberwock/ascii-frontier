@@ -52,10 +52,15 @@ export interface LuaHostBridge {
   addOre?:     (delta: number) => number | null;
   worldTime?:  () => number;                       // seconds since engine start (or Date.now/1000)
   worldSeed?:  () => number;
-  listEntities?: (filter?: { kind?: string; faction?: string; max?: number }) => Array<Record<string, unknown>>;
+  listEntities?: (filter?: { kind?: string; faction?: string; max?: number; radius?: number; nearX?: number; nearY?: number; nearZ?: number }) => Array<Record<string, unknown>>;
   getEntity?:  (idx: number) => Record<string, unknown> | null;
   chatterAdd?: (kind: string, line: string) => boolean;   // append a template line; returns true if kind is known
   installedMods?: () => Array<{ id: string; name: string; enabled: boolean }>;
+  // 0.7.0 — per-mod error attribution. When provided, the host calls this on
+  // every load/run/hook error string before storing it on `lastError`. The
+  // engine implementation maps line numbers in the concatenated source back
+  // to the owning mod id (or "user script"). Optional.
+  remapError?: (err: string) => string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -177,7 +182,7 @@ export class LuaHost {
     // frontier.entities.list{ kind=?, faction=?, max=? } / frontier.entities.get(idx)
     lua.lua_newtable(L);
     lua.lua_pushjsfunction(L, (Ls: L) => {
-      let filter: { kind?: string; faction?: string; max?: number } | undefined;
+      let filter: { kind?: string; faction?: string; max?: number; radius?: number; nearX?: number; nearY?: number; nearZ?: number } | undefined;
       if (lua.lua_type(Ls, 1) === lua.LUA_TTABLE) {
         const readStr = (f: string) => {
           lua.lua_getfield(Ls, 1, to_luastring(f));
@@ -189,7 +194,10 @@ export class LuaHost {
           const n = lua.lua_type(Ls, -1) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, -1)) : undefined;
           lua.lua_pop(Ls, 1); return n;
         };
-        filter = { kind: readStr("kind"), faction: readStr("faction"), max: readNum("max") };
+        filter = {
+          kind: readStr("kind"), faction: readStr("faction"), max: readNum("max"),
+          radius: readNum("radius"), nearX: readNum("nearX"), nearY: readNum("nearY"), nearZ: readNum("nearZ"),
+        };
       }
       const arr = this.bridge.listEntities?.(filter) ?? [];
       pushJsAsLua(Ls, arr, 0);
@@ -268,12 +276,14 @@ export class LuaHost {
           const rc = lua.lua_pcall(this.L, 1, 0, 0);
           if (rc !== lua.LUA_OK) {
             const err = lua.lua_tojsstring(this.L, -1) ?? "(unknown lua error)";
-            this.lastError = `hook ${name}: ${err}`;
+            const mapped = this.bridge.remapError?.(err) ?? err;
+            this.lastError = `hook ${name}: ${mapped}`;
             this.bridge.pushLog(`[script] ${this.lastError}`);
             lua.lua_pop(this.L, 1);
           }
         } catch (e) {
-          this.lastError = `hook ${name}: ${String(e)}`;
+          const raw = String(e);
+          this.lastError = `hook ${name}: ${this.bridge.remapError?.(raw) ?? raw}`;
         }
       });
       this.unsubs.push(off);
@@ -287,14 +297,14 @@ export class LuaHost {
     const loadStatus = lauxlib.luaL_loadstring(L, to_luastring(source));
     if (loadStatus !== lua.LUA_OK) {
       const err = lua.lua_tojsstring(L, -1) ?? "(load error)";
-      this.lastError = `load: ${err}`;
+      this.lastError = `load: ${this.bridge.remapError?.(err) ?? err}`;
       this.dispose();
       return { ok: false, error: this.lastError };
     }
     const runStatus = lua.lua_pcall(L, 0, 0, 0);
     if (runStatus !== lua.LUA_OK) {
       const err = lua.lua_tojsstring(L, -1) ?? "(run error)";
-      this.lastError = `run: ${err}`;
+      this.lastError = `run: ${this.bridge.remapError?.(err) ?? err}`;
       this.dispose();
       return { ok: false, error: this.lastError };
     }
