@@ -4695,6 +4695,7 @@ export class Voidwake {
       case "codex": this.updateCodex(); break;
       case "howto": this.updateHowto(); break;
       case "quest-log": this.updateQuestLog(); break;
+      case "character": this.updateCharacterSheet(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
   }
