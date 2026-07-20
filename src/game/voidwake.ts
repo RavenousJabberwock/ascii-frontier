@@ -1667,6 +1667,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   autopilot: "o",        // toggle hired Pilot's autopilot to current target
   questLog: "u",         // open the toggle-able Quest Log popup
   pinRep: "r",           // toggle the compact reputation panel
+  characterSheet: "c",   // open the full Character Sheet overlay
 };
 
 // User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
