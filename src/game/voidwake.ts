@@ -7489,6 +7489,9 @@ export class Voidwake {
       }
     } catch { /* noop */ }
   }
+  private enabledModIds(): string[] {
+    return this.mods.filter((m) => m.enabled).map((m) => m.id).sort();
+  }
 
 
 
