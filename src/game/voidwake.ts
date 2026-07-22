@@ -2906,13 +2906,7 @@ function effectiveBerthMax(p: PlayerState): number {
   return cabins * 2;
 }
 
-// 0.7.1 — total cargo occupied across ore + commodities. All commodity
-// units take 1 cargo slot, matching the existing 'ore' convention.
-function cargoUsed(p: PlayerState): number {
-  let n = p.ship.cargo["ore"] ?? 0;
-  for (const c of COMMODITIES) n += p.ship.cargo[c.id] ?? 0;
-  return n;
-}
+// (cargoTotal above already sums ore + commodities — no separate helper.)
 
 // Effective radar range in world units. Base 1500u, +150u each for an
 // on-crew Pilot (sharp eyes on the nav plot) and Engineer (better sensor
