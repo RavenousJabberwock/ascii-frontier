@@ -2817,29 +2817,53 @@ function commodityBias(cls: CommodityClass, faction: string): number {
   return 0;
 }
 
-function generateStationStock(stationId: number): StationStock {
-  const rng = mulberry32(stationId * 9176 + 7);
+function generateStationStock(stationId: number, faction: string = "guild", day: number = marketDay()): StationStock {
+  // Seed mixes station id with the market day so inventory rotates every
+  // ~10 real minutes. Deterministic within a day, different across days.
+  const rng = mulberry32(stationId * 9176 + 7 + day * 131);
   const fuelPrice = 4 + Math.floor(rng() * 5);      // 4..8
   const orePrice  = 7 + Math.floor(rng() * 8);      // 7..14
-  // Each station carries 1-3 weapons and 2-5 modules from the (now larger)
-  // catalog. Slightly widened so the expanded upgrade list is discoverable
-  // without hopping through five stations.
   const shuffled = <T,>(arr: T[]) => arr.slice().sort(() => rng() - 0.5);
   const weapons = shuffled(WEAPONS).slice(0, 1 + Math.floor(rng() * 3))
     .map((w) => ({ id: w.id, price: Math.round((w.dmg * 40 + w.range * 0.4) * (0.8 + rng() * 0.5)) }));
-  const modules = shuffled(MODULE_CATALOG).slice(0, 2 + Math.floor(rng() * 4))
+  // 0.7.1 — rotate 0..5 upgrades per station per day. Station Core is
+  // gated: only Federation Gate stations ever stock one.
+  const catalog = MODULE_CATALOG.filter((m) => m.id !== "station-core" || faction === "federation");
+  const moduleCount = Math.floor(rng() * 6);        // 0..5
+  const modules = shuffled(catalog).slice(0, moduleCount)
     .map((m) => ({ ...m, price: Math.round(m.price * (0.85 + rng() * 0.4)) }));
   const gunnerFee = 200 + Math.floor(rng() * 400);
+  const recruitSlots = Math.floor(rng() * 5);       // 0..4
   const rumors = [
     "Trader gossip: pirate wing prowling outer belt.",
     "Surveyors report dense ore in deep field.",
     "Federation patrols thin this rotation.",
     "Bounty board: high-value raider sighted.",
     "Refinery shift change — ore prices spike soon.",
+    "Passenger manifest wide open — anyone with berths, apply.",
+    "Commodity spread's fat today. Buy elements local, sell hub-side.",
   ];
+  // Per-station commodity prices — bias by faction, jitter by rng.
+  const commodities = COMMODITIES.map((c) => {
+    const bias = commodityBias(c.class, faction);
+    const jitter = (rng() - 0.5) * 0.30;            // ±15%
+    // buy < sell (station buys from you low, sells to you high). Spread
+    // shrinks with bias in the "cheap here" direction so profit still
+    // comes from moving to another station.
+    const mid = c.base * (1 + bias * 0.4 + jitter);
+    const spread = 0.12;                             // 24% total spread
+    return {
+      id: c.id,
+      name: c.name,
+      buy:  Math.max(1, Math.round(mid * (1 + spread))),  // player buys FROM station
+      sell: Math.max(1, Math.round(mid * (1 - spread))),  // player sells TO station
+      stock: Math.floor(20 + rng() * 80),
+    };
+  });
   return {
     fuelPrice, orePrice, weapons, modules, gunnerFee,
     rumor: rumors[Math.floor(rng() * rumors.length)],
+    day, recruitSlots, commodities,
   };
 }
 
