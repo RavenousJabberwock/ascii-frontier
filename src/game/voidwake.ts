@@ -5279,6 +5279,17 @@ export class Voidwake {
     if (hasCrew(p, "engineer") && p.throttle < 0.35 && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
       p.ship.hull = Math.min(p.ship.hullMax, p.ship.hull + dt * 0.6);
     }
+    // 0.7.1 — Repair Drones module: slow ambient hull regen regardless of
+    // engineer/throttle (drones patch panels during flight).
+    if (p.ship.modules.includes("repair-drones") && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
+      p.ship.hull = Math.min(p.ship.hullMax, p.ship.hull + dt * 0.4);
+    }
+    // 0.7.1 — Fuel Scoop module: trickle refuel while in flight (not
+    // supercruise/afterburner). Cheap alternative to docking constantly.
+    if (p.ship.modules.includes("fuel-scoop") && p.ship.fuel < p.ship.fuelMax && !p.supercruise && !p.afterburner) {
+      p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 0.35);
+    }
+    { // no-op block to preserve indentation
 
     // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
     const now = performance.now() / 1000;
