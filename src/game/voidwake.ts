@@ -4003,7 +4003,7 @@ export class Voidwake {
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
   // Throttles for periodic respawning from stations / planets / pirate bases.
