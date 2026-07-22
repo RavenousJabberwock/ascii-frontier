@@ -6273,6 +6273,26 @@ export class Voidwake {
     }
 
 
+    // Passenger drop-off — completes on arrival at the destination station.
+    if (p.mission && p.mission.kind === "passenger" && p.mission.targetId === t.id) {
+      p.mission.done = true;
+      this.pushChatter(p.mission.guestName ?? "Passenger",
+        p.mission.vip ? "Impeccable. My office will remember this." : "Thank you, Captain. Safe passage means a lot.",
+        "#ffd28a");
+      adjustRep(p, "guild", 2);
+      if (p.mission.vip) adjustRep(p, "federation", 3);
+    }
+    // Passenger-owned station income: if this is one of the player's own
+    // stations, pay out treasury and skip further wage/rep logic later.
+    if (p.ownedStations) {
+      const mine = p.ownedStations.find((s) => s.entityId === t.id);
+      if (mine && mine.treasury > 0) {
+        p.credits += mine.treasury;
+        this.pushLog(`Withdrew ${mine.treasury}cr from ${mine.name}.`);
+        mine.treasury = 0;
+      }
+    }
+
     // Hand in mission
     if (p.mission && p.mission.done) {
       p.credits += p.mission.reward;
