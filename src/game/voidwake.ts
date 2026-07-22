@@ -8354,21 +8354,36 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
+  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
 
-  // Build the visible item list for the current station page so the
-  // renderer and update loop stay in lockstep (cursor indexes line up).
   buildStationLines(): string[] {
     const p = this.player!;
     const sid = this.dockedStationId;
     if (sid == null) return ["Undock"];
     const stock = this.getStock(sid);
-    // Orbital mini-stations and ship-to-ship "hail" docks expose only the
-    // Market page — no crew, weapons, or module inventory.
     const dockedEnt = this.entities.find((e) => e.id === sid);
     const isMini = dockedEnt && (dockedEnt.kind !== "station" || dockedEnt.state === "orbital");
+    const isOwned = dockedEnt?.faction === "player";
     if (this.stationPage === "main") {
-      return isMini ? ["Market", "Undock"] : this.stationItems;
+      if (isOwned) {
+        // Player-owned station menu: build/upgrade + withdraw + undock.
+        const mine = p.ownedStations?.find((s) => s.entityId === sid);
+        const rows = [
+          `-- Your Station (Tier ${mine?.tier ?? 0}) --`,
+          "Build / Upgrade",
+          "Commodities",
+          `Withdraw treasury (${mine?.treasury ?? 0}cr)`,
+          "Undock",
+        ];
+        return rows;
+      }
+      const base = isMini ? ["Market", "Commodities", "Undock"] : this.stationItems.slice();
+      // Deploy Station Core is main-menu action if the module is installed
+      // AND we're at a Federation Gate (required deploy location).
+      if (p.ship.modules.includes("station-core") && dockedEnt?.faction === "federation") {
+        base.splice(base.length - 1, 0, "Deploy Station Core (from this Gate)");
+      }
+      return base;
     }
     if (this.stationPage === "market") {
       const ore = p.cargo.ore ?? 0;
