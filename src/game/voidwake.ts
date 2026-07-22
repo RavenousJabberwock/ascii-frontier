@@ -6292,6 +6292,16 @@ export class Voidwake {
         mine.treasury = 0;
       }
     }
+    // Passive income accrual for the player's OTHER stations while they
+    // dock elsewhere — represents NPCs docking at their unattended holdings.
+    if (p.ownedStations) {
+      for (const s of p.ownedStations) {
+        if (s.entityId === t.id) continue;
+        const tierRow = PLAYER_STATION_TIERS.find((x) => x.tier === s.tier);
+        if (tierRow) s.treasury += tierRow.incomePerDock;
+      }
+    }
+
 
     // Hand in mission
     if (p.mission && p.mission.done) {
