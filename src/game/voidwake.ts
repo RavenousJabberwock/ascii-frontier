@@ -6171,10 +6171,16 @@ export class Voidwake {
     if (d > 200) { this.pushLog("Too far to mine."); return; }
     if ((t.ore ?? 0) <= 0) { this.pushLog("Asteroid depleted."); return; }
     if (cargoTotal(p) >= p.ship.cargoMax) { this.pushLog("Cargo full."); return; }
-    t.ore!--;
-    p.cargo.ore = (p.cargo.ore ?? 0) + 1;
+    // 0.7.1 — Mining Laser Mk II: +50% yield (integer, with fractional
+    // rollover via Math.random so avg = 1.5/tick).
+    const yieldN = p.ship.modules.includes("mining-upgrade")
+      ? (1 + (Math.random() < 0.5 ? 1 : 0))
+      : 1;
+    const take = Math.min(yieldN, t.ore ?? 0);
+    t.ore = (t.ore ?? 0) - take;
+    p.cargo.ore = (p.cargo.ore ?? 0) + take;
     awardXP(p, 2);
-    this.pushLog("Mined 1 ore.");
+    this.pushLog(`Mined ${take} ore.`);
     // Rare: ~1-in-50 chance the fragment is an "encoded relic" — pays a
     // one-shot credit bonus and a chunk of XP. Kept as an immediate payout
     // (rather than a new cargo item) so it stays a one-line surprise instead
