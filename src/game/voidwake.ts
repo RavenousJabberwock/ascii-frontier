@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.0";
+const VERSION = "0.7.1";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1487,10 +1487,19 @@ interface PlayerState {
   // (UFOs, thargoids, alien swarms, motherships). Once it crosses the
   // XENO_HIRE_THRESHOLD (5), the station Crew page unlocks Xeno hires.
   alienEncounters?: number;
+  // 0.7.1 — active passenger manifest. Each entry occupies one berth on
+  // top of crew (see effectiveBerthMax). Delivery is completed by the
+  // corresponding Mission in `missions[]`; this array just holds the
+  // occupancy count so berths math is simple.
+  passengers?: { name: string; missionId: number; destStationId: number; vip?: boolean }[];
+  // 0.7.1 — player-owned space stations. Deployed via the Station Core
+  // module. Tier 0 = shell, T5 = fully upgraded. Treasury accrues per
+  // dock and is withdrawn when the player docks at their own station.
+  ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number> }[];
 }
 const XENO_HIRE_THRESHOLD = 5;
 
-type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul";
+type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
 interface Mission {
   id: number;
   kind: MissionKind;
@@ -1500,6 +1509,14 @@ interface Mission {
   cargoQty?: number;
   reward: number;
   done: boolean;
+  // 0.7.1 — passenger fields. deadlineAt is a performance.now()/1000
+  // timestamp; on expiry the mission is failed with a rep hit. destName
+  // is cached at generation time in case the target station drifts off
+  // the entity list mid-mission.
+  guestName?: string;
+  destName?: string;
+  deadlineAt?: number;
+  vip?: boolean;
 }
 
 // Per-station market state. Generated deterministically from the station id
@@ -1508,11 +1525,15 @@ interface Mission {
 // charges double). Persisted lazily in Voidwake.stationStocks at runtime.
 interface StationStock {
   fuelPrice: number;          // cr per unit
-  orePrice: number;           // cr per unit sold to station
+  orePrice: number;           // cr per unit sold to station (legacy 'ore')
   weapons: { id: string; price: number }[];
   modules: { id: string; name: string; price: number; desc: string }[];
   gunnerFee: number;          // one-time hiring cost
   rumor: string;              // flavor line for the station screen
+  // 0.7.1 — rotating daily inventory
+  day: number;                // marketDay() when this stock was generated
+  recruitSlots: number;       // 0..4 crew hires available today
+  commodities: { id: string; name: string; buy: number; sell: number; stock: number }[];
 }
 
 // One line in the comms / chatter feed. "who" is the speaker label
@@ -2713,41 +2734,153 @@ const MODULE_CATALOG = [
   { id: "auto-loader",        name: "Auto-Loader",        price: 900,  desc: "weapon cooldown -15%" },
   { id: "loot-magnet",        name: "Loot Magnet",        price: 500,  desc: "pickup range 3x" },
   { id: "crew-quarters",      name: "Crew Quarters",      price: 1400, desc: "+1 crew slot" },
-  // Sensor Array: passive radar-range boost. Stacks additively with the
-  // small crew bonuses granted by an on-board Pilot / Engineer (see
-  // effectiveRadarRange). Single install — dupes blocked in buyModule().
   { id: "sensor-array",       name: "Sensor Array",       price: 950,  desc: "+600u radar range" },
-  // New: capacity / performance modules. Effects applied at install time
-  // (hullMax/fuelMax bump) or via effective*() helpers (top speed, boost).
   { id: "engine-tune",        name: "Engine Tune",        price: 1200, desc: "+15% top speed" },
   { id: "reinforced-plating", name: "Reinforced Plating", price: 1000, desc: "+40 hull max" },
   { id: "aux-fuel-tank",      name: "Aux Fuel Tank",      price: 700,  desc: "+50 fuel max" },
   { id: "long-range-scanner", name: "Long-Range Scanner", price: 1300, desc: "+1000u radar range" },
+  // 0.7.1 new upgrades
+  { id: "hull-plating-mk2",   name: "Hull Plating Mk II", price: 2200, desc: "+80 hull max (heavy)" },
+  { id: "aux-thruster",       name: "Aux Thruster",       price: 1500, desc: "+10% top speed + turn" },
+  { id: "mining-upgrade",     name: "Mining Laser Mk II", price: 1200, desc: "asteroid yield +50%" },
+  { id: "ecm-suite",          name: "ECM Suite",          price: 1800, desc: "hostiles lose lock 15% more often" },
+  { id: "fuel-scoop",         name: "Fuel Scoop",         price: 1600, desc: "slow ambient refuel in flight" },
+  { id: "luxury-cabin",       name: "Luxury Cabin",       price: 2400, desc: "+2 passenger berths" },
+  { id: "repair-drones",      name: "Repair Drones",      price: 2600, desc: "slow hull regen in flight" },
+  { id: "targeting-computer", name: "Targeting Computer", price: 1400, desc: "weapon cooldown -10%" },
+  { id: "station-core",       name: "Station Core",       price: 250000, desc: "deploy your own station (Fed Gate only)" },
 ];
 
-function generateStationStock(stationId: number): StationStock {
-  const rng = mulberry32(stationId * 9176 + 7);
+// 0.7.1 — Player-owned station tier costs (commodities in cargo consumed
+// on delivery via the Player Station "Build" page). Each entry unlocks
+// docking (T1), passive income (T2), NPC trade (T3), crew hire (T4),
+// defense drones (T5).
+const PLAYER_STATION_TIERS: { tier: number; needs: Record<string, number>; unlocks: string; incomePerDock: number }[] = [
+  { tier: 1, needs: { iron: 30, silicon: 20 },                   unlocks: "Docking + refuel", incomePerDock: 0 },
+  { tier: 2, needs: { iron: 60, silicon: 40, copper: 20 },       unlocks: "Passive income (100cr/dock)", incomePerDock: 100 },
+  { tier: 3, needs: { titanium: 40, microchips: 20 },            unlocks: "NPC trade income (250cr/dock)", incomePerDock: 250 },
+  { tier: 4, needs: { titanium: 80, robotics: 20, uranium: 10 }, unlocks: "Recruits + missions (500cr/dock)", incomePerDock: 500 },
+  { tier: 5, needs: { antimatter: 5, ai_cores: 10, quantum_drives: 5 }, unlocks: "Defense drones (1000cr/dock)", incomePerDock: 1000 },
+];
+
+// 0.7.1 — Commodity catalog. Every entry is a valid cargo key (single
+// slot per unit, matching the existing 'ore' convention). Classes drive
+// per-station price bias: Mining stations underprice elements, Industrial
+// underprice tech, Agricultural underprice food, Federation Gates carry
+// premium relics.
+type CommodityClass = "element" | "tech" | "food" | "relic";
+interface Commodity {
+  id: string;          // cargo key
+  name: string;
+  base: number;        // base cr / unit
+  class: CommodityClass;
+  legality: "clean" | "grey" | "restricted";
+}
+const COMMODITIES: Commodity[] = [
+  { id: "iron",              name: "Iron",              base: 12,   class: "element", legality: "clean" },
+  { id: "copper",            name: "Copper",            base: 18,   class: "element", legality: "clean" },
+  { id: "silicon",           name: "Silicon",           base: 22,   class: "element", legality: "clean" },
+  { id: "titanium",          name: "Titanium",          base: 55,   class: "element", legality: "clean" },
+  { id: "uranium",           name: "Uranium",           base: 140,  class: "element", legality: "grey" },
+  { id: "antimatter",        name: "Antimatter",        base: 1400, class: "element", legality: "restricted" },
+  { id: "microchips",        name: "Microchips",        base: 90,   class: "tech",    legality: "clean" },
+  { id: "robotics",          name: "Robotics",          base: 220,  class: "tech",    legality: "clean" },
+  { id: "ai_cores",          name: "AI Cores",          base: 620,  class: "tech",    legality: "grey" },
+  { id: "quantum_drives",    name: "Quantum Drives",    base: 1800, class: "tech",    legality: "grey" },
+  { id: "grain",             name: "Grain",             base: 8,    class: "food",    legality: "clean" },
+  { id: "textiles",          name: "Textiles",          base: 15,   class: "food",    legality: "clean" },
+  { id: "medicine",          name: "Medicine",          base: 65,   class: "food",    legality: "clean" },
+  { id: "spices",            name: "Spices",            base: 45,   class: "food",    legality: "clean" },
+  { id: "luxury_goods",      name: "Luxury Goods",      base: 260,  class: "food",    legality: "clean" },
+  { id: "precursor_frag",    name: "Precursor Fragment",base: 900,  class: "relic",   legality: "grey" },
+  { id: "ancient_datacore",  name: "Ancient Datacore",  base: 1600, class: "relic",   legality: "grey" },
+  { id: "xeno_artifact",     name: "Xeno Artifact",     base: 3200, class: "relic",   legality: "restricted" },
+];
+
+// Real-time "market day" — every 10 real minutes station inventories
+// (upgrades, crew, commodity prices) rotate. Kept as a pure function so
+// the market cache can compare it against the last-generated day.
+function marketDay(): number {
+  return Math.floor(Date.now() / 1000 / 600);
+}
+
+// Faction-based commodity price bias. Positive means the station tends
+// to have the good CHEAP (buy here); negative means EXPENSIVE (sell
+// here). Same faction+class deltas across the whole map so routes are
+// learnable.
+function commodityBias(cls: CommodityClass, faction: string): number {
+  if (faction === "federation") {
+    if (cls === "relic") return -0.35;   // Fed Gates want relics — pay well
+    if (cls === "tech")  return -0.10;
+    return 0.05;
+  }
+  if (faction === "guild") {   // trade hubs — neutral, small spread
+    return 0;
+  }
+  if (faction === "miner" || faction === "industry") {
+    if (cls === "element") return 0.30;  // cheap elements at refineries
+    if (cls === "tech")    return -0.15;
+    return 0.05;
+  }
+  if (faction === "nature") {  // colonies
+    if (cls === "food") return 0.30;
+    if (cls === "tech") return -0.20;
+    return 0.05;
+  }
+  if (faction === "pirate") {
+    if (cls === "relic") return -0.15;
+    return -0.05;               // black-market shave
+  }
+  return 0;
+}
+
+function generateStationStock(stationId: number, faction: string = "guild", day: number = marketDay()): StationStock {
+  // Seed mixes station id with the market day so inventory rotates every
+  // ~10 real minutes. Deterministic within a day, different across days.
+  const rng = mulberry32(stationId * 9176 + 7 + day * 131);
   const fuelPrice = 4 + Math.floor(rng() * 5);      // 4..8
   const orePrice  = 7 + Math.floor(rng() * 8);      // 7..14
-  // Each station carries 1-3 weapons and 2-5 modules from the (now larger)
-  // catalog. Slightly widened so the expanded upgrade list is discoverable
-  // without hopping through five stations.
   const shuffled = <T,>(arr: T[]) => arr.slice().sort(() => rng() - 0.5);
   const weapons = shuffled(WEAPONS).slice(0, 1 + Math.floor(rng() * 3))
     .map((w) => ({ id: w.id, price: Math.round((w.dmg * 40 + w.range * 0.4) * (0.8 + rng() * 0.5)) }));
-  const modules = shuffled(MODULE_CATALOG).slice(0, 2 + Math.floor(rng() * 4))
+  // 0.7.1 — rotate 0..5 upgrades per station per day. Station Core is
+  // gated: only Federation Gate stations ever stock one.
+  const catalog = MODULE_CATALOG.filter((m) => m.id !== "station-core" || faction === "federation");
+  const moduleCount = Math.floor(rng() * 6);        // 0..5
+  const modules = shuffled(catalog).slice(0, moduleCount)
     .map((m) => ({ ...m, price: Math.round(m.price * (0.85 + rng() * 0.4)) }));
   const gunnerFee = 200 + Math.floor(rng() * 400);
+  const recruitSlots = Math.floor(rng() * 5);       // 0..4
   const rumors = [
     "Trader gossip: pirate wing prowling outer belt.",
     "Surveyors report dense ore in deep field.",
     "Federation patrols thin this rotation.",
     "Bounty board: high-value raider sighted.",
     "Refinery shift change — ore prices spike soon.",
+    "Passenger manifest wide open — anyone with berths, apply.",
+    "Commodity spread's fat today. Buy elements local, sell hub-side.",
   ];
+  // Per-station commodity prices — bias by faction, jitter by rng.
+  const commodities = COMMODITIES.map((c) => {
+    const bias = commodityBias(c.class, faction);
+    const jitter = (rng() - 0.5) * 0.30;            // ±15%
+    // buy < sell (station buys from you low, sells to you high). Spread
+    // shrinks with bias in the "cheap here" direction so profit still
+    // comes from moving to another station.
+    const mid = c.base * (1 + bias * 0.4 + jitter);
+    const spread = 0.12;                             // 24% total spread
+    return {
+      id: c.id,
+      name: c.name,
+      buy:  Math.max(1, Math.round(mid * (1 + spread))),  // player buys FROM station
+      sell: Math.max(1, Math.round(mid * (1 - spread))),  // player sells TO station
+      stock: Math.floor(20 + rng() * 80),
+    };
+  });
   return {
     fuelPrice, orePrice, weapons, modules, gunnerFee,
     rumor: rumors[Math.floor(rng() * rumors.length)],
+    day, recruitSlots, commodities,
   };
 }
 
@@ -2765,6 +2898,15 @@ function effectiveCrewMax(p: PlayerState): number {
   const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
   return base + quarters;
 }
+
+// 0.7.1 — Passenger berths: 2 per Luxury Cabin module. Kept independent
+// of crew so cabins can be added without giving up crew slots.
+function effectiveBerthMax(p: PlayerState): number {
+  const cabins = p.ship.modules.filter((m) => m === "luxury-cabin").length;
+  return cabins * 2;
+}
+
+// (cargoTotal above already sums ore + commodities — no separate helper.)
 
 // Effective radar range in world units. Base 1500u, +150u each for an
 // on-crew Pilot (sharp eyes on the nav plot) and Engineer (better sensor
@@ -2791,16 +2933,19 @@ function effectiveRadarRange(p: PlayerState): number {
 // (i.e. 1.6x → 1.92x while holding boost). Kept in one place so the flight
 // tick and the collision-speed estimate can't drift apart.
 function effectiveTopSpeed(p: PlayerState): number {
-  const tune = p.ship.modules.includes("engine-tune") ? 1.15 : 1.0;
+  const tune  = p.ship.modules.includes("engine-tune")  ? 1.15 : 1.0;
+  const aux   = p.ship.modules.includes("aux-thruster") ? 1.10 : 1.0;
   const speciesMul = speciesOf(p.char.species).topSpeedMul ?? 1;
-  return p.ship.speed * tune * speciesMul;
+  return p.ship.speed * tune * aux * speciesMul;
 }
 function effectiveBoostMul(p: PlayerState): number {
   return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
 }
-// Auto-Loader trims weapon cooldown by 15%. Reptilians shave another 10%.
 function effectiveCooldownMul(p: PlayerState): number {
-  const modMul = p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
+  // Auto-Loader -15%, Targeting Computer -10%, stack multiplicatively.
+  let modMul = 1.0;
+  if (p.ship.modules.includes("auto-loader"))        modMul *= 0.85;
+  if (p.ship.modules.includes("targeting-computer")) modMul *= 0.90;
   const speciesMul = speciesOf(p.char.species).cooldownMul ?? 1;
   return modMul * speciesMul;
 }
@@ -3861,7 +4006,7 @@ export class Voidwake {
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" = "main";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
   // Throttles for periodic respawning from stations / planets / pirate bases.
@@ -4344,16 +4489,19 @@ export class Voidwake {
   }
 
 
-  // Cached station market lookup. Generates on first request.
+  // Cached station market lookup. Regenerates when the market day rolls
+  // over so inventories rotate every ~10 real minutes.
   getStock(stationId: number): StationStock {
     let s = this.stationStocks.get(stationId);
-    if (!s) {
-      s = generateStationStock(stationId);
+    const today = marketDay();
+    if (!s || s.day !== today) {
+      const ent = this.entities.find((x) => x.id === stationId);
+      const faction = ent?.faction ?? "guild";
+      s = generateStationStock(stationId, faction, today);
       // 0.5.6 — Colony jitter. Populated planets pay noticeably more for
       // ore (colonies always need refinery feedstock), charge a small
       // premium on fuel (no atmosphere refinery), and use a colony-specific
       // rumor set. Weapons are unlisted at colonies (militia-only supply).
-      const ent = this.entities.find((x) => x.id === stationId);
       if (ent && ent.kind === "planet" && ent.populated) {
         s.orePrice = Math.round(s.orePrice * 1.25);
         s.fuelPrice = Math.round(s.fuelPrice * 1.10);
@@ -5131,6 +5279,15 @@ export class Voidwake {
     // Engineer perk: slow hull regen while throttle is light and not on fire.
     if (hasCrew(p, "engineer") && p.throttle < 0.35 && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
       p.ship.hull = Math.min(p.ship.hullMax, p.ship.hull + dt * 0.6);
+    }
+    // 0.7.1 — Repair Drones module: slow ambient hull regen regardless of
+    // engineer/throttle (drones patch panels during flight).
+    if (p.ship.modules.includes("repair-drones") && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
+      p.ship.hull = Math.min(p.ship.hullMax, p.ship.hull + dt * 0.4);
+    }
+    // 0.7.1 — Fuel Scoop module: trickle refuel while in flight.
+    if (p.ship.modules.includes("fuel-scoop") && p.ship.fuel < p.ship.fuelMax) {
+      p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 0.35);
     }
 
     // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
@@ -6014,10 +6171,16 @@ export class Voidwake {
     if (d > 200) { this.pushLog("Too far to mine."); return; }
     if ((t.ore ?? 0) <= 0) { this.pushLog("Asteroid depleted."); return; }
     if (cargoTotal(p) >= p.ship.cargoMax) { this.pushLog("Cargo full."); return; }
-    t.ore!--;
-    p.cargo.ore = (p.cargo.ore ?? 0) + 1;
+    // 0.7.1 — Mining Laser Mk II: +50% yield (integer, with fractional
+    // rollover via Math.random so avg = 1.5/tick).
+    const yieldN = p.ship.modules.includes("mining-upgrade")
+      ? (1 + (Math.random() < 0.5 ? 1 : 0))
+      : 1;
+    const take = Math.min(yieldN, t.ore ?? 0);
+    t.ore = (t.ore ?? 0) - take;
+    p.cargo.ore = (p.cargo.ore ?? 0) + take;
     awardXP(p, 2);
-    this.pushLog("Mined 1 ore.");
+    this.pushLog(`Mined ${take} ore.`);
     // Rare: ~1-in-50 chance the fragment is an "encoded relic" — pays a
     // one-shot credit bonus and a chunk of XP. Kept as an immediate payout
     // (rather than a new cargo item) so it stays a one-line surprise instead
@@ -6128,6 +6291,36 @@ export class Voidwake {
     }
 
 
+    // Passenger drop-off — completes on arrival at the destination station.
+    if (p.mission && p.mission.kind === "passenger" && p.mission.targetId === t.id) {
+      p.mission.done = true;
+      this.pushChatter(p.mission.guestName ?? "Passenger",
+        p.mission.vip ? "Impeccable. My office will remember this." : "Thank you, Captain. Safe passage means a lot.",
+        "#ffd28a");
+      adjustRep(p, "guild", 2);
+      if (p.mission.vip) adjustRep(p, "federation", 3);
+    }
+    // Passenger-owned station income: if this is one of the player's own
+    // stations, pay out treasury and skip further wage/rep logic later.
+    if (p.ownedStations) {
+      const mine = p.ownedStations.find((s) => s.entityId === t.id);
+      if (mine && mine.treasury > 0) {
+        p.credits += mine.treasury;
+        this.pushLog(`Withdrew ${mine.treasury}cr from ${mine.name}.`);
+        mine.treasury = 0;
+      }
+    }
+    // Passive income accrual for the player's OTHER stations while they
+    // dock elsewhere — represents NPCs docking at their unattended holdings.
+    if (p.ownedStations) {
+      for (const s of p.ownedStations) {
+        if (s.entityId === t.id) continue;
+        const tierRow = PLAYER_STATION_TIERS.find((x) => x.tier === s.tier);
+        if (tierRow) s.treasury += tierRow.incomePerDock;
+      }
+    }
+
+
     // Hand in mission
     if (p.mission && p.mission.done) {
       p.credits += p.mission.reward;
@@ -6208,13 +6401,18 @@ export class Voidwake {
   // something real to point at.
   generateMission(): Mission {
     const rng = this.rng;
+    const p = this.player;
+    // Passenger missions unlock once the ship has any Luxury Cabin
+    // berths. They're weighted low so trader/combat variety survives.
+    const canPassenger = !!p && effectiveBerthMax(p) > 0;
     const roll = rng();
     const kinds: MissionKind[] =
-      roll < 0.20 ? ["deliver"] :
-      roll < 0.35 ? ["haul"] :
-      roll < 0.50 ? ["destroy"] :
-      roll < 0.63 ? ["bounty"] :
-      roll < 0.76 ? ["scan"] :
+      canPassenger && roll < 0.15 ? ["passenger"] :
+      roll < 0.30 ? ["deliver"] :
+      roll < 0.42 ? ["haul"] :
+      roll < 0.55 ? ["destroy"] :
+      roll < 0.66 ? ["bounty"] :
+      roll < 0.77 ? ["scan"] :
       roll < 0.88 ? ["escort"] :
       ["rescue"];
     const k = kinds[0];
@@ -6228,7 +6426,6 @@ export class Voidwake {
       };
     }
     if (k === "bounty") {
-      // A named high-value pirate — pick one and mark it. Bigger reward.
       const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
       return {
         id, kind: k, targetId: target?.id,
@@ -6267,6 +6464,30 @@ export class Voidwake {
         reward: 520, done: false,
       };
     }
+    if (k === "passenger") {
+      // Passenger destination: any station different from where we are
+      // now (so the mission actually requires travel). Deadline scales
+      // with rough distance — 90s per 1000u, min 180s (3min).
+      const stations = this.entities.filter((e) => e.kind === "station" && e.id !== this.dockedStationId);
+      const dest = stations.length ? stations[Math.floor(rng() * stations.length)] : null;
+      const dist = dest && p ? V.len(V.sub(dest.pos, p.pos)) : 2000;
+      const secs = Math.max(180, Math.round(dist / 1000 * 90));
+      const vip = rng() < 0.15;
+      const firsts = ["Adira","Mira","Kestrel","Toma","Vex","Sable","Reeve","Nia","Cyrus","Odell"];
+      const lasts  = ["Halden","Vorne","Kestrel","Ashe","Rune","Marek","Shen","Bloom","Ilex"];
+      const gname = `${firsts[Math.floor(rng()*firsts.length)]} ${lasts[Math.floor(rng()*lasts.length)]}`;
+      const reward = Math.round((vip ? 900 : 450) + dist * 0.08);
+      return {
+        id, kind: "passenger",
+        description: `${vip ? "VIP" : "Passenger"} ${gname} → ${dest?.name ?? "distant hub"} (${Math.floor(secs/60)}m${secs%60}s)`,
+        targetId: dest?.id,
+        guestName: gname,
+        destName: dest?.name ?? "distant hub",
+        deadlineAt: performance.now() / 1000 + secs,
+        vip,
+        reward, done: false,
+      };
+    }
     return {
       id, kind: "deliver", cargoItem: "ore", cargoQty: 5,
       description: "Deliver 5 ore to any station",
@@ -6301,6 +6522,20 @@ export class Voidwake {
     if (m.kind === "rescue" && m.targetId) {
       const t = this.entities.find((e) => e.id === m.targetId);
       if (t && V.len(V.sub(t.pos, p.pos)) < 50) { m.done = true; this.pushLog("Rescue signal acknowledged."); }
+    }
+    if (m.kind === "passenger") {
+      const now = performance.now() / 1000;
+      if (m.deadlineAt && now > m.deadlineAt) {
+        // Deadline blown — fail: rep hit, small credit clawback, mission cleared.
+        this.pushLog(`✗ ${m.vip ? "VIP" : "Passenger"} ${m.guestName ?? ""} missed connection — contract failed.`);
+        this.pushChatter("Computer", `Passenger contract with ${m.guestName ?? "guest"} lapsed. Reputation logged.`, "#ff8a8a");
+        adjustRep(p, "guild", -3);
+        if (m.vip) adjustRep(p, "federation", -2);
+        p.mission = undefined;
+        return;
+      }
+      // Completion is set in tryDock (we need to know WHERE the player
+      // docked). Only render remaining time here — mission log handles it.
     }
     // "bounty" / "destroy" completion is set by the bullet-hit loop.
   }
@@ -8137,21 +8372,36 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
+  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
 
-  // Build the visible item list for the current station page so the
-  // renderer and update loop stay in lockstep (cursor indexes line up).
   buildStationLines(): string[] {
     const p = this.player!;
     const sid = this.dockedStationId;
     if (sid == null) return ["Undock"];
     const stock = this.getStock(sid);
-    // Orbital mini-stations and ship-to-ship "hail" docks expose only the
-    // Market page — no crew, weapons, or module inventory.
     const dockedEnt = this.entities.find((e) => e.id === sid);
     const isMini = dockedEnt && (dockedEnt.kind !== "station" || dockedEnt.state === "orbital");
+    const isOwned = dockedEnt?.faction === "player";
     if (this.stationPage === "main") {
-      return isMini ? ["Market", "Undock"] : this.stationItems;
+      if (isOwned) {
+        // Player-owned station menu: build/upgrade + withdraw + undock.
+        const mine = p.ownedStations?.find((s) => s.entityId === sid);
+        const rows = [
+          `-- Your Station (Tier ${mine?.tier ?? 0}) --`,
+          "Build / Upgrade",
+          "Commodities",
+          `Withdraw treasury (${mine?.treasury ?? 0}cr)`,
+          "Undock",
+        ];
+        return rows;
+      }
+      const base = isMini ? ["Market", "Commodities", "Undock"] : this.stationItems.slice();
+      // Deploy Station Core is main-menu action if the module is installed
+      // AND we're at a Federation Gate (required deploy location).
+      if (p.ship.modules.includes("station-core") && dockedEnt?.faction === "federation") {
+        base.splice(base.length - 1, 0, "Deploy Station Core (from this Gate)");
+      }
+      return base;
     }
     if (this.stationPage === "market") {
       const ore = p.cargo.ore ?? 0;
@@ -8253,6 +8503,40 @@ export class Voidwake {
       rows.push("Back");
       return rows;
     }
+    if (this.stationPage === "commodities") {
+      // Two rows per commodity: buy10 / sell10 (or sell-all if <10 in cargo).
+      // Includes a header + Back row.
+      const rows: string[] = [`~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`];
+      for (const c of stock.commodities) {
+        const have = p.cargo[c.id] ?? 0;
+        rows.push(`Buy  10 ${c.name.padEnd(18)} @${c.buy}cr  (stock ${c.stock}, you have ${have})`);
+        rows.push(`Sell 10 ${c.name.padEnd(18)} @${c.sell}cr  (you have ${have})`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+    if (this.stationPage === "build-station") {
+      const mine = p.ownedStations?.find((s) => s.entityId === sid);
+      if (!mine) return ["Back"];
+      const rows: string[] = [`~ ${mine.name}  Tier ${mine.tier}/5 ~`];
+      const next = PLAYER_STATION_TIERS.find((r) => r.tier === mine.tier + 1);
+      if (next) {
+        rows.push(`Next tier unlocks: ${next.unlocks}`);
+        rows.push("Deliver required materials:");
+        for (const [k, qty] of Object.entries(next.needs)) {
+          const have = p.cargo[k] ?? 0;
+          const done = have >= (qty - (mine.delivered[k] ?? 0)) ? " ✓" : "";
+          rows.push(`  ${k.padEnd(16)} ${mine.delivered[k] ?? 0}/${qty}  (in cargo: ${have})${done}`);
+        }
+        rows.push("Deliver from cargo (transfer everything eligible)");
+        const canUpgrade = Object.entries(next.needs).every(([k, qty]) => (mine.delivered[k] ?? 0) >= qty);
+        rows.push(canUpgrade ? "Complete upgrade →" : "Complete upgrade → (need more materials)");
+      } else {
+        rows.push("Maximum tier reached.");
+      }
+      rows.push("Back");
+      return rows;
+    }
     return ["Back"];
   }
 
@@ -8269,14 +8553,20 @@ export class Voidwake {
     if (this.stationPage === "main") {
       const c = lines[i];
       if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
+      else if (c === "Commodities") { this.stationPage = "commodities"; this.menuCursor = 0; }
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
+      else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
+      else if (c && c.startsWith("Withdraw treasury")) {
+        const mine = p.ownedStations?.find((s) => s.entityId === sid);
+        if (mine) { p.credits += mine.treasury; this.pushLog(`Withdrew ${mine.treasury}cr.`); mine.treasury = 0; }
+      }
+      else if (c === "Deploy Station Core (from this Gate)") {
+        this.deployStationCore();
+      }
       else if (c === "Undock")  {
-        // Play a short "clamps disengaging" beat by suppressing tryDock for
-        // 0.6s. Prevents the docking screen from bouncing right back if the
-        // player mashes F.
         this._dockCooldownUntil = performance.now() / 1000 + 0.6;
         this.pushLog("Clamps disengaging…");
         this.screen = "playing"; this.dockedStationId = null;
@@ -8360,7 +8650,10 @@ export class Voidwake {
       if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
       if (offer.id === "crew-quarters") this.pushLog("Crew quarters installed — +1 berth.");
       if (offer.id === "reinforced-plating") { p.ship.hullMax += 40; p.ship.hull += 40; }
+      if (offer.id === "hull-plating-mk2")   { p.ship.hullMax += 80; p.ship.hull += 80; }
       if (offer.id === "aux-fuel-tank") { p.ship.fuelMax += 50; p.ship.fuel += 50; }
+      if (offer.id === "luxury-cabin") this.pushLog("Luxury Cabin installed — +2 passenger berths.");
+      if (offer.id === "station-core") this.pushLog("Station Core secured — head to open space, dock menu ▸ 'Deploy Station Core'.");
       this.pushLog(`Installed ${offer.name}.`);
       return;
     }
@@ -8426,7 +8719,109 @@ export class Voidwake {
       }
       return;
     }
+
+    // ---- Commodities page ---------------------------------------------------
+    // Rows are: header, then per-commodity (buy10, sell10), Back. Layout must
+    // match buildStationLines() exactly.
+    if (this.stationPage === "commodities") {
+      if (i === 0) return;                 // header row
+      const idx = i - 1;
+      const commIdx = Math.floor(idx / 2);
+      const isBuy = idx % 2 === 0;
+      const c = stock.commodities[commIdx];
+      if (!c) return;
+      const qty = 10;
+      if (isBuy) {
+        const room = p.ship.cargoMax - cargoTotal(p);
+        const n = Math.max(0, Math.min(qty, c.stock, room, Math.floor(p.credits / c.buy)));
+        if (n <= 0) { this.pushLog("Can't buy — full/broke/out of stock."); return; }
+        p.credits -= n * c.buy;
+        p.cargo[c.id] = (p.cargo[c.id] ?? 0) + n;
+        c.stock -= n;
+        this.pushLog(`Bought ${n} ${c.name} for ${n * c.buy}cr.`);
+      } else {
+        const have = p.cargo[c.id] ?? 0;
+        const n = Math.min(qty, have);
+        if (n <= 0) { this.pushLog(`No ${c.name} to sell.`); return; }
+        const gross = n * c.sell;
+        const total = Math.round(gross * merchantSellMult(p));
+        p.cargo[c.id] = have - n;
+        p.credits += total;
+        c.stock += n;
+        this.pushLog(`Sold ${n} ${c.name} for ${total}cr.`);
+      }
+      return;
+    }
+
+    // ---- Build / Upgrade page (player-owned station) ------------------------
+    if (this.stationPage === "build-station") {
+      const mine = p.ownedStations?.find((s) => s.entityId === sid);
+      if (!mine) return;
+      const row = lines[i] ?? "";
+      const next = PLAYER_STATION_TIERS.find((r) => r.tier === mine.tier + 1);
+      if (!next) return;
+      if (row.startsWith("Deliver from cargo")) {
+        for (const [k, qty] of Object.entries(next.needs)) {
+          const need = qty - (mine.delivered[k] ?? 0);
+          if (need <= 0) continue;
+          const have = p.cargo[k] ?? 0;
+          const move = Math.min(need, have);
+          if (move > 0) {
+            p.cargo[k] = have - move;
+            mine.delivered[k] = (mine.delivered[k] ?? 0) + move;
+          }
+        }
+        this.pushLog("Materials transferred to construction bay.");
+        return;
+      }
+      if (row.startsWith("Complete upgrade →") && !row.includes("need more")) {
+        const canUpgrade = Object.entries(next.needs).every(([k, qty]) => (mine.delivered[k] ?? 0) >= qty);
+        if (!canUpgrade) { this.pushLog("Missing materials."); return; }
+        mine.tier = next.tier;
+        mine.delivered = {};
+        this.pushLog(`${mine.name} advanced to Tier ${mine.tier}: ${next.unlocks}`);
+        this.pushChatter(mine.name, `Tier ${mine.tier} online. Systems nominal.`, "#7CFC00");
+        // Reflect tier on the entity so its render/label can pick it up.
+        const ent = this.entities.find((e) => e.id === mine.entityId);
+        if (ent) ent.name = `${mine.name} T${mine.tier}`;
+        return;
+      }
+      return;
+    }
   }
+
+  // 0.7.1 — Deploy a fresh player-owned station 1500u "outbound" from the
+  // current dock. Consumes one Station Core module and undocks.
+  deployStationCore() {
+    const p = this.player; if (!p) return;
+    const sid = this.dockedStationId; if (sid == null) return;
+    const parent = this.entities.find((e) => e.id === sid);
+    if (!parent) return;
+    // Remove one station-core install.
+    const midx = p.ship.modules.indexOf("station-core");
+    if (midx < 0) { this.pushLog("No Station Core aboard."); return; }
+    p.ship.modules.splice(midx, 1);
+    // Position: 1500u along +X from the parent Gate. Good enough for MVP.
+    const pos: Vec3 = { x: parent.pos.x + 1500, y: parent.pos.y, z: parent.pos.z };
+    const id = nextId();
+    const name = `Bastion-${id.toString(36).toUpperCase()}`;
+    const ent: Entity = {
+      id, kind: "station",
+      name: `${name} T0`,
+      pos, vel: { x: 0, y: 0, z: 0 },
+      faction: "player",
+      hull: 500,
+    };
+    this.entities.push(ent);
+    p.ownedStations = p.ownedStations ?? [];
+    p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {} });
+    this.pushLog(`Station Core deployed as ${name}. Fly to it and dock to build.`);
+    this.pushChatter("Computer", `${name} beacon online. Awaiting construction crews.`, "#7fd0ff");
+    // Auto-undock so the player can fly to it.
+    this._dockCooldownUntil = performance.now() / 1000 + 0.6;
+    this.screen = "playing"; this.dockedStationId = null;
+  }
+
 
   // --- Common menu nav -----------------------------------------------------
   menuNav(n: number) {
