@@ -2933,9 +2933,10 @@ function effectiveRadarRange(p: PlayerState): number {
 // (i.e. 1.6x → 1.92x while holding boost). Kept in one place so the flight
 // tick and the collision-speed estimate can't drift apart.
 function effectiveTopSpeed(p: PlayerState): number {
-  const tune = p.ship.modules.includes("engine-tune") ? 1.15 : 1.0;
+  const tune  = p.ship.modules.includes("engine-tune")  ? 1.15 : 1.0;
+  const aux   = p.ship.modules.includes("aux-thruster") ? 1.10 : 1.0;
   const speciesMul = speciesOf(p.char.species).topSpeedMul ?? 1;
-  return p.ship.speed * tune * speciesMul;
+  return p.ship.speed * tune * aux * speciesMul;
 }
 function effectiveBoostMul(p: PlayerState): number {
   return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
