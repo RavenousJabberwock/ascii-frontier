@@ -8485,6 +8485,40 @@ export class Voidwake {
       rows.push("Back");
       return rows;
     }
+    if (this.stationPage === "commodities") {
+      // Two rows per commodity: buy10 / sell10 (or sell-all if <10 in cargo).
+      // Includes a header + Back row.
+      const rows: string[] = [`~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`];
+      for (const c of stock.commodities) {
+        const have = p.cargo[c.id] ?? 0;
+        rows.push(`Buy  10 ${c.name.padEnd(18)} @${c.buy}cr  (stock ${c.stock}, you have ${have})`);
+        rows.push(`Sell 10 ${c.name.padEnd(18)} @${c.sell}cr  (you have ${have})`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+    if (this.stationPage === "build-station") {
+      const mine = p.ownedStations?.find((s) => s.entityId === sid);
+      if (!mine) return ["Back"];
+      const rows: string[] = [`~ ${mine.name}  Tier ${mine.tier}/5 ~`];
+      const next = PLAYER_STATION_TIERS.find((r) => r.tier === mine.tier + 1);
+      if (next) {
+        rows.push(`Next tier unlocks: ${next.unlocks}`);
+        rows.push("Deliver required materials:");
+        for (const [k, qty] of Object.entries(next.needs)) {
+          const have = p.cargo[k] ?? 0;
+          const done = have >= (qty - (mine.delivered[k] ?? 0)) ? " ✓" : "";
+          rows.push(`  ${k.padEnd(16)} ${mine.delivered[k] ?? 0}/${qty}  (in cargo: ${have})${done}`);
+        }
+        rows.push("Deliver from cargo (transfer everything eligible)");
+        const canUpgrade = Object.entries(next.needs).every(([k, qty]) => (mine.delivered[k] ?? 0) >= qty);
+        rows.push(canUpgrade ? "Complete upgrade →" : "Complete upgrade → (need more materials)");
+      } else {
+        rows.push("Maximum tier reached.");
+      }
+      rows.push("Back");
+      return rows;
+    }
     return ["Back"];
   }
 
