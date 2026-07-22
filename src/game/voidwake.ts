@@ -8792,7 +8792,7 @@ export class Voidwake {
       name: `${name} T0`,
       pos, vel: { x: 0, y: 0, z: 0 },
       faction: "player",
-      hull: 500, hullMax: 500,
+      hull: 500,
     };
     this.entities.push(ent);
     p.ownedStations = p.ownedStations ?? [];
