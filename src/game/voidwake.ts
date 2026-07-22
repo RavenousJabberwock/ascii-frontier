@@ -6475,6 +6475,20 @@ export class Voidwake {
       const t = this.entities.find((e) => e.id === m.targetId);
       if (t && V.len(V.sub(t.pos, p.pos)) < 50) { m.done = true; this.pushLog("Rescue signal acknowledged."); }
     }
+    if (m.kind === "passenger") {
+      const now = performance.now() / 1000;
+      if (m.deadlineAt && now > m.deadlineAt) {
+        // Deadline blown — fail: rep hit, small credit clawback, mission cleared.
+        this.pushLog(`✗ ${m.vip ? "VIP" : "Passenger"} ${m.guestName ?? ""} missed connection — contract failed.`);
+        this.pushChatter("Computer", `Passenger contract with ${m.guestName ?? "guest"} lapsed. Reputation logged.`, "#ff8a8a");
+        adjustRep(p, "guild", -3);
+        if (m.vip) adjustRep(p, "federation", -2);
+        p.mission = undefined;
+        return;
+      }
+      // Completion is set in tryDock (we need to know WHERE the player
+      // docked). Only render remaining time here — mission log handles it.
+    }
     // "bounty" / "destroy" completion is set by the bullet-hit loop.
   }
 
