@@ -1490,7 +1490,7 @@ interface PlayerState {
 }
 const XENO_HIRE_THRESHOLD = 5;
 
-type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul";
+type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
 interface Mission {
   id: number;
   kind: MissionKind;
@@ -1500,6 +1500,14 @@ interface Mission {
   cargoQty?: number;
   reward: number;
   done: boolean;
+  // 0.7.1 — passenger fields. deadlineAt is a performance.now()/1000
+  // timestamp; on expiry the mission is failed with a rep hit. destName
+  // is cached at generation time in case the target station drifts off
+  // the entity list mid-mission.
+  guestName?: string;
+  destName?: string;
+  deadlineAt?: number;
+  vip?: boolean;
 }
 
 // Per-station market state. Generated deterministically from the station id
