@@ -1508,11 +1508,15 @@ interface Mission {
 // charges double). Persisted lazily in Voidwake.stationStocks at runtime.
 interface StationStock {
   fuelPrice: number;          // cr per unit
-  orePrice: number;           // cr per unit sold to station
+  orePrice: number;           // cr per unit sold to station (legacy 'ore')
   weapons: { id: string; price: number }[];
   modules: { id: string; name: string; price: number; desc: string }[];
   gunnerFee: number;          // one-time hiring cost
   rumor: string;              // flavor line for the station screen
+  // 0.7.1 — rotating daily inventory
+  day: number;                // marketDay() when this stock was generated
+  recruitSlots: number;       // 0..4 crew hires available today
+  commodities: { id: string; name: string; buy: number; sell: number; stock: number }[];
 }
 
 // One line in the comms / chatter feed. "who" is the speaker label
