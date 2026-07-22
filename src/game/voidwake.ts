@@ -5289,7 +5289,6 @@ export class Voidwake {
     if (p.ship.modules.includes("fuel-scoop") && p.ship.fuel < p.ship.fuelMax && !p.supercruise && !p.afterburner) {
       p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 0.35);
     }
-    { // no-op block to preserve indentation
 
     // --- Environment hazards: nebula drain, beacon pickup, comet wash ------
     const now = performance.now() / 1000;
