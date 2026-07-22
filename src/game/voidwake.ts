@@ -2899,6 +2899,21 @@ function effectiveCrewMax(p: PlayerState): number {
   return base + quarters;
 }
 
+// 0.7.1 — Passenger berths: 2 per Luxury Cabin module. Kept independent
+// of crew so cabins can be added without giving up crew slots.
+function effectiveBerthMax(p: PlayerState): number {
+  const cabins = p.ship.modules.filter((m) => m === "luxury-cabin").length;
+  return cabins * 2;
+}
+
+// 0.7.1 — total cargo occupied across ore + commodities. All commodity
+// units take 1 cargo slot, matching the existing 'ore' convention.
+function cargoUsed(p: PlayerState): number {
+  let n = p.ship.cargo["ore"] ?? 0;
+  for (const c of COMMODITIES) n += p.ship.cargo[c.id] ?? 0;
+  return n;
+}
+
 // Effective radar range in world units. Base 1500u, +150u each for an
 // on-crew Pilot (sharp eyes on the nav plot) and Engineer (better sensor
 // tuning), and +600u for a Sensor Array module. Kept as a pure function
