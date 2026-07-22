@@ -8505,7 +8505,10 @@ export class Voidwake {
       if (offer.id === "shield-booster") { p.ship.shieldMax += 25; p.ship.shield += 25; }
       if (offer.id === "crew-quarters") this.pushLog("Crew quarters installed — +1 berth.");
       if (offer.id === "reinforced-plating") { p.ship.hullMax += 40; p.ship.hull += 40; }
+      if (offer.id === "hull-plating-mk2")   { p.ship.hullMax += 80; p.ship.hull += 80; }
       if (offer.id === "aux-fuel-tank") { p.ship.fuelMax += 50; p.ship.fuel += 50; }
+      if (offer.id === "luxury-cabin") this.pushLog("Luxury Cabin installed — +2 passenger berths.");
+      if (offer.id === "station-core") this.pushLog("Station Core secured — head to open space, dock menu ▸ 'Deploy Station Core'.");
       this.pushLog(`Installed ${offer.name}.`);
       return;
     }
