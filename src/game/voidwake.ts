@@ -8701,7 +8701,109 @@ export class Voidwake {
       }
       return;
     }
+
+    // ---- Commodities page ---------------------------------------------------
+    // Rows are: header, then per-commodity (buy10, sell10), Back. Layout must
+    // match buildStationLines() exactly.
+    if (this.stationPage === "commodities") {
+      if (i === 0) return;                 // header row
+      const idx = i - 1;
+      const commIdx = Math.floor(idx / 2);
+      const isBuy = idx % 2 === 0;
+      const c = stock.commodities[commIdx];
+      if (!c) return;
+      const qty = 10;
+      if (isBuy) {
+        const room = p.ship.cargoMax - cargoTotal(p);
+        const n = Math.max(0, Math.min(qty, c.stock, room, Math.floor(p.credits / c.buy)));
+        if (n <= 0) { this.pushLog("Can't buy — full/broke/out of stock."); return; }
+        p.credits -= n * c.buy;
+        p.cargo[c.id] = (p.cargo[c.id] ?? 0) + n;
+        c.stock -= n;
+        this.pushLog(`Bought ${n} ${c.name} for ${n * c.buy}cr.`);
+      } else {
+        const have = p.cargo[c.id] ?? 0;
+        const n = Math.min(qty, have);
+        if (n <= 0) { this.pushLog(`No ${c.name} to sell.`); return; }
+        const gross = n * c.sell;
+        const total = Math.round(gross * merchantSellMult(p));
+        p.cargo[c.id] = have - n;
+        p.credits += total;
+        c.stock += n;
+        this.pushLog(`Sold ${n} ${c.name} for ${total}cr.`);
+      }
+      return;
+    }
+
+    // ---- Build / Upgrade page (player-owned station) ------------------------
+    if (this.stationPage === "build-station") {
+      const mine = p.ownedStations?.find((s) => s.entityId === sid);
+      if (!mine) return;
+      const row = lines[i] ?? "";
+      const next = PLAYER_STATION_TIERS.find((r) => r.tier === mine.tier + 1);
+      if (!next) return;
+      if (row.startsWith("Deliver from cargo")) {
+        for (const [k, qty] of Object.entries(next.needs)) {
+          const need = qty - (mine.delivered[k] ?? 0);
+          if (need <= 0) continue;
+          const have = p.cargo[k] ?? 0;
+          const move = Math.min(need, have);
+          if (move > 0) {
+            p.cargo[k] = have - move;
+            mine.delivered[k] = (mine.delivered[k] ?? 0) + move;
+          }
+        }
+        this.pushLog("Materials transferred to construction bay.");
+        return;
+      }
+      if (row.startsWith("Complete upgrade →") && !row.includes("need more")) {
+        const canUpgrade = Object.entries(next.needs).every(([k, qty]) => (mine.delivered[k] ?? 0) >= qty);
+        if (!canUpgrade) { this.pushLog("Missing materials."); return; }
+        mine.tier = next.tier;
+        mine.delivered = {};
+        this.pushLog(`${mine.name} advanced to Tier ${mine.tier}: ${next.unlocks}`);
+        this.pushChatter(mine.name, `Tier ${mine.tier} online. Systems nominal.`, "#7CFC00");
+        // Reflect tier on the entity so its render/label can pick it up.
+        const ent = this.entities.find((e) => e.id === mine.entityId);
+        if (ent) ent.name = `${mine.name} T${mine.tier}`;
+        return;
+      }
+      return;
+    }
   }
+
+  // 0.7.1 — Deploy a fresh player-owned station 1500u "outbound" from the
+  // current dock. Consumes one Station Core module and undocks.
+  deployStationCore() {
+    const p = this.player; if (!p) return;
+    const sid = this.dockedStationId; if (sid == null) return;
+    const parent = this.entities.find((e) => e.id === sid);
+    if (!parent) return;
+    // Remove one station-core install.
+    const midx = p.ship.modules.indexOf("station-core");
+    if (midx < 0) { this.pushLog("No Station Core aboard."); return; }
+    p.ship.modules.splice(midx, 1);
+    // Position: 1500u along +X from the parent Gate. Good enough for MVP.
+    const pos: Vec3 = { x: parent.pos.x + 1500, y: parent.pos.y, z: parent.pos.z };
+    const id = nextId();
+    const name = `Bastion-${id.toString(36).toUpperCase()}`;
+    const ent: Entity = {
+      id, kind: "station",
+      name: `${name} T0`,
+      pos, vel: { x: 0, y: 0, z: 0 },
+      faction: "player",
+      hull: 500, hullMax: 500,
+    };
+    this.entities.push(ent);
+    p.ownedStations = p.ownedStations ?? [];
+    p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {} });
+    this.pushLog(`Station Core deployed as ${name}. Fly to it and dock to build.`);
+    this.pushChatter("Computer", `${name} beacon online. Awaiting construction crews.`, "#7fd0ff");
+    // Auto-undock so the player can fly to it.
+    this._dockCooldownUntil = performance.now() / 1000 + 0.6;
+    this.screen = "playing"; this.dockedStationId = null;
+  }
+
 
   // --- Common menu nav -----------------------------------------------------
   menuNav(n: number) {
