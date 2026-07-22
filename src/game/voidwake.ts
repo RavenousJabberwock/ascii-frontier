@@ -6353,13 +6353,18 @@ export class Voidwake {
   // something real to point at.
   generateMission(): Mission {
     const rng = this.rng;
+    const p = this.player;
+    // Passenger missions unlock once the ship has any Luxury Cabin
+    // berths. They're weighted low so trader/combat variety survives.
+    const canPassenger = !!p && effectiveBerthMax(p) > 0;
     const roll = rng();
     const kinds: MissionKind[] =
-      roll < 0.20 ? ["deliver"] :
-      roll < 0.35 ? ["haul"] :
-      roll < 0.50 ? ["destroy"] :
-      roll < 0.63 ? ["bounty"] :
-      roll < 0.76 ? ["scan"] :
+      canPassenger && roll < 0.15 ? ["passenger"] :
+      roll < 0.30 ? ["deliver"] :
+      roll < 0.42 ? ["haul"] :
+      roll < 0.55 ? ["destroy"] :
+      roll < 0.66 ? ["bounty"] :
+      roll < 0.77 ? ["scan"] :
       roll < 0.88 ? ["escort"] :
       ["rescue"];
     const k = kinds[0];
@@ -6373,7 +6378,6 @@ export class Voidwake {
       };
     }
     if (k === "bounty") {
-      // A named high-value pirate — pick one and mark it. Bigger reward.
       const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
       return {
         id, kind: k, targetId: target?.id,
@@ -6410,6 +6414,30 @@ export class Voidwake {
         id, kind: "haul", cargoItem: "ore", cargoQty: 15,
         description: "Haul 15 ore to any civilian station",
         reward: 520, done: false,
+      };
+    }
+    if (k === "passenger") {
+      // Passenger destination: any station different from where we are
+      // now (so the mission actually requires travel). Deadline scales
+      // with rough distance — 90s per 1000u, min 180s (3min).
+      const stations = this.entities.filter((e) => e.kind === "station" && e.id !== this.dockedStationId);
+      const dest = stations.length ? stations[Math.floor(rng() * stations.length)] : null;
+      const dist = dest && p ? V.len(V.sub(dest.pos, p.pos)) : 2000;
+      const secs = Math.max(180, Math.round(dist / 1000 * 90));
+      const vip = rng() < 0.15;
+      const firsts = ["Adira","Mira","Kestrel","Toma","Vex","Sable","Reeve","Nia","Cyrus","Odell"];
+      const lasts  = ["Halden","Vorne","Kestrel","Ashe","Rune","Marek","Shen","Bloom","Ilex"];
+      const gname = `${firsts[Math.floor(rng()*firsts.length)]} ${lasts[Math.floor(rng()*lasts.length)]}`;
+      const reward = Math.round((vip ? 900 : 450) + dist * 0.08);
+      return {
+        id, kind: "passenger",
+        description: `${vip ? "VIP" : "Passenger"} ${gname} → ${dest?.name ?? "distant hub"} (${Math.floor(secs/60)}m${secs%60}s)`,
+        targetId: dest?.id,
+        guestName: gname,
+        destName: dest?.name ?? "distant hub",
+        deadlineAt: performance.now() / 1000 + secs,
+        vip,
+        reward, done: false,
       };
     }
     return {
