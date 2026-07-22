@@ -2940,9 +2940,11 @@ function effectiveTopSpeed(p: PlayerState): number {
 function effectiveBoostMul(p: PlayerState): number {
   return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
 }
-// Auto-Loader trims weapon cooldown by 15%. Reptilians shave another 10%.
 function effectiveCooldownMul(p: PlayerState): number {
-  const modMul = p.ship.modules.includes("auto-loader") ? 0.85 : 1.0;
+  // Auto-Loader -15%, Targeting Computer -10%, stack multiplicatively.
+  let modMul = 1.0;
+  if (p.ship.modules.includes("auto-loader"))        modMul *= 0.85;
+  if (p.ship.modules.includes("targeting-computer")) modMul *= 0.90;
   const speciesMul = speciesOf(p.char.species).cooldownMul ?? 1;
   return modMul * speciesMul;
 }
