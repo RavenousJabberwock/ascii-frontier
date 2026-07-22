@@ -4460,16 +4460,19 @@ export class Voidwake {
   }
 
 
-  // Cached station market lookup. Generates on first request.
+  // Cached station market lookup. Regenerates when the market day rolls
+  // over so inventories rotate every ~10 real minutes.
   getStock(stationId: number): StationStock {
     let s = this.stationStocks.get(stationId);
-    if (!s) {
-      s = generateStationStock(stationId);
+    const today = marketDay();
+    if (!s || s.day !== today) {
+      const ent = this.entities.find((x) => x.id === stationId);
+      const faction = ent?.faction ?? "guild";
+      s = generateStationStock(stationId, faction, today);
       // 0.5.6 — Colony jitter. Populated planets pay noticeably more for
       // ore (colonies always need refinery feedstock), charge a small
       // premium on fuel (no atmosphere refinery), and use a colony-specific
       // rumor set. Weapons are unlisted at colonies (militia-only supply).
-      const ent = this.entities.find((x) => x.id === stationId);
       if (ent && ent.kind === "planet" && ent.populated) {
         s.orePrice = Math.round(s.orePrice * 1.25);
         s.fuelPrice = Math.round(s.fuelPrice * 1.10);
