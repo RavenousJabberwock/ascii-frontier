@@ -5284,9 +5284,8 @@ export class Voidwake {
     if (p.ship.modules.includes("repair-drones") && p.ship.hull > 0 && p.ship.hull < p.ship.hullMax) {
       p.ship.hull = Math.min(p.ship.hullMax, p.ship.hull + dt * 0.4);
     }
-    // 0.7.1 — Fuel Scoop module: trickle refuel while in flight (not
-    // supercruise/afterburner). Cheap alternative to docking constantly.
-    if (p.ship.modules.includes("fuel-scoop") && p.ship.fuel < p.ship.fuelMax && !p.supercruise && !p.afterburner) {
+    // 0.7.1 — Fuel Scoop module: trickle refuel while in flight.
+    if (p.ship.modules.includes("fuel-scoop") && p.ship.fuel < p.ship.fuelMax) {
       p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + dt * 0.35);
     }
 
