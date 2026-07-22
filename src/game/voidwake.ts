@@ -8535,14 +8535,20 @@ export class Voidwake {
     if (this.stationPage === "main") {
       const c = lines[i];
       if (c === "Market")       { this.stationPage = "market";  this.menuCursor = 0; }
+      else if (c === "Commodities") { this.stationPage = "commodities"; this.menuCursor = 0; }
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
+      else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
+      else if (c && c.startsWith("Withdraw treasury")) {
+        const mine = p.ownedStations?.find((s) => s.entityId === sid);
+        if (mine) { p.credits += mine.treasury; this.pushLog(`Withdrew ${mine.treasury}cr.`); mine.treasury = 0; }
+      }
+      else if (c === "Deploy Station Core (from this Gate)") {
+        this.deployStationCore();
+      }
       else if (c === "Undock")  {
-        // Play a short "clamps disengaging" beat by suppressing tryDock for
-        // 0.6s. Prevents the docking screen from bouncing right back if the
-        // player mashes F.
         this._dockCooldownUntil = performance.now() / 1000 + 0.6;
         this.pushLog("Clamps disengaging…");
         this.screen = "playing"; this.dockedStationId = null;
