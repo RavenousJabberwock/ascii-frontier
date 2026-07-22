@@ -2713,17 +2713,105 @@ const MODULE_CATALOG = [
   { id: "auto-loader",        name: "Auto-Loader",        price: 900,  desc: "weapon cooldown -15%" },
   { id: "loot-magnet",        name: "Loot Magnet",        price: 500,  desc: "pickup range 3x" },
   { id: "crew-quarters",      name: "Crew Quarters",      price: 1400, desc: "+1 crew slot" },
-  // Sensor Array: passive radar-range boost. Stacks additively with the
-  // small crew bonuses granted by an on-board Pilot / Engineer (see
-  // effectiveRadarRange). Single install — dupes blocked in buyModule().
   { id: "sensor-array",       name: "Sensor Array",       price: 950,  desc: "+600u radar range" },
-  // New: capacity / performance modules. Effects applied at install time
-  // (hullMax/fuelMax bump) or via effective*() helpers (top speed, boost).
   { id: "engine-tune",        name: "Engine Tune",        price: 1200, desc: "+15% top speed" },
   { id: "reinforced-plating", name: "Reinforced Plating", price: 1000, desc: "+40 hull max" },
   { id: "aux-fuel-tank",      name: "Aux Fuel Tank",      price: 700,  desc: "+50 fuel max" },
   { id: "long-range-scanner", name: "Long-Range Scanner", price: 1300, desc: "+1000u radar range" },
+  // 0.7.1 new upgrades
+  { id: "hull-plating-mk2",   name: "Hull Plating Mk II", price: 2200, desc: "+80 hull max (heavy)" },
+  { id: "aux-thruster",       name: "Aux Thruster",       price: 1500, desc: "+10% top speed + turn" },
+  { id: "mining-upgrade",     name: "Mining Laser Mk II", price: 1200, desc: "asteroid yield +50%" },
+  { id: "ecm-suite",          name: "ECM Suite",          price: 1800, desc: "hostiles lose lock 15% more often" },
+  { id: "fuel-scoop",         name: "Fuel Scoop",         price: 1600, desc: "slow ambient refuel in flight" },
+  { id: "luxury-cabin",       name: "Luxury Cabin",       price: 2400, desc: "+2 passenger berths" },
+  { id: "repair-drones",      name: "Repair Drones",      price: 2600, desc: "slow hull regen in flight" },
+  { id: "targeting-computer", name: "Targeting Computer", price: 1400, desc: "weapon cooldown -10%" },
+  { id: "station-core",       name: "Station Core",       price: 250000, desc: "deploy your own station (Fed Gate only)" },
 ];
+
+// 0.7.1 — Player-owned station tier costs (commodities in cargo consumed
+// on delivery via the Player Station "Build" page). Each entry unlocks
+// docking (T1), passive income (T2), NPC trade (T3), crew hire (T4),
+// defense drones (T5).
+const PLAYER_STATION_TIERS: { tier: number; needs: Record<string, number>; unlocks: string; incomePerDock: number }[] = [
+  { tier: 1, needs: { iron: 30, silicon: 20 },                   unlocks: "Docking + refuel", incomePerDock: 0 },
+  { tier: 2, needs: { iron: 60, silicon: 40, copper: 20 },       unlocks: "Passive income (100cr/dock)", incomePerDock: 100 },
+  { tier: 3, needs: { titanium: 40, microchips: 20 },            unlocks: "NPC trade income (250cr/dock)", incomePerDock: 250 },
+  { tier: 4, needs: { titanium: 80, robotics: 20, uranium: 10 }, unlocks: "Recruits + missions (500cr/dock)", incomePerDock: 500 },
+  { tier: 5, needs: { antimatter: 5, ai_cores: 10, quantum_drives: 5 }, unlocks: "Defense drones (1000cr/dock)", incomePerDock: 1000 },
+];
+
+// 0.7.1 — Commodity catalog. Every entry is a valid cargo key (single
+// slot per unit, matching the existing 'ore' convention). Classes drive
+// per-station price bias: Mining stations underprice elements, Industrial
+// underprice tech, Agricultural underprice food, Federation Gates carry
+// premium relics.
+type CommodityClass = "element" | "tech" | "food" | "relic";
+interface Commodity {
+  id: string;          // cargo key
+  name: string;
+  base: number;        // base cr / unit
+  class: CommodityClass;
+  legality: "clean" | "grey" | "restricted";
+}
+const COMMODITIES: Commodity[] = [
+  { id: "iron",              name: "Iron",              base: 12,   class: "element", legality: "clean" },
+  { id: "copper",            name: "Copper",            base: 18,   class: "element", legality: "clean" },
+  { id: "silicon",           name: "Silicon",           base: 22,   class: "element", legality: "clean" },
+  { id: "titanium",          name: "Titanium",          base: 55,   class: "element", legality: "clean" },
+  { id: "uranium",           name: "Uranium",           base: 140,  class: "element", legality: "grey" },
+  { id: "antimatter",        name: "Antimatter",        base: 1400, class: "element", legality: "restricted" },
+  { id: "microchips",        name: "Microchips",        base: 90,   class: "tech",    legality: "clean" },
+  { id: "robotics",          name: "Robotics",          base: 220,  class: "tech",    legality: "clean" },
+  { id: "ai_cores",          name: "AI Cores",          base: 620,  class: "tech",    legality: "grey" },
+  { id: "quantum_drives",    name: "Quantum Drives",    base: 1800, class: "tech",    legality: "grey" },
+  { id: "grain",             name: "Grain",             base: 8,    class: "food",    legality: "clean" },
+  { id: "textiles",          name: "Textiles",          base: 15,   class: "food",    legality: "clean" },
+  { id: "medicine",          name: "Medicine",          base: 65,   class: "food",    legality: "clean" },
+  { id: "spices",            name: "Spices",            base: 45,   class: "food",    legality: "clean" },
+  { id: "luxury_goods",      name: "Luxury Goods",      base: 260,  class: "food",    legality: "clean" },
+  { id: "precursor_frag",    name: "Precursor Fragment",base: 900,  class: "relic",   legality: "grey" },
+  { id: "ancient_datacore",  name: "Ancient Datacore",  base: 1600, class: "relic",   legality: "grey" },
+  { id: "xeno_artifact",     name: "Xeno Artifact",     base: 3200, class: "relic",   legality: "restricted" },
+];
+
+// Real-time "market day" — every 10 real minutes station inventories
+// (upgrades, crew, commodity prices) rotate. Kept as a pure function so
+// the market cache can compare it against the last-generated day.
+function marketDay(): number {
+  return Math.floor(Date.now() / 1000 / 600);
+}
+
+// Faction-based commodity price bias. Positive means the station tends
+// to have the good CHEAP (buy here); negative means EXPENSIVE (sell
+// here). Same faction+class deltas across the whole map so routes are
+// learnable.
+function commodityBias(cls: CommodityClass, faction: string): number {
+  if (faction === "federation") {
+    if (cls === "relic") return -0.35;   // Fed Gates want relics — pay well
+    if (cls === "tech")  return -0.10;
+    return 0.05;
+  }
+  if (faction === "guild") {   // trade hubs — neutral, small spread
+    return 0;
+  }
+  if (faction === "miner" || faction === "industry") {
+    if (cls === "element") return 0.30;  // cheap elements at refineries
+    if (cls === "tech")    return -0.15;
+    return 0.05;
+  }
+  if (faction === "nature") {  // colonies
+    if (cls === "food") return 0.30;
+    if (cls === "tech") return -0.20;
+    return 0.05;
+  }
+  if (faction === "pirate") {
+    if (cls === "relic") return -0.15;
+    return -0.05;               // black-market shave
+  }
+  return 0;
+}
 
 function generateStationStock(stationId: number): StationStock {
   const rng = mulberry32(stationId * 9176 + 7);
