@@ -1487,6 +1487,15 @@ interface PlayerState {
   // (UFOs, thargoids, alien swarms, motherships). Once it crosses the
   // XENO_HIRE_THRESHOLD (5), the station Crew page unlocks Xeno hires.
   alienEncounters?: number;
+  // 0.7.1 — active passenger manifest. Each entry occupies one berth on
+  // top of crew (see effectiveBerthMax). Delivery is completed by the
+  // corresponding Mission in `missions[]`; this array just holds the
+  // occupancy count so berths math is simple.
+  passengers?: { name: string; missionId: number; destStationId: number; vip?: boolean }[];
+  // 0.7.1 — player-owned space stations. Deployed via the Station Core
+  // module. Tier 0 = shell, T5 = fully upgraded. Treasury accrues per
+  // dock and is withdrawn when the player docks at their own station.
+  ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number> }[];
 }
 const XENO_HIRE_THRESHOLD = 5;
 
