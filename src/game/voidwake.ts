@@ -1164,6 +1164,30 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{a}: If the reactor whines like that at home, you replace it.  ||  {b}: If it whines like that here, you name it and hope it stays.",
     "{a}: Ever wonder if we're just NPCs in someone else's log?  ||  {b}: Only when the dialogue gets suspiciously good.",
   ],
+  passenger_smalltalk: [
+    "So this is a real starship. My tour brochure lied about the legroom.",
+    "Captain, is that noise the engine or the engine giving up?",
+    "I'll write you a good review if we don't get shot.",
+    "My last transport crashed. Statistically, that means we're safe. Right?",
+    "You do this every day? I'd be gray by month two.",
+    "The stars look faker from out here than from the resort brochures.",
+    "Wake me at the destination. Or don't, if there's a firefight.",
+    "Is 'evasive maneuver' the technical term for that stomach-flip?",
+    "I brought snacks. You look like you skip meals, Captain.",
+    "Tell the gunner to aim well. I'm attached to my luggage.",
+    "Precisely how insured is this hull? Asking for a will.",
+    "If we detour, the ministry will remember. So will my accountant.",
+  ],
+  player_station_report: [
+    "{station}: All systems nominal. Traffic light this rotation.",
+    "{station}: Refueling three haulers. Treasury ticking up.",
+    "{station}: Docking clamps cycled clean. No incidents.",
+    "{station}: Traders asking about spice futures. Politely deflected.",
+    "{station}: Defense drones on standby. Sector quiet.",
+    "{station}: Crew rotation complete. Morale steady.",
+    "{station}: Requesting more Titanium at your convenience, Captain.",
+    "{station}: A pirate scout sniffed the perimeter. Waved off.",
+  ],
 };
 
 interface ChatterCtx {
