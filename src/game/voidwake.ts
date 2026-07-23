@@ -4041,6 +4041,8 @@ export class Voidwake {
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
   stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" = "main";
+  // 0.7.2 — Commodities page mode toggle. Cycled with LEFT/RIGHT arrows.
+  commodityMode: "buy" | "sell" = "buy";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
   // Throttles for periodic respawning from stations / planets / pirate bases.
