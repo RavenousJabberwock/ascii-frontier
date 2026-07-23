@@ -2849,8 +2849,23 @@ function commodityBias(cls: CommodityClass, faction: string): number {
     return 0.05;
   }
   if (faction === "guild") {   // trade hubs — neutral, small spread
-    return 0;
-  }
+  return 0;
+}
+
+// 0.7.2 — Only commodities matching the station's economic identity are
+// offered on the Commodities page. This keeps the trade menu compact
+// (typically 4-8 rows instead of 18) and makes each dock feel distinct.
+// The full COMMODITIES table is still generated per-station so scripts /
+// mods can read hidden prices via `frontier.economy.price()`.
+function stationCommodityFilter(faction: string): Set<CommodityClass> {
+  if (faction === "federation") return new Set(["relic", "tech"] as CommodityClass[]);
+  if (faction === "guild")      return new Set(["element","tech","food","relic"] as CommodityClass[]);
+  if (faction === "miner" || faction === "industry")
+                                return new Set(["element", "tech"] as CommodityClass[]);
+  if (faction === "nature")     return new Set(["food", "element"] as CommodityClass[]);
+  if (faction === "pirate")     return new Set(["relic", "tech"] as CommodityClass[]);
+  return new Set(["element", "food"] as CommodityClass[]);
+}
   if (faction === "miner" || faction === "industry") {
     if (cls === "element") return 0.30;  // cheap elements at refineries
     if (cls === "tech")    return -0.15;
