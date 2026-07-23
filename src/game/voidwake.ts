@@ -8555,13 +8555,25 @@ export class Voidwake {
       return rows;
     }
     if (this.stationPage === "commodities") {
-      // Two rows per commodity: buy10 / sell10 (or sell-all if <10 in cargo).
-      // Includes a header + Back row.
-      const rows: string[] = [`~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`];
-      for (const c of stock.commodities) {
+      // 0.7.2 — Compact layout: one row per relevant commodity. A
+      // page-level mode toggle (BUY / SELL) drives the action. Rows are
+      // faction-filtered so each dock offers 4-8 items, not 18.
+      const faction = dockedEnt?.faction ?? "guild";
+      const allowed = stationCommodityFilter(faction);
+      const shown = stock.commodities.filter((c) => {
+        const meta = COMMODITIES.find((m) => m.id === c.id);
+        return meta ? allowed.has(meta.class) : true;
+      });
+      const mode = this.commodityMode.toUpperCase();
+      const rows: string[] = [
+        `~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`,
+        `Mode: ◀ ${mode} ▶   (←/→ toggle, ENTER to trade 10)`,
+      ];
+      for (const c of shown) {
         const have = p.cargo[c.id] ?? 0;
-        rows.push(`Buy  10 ${c.name.padEnd(18)} @${c.buy}cr  (stock ${c.stock}, you have ${have})`);
-        rows.push(`Sell 10 ${c.name.padEnd(18)} @${c.sell}cr  (you have ${have})`);
+        const price = this.commodityMode === "buy" ? c.buy : c.sell;
+        const tag   = this.commodityMode === "buy" ? "[BUY 10]" : "[SELL10]";
+        rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}`);
       }
       rows.push("Back");
       return rows;
