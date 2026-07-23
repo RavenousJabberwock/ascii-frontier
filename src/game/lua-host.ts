@@ -37,6 +37,7 @@ import {
 const HOOK_NAMES: ScriptHookName[] = [
   "onWorldGenerate", "onTick", "onPlayerFire", "onPlayerDock",
   "onEntityDestroyed", "onChatter", "onSave", "onLoad", "onPlanetLand",
+  "onCommodityTrade", "onPassengerBoard", "onPassengerDeliver", "onPlayerStationTierUp",
 ];
 
 export interface LuaHostBridge {
