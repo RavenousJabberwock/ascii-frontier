@@ -6350,6 +6350,10 @@ export class Voidwake {
         "#ffd28a");
       adjustRep(p, "guild", 2);
       if (p.mission.vip) adjustRep(p, "federation", 3);
+      dispatchHook("onPassengerDeliver", {
+        name: p.mission.guestName, vip: !!p.mission.vip,
+        stationId: t.id, station: t.name,
+      });
     }
     // Passenger-owned station income: if this is one of the player's own
     // stations, pay out treasury and skip further wage/rep logic later.
