@@ -37,6 +37,7 @@ import {
 const HOOK_NAMES: ScriptHookName[] = [
   "onWorldGenerate", "onTick", "onPlayerFire", "onPlayerDock",
   "onEntityDestroyed", "onChatter", "onSave", "onLoad", "onPlanetLand",
+  "onCommodityTrade", "onPassengerBoard", "onPassengerDeliver", "onPlayerStationTierUp",
 ];
 
 export interface LuaHostBridge {
@@ -61,6 +62,10 @@ export interface LuaHostBridge {
   // engine implementation maps line numbers in the concatenated source back
   // to the owning mod id (or "user script"). Optional.
   remapError?: (err: string) => string;
+  // 0.7.2 — economy read surface. Returns { buy, sell, stock } for a
+  // (commodityId, stationId?) pair. If stationId is omitted, the currently
+  // docked station is used. Returns null if the pair is unknown.
+  commodityPrice?: (commodityId: string, stationId?: number) => { buy: number; sell: number; stock: number } | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -247,6 +252,18 @@ export class LuaHost {
     });
     lua.lua_setfield(L, -2, to_luastring("installed"));
     lua.lua_setfield(L, -2, to_luastring("mods"));
+
+    // frontier.economy.price(commodityId, stationId?) → { buy, sell, stock } | nil
+    lua.lua_newtable(L);
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const id = lua.lua_tojsstring(Ls, 1) ?? "";
+      const sid = lua.lua_type(Ls, 2) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, 2)) : undefined;
+      const row = this.bridge.commodityPrice?.(String(id), sid) ?? null;
+      pushJsAsLua(Ls, row, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("price"));
+    lua.lua_setfield(L, -2, to_luastring("economy"));
 
     lua.lua_pushjsfunction(L, (Ls: L) => {
 

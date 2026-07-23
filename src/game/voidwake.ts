@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.1";
+const VERSION = "0.7.2";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -89,7 +89,12 @@ export type ScriptHookName =
   | "onChatter"
   | "onSave"
   | "onLoad"
-  | "onPlanetLand";
+  | "onPlanetLand"
+  // 0.7.2 — economy & ownership hooks
+  | "onCommodityTrade"
+  | "onPassengerBoard"
+  | "onPassengerDeliver"
+  | "onPlayerStationTierUp";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -104,6 +109,10 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onSave:            [],
   onLoad:            [],
   onPlanetLand:      [],
+  onCommodityTrade:     [],
+  onPassengerBoard:     [],
+  onPassengerDeliver:   [],
+  onPlayerStationTierUp:[],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
@@ -193,6 +202,7 @@ type ChatterKind =
   | "recruiter_farewell_good" | "recruiter_farewell_bad"
   | "tactical_idle" | "tactical_greet" | "tactical_hostile"
   | "tactical_farewell_good" | "tactical_farewell_bad"
+  | "passenger_smalltalk" | "player_station_report"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1153,6 +1163,30 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{a}: I found the Gratuitous Space Battles forum in the ship's log cache.  ||  {b}: Anything useful?  ||  {a}: Mostly people arguing about frigate loadouts. So — yes.",
     "{a}: If the reactor whines like that at home, you replace it.  ||  {b}: If it whines like that here, you name it and hope it stays.",
     "{a}: Ever wonder if we're just NPCs in someone else's log?  ||  {b}: Only when the dialogue gets suspiciously good.",
+  ],
+  passenger_smalltalk: [
+    "So this is a real starship. My tour brochure lied about the legroom.",
+    "Captain, is that noise the engine or the engine giving up?",
+    "I'll write you a good review if we don't get shot.",
+    "My last transport crashed. Statistically, that means we're safe. Right?",
+    "You do this every day? I'd be gray by month two.",
+    "The stars look faker from out here than from the resort brochures.",
+    "Wake me at the destination. Or don't, if there's a firefight.",
+    "Is 'evasive maneuver' the technical term for that stomach-flip?",
+    "I brought snacks. You look like you skip meals, Captain.",
+    "Tell the gunner to aim well. I'm attached to my luggage.",
+    "Precisely how insured is this hull? Asking for a will.",
+    "If we detour, the ministry will remember. So will my accountant.",
+  ],
+  player_station_report: [
+    "{station}: All systems nominal. Traffic light this rotation.",
+    "{station}: Refueling three haulers. Treasury ticking up.",
+    "{station}: Docking clamps cycled clean. No incidents.",
+    "{station}: Traders asking about spice futures. Politely deflected.",
+    "{station}: Defense drones on standby. Sector quiet.",
+    "{station}: Crew rotation complete. Morale steady.",
+    "{station}: Requesting more Titanium at your convenience, Captain.",
+    "{station}: A pirate scout sniffed the perimeter. Waved off.",
   ],
 };
 
@@ -2834,6 +2868,21 @@ function commodityBias(cls: CommodityClass, faction: string): number {
   return 0;
 }
 
+// 0.7.2 — Only commodities matching the station's economic identity are
+// offered on the Commodities page. This keeps the trade menu compact
+// (typically 4-8 rows instead of 18) and makes each dock feel distinct.
+// The full COMMODITIES table is still generated per-station so scripts /
+// mods can read hidden prices via `frontier.economy.price()`.
+function stationCommodityFilter(faction: string): Set<CommodityClass> {
+  if (faction === "federation") return new Set(["relic", "tech"] as CommodityClass[]);
+  if (faction === "guild")      return new Set(["element","tech","food","relic"] as CommodityClass[]);
+  if (faction === "miner" || faction === "industry")
+                                return new Set(["element", "tech"] as CommodityClass[]);
+  if (faction === "nature")     return new Set(["food", "element"] as CommodityClass[]);
+  if (faction === "pirate")     return new Set(["relic", "tech"] as CommodityClass[]);
+  return new Set(["element", "food"] as CommodityClass[]);
+}
+
 function generateStationStock(stationId: number, faction: string = "guild", day: number = marketDay()): StationStock {
   // Seed mixes station id with the market day so inventory rotates every
   // ~10 real minutes. Deterministic within a day, different across days.
@@ -4007,6 +4056,8 @@ export class Voidwake {
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
   stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" = "main";
+  // 0.7.2 — Commodities page mode toggle. Cycled with LEFT/RIGHT arrows.
+  commodityMode: "buy" | "sell" = "buy";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
   private _nextAmbientChatterAt = 0;
   // Throttles for periodic respawning from stations / planets / pirate bases.
@@ -6299,6 +6350,10 @@ export class Voidwake {
         "#ffd28a");
       adjustRep(p, "guild", 2);
       if (p.mission.vip) adjustRep(p, "federation", 3);
+      dispatchHook("onPassengerDeliver", {
+        name: p.mission.guestName, vip: !!p.mission.vip,
+        stationId: t.id, station: t.name,
+      });
     }
     // Passenger-owned station income: if this is one of the player's own
     // stations, pay out treasury and skip further wage/rep logic later.
@@ -6327,6 +6382,12 @@ export class Voidwake {
       awardXP(p, 80);
       this.pushLog(`Mission paid: +${p.mission.reward}cr`);
       p.mission = this.generateMission();
+      if (p.mission?.kind === "passenger") {
+        dispatchHook("onPassengerBoard", {
+          name: p.mission.guestName, vip: !!p.mission.vip,
+          destStationId: p.mission.targetId, fare: p.mission.reward,
+        });
+      }
     }
 
     // Pay crew wages. Flat per-dock cr per crewmember + gunner. Shortfalls
@@ -7805,6 +7866,14 @@ export class Voidwake {
         chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
         installedMods: () => this.mods.map((m) => ({ id: m.id, name: m.name, enabled: m.enabled })),
         remapError: (err) => this.remapLuaError(err),
+        commodityPrice: (id, sid) => {
+          const stationId = sid ?? this.dockedStationId ?? undefined;
+          if (stationId == null) return null;
+          const stock = this.stationStocks.get(stationId);
+          if (!stock) return null;
+          const row = stock.commodities.find((c) => c.id === id);
+          return row ? { buy: row.buy, sell: row.sell, stock: row.stock } : null;
+        },
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -8504,13 +8573,25 @@ export class Voidwake {
       return rows;
     }
     if (this.stationPage === "commodities") {
-      // Two rows per commodity: buy10 / sell10 (or sell-all if <10 in cargo).
-      // Includes a header + Back row.
-      const rows: string[] = [`~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`];
-      for (const c of stock.commodities) {
+      // 0.7.2 — Compact layout: one row per relevant commodity. A
+      // page-level mode toggle (BUY / SELL) drives the action. Rows are
+      // faction-filtered so each dock offers 4-8 items, not 18.
+      const faction = dockedEnt?.faction ?? "guild";
+      const allowed = stationCommodityFilter(faction);
+      const shown = stock.commodities.filter((c) => {
+        const meta = COMMODITIES.find((m) => m.id === c.id);
+        return meta ? allowed.has(meta.class) : true;
+      });
+      const mode = this.commodityMode.toUpperCase();
+      const rows: string[] = [
+        `~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`,
+        `Mode: ◀ ${mode} ▶   (←/→ toggle, ENTER to trade 10)`,
+      ];
+      for (const c of shown) {
         const have = p.cargo[c.id] ?? 0;
-        rows.push(`Buy  10 ${c.name.padEnd(18)} @${c.buy}cr  (stock ${c.stock}, you have ${have})`);
-        rows.push(`Sell 10 ${c.name.padEnd(18)} @${c.sell}cr  (you have ${have})`);
+        const price = this.commodityMode === "buy" ? c.buy : c.sell;
+        const tag   = this.commodityMode === "buy" ? "[BUY 10]" : "[SELL10]";
+        rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}`);
       }
       rows.push("Back");
       return rows;
@@ -8545,6 +8626,13 @@ export class Voidwake {
     if (this.dockedStationId == null) { this.screen = "playing"; return; }
     const lines = this.buildStationLines();
     this.menuNav(lines.length);
+    // 0.7.2 — LEFT/RIGHT toggles the buy/sell mode on the Commodities page.
+    if (this.stationPage === "commodities") {
+      if (this.input.consume("left") || this.input.consume("right")) {
+        this.commodityMode = this.commodityMode === "buy" ? "sell" : "buy";
+        return;
+      }
+    }
     if (!this.input.consume("enter")) return;
     const i = this.menuCursor;
     const sid = this.dockedStationId;
@@ -8720,18 +8808,27 @@ export class Voidwake {
       return;
     }
 
-    // ---- Commodities page ---------------------------------------------------
-    // Rows are: header, then per-commodity (buy10, sell10), Back. Layout must
-    // match buildStationLines() exactly.
+    // ---- Commodities page (0.7.2 compact) -----------------------------------
+    // Layout: [0] header, [1] mode toggle, [2..N] per-commodity action, [N+1] Back.
+    // The action shown depends on `this.commodityMode` (buy vs sell).
     if (this.stationPage === "commodities") {
-      if (i === 0) return;                 // header row
-      const idx = i - 1;
-      const commIdx = Math.floor(idx / 2);
-      const isBuy = idx % 2 === 0;
-      const c = stock.commodities[commIdx];
-      if (!c) return;
+      if (i === 0) return;                       // header
+      if (i === 1) {                             // mode toggle row
+        this.commodityMode = this.commodityMode === "buy" ? "sell" : "buy";
+        return;
+      }
+      const dockedEnt = this.entities.find((e) => e.id === sid);
+      const faction = dockedEnt?.faction ?? "guild";
+      const allowed = stationCommodityFilter(faction);
+      const shown = stock.commodities.filter((c) => {
+        const meta = COMMODITIES.find((m) => m.id === c.id);
+        return meta ? allowed.has(meta.class) : true;
+      });
+      const idx = i - 2;
+      const c = shown[idx];
+      if (!c) return;                             // Back row
       const qty = 10;
-      if (isBuy) {
+      if (this.commodityMode === "buy") {
         const room = p.ship.cargoMax - cargoTotal(p);
         const n = Math.max(0, Math.min(qty, c.stock, room, Math.floor(p.credits / c.buy)));
         if (n <= 0) { this.pushLog("Can't buy — full/broke/out of stock."); return; }
@@ -8739,6 +8836,7 @@ export class Voidwake {
         p.cargo[c.id] = (p.cargo[c.id] ?? 0) + n;
         c.stock -= n;
         this.pushLog(`Bought ${n} ${c.name} for ${n * c.buy}cr.`);
+        dispatchHook("onCommodityTrade", { action: "buy", id: c.id, name: c.name, qty: n, price: c.buy, stationId: sid });
       } else {
         const have = p.cargo[c.id] ?? 0;
         const n = Math.min(qty, have);
@@ -8749,6 +8847,7 @@ export class Voidwake {
         p.credits += total;
         c.stock += n;
         this.pushLog(`Sold ${n} ${c.name} for ${total}cr.`);
+        dispatchHook("onCommodityTrade", { action: "sell", id: c.id, name: c.name, qty: n, price: c.sell, total, stationId: sid });
       }
       return;
     }
@@ -8784,6 +8883,7 @@ export class Voidwake {
         // Reflect tier on the entity so its render/label can pick it up.
         const ent = this.entities.find((e) => e.id === mine.entityId);
         if (ent) ent.name = `${mine.name} T${mine.tier}`;
+        dispatchHook("onPlayerStationTierUp", { stationId: mine.entityId, name: mine.name, tier: mine.tier, unlocks: next.unlocks });
         return;
       }
       return;
