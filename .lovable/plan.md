@@ -1,78 +1,46 @@
-# 0.7.1 — Economy & Ownership Pass
+# 0.7.2 — Trade UX + Modding Completeness
 
-Big feature bundle. Scoping into four coordinated systems in `src/game/voidwake.ts`, shipped as **0.7.1**. All new state added to `SaveBlob` with graceful migration (missing fields → sensible defaults).
+Ships as **0.7.2**. Focus: compact commodities UI, faction-relevant filtering, and finishing the modding/scripting surface for the 0.7.x economy.
 
-## 1. Station upgrade rotation
+## 1. Compact Commodities menu
 
-Each station rolls a per-visit inventory:
+- One row per commodity instead of two (was: `Buy 10 …` + `Sell 10 …`).
+- Page header row + a **Mode toggle row** (`◀ BUY ▶` / `SELL`). LEFT/RIGHT keys or ENTER on the toggle row flip the mode.
+- Row action tag mirrors the current mode: `[BUY 10]` or `[SELL10]`.
+- Faction filter (`stationCommodityFilter`) trims the 18-commodity table to what makes sense at each station:
+  - Federation Gate → relics + tech
+  - Miner / Industrial → elements + tech
+  - Nature colony → food + elements
+  - Pirate → relics + tech (fenced)
+  - Trade Hub → all four classes
+- Result: typical station shows 4–8 rows and everything fits without scrolling off the bottom.
 
-- **New modules** — expand `MODULE_CATALOG` from the current set to ~18 upgrades: extra shield capacitor, aux thruster, cargo expander I/II, mining laser upgrade, sensor booster, ECM suite, hull plating I/II, fuel scoop, life support upgrade, targeting computer, jump range extender, stealth coating, tractor beam, repair drones, luxury cabin (unlocks passenger berths), station beacon kit (see §4).
-- **Rotation** — each station gets `upgradesOffered: string[]` of length `rng(0..5)` sampled from the catalog, seeded from `(stationId, epochDay)` so it rotates ~daily in-game.
-- **Crew availability** — each station's `recruits: CrewMember[]` also rotates 0–4 per day, seeded the same way. Recruiter perk keeps its bonus of +1.
-- Buy menu (`B`) gains an **Upgrades** tab alongside cargo.
+## 2. Scripting / Modding surface
 
-## 2. Arbitrage economy
+New Lua hooks dispatched from the engine:
 
-Introduce a proper commodity system. Cargo already tracks tonnage; each unit takes 1 slot.
+- `onCommodityTrade { action, id, name, qty, price, [total], stationId }`
+- `onPassengerBoard { name, vip, destStationId, fare }`
+- `onPassengerDeliver { name, vip, stationId, station }`
+- `onPlayerStationTierUp { stationId, name, tier, unlocks }`
 
-- **Commodity classes** (with base price, volatility, legality):
-  - *Elements*: Iron, Copper, Silicon, Titanium, Uranium, Antimatter.
-  - *Tech*: Microchips, Robotics, AI Cores, Quantum Drives.
-  - *Trade goods*: Grain, Textiles, Medicine, Spices, Luxury Goods.
-  - *Relics*: Precursor Fragment, Ancient Datacore, Xeno Artifact (rare, high value, mild rep risk if sold to wrong faction).
-- **Per-station price model**: `price = base * (1 + supplyBias) * (1 + rng(-0.15..0.15))` where `supplyBias` derives from station class (Mining → cheap elements, Industrial → cheap tech, Agricultural → cheap food, Trade Hub → neutral, Federation Gate → premium relics). Prices reseed daily so routes shift.
-- Existing single-commodity trade collapses into this table; migrate old saves by converting current cargo to `Iron`.
-- HUD shows top 3 spread hints when docked ("Buy X here, sell at Industrial +42%") — Navigator perk reveals more.
+New reader table:
 
-## 3. Passenger & long quest lines
+- `frontier.economy.price(id, stationId?) → { buy, sell, stock } | nil`
 
-Add a new mission kind `passenger`:
+New content-pack chatter kinds mods can extend via `frontier.chatter.add`:
 
-- Requires ≥1 free **berth** (base 0; Luxury Cabin module = +2, larger hulls get 1–2 baseline).
-- Payload: `{ guestName, originStation, destStation, deadlineTicks, fare, vip }`.
-- Deadline is generous (`distance / cruiseSpeed * 1.6`) so it's doable. Timer visible in Mission Log.
-- On dock at dest → payout + rep; on expiry or guest death (hull breach) → rep hit and half fare forfeited.
+- `passenger_smalltalk` — ambient VIP/guest lines while ferrying.
+- `player_station_report` — status pings from player-owned stations.
 
-Longer quest chains (`missionChain`):
-- 3–5 step arcs (courier → recon → combat → payoff). Each station may offer chain step 1; completion at destination unlocks step 2 as a follow-up in Comms.
-- Stored as `activeChains: MissionChain[]` in save.
+## 3. Docs / bundle
 
-## 4. Player-owned stations
+- Bump `VERSION` to `0.7.2`.
+- Rebuild the offline bundle after all edits land.
 
-Late-game money sink & income source:
-
-- Purchase **Station Core** (~250k cr) from Federation Gate or Trade Hub when reputation ≥ threshold.
-- Deploy at any free-space location (`F` while core is in cargo) → creates a `PlayerStation` entity with `tier: 0`, `capacity: 0`.
-- Supply raw materials (Iron, Silicon, Titanium, etc. — see §2) to build tiers 1–5. Each tier lists required commodities; delivering enough advances the tier and unlocks:
-  - Tier 1: docking + refuel.
-  - Tier 2: passive income (10 cr/tick × tier).
-  - Tier 3: buys/sells commodities from NPC traffic (adds to your treasury).
-  - Tier 4: recruits crew, offers missions to NPCs.
-  - Tier 5: fields defense drones vs hostiles.
-- Player stations appear on radar with a unique glyph. Treasury visible in Character Sheet; withdraw on dock.
-
-## 5. Lua/mod surface
-
-- New hooks: `onCommodityTrade`, `onPassengerBoard`, `onPassengerDeliver`, `onPlayerStationTierUp`.
-- `frontier.economy.price(commodityId, stationId?)` reader.
-- `frontier.mods` chatter packs gain new pools: `passenger_smalltalk`, `player_station_report`.
-
-## 6. Chatter, UI, docs
-
-- ~40 new lines for passengers, station construction, and market gossip.
-- Character Sheet gets a **Holdings** section listing owned stations, tiers, and income.
-- Update `README.md`, `src/game/README.md`, `src/game/lua-samples.md`, and `.lovable/plan.md`. Bump `VERSION` to `0.7.1`. Rebuild offline bundle.
-
-## Technical notes
-
-- Save migration: any missing new field defaults to empty/zero; old cargo string maps to `Iron`.
-- Station daily seed: `hash(stationId, floor(worldTime / DAY_TICKS))`.
-- Player stations serialize with position, tier, materials-delivered, treasury.
-- Type additions: `Commodity`, `MarketRow`, `PassengerMission`, `MissionChain`, `PlayerStation`, expanded `Module`.
-- All new UI keys reuse existing menus (`B` upgrades tab, mission log for timers, `C` sheet for holdings) — no new keybinds needed.
-
-## Out of scope for 0.7.1 (deferred)
+## Deferred (stays on the backlog)
 
 - Player-station cosmetic customization.
-- NPC trade AI actually moving cargo between stations (prices still shift daily via RNG).
+- NPC trade AI actually moving cargo between stations.
 - Faction-specific commodity bans beyond the relic rep hint.
+- Route-hint HUD ("Buy X here, sell at Industrial +42%").
