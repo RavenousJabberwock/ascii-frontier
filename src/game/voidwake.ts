@@ -89,7 +89,12 @@ export type ScriptHookName =
   | "onChatter"
   | "onSave"
   | "onLoad"
-  | "onPlanetLand";
+  | "onPlanetLand"
+  // 0.7.2 — economy & ownership hooks
+  | "onCommodityTrade"
+  | "onPassengerBoard"
+  | "onPassengerDeliver"
+  | "onPlayerStationTierUp";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -104,6 +109,10 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onSave:            [],
   onLoad:            [],
   onPlanetLand:      [],
+  onCommodityTrade:     [],
+  onPassengerBoard:     [],
+  onPassengerDeliver:   [],
+  onPlayerStationTierUp:[],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
