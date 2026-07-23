@@ -62,6 +62,10 @@ export interface LuaHostBridge {
   // engine implementation maps line numbers in the concatenated source back
   // to the owning mod id (or "user script"). Optional.
   remapError?: (err: string) => string;
+  // 0.7.2 — economy read surface. Returns { buy, sell, stock } for a
+  // (commodityId, stationId?) pair. If stationId is omitted, the currently
+  // docked station is used. Returns null if the pair is unknown.
+  commodityPrice?: (commodityId: string, stationId?: number) => { buy: number; sell: number; stock: number } | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
