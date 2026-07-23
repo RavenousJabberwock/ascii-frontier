@@ -8783,18 +8783,27 @@ export class Voidwake {
       return;
     }
 
-    // ---- Commodities page ---------------------------------------------------
-    // Rows are: header, then per-commodity (buy10, sell10), Back. Layout must
-    // match buildStationLines() exactly.
+    // ---- Commodities page (0.7.2 compact) -----------------------------------
+    // Layout: [0] header, [1] mode toggle, [2..N] per-commodity action, [N+1] Back.
+    // The action shown depends on `this.commodityMode` (buy vs sell).
     if (this.stationPage === "commodities") {
-      if (i === 0) return;                 // header row
-      const idx = i - 1;
-      const commIdx = Math.floor(idx / 2);
-      const isBuy = idx % 2 === 0;
-      const c = stock.commodities[commIdx];
-      if (!c) return;
+      if (i === 0) return;                       // header
+      if (i === 1) {                             // mode toggle row
+        this.commodityMode = this.commodityMode === "buy" ? "sell" : "buy";
+        return;
+      }
+      const dockedEnt = this.entities.find((e) => e.id === sid);
+      const faction = dockedEnt?.faction ?? "guild";
+      const allowed = stationCommodityFilter(faction);
+      const shown = stock.commodities.filter((c) => {
+        const meta = COMMODITIES.find((m) => m.id === c.id);
+        return meta ? allowed.has(meta.class) : true;
+      });
+      const idx = i - 2;
+      const c = shown[idx];
+      if (!c) return;                             // Back row
       const qty = 10;
-      if (isBuy) {
+      if (this.commodityMode === "buy") {
         const room = p.ship.cargoMax - cargoTotal(p);
         const n = Math.max(0, Math.min(qty, c.stock, room, Math.floor(p.credits / c.buy)));
         if (n <= 0) { this.pushLog("Can't buy — full/broke/out of stock."); return; }
@@ -8802,6 +8811,7 @@ export class Voidwake {
         p.cargo[c.id] = (p.cargo[c.id] ?? 0) + n;
         c.stock -= n;
         this.pushLog(`Bought ${n} ${c.name} for ${n * c.buy}cr.`);
+        dispatchHook("onCommodityTrade", { action: "buy", id: c.id, name: c.name, qty: n, price: c.buy, stationId: sid });
       } else {
         const have = p.cargo[c.id] ?? 0;
         const n = Math.min(qty, have);
@@ -8812,6 +8822,7 @@ export class Voidwake {
         p.credits += total;
         c.stock += n;
         this.pushLog(`Sold ${n} ${c.name} for ${total}cr.`);
+        dispatchHook("onCommodityTrade", { action: "sell", id: c.id, name: c.name, qty: n, price: c.sell, total, stationId: sid });
       }
       return;
     }
