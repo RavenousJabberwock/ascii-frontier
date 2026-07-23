@@ -8608,6 +8608,13 @@ export class Voidwake {
     if (this.dockedStationId == null) { this.screen = "playing"; return; }
     const lines = this.buildStationLines();
     this.menuNav(lines.length);
+    // 0.7.2 — LEFT/RIGHT toggles the buy/sell mode on the Commodities page.
+    if (this.stationPage === "commodities") {
+      if (this.input.consume("left") || this.input.consume("right")) {
+        this.commodityMode = this.commodityMode === "buy" ? "sell" : "buy";
+        return;
+      }
+    }
     if (!this.input.consume("enter")) return;
     const i = this.menuCursor;
     const sid = this.dockedStationId;
