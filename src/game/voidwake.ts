@@ -7866,6 +7866,14 @@ export class Voidwake {
         chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
         installedMods: () => this.mods.map((m) => ({ id: m.id, name: m.name, enabled: m.enabled })),
         remapError: (err) => this.remapLuaError(err),
+        commodityPrice: (id, sid) => {
+          const stationId = sid ?? this.dockedStationId ?? undefined;
+          if (stationId == null) return null;
+          const stock = this.stationStocks.get(stationId);
+          if (!stock) return null;
+          const row = stock.commodities.find((c) => c.id === id);
+          return row ? { buy: row.buy, sell: row.sell, stock: row.stock } : null;
+        },
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
