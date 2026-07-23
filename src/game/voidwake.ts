@@ -8869,6 +8869,7 @@ export class Voidwake {
         // Reflect tier on the entity so its render/label can pick it up.
         const ent = this.entities.find((e) => e.id === mine.entityId);
         if (ent) ent.name = `${mine.name} T${mine.tier}`;
+        dispatchHook("onPlayerStationTierUp", { stationId: mine.entityId, name: mine.name, tier: mine.tier, unlocks: next.unlocks });
         return;
       }
       return;
