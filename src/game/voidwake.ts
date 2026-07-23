@@ -202,6 +202,7 @@ type ChatterKind =
   | "recruiter_farewell_good" | "recruiter_farewell_bad"
   | "tactical_idle" | "tactical_greet" | "tactical_hostile"
   | "tactical_farewell_good" | "tactical_farewell_bad"
+  | "passenger_smalltalk" | "player_station_report"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
