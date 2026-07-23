@@ -253,6 +253,18 @@ export class LuaHost {
     lua.lua_setfield(L, -2, to_luastring("installed"));
     lua.lua_setfield(L, -2, to_luastring("mods"));
 
+    // frontier.economy.price(commodityId, stationId?) → { buy, sell, stock } | nil
+    lua.lua_newtable(L);
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const id = lua.lua_tojsstring(Ls, 1) ?? "";
+      const sid = lua.lua_type(Ls, 2) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, 2)) : undefined;
+      const row = this.bridge.commodityPrice?.(String(id), sid) ?? null;
+      pushJsAsLua(Ls, row, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("price"));
+    lua.lua_setfield(L, -2, to_luastring("economy"));
+
     lua.lua_pushjsfunction(L, (Ls: L) => {
 
       const snap = this.bridge.getPlayerSnapshot?.() ?? null;
