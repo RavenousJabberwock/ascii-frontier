@@ -2849,6 +2849,22 @@ function commodityBias(cls: CommodityClass, faction: string): number {
     return 0.05;
   }
   if (faction === "guild") {   // trade hubs — neutral, small spread
+    return 0;
+  }
+  if (faction === "miner" || faction === "industry") {
+    if (cls === "element") return 0.30;  // cheap elements at refineries
+    if (cls === "tech")    return -0.15;
+    return 0.05;
+  }
+  if (faction === "nature") {  // colonies
+    if (cls === "food") return 0.30;
+    if (cls === "tech") return -0.20;
+    return 0.05;
+  }
+  if (faction === "pirate") {
+    if (cls === "relic") return -0.15;
+    return -0.05;               // black-market shave
+  }
   return 0;
 }
 
@@ -2865,22 +2881,6 @@ function stationCommodityFilter(faction: string): Set<CommodityClass> {
   if (faction === "nature")     return new Set(["food", "element"] as CommodityClass[]);
   if (faction === "pirate")     return new Set(["relic", "tech"] as CommodityClass[]);
   return new Set(["element", "food"] as CommodityClass[]);
-}
-  if (faction === "miner" || faction === "industry") {
-    if (cls === "element") return 0.30;  // cheap elements at refineries
-    if (cls === "tech")    return -0.15;
-    return 0.05;
-  }
-  if (faction === "nature") {  // colonies
-    if (cls === "food") return 0.30;
-    if (cls === "tech") return -0.20;
-    return 0.05;
-  }
-  if (faction === "pirate") {
-    if (cls === "relic") return -0.15;
-    return -0.05;               // black-market shave
-  }
-  return 0;
 }
 
 function generateStationStock(stationId: number, faction: string = "guild", day: number = marketDay()): StationStock {
