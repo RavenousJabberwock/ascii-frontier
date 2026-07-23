@@ -6382,6 +6382,12 @@ export class Voidwake {
       awardXP(p, 80);
       this.pushLog(`Mission paid: +${p.mission.reward}cr`);
       p.mission = this.generateMission();
+      if (p.mission?.kind === "passenger") {
+        dispatchHook("onPassengerBoard", {
+          name: p.mission.guestName, vip: !!p.mission.vip,
+          destStationId: p.mission.targetId, fare: p.mission.reward,
+        });
+      }
     }
 
     // Pay crew wages. Flat per-dock cr per crewmember + gunner. Shortfalls
