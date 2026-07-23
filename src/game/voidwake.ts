@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.1";
+const VERSION = "0.7.2";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
