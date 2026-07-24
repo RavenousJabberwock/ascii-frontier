@@ -1805,6 +1805,7 @@ function defaultOptions(): Options {
     commsCols: 54,
     commsRows: 12,
     commsWrap: false,
+    questOffers: true,
   };
 }
 
