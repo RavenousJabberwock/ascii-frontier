@@ -6479,6 +6479,7 @@ export class Voidwake {
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.sfx("dock");
+    this.tryPickupStowaway("station");
     // 0.6.2 — dock trickle XP for all crew (rest, drills, shore leave).
     grantCrewXP(p, 3);
     dispatchHook("onPlayerDock", { entity: t, kind: "station" });
