@@ -2974,12 +2974,16 @@ function effectiveCargoMax(p: PlayerState): number {
   return base + expanders * 12;
 }
 
-// Effective crew capacity after hull base + Crew Quarters modules.
+// Effective crew capacity after hull base + Crew Quarters modules. An
+// undiscovered stowaway squats one berth (marked OUT OF ORDER on the
+// Character Sheet); once revealed they slot into the roster proper and
+// no longer subtract from the max.
 function effectiveCrewMax(p: PlayerState): number {
   const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId);
   const base = hull?.crewSlots ?? 1;
   const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
-  return base + quarters;
+  const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
+  return Math.max(1, base + quarters - stow);
 }
 
 // 0.7.1 — Passenger berths: 2 per Luxury Cabin module. Kept independent
