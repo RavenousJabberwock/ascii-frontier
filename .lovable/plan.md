@@ -1,3 +1,12 @@
+# 0.7.4 — Stowaways & Pets
+
+Ships as **0.7.4**.
+
+- 5% chance on a non-trap distress rescue, derelict salvage, or station dock (with a free berth) to pick up a stowaway. Max one per playthrough.
+- Undiscovered stowaway squats a berth: Character Sheet shows it as "OUT OF ORDER"; `effectiveCrewMax` -1 until revealed.
+- Weird-things chatter drips every ~1–3 min (respects Comms frequency); after 3–5 hints they step out and slot into the first vacant role at **10cr/dock**, no perks.
+- 5% chance at hire that any crewmember (or the legacy gunner) has a pet from a 44-entry table. Cosmetic only — appears on their Character Sheet row.
+
 # 0.7.2 — Trade UX + Modding Completeness
 
 Ships as **0.7.2**. Focus: compact commodities UI, faction-relevant filtering, and finishing the modding/scripting surface for the 0.7.x economy.

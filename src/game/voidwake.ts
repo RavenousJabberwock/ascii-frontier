@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.3";
+const VERSION = "0.7.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1466,12 +1466,38 @@ interface Gunner {
   wage: number;               // flat credits paid to this crewmember every dock
   nextBarkAt: number;         // throttle idle barks
   xp?: number;                // 0.6.2 — mirrors CrewMember.xp for legacy gunner
+  pet?: Pet;                  // 0.7.4 — 5% chance at hire, cosmetic
 }
 
 // Multi-role crew. Roles: "gunner" (auto-fire/mine), "pilot" (autopilot to
 // current target), "engineer" (regen hull/shield + fuel efficiency),
 // "merchant" (better market spreads).
 type CrewRole = "gunner" | "pilot" | "engineer" | "merchant" | "navigator" | "quartermaster" | "recruiter" | "tactical";
+// 0.7.4 — pets are pure flavor. Rolled 5% at hire time and attached to a
+// crewmember or the legacy gunner; they share the owner's berth and add a
+// line to the Character Sheet portrait entry. See PET_TABLE below.
+interface Pet {
+  name: string;
+  kind: string;      // "cat", "rock-lizard", etc.
+  glyph: string;     // single ascii/emoji-ish char for the sheet
+  quirk: string;     // one-line flavor
+}
+// 0.7.4 — a stowaway aboard an unclaimed berth. Rolled at 5% on non-trap
+// distress rescues, derelict salvage, and station docks with a free berth.
+// Only one ever per playthrough. While !discovered, the berth reads
+// "OUT OF ORDER" on the Character Sheet and reduces effectiveCrewMax by 1.
+// Weird-things chatter counts up encounters; after 3-5 hints they reveal
+// themselves and slot into the first vacant crew role at a very low wage.
+interface Stowaway {
+  name: string;
+  species: string;
+  gender: string;
+  discovered: boolean;
+  encounters: number;      // hint count so far
+  revealAt: number;        // encounters needed before reveal
+  nextHintAt: number;      // seconds until next hint (dt-decremented)
+  source: string;          // where they slipped aboard, for the reveal line
+}
 interface CrewMember {
   role: CrewRole;
   name: string;
@@ -1492,6 +1518,7 @@ interface CrewMember {
   // (small trickle). Level = floor(xp/50), capped at 9. Purely cosmetic
   // today except for a small gunner crit bonus on the fire path.
   xp?: number;
+  pet?: Pet;            // 0.7.4 — 5% chance at hire, cosmetic
 }
 
 interface PlayerState {
@@ -1530,6 +1557,8 @@ interface PlayerState {
   // module. Tier 0 = shell, T5 = fully upgraded. Treasury accrues per
   // dock and is withdrawn when the player docks at their own station.
   ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number> }[];
+  // 0.7.4 — stowaway aboard. One per playthrough, max.
+  stowaway?: Stowaway;
 }
 const XENO_HIRE_THRESHOLD = 5;
 
@@ -2759,6 +2788,7 @@ function generateGunner(rng: () => number): Gunner {
     cooldown: 0,
     wage: 30,      // flat cr per dock; see tryDock() wage deduction
     nextBarkAt: 0,
+    pet: rollPet(rng),
   };
 }
 
@@ -2945,12 +2975,16 @@ function effectiveCargoMax(p: PlayerState): number {
   return base + expanders * 12;
 }
 
-// Effective crew capacity after hull base + Crew Quarters modules.
+// Effective crew capacity after hull base + Crew Quarters modules. An
+// undiscovered stowaway squats one berth (marked OUT OF ORDER on the
+// Character Sheet); once revealed they slot into the roster proper and
+// no longer subtract from the max.
 function effectiveCrewMax(p: PlayerState): number {
   const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId);
   const base = hull?.crewSlots ?? 1;
   const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
-  return base + quarters;
+  const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
+  return Math.max(1, base + quarters - stow);
 }
 
 // 0.7.1 — Passenger berths: 2 per Luxury Cabin module. Kept independent
@@ -3104,8 +3138,94 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
     autopilot: false,
     wage,
     morale: 100,
+    pet: rollPet(rng),
   };
 }
+
+// ---------------- Pets (0.7.4) --------------------------------------------
+// 5% chance at hire that a crewmember shows up with an animal companion.
+// Pets share their owner's berth, catch vermin, and look cute. No stats,
+// no perks, no cost. Kept broad so the flavor never repeats too quickly.
+const PET_TABLE: Pet[] = [
+  { name: "Miso",     kind: "orange tabby cat",      glyph: "^",  quirk: "loves ration crumbs" },
+  { name: "Bolt",     kind: "black ship's cat",      glyph: "^",  quirk: "sleeps in the coolant vent" },
+  { name: "Pico",     kind: "tortoiseshell cat",     glyph: "^",  quirk: "hunts anything smaller than a fist" },
+  { name: "Rusk",     kind: "corgi mix pup",         glyph: "d",  quirk: "barks at every airlock cycle" },
+  { name: "Nell",     kind: "beagle rescue",         glyph: "d",  quirk: "howls in tune with the reactor" },
+  { name: "Chirp",    kind: "songfinch",             glyph: "v",  quirk: "sings during hyperspace jumps" },
+  { name: "Solder",   kind: "ferret",                glyph: "~",  quirk: "steals small tools; returns most" },
+  { name: "Nutmeg",   kind: "dwarf hamster",         glyph: "o",  quirk: "runs the wheel all third watch" },
+  { name: "Widget",   kind: "sugar glider",          glyph: "w",  quirk: "glides between bunk racks at night" },
+  { name: "Poe",      kind: "raven",                 glyph: "V",  quirk: "collects shiny fasteners" },
+  { name: "Zed",      kind: "rock lizard",           glyph: "z",  quirk: "basks under the coolant lamp" },
+  { name: "Mim",      kind: "leaf gecko",            glyph: "g",  quirk: "sticks to any surface" },
+  { name: "Blip",     kind: "axolotl",               glyph: ":",  quirk: "lives in a repurposed water tank" },
+  { name: "Nettle",   kind: "hedgehog",              glyph: "*",  quirk: "keeps the ration hold rodent-free" },
+  { name: "Fig",      kind: "sugar bat",             glyph: "n",  quirk: "hangs upside down over the map table" },
+  { name: "Ozzie",    kind: "bearded dragon",        glyph: "L",  quirk: "does slow push-ups at breakfast" },
+  { name: "Puck",     kind: "chinchilla",            glyph: "%",  quirk: "dust-bathes in the ventilation" },
+  { name: "Kettle",   kind: "guinea pig",            glyph: "o",  quirk: "whistles at meal alerts" },
+  { name: "Twill",    kind: "canary",                glyph: "v",  quirk: "watches the CO2 alarm herself" },
+  { name: "Grep",     kind: "grey parrot",           glyph: "V",  quirk: "quotes intercom chatter back at you" },
+  { name: "Yarrow",   kind: "cockatiel",             glyph: "v",  quirk: "whistles the SPD anthem, badly" },
+  { name: "Fern",     kind: "iguana",                glyph: "T",  quirk: "sunbathes on the console" },
+  { name: "Boots",    kind: "tuxedo cat",            glyph: "^",  quirk: "steals the pilot's seat every shift" },
+  { name: "Gauge",    kind: "russian tortoise",      glyph: "O",  quirk: "moves an inch per week; unphased" },
+  { name: "Sprocket", kind: "mech-mouse (defunct)",  glyph: "M",  quirk: "twitches on power surges; harmless" },
+  { name: "Halcyon",  kind: "gene-mod moth",         glyph: "m",  quirk: "glows in the crew showers" },
+  { name: "Ash",      kind: "grey rabbit",           glyph: "u",  quirk: "thumps at unfamiliar footsteps" },
+  { name: "Marlow",   kind: "shrimp colony",         glyph: "&",  quirk: "lives in a shatterproof jar" },
+  { name: "Peso",     kind: "hermit crab",           glyph: "C",  quirk: "traded shells with a station gift shop" },
+  { name: "Vex",      kind: "spider crab",           glyph: "X",  quirk: "waves at newcomers, terrifyingly" },
+  { name: "Muon",     kind: "void jellyfish",        glyph: "*",  quirk: "phosphoresces during hard burns" },
+  { name: "Rue",      kind: "arctic fox pup",        glyph: "d",  quirk: "hides socks in the escape pod" },
+  { name: "Bramble",  kind: "porcupine",             glyph: "#",  quirk: "keeps the mice honest" },
+  { name: "Cinder",   kind: "salamander",            glyph: "s",  quirk: "sleeps on the plasma coil housing" },
+  { name: "Halo",     kind: "carrier pigeon",        glyph: "V",  quirk: "carries handwritten notes between decks" },
+  { name: "Tock",     kind: "cricket colony",        glyph: ".",  quirk: "chirps you awake at ship-midnight" },
+  { name: "Umbra",    kind: "black moor goldfish",   glyph: "o",  quirk: "kept in a bowl bolted to nav" },
+  { name: "Sprig",    kind: "praying mantis",        glyph: "y",  quirk: "watches the door like a bailiff" },
+  { name: "Rio",      kind: "Aquilan glide-eel",     glyph: "~",  quirk: "swims laps in the fuel-line simulator" },
+  { name: "Nix",      kind: "shadow cat (rescue)",   glyph: "^",  quirk: "makes noise only for the captain" },
+  { name: "Beacon",   kind: "gene-mod firefly",      glyph: "*",  quirk: "flickers when lies are told nearby" },
+  { name: "Motte",    kind: "pygmy goat",            glyph: "h",  quirk: "eats anything soft, twice" },
+  { name: "Quill",    kind: "trained octopus",       glyph: "@",  quirk: "solves the jar puzzle in 12 seconds" },
+  { name: "Anise",    kind: "reef mouse",            glyph: "m",  quirk: "surfs the water recycler" },
+  { name: "Bishop",   kind: "yorkie mix",            glyph: "d",  quirk: "guards the coffee ration violently" },
+];
+function rollPet(rng: () => number): Pet | undefined {
+  if (rng() >= 0.05) return undefined;
+  const p = PET_TABLE[Math.floor(rng() * PET_TABLE.length)];
+  // Return a shallow copy so save/load can't mutate the shared table.
+  return { name: p.name, kind: p.kind, glyph: p.glyph, quirk: p.quirk };
+}
+
+// ---------------- Stowaways (0.7.4) ---------------------------------------
+// One-per-playthrough NPC that squats an unclaimed berth. Attempted on
+// non-trap distress rescues, derelict salvage, and station docks with a
+// free berth. 5% odds per qualifying event, gated on p.stowaway == null.
+const STOWAWAY_HINT_LINES = [
+  "Cmdr — my ration bar is gone. Again.",
+  "Something moved my wrench. Nobody's been on this deck for hours.",
+  "Sensor blip on the crew deck. Went to check — nothing there.",
+  "The pantry's short a few packs. Inventory says otherwise.",
+  "Cmdr, I keep hearing footsteps behind the aft bulkhead.",
+  "My tools were rearranged. Who moves someone's ratchet by mercy?",
+  "There's a bootprint by the maintenance hatch that isn't mine.",
+  "Coffee reserves are down. I'm the only one who touches the pot.",
+  "Life-support is drawing a little too much CO2 scrub for our headcount.",
+  "Cmdr, the light in the aft passage flicked on when nobody was there.",
+  "The rec deck blanket keeps ending up folded when I know I threw it.",
+  "Cmdr — swear I heard humming from the ductwork. Not the reactor.",
+  "Somebody ate the last protein cube and it wasn't me.",
+  "Cmdr, the water recycler's cycling like there's an extra body aboard.",
+];
+function reveallineFor(src: string): string {
+  if (src === "beacon")   return "Turns out I hitched a ride when you answered that mayday. Sorry. Please don't jettison me.";
+  if (src === "derelict") return "Been hiding in your maintenance crawl since you salvaged that wreck. Please don't jettison me.";
+  return "I stowed away at the last dock. Been living in the crawlspace. Please don't jettison me.";
+}
+
 
 
 
@@ -5440,6 +5560,7 @@ export class Voidwake {
             p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + 25);
             this.pushLog(`Distress payout: +${cr}cr, +25 fuel.`);
             this.pushChatter("Survivor", "Stars bless you, pilot.", "#9fe");
+            this.tryPickupStowaway("beacon");
           }
           // Consume the beacon either way.
           e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
@@ -5460,6 +5581,7 @@ export class Voidwake {
           }
           this.pushChatter("Sensors", `Derelict logged. ${e.name} was a ghost.`, "#c0d0d8");
           this.sfx("chime");
+          this.tryPickupStowaway("derelict");
           // Convert to expiring loot so it disappears next tick.
           e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
         }
@@ -5750,6 +5872,7 @@ export class Voidwake {
     this.tickCrewIdle(dt);
     this.tickCrewBanter(dt);
     this.tickNpcBanter(dt);
+    this.tickStowaway(dt);
     this.tickRetaliation();
     this.tickRespawns(dt);
 
@@ -6356,6 +6479,7 @@ export class Voidwake {
     this.pushLog(`Docked at ${t.name}. Refueled and repaired.`);
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.sfx("dock");
+    this.tryPickupStowaway("station");
     // 0.6.2 — dock trickle XP for all crew (rest, drills, shore leave).
     grantCrewXP(p, 3);
     dispatchHook("onPlayerDock", { entity: t, kind: "station" });
@@ -6857,6 +6981,99 @@ export class Voidwake {
     }
   }
 
+  // 0.7.4 — stowaway pickup + tick. tryPickupStowaway runs on the three
+  // qualifying events (non-trap distress rescue, derelict salvage, station
+  // dock with a free berth) and rolls 5%. tickStowaway drips weird-things
+  // chatter until reveal, then promotes them into the crew roster.
+  tryPickupStowaway(source: "beacon" | "derelict" | "station") {
+    const p = this.player; if (!p) return;
+    if (p.stowaway) return;                                  // one per playthrough
+    if (source === "station") {
+      // Must be a genuinely unclaimed berth (not already reserved by crew
+      // or a booked passenger).
+      const used = crewCount(p) + (p.passengers?.length ?? 0);
+      if (used >= effectiveCrewMax(p)) return;
+    }
+    if (Math.random() >= 0.05) return;
+    const first = GUNNER_FIRST[Math.floor(Math.random() * GUNNER_FIRST.length)];
+    const last  = GUNNER_LAST[Math.floor(Math.random() * GUNNER_LAST.length)];
+    const gender = ["Female","Male","Nonbinary"][Math.floor(Math.random() * 3)];
+    const species = SPECIES[Math.floor(Math.random() * SPECIES.length)];
+    p.stowaway = {
+      name: `${first} ${last}`,
+      species, gender,
+      discovered: false,
+      encounters: 0,
+      revealAt: 3 + Math.floor(Math.random() * 3),   // 3..5 hints
+      nextHintAt: 90 + Math.random() * 120,          // 1.5–3.5 min before first hint
+      source,
+    };
+    // The player gets no notification yet — that's the point. A berth just
+    // quietly goes "out of order" on the Character Sheet.
+  }
+  private _stowawayTickAcc = 0;
+  tickStowaway(dt: number) {
+    const p = this.player; if (!p) return;
+    const s = p.stowaway;
+    if (!s || s.discovered) return;
+    // Respect the Comms frequency setting — undiscovered hints ride the
+    // same schedule budget as other ambient chatter.
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 2.5 : freq === "lively" ? 0.6 : 1.0;
+    s.nextHintAt -= dt;
+    if (s.nextHintAt > 0) return;
+    s.nextHintAt = (60 + Math.random() * 90) * mul;
+    s.encounters += 1;
+    // Pick a "reporter" — a real crewmember if any, else the ship computer.
+    let speaker = "Computer";
+    let color = "#9effd2";
+    if (p.gunner) {
+      speaker = `Gunner ${p.gunner.name.split(" ")[0]}`;
+      color = "#fc6";
+    } else if (p.crew && p.crew.length) {
+      const c = p.crew[Math.floor(Math.random() * p.crew.length)];
+      speaker = `${CREW_ROLE_INFO[c.role].title} ${c.name.split(" ")[0]}`;
+      color = CREW_ROLE_INFO[c.role].color;
+    }
+    const line = STOWAWAY_HINT_LINES[Math.floor(Math.random() * STOWAWAY_HINT_LINES.length)];
+    this.pushChatter(speaker, line, color, "crew");
+    if (s.encounters >= s.revealAt) this.revealStowaway();
+  }
+  private revealStowaway() {
+    const p = this.player; if (!p) return;
+    const s = p.stowaway; if (!s || s.discovered) return;
+    s.discovered = true;
+    // Slot into the first vacant standard role. If every role is filled
+    // they still join, just as a duplicate role at very low wage.
+    const filled = new Set<CrewRole>(p.crew?.map((c) => c.role) ?? []);
+    if (p.gunner) filled.add("gunner");
+    const order: CrewRole[] = ["merchant","engineer","navigator","quartermaster","recruiter","tactical","pilot","gunner"];
+    const role = order.find((r) => !filled.has(r)) ?? "merchant";
+    const member: CrewMember = {
+      role,
+      name: s.name,
+      species: s.species,
+      gender: s.gender,
+      enabled: true,
+      hiredAt: Date.now(),
+      nextBarkAt: 0,
+      cooldown: 0,
+      autopilot: false,
+      wage: 10,          // very low pay — they're grateful, not qualified
+      morale: 100,
+      xp: 0,
+    };
+    if (!p.crew) p.crew = [];
+    p.crew.push(member);
+    this.pushLog(`⚠ Stowaway discovered — ${s.name} steps out of the crawlspace.`);
+    this.pushChatter(s.name, reveallineFor(s.source), "#ffb0d0", "crew");
+    this.pushChatter("Computer",
+      `Manifest updated. ${s.name} assigned as ${CREW_ROLE_INFO[role].title} at 10cr/dock.`,
+      "#9effd2", "system");
+    this.sfx("chime");
+  }
+
   // Crew banter timer + tick (uses "banter" template kind).
   private _nextBanterAt = 0;
   tickCrewBanter(dt: number) {
@@ -7252,12 +7469,12 @@ export class Voidwake {
     const cyStart = Math.max(sy + Math.max(shipArt.length + 2, sry - sy) + 1, my + 1);
     let cy = cyStart;
     putText(g, 4, cy++, "[ CREW ]", "#7CFC00");
-    const roster: Array<{ role: string; name: string; species: string; gender: string; state: string; xp: number; morale: number; color: string; wage: number }> = [];
+    const roster: Array<{ role: string; name: string; species: string; gender: string; state: string; xp: number; morale: number; color: string; wage: number; pet?: Pet }> = [];
     if (p.gunner) {
       roster.push({
         role: "Gunner", name: p.gunner.name, species: p.gunner.species, gender: p.gunner.gender,
         state: p.gunner.enabled ? "AUTO" : "STANDBY",
-        xp: p.gunner.xp ?? 0, morale: 100, color: "#fc6", wage: p.gunner.wage,
+        xp: p.gunner.xp ?? 0, morale: 100, color: "#fc6", wage: p.gunner.wage, pet: p.gunner.pet,
       });
     }
     if (p.crew) for (const c of p.crew) {
@@ -7266,20 +7483,35 @@ export class Voidwake {
                     !c.enabled ? "STANDBY" : "ACTIVE";
       roster.push({
         role: info.title, name: c.name, species: c.species, gender: c.gender,
-        state, xp: c.xp ?? 0, morale: c.morale ?? 100, color: info.color, wage: c.wage ?? 0,
+        state, xp: c.xp ?? 0, morale: c.morale ?? 100, color: info.color, wage: c.wage ?? 0, pet: c.pet,
       });
     }
-    if (!roster.length) {
+    // 0.7.4 — undiscovered stowaway shows up as an OUT OF ORDER berth row.
+    const stow = p.stowaway;
+    const hasHiddenStow = !!(stow && !stow.discovered);
+    if (!roster.length && !hasHiddenStow) {
       putText(g, 6, cy, "(no hires — visit a station's Crew Bay)", "#888");
     } else {
       const colW = Math.floor((cols - 8) / 2);
-      for (let i = 0; i < roster.length; i++) {
-        const r = roster[i];
+      const total = roster.length + (hasHiddenStow ? 1 : 0);
+      for (let i = 0; i < total; i++) {
         const col = i % 2;
         const row = Math.floor(i / 2);
         const bx = 4 + col * colW;
         const by = cy + row * 7;
         if (by + 5 >= rows - 1) break;
+        if (i === roster.length && hasHiddenStow) {
+          // OUT OF ORDER berth placeholder.
+          const port = ["███████","█ ??? █","█  ?  █","█ ??? █","███████","'-----'"];
+          for (let k = 0; k < port.length; k++) putText(g, bx, by + k, port[k], "#888", bx + colW - 1);
+          const tx = bx + 10;
+          putText(g, tx, by,     `Berth · OUT OF ORDER`, "#f88", bx + colW - 1);
+          putText(g, tx, by + 1, `sealed pending maintenance`, "#888", bx + colW - 1);
+          putText(g, tx, by + 2, `State: —`, "#888", bx + colW - 1);
+          putText(g, tx, by + 3, `(quartermaster has the key on order)`, "#888", bx + colW - 1);
+          continue;
+        }
+        const r = roster[i];
         const port = this.portraitFor(r.species);
         for (let k = 0; k < port.length; k++) putText(g, bx, by + k, port[k], r.color, bx + colW - 1);
         const tx = bx + 10;
@@ -7288,6 +7520,7 @@ export class Voidwake {
         putText(g, tx, by + 1, `${r.species}, ${r.gender}`, "#aef", bx + colW - 1);
         putText(g, tx, by + 2, `State: ${r.state}   Lv ${lv}  (xp ${r.xp})`, "#9fe", bx + colW - 1);
         putText(g, tx, by + 3, `Morale: ${r.morale}   Wage: ${r.wage}cr/dock`, r.morale < 40 ? "#f88" : "#9fe", bx + colW - 1);
+        if (r.pet) putText(g, tx, by + 4, `${r.pet.glyph} Pet: ${r.pet.name} the ${r.pet.kind} — ${r.pet.quirk}`, "#ffb0d0", bx + colW - 1);
       }
     }
 
