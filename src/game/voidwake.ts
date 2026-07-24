@@ -7469,12 +7469,12 @@ export class Voidwake {
     const cyStart = Math.max(sy + Math.max(shipArt.length + 2, sry - sy) + 1, my + 1);
     let cy = cyStart;
     putText(g, 4, cy++, "[ CREW ]", "#7CFC00");
-    const roster: Array<{ role: string; name: string; species: string; gender: string; state: string; xp: number; morale: number; color: string; wage: number }> = [];
+    const roster: Array<{ role: string; name: string; species: string; gender: string; state: string; xp: number; morale: number; color: string; wage: number; pet?: Pet }> = [];
     if (p.gunner) {
       roster.push({
         role: "Gunner", name: p.gunner.name, species: p.gunner.species, gender: p.gunner.gender,
         state: p.gunner.enabled ? "AUTO" : "STANDBY",
-        xp: p.gunner.xp ?? 0, morale: 100, color: "#fc6", wage: p.gunner.wage,
+        xp: p.gunner.xp ?? 0, morale: 100, color: "#fc6", wage: p.gunner.wage, pet: p.gunner.pet,
       });
     }
     if (p.crew) for (const c of p.crew) {
@@ -7483,20 +7483,35 @@ export class Voidwake {
                     !c.enabled ? "STANDBY" : "ACTIVE";
       roster.push({
         role: info.title, name: c.name, species: c.species, gender: c.gender,
-        state, xp: c.xp ?? 0, morale: c.morale ?? 100, color: info.color, wage: c.wage ?? 0,
+        state, xp: c.xp ?? 0, morale: c.morale ?? 100, color: info.color, wage: c.wage ?? 0, pet: c.pet,
       });
     }
-    if (!roster.length) {
+    // 0.7.4 — undiscovered stowaway shows up as an OUT OF ORDER berth row.
+    const stow = p.stowaway;
+    const hasHiddenStow = !!(stow && !stow.discovered);
+    if (!roster.length && !hasHiddenStow) {
       putText(g, 6, cy, "(no hires — visit a station's Crew Bay)", "#888");
     } else {
       const colW = Math.floor((cols - 8) / 2);
-      for (let i = 0; i < roster.length; i++) {
-        const r = roster[i];
+      const total = roster.length + (hasHiddenStow ? 1 : 0);
+      for (let i = 0; i < total; i++) {
         const col = i % 2;
         const row = Math.floor(i / 2);
         const bx = 4 + col * colW;
         const by = cy + row * 7;
         if (by + 5 >= rows - 1) break;
+        if (i === roster.length && hasHiddenStow) {
+          // OUT OF ORDER berth placeholder.
+          const port = ["███████","█ ??? █","█  ?  █","█ ??? █","███████","'-----'"];
+          for (let k = 0; k < port.length; k++) putText(g, bx, by + k, port[k], "#888", bx + colW - 1);
+          const tx = bx + 10;
+          putText(g, tx, by,     `Berth · OUT OF ORDER`, "#f88", bx + colW - 1);
+          putText(g, tx, by + 1, `sealed pending maintenance`, "#888", bx + colW - 1);
+          putText(g, tx, by + 2, `State: —`, "#888", bx + colW - 1);
+          putText(g, tx, by + 3, `(quartermaster has the key on order)`, "#888", bx + colW - 1);
+          continue;
+        }
+        const r = roster[i];
         const port = this.portraitFor(r.species);
         for (let k = 0; k < port.length; k++) putText(g, bx, by + k, port[k], r.color, bx + colW - 1);
         const tx = bx + 10;
@@ -7505,6 +7520,7 @@ export class Voidwake {
         putText(g, tx, by + 1, `${r.species}, ${r.gender}`, "#aef", bx + colW - 1);
         putText(g, tx, by + 2, `State: ${r.state}   Lv ${lv}  (xp ${r.xp})`, "#9fe", bx + colW - 1);
         putText(g, tx, by + 3, `Morale: ${r.morale}   Wage: ${r.wage}cr/dock`, r.morale < 40 ? "#f88" : "#9fe", bx + colW - 1);
+        if (r.pet) putText(g, tx, by + 4, `${r.pet.glyph} Pet: ${r.pet.name} the ${r.pet.kind} — ${r.pet.quirk}`, "#ffb0d0", bx + colW - 1);
       }
     }
 
