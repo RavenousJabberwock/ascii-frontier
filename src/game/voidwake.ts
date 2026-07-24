@@ -5560,6 +5560,7 @@ export class Voidwake {
             p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + 25);
             this.pushLog(`Distress payout: +${cr}cr, +25 fuel.`);
             this.pushChatter("Survivor", "Stars bless you, pilot.", "#9fe");
+            this.tryPickupStowaway("beacon");
           }
           // Consume the beacon either way.
           e.hull = -1; e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
