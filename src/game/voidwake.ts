@@ -4915,6 +4915,7 @@ export class Voidwake {
       case "codex": this.updateCodex(); break;
       case "howto": this.updateHowto(); break;
       case "quest-log": this.updateQuestLog(); break;
+      case "mission-offer": this.updateMissionOffer(); break;
       case "character": this.updateCharacterSheet(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
@@ -9091,6 +9092,7 @@ export class Voidwake {
       case "codex": this.renderCodex(grid); break;
       case "howto": this.renderHowto(grid); break;
       case "quest-log": this.renderQuestLog(grid); break;
+      case "mission-offer": this.renderMissionOffer(grid); break;
       case "character": this.renderCharacterSheet(grid); break;
     }
 
