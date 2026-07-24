@@ -7628,10 +7628,11 @@ export class Voidwake {
       const n = modes.length;
       this.options.reticleShape = modes[(idx + (right ? 1 : -1) + n) % n];
     }
+    if (i === 13 && (left || right)) this.options.questOffers = !(this.options.questOffers !== false);
     // "Chat Windows" opens a nested sub-page with the three comms controls
     // (width, height, word-wrap). Kept out of the flat Gameplay list so the
     // list stays scannable and there's room for future per-tab options.
-    if (i === 13 && this.input.consume("enter")) {
+    if (i === 14 && this.input.consume("enter")) {
       this.optionsSection = "chat"; this.menuCursor = 0;
       return;
     }
@@ -7656,6 +7657,7 @@ export class Voidwake {
       `HUD Color: ${this.options.hudScheme ?? "green"}`,
       `Reticle Color: ${this.options.reticleColor ?? "green"}`,
       `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
+      `Quest Offers: ${this.options.questOffers === false ? "OFF" : "ON"}`,
       `Chat Windows ▸`,
       "Back",
     ];
