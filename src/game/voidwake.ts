@@ -7070,7 +7070,8 @@ export class Voidwake {
     this.sfx("chime");
   }
 
-
+  // Crew banter timer + tick (uses "banter" template kind).
+  private _nextBanterAt = 0;
   tickCrewBanter(dt: number) {
     const p = this.player; if (!p) return;
     const freq = this.options.chatterFreq ?? "normal";
