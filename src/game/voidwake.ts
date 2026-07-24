@@ -4017,7 +4017,7 @@ export class Voidwake {
   // and returns to _offerReturn.
   _offerCandidates: Mission[] = [];
   _offerCursor = 0;
-  _offerReturn: ScreenT = "playing";
+  _offerReturn: Screen = "playing";
   _offerReason = "";
   // Timestamp (seconds) when the player entered the destroyed screen — used
   // for a short input grace period so the death banner is actually readable.
