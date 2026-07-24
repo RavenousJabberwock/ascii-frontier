@@ -2788,6 +2788,7 @@ function generateGunner(rng: () => number): Gunner {
     cooldown: 0,
     wage: 30,      // flat cr per dock; see tryDock() wage deduction
     nextBarkAt: 0,
+    pet: rollPet(rng),
   };
 }
 
