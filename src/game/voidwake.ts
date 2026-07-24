@@ -4896,6 +4896,12 @@ export class Voidwake {
       } else if (this.screen === "character") {
         this.screen = this._characterReturn;
         this.menuCursor = 0;
+      } else if (this.screen === "mission-offer") {
+        // ESC on the contract board = decline all.
+        this._offerCandidates = [];
+        this.screen = this._offerReturn;
+        this.menuCursor = 0;
+        this.pushLog("Contract board declined.");
       }
     }
 
