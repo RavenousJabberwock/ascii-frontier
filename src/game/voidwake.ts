@@ -1557,6 +1557,8 @@ interface PlayerState {
   // module. Tier 0 = shell, T5 = fully upgraded. Treasury accrues per
   // dock and is withdrawn when the player docks at their own station.
   ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number> }[];
+  // 0.7.4 — stowaway aboard. One per playthrough, max.
+  stowaway?: Stowaway;
 }
 const XENO_HIRE_THRESHOLD = 5;
 
