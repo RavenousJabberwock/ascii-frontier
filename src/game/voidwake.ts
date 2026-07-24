@@ -1518,6 +1518,7 @@ interface CrewMember {
   // (small trickle). Level = floor(xp/50), capped at 9. Purely cosmetic
   // today except for a small gunner crit bonus on the fire path.
   xp?: number;
+  pet?: Pet;            // 0.7.4 — 5% chance at hire, cosmetic
 }
 
 interface PlayerState {
