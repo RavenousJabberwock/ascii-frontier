@@ -1473,6 +1473,31 @@ interface Gunner {
 // current target), "engineer" (regen hull/shield + fuel efficiency),
 // "merchant" (better market spreads).
 type CrewRole = "gunner" | "pilot" | "engineer" | "merchant" | "navigator" | "quartermaster" | "recruiter" | "tactical";
+// 0.7.4 — pets are pure flavor. Rolled 5% at hire time and attached to a
+// crewmember or the legacy gunner; they share the owner's berth and add a
+// line to the Character Sheet portrait entry. See PET_TABLE below.
+interface Pet {
+  name: string;
+  kind: string;      // "cat", "rock-lizard", etc.
+  glyph: string;     // single ascii/emoji-ish char for the sheet
+  quirk: string;     // one-line flavor
+}
+// 0.7.4 — a stowaway aboard an unclaimed berth. Rolled at 5% on non-trap
+// distress rescues, derelict salvage, and station docks with a free berth.
+// Only one ever per playthrough. While !discovered, the berth reads
+// "OUT OF ORDER" on the Character Sheet and reduces effectiveCrewMax by 1.
+// Weird-things chatter counts up encounters; after 3-5 hints they reveal
+// themselves and slot into the first vacant crew role at a very low wage.
+interface Stowaway {
+  name: string;
+  species: string;
+  gender: string;
+  discovered: boolean;
+  encounters: number;      // hint count so far
+  revealAt: number;        // encounters needed before reveal
+  nextHintAt: number;      // seconds until next hint (dt-decremented)
+  source: string;          // where they slipped aboard, for the reveal line
+}
 interface CrewMember {
   role: CrewRole;
   name: string;
