@@ -5870,6 +5870,7 @@ export class Voidwake {
     this.tickCrewIdle(dt);
     this.tickCrewBanter(dt);
     this.tickNpcBanter(dt);
+    this.tickStowaway(dt);
     this.tickRetaliation();
     this.tickRespawns(dt);
 
