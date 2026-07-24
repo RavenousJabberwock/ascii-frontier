@@ -6392,18 +6392,21 @@ export class Voidwake {
     }
 
 
-    // Hand in mission
+    // Hand in mission. New in 0.7.3: instead of auto-assigning the next
+    // contract, we clear the mission slot and (when Quest Offers is on)
+    // open a 3-choice offer board so the player can pick or decline.
     if (p.mission && p.mission.done) {
       p.credits += p.mission.reward;
       awardXP(p, 80);
       this.pushLog(`Mission paid: +${p.mission.reward}cr`);
-      p.mission = this.generateMission();
-      if (p.mission?.kind === "passenger") {
-        dispatchHook("onPassengerBoard", {
-          name: p.mission.guestName, vip: !!p.mission.vip,
-          destStationId: p.mission.targetId, fare: p.mission.reward,
-        });
-      }
+      p.mission = undefined;
+    }
+    // Contract board on dock — offer 3 fresh missions if the player has no
+    // active contract and hasn't disabled Quest Offers. Player can Esc to
+    // decline all and enjoy pure sandbox flight.
+    if (!p.mission && this.options.questOffers !== false && t.kind === "station" && t.faction !== "pirate") {
+      const cands = [this.generateMission(), this.generateMission(), this.generateMission()];
+      this.openMissionOffer(`${t.name} contract board — pick a job, or ESC to skip.`, "station", cands);
     }
 
     // Pay crew wages. Flat per-dock cr per crewmember + gunner. Shortfalls
