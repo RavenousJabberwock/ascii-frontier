@@ -6977,8 +6977,100 @@ export class Voidwake {
     }
   }
 
-  // Crew banter timer + tick (uses "banter" template kind).
-  private _nextBanterAt = 0;
+  // 0.7.4 — stowaway pickup + tick. tryPickupStowaway runs on the three
+  // qualifying events (non-trap distress rescue, derelict salvage, station
+  // dock with a free berth) and rolls 5%. tickStowaway drips weird-things
+  // chatter until reveal, then promotes them into the crew roster.
+  tryPickupStowaway(source: "beacon" | "derelict" | "station") {
+    const p = this.player; if (!p) return;
+    if (p.stowaway) return;                                  // one per playthrough
+    if (source === "station") {
+      // Must be a genuinely unclaimed berth (not already reserved by crew
+      // or a booked passenger).
+      const used = crewCount(p) + (p.passengers?.length ?? 0);
+      if (used >= effectiveCrewMax(p)) return;
+    }
+    if (Math.random() >= 0.05) return;
+    const first = GUNNER_FIRST[Math.floor(Math.random() * GUNNER_FIRST.length)];
+    const last  = GUNNER_LAST[Math.floor(Math.random() * GUNNER_LAST.length)];
+    const gender = ["Female","Male","Nonbinary"][Math.floor(Math.random() * 3)];
+    const species = SPECIES[Math.floor(Math.random() * SPECIES.length)];
+    p.stowaway = {
+      name: `${first} ${last}`,
+      species, gender,
+      discovered: false,
+      encounters: 0,
+      revealAt: 3 + Math.floor(Math.random() * 3),   // 3..5 hints
+      nextHintAt: 90 + Math.random() * 120,          // 1.5–3.5 min before first hint
+      source,
+    };
+    // The player gets no notification yet — that's the point. A berth just
+    // quietly goes "out of order" on the Character Sheet.
+  }
+  private _stowawayTickAcc = 0;
+  tickStowaway(dt: number) {
+    const p = this.player; if (!p) return;
+    const s = p.stowaway;
+    if (!s || s.discovered) return;
+    // Respect the Comms frequency setting — undiscovered hints ride the
+    // same schedule budget as other ambient chatter.
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 2.5 : freq === "lively" ? 0.6 : 1.0;
+    s.nextHintAt -= dt;
+    if (s.nextHintAt > 0) return;
+    s.nextHintAt = (60 + Math.random() * 90) * mul;
+    s.encounters += 1;
+    // Pick a "reporter" — a real crewmember if any, else the ship computer.
+    let speaker = "Computer";
+    let color = "#9effd2";
+    if (p.gunner) {
+      speaker = `Gunner ${p.gunner.name.split(" ")[0]}`;
+      color = "#fc6";
+    } else if (p.crew && p.crew.length) {
+      const c = p.crew[Math.floor(Math.random() * p.crew.length)];
+      speaker = `${CREW_ROLE_INFO[c.role].title} ${c.name.split(" ")[0]}`;
+      color = CREW_ROLE_INFO[c.role].color;
+    }
+    const line = STOWAWAY_HINT_LINES[Math.floor(Math.random() * STOWAWAY_HINT_LINES.length)];
+    this.pushChatter(speaker, line, color, "crew");
+    if (s.encounters >= s.revealAt) this.revealStowaway();
+  }
+  private revealStowaway() {
+    const p = this.player; if (!p) return;
+    const s = p.stowaway; if (!s || s.discovered) return;
+    s.discovered = true;
+    // Slot into the first vacant standard role. If every role is filled
+    // they still join, just as a duplicate role at very low wage.
+    const filled = new Set<CrewRole>(p.crew?.map((c) => c.role) ?? []);
+    if (p.gunner) filled.add("gunner");
+    const order: CrewRole[] = ["merchant","engineer","navigator","quartermaster","recruiter","tactical","pilot","gunner"];
+    const role = order.find((r) => !filled.has(r)) ?? "merchant";
+    const member: CrewMember = {
+      role,
+      name: s.name,
+      species: s.species,
+      gender: s.gender,
+      enabled: true,
+      hiredAt: Date.now(),
+      nextBarkAt: 0,
+      cooldown: 0,
+      autopilot: false,
+      wage: 10,          // very low pay — they're grateful, not qualified
+      morale: 100,
+      xp: 0,
+    };
+    if (!p.crew) p.crew = [];
+    p.crew.push(member);
+    this.pushLog(`⚠ Stowaway discovered — ${s.name} steps out of the crawlspace.`);
+    this.pushChatter(s.name, reveallineFor(s.source), "#ffb0d0", "crew");
+    this.pushChatter("Computer",
+      `Manifest updated. ${s.name} assigned as ${CREW_ROLE_INFO[role].title} at 10cr/dock.`,
+      "#9effd2", "system");
+    this.sfx("chime");
+  }
+
+
   tickCrewBanter(dt: number) {
     const p = this.player; if (!p) return;
     const freq = this.options.chatterFreq ?? "normal";
