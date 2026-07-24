@@ -5581,6 +5581,7 @@ export class Voidwake {
           }
           this.pushChatter("Sensors", `Derelict logged. ${e.name} was a ghost.`, "#c0d0d8");
           this.sfx("chime");
+          this.tryPickupStowaway("derelict");
           // Convert to expiring loot so it disappears next tick.
           e.kind = "loot"; e.loot = {}; e.ttlAt = performance.now() / 1000 + 0.1;
         }
