@@ -6961,6 +6961,81 @@ export class Voidwake {
   }
 
 
+  // --- Mission offer popup (0.7.3) ---------------------------------------
+  // A modal contract board. openMissionOffer is called from newGame and from
+  // tryDock (station hand-in) when Options.questOffers is on. Player selects
+  // one candidate with UP/DOWN + ENTER (accept), or presses ESC / D to
+  // decline all and return to _offerReturn.
+  openMissionOffer(reason: string, returnTo: Screen, candidates: Mission[]) {
+    if (!candidates.length) return;
+    this._offerCandidates = candidates;
+    this._offerCursor = 0;
+    this._offerReturn = returnTo;
+    this._offerReason = reason;
+    this.screen = "mission-offer";
+    this.menuCursor = 0;
+  }
+
+  updateMissionOffer() {
+    const n = this._offerCandidates.length;
+    if (!n) { this.screen = this._offerReturn; return; }
+    if (this.input.consume("arrowdown") || this.input.consume("s")) {
+      this._offerCursor = (this._offerCursor + 1) % (n + 1); // extra slot = Skip
+    }
+    if (this.input.consume("arrowup") || this.input.consume("w")) {
+      this._offerCursor = (this._offerCursor - 1 + (n + 1)) % (n + 1);
+    }
+    if (this.input.consume("d")) {
+      this._offerCandidates = [];
+      this.screen = this._offerReturn;
+      this.pushLog("Contract board declined.");
+      return;
+    }
+    if (this.input.consume("enter")) {
+      const p = this.player;
+      if (this._offerCursor === n) {
+        // Skip row selected — decline all.
+        this._offerCandidates = [];
+        this.screen = this._offerReturn;
+        this.pushLog("Contract board declined.");
+        return;
+      }
+      const picked = this._offerCandidates[this._offerCursor];
+      if (p && picked) {
+        p.mission = picked;
+        this.pushLog(`Accepted: ${picked.description}`);
+        if (picked.kind === "passenger") {
+          dispatchHook("onPassengerBoard", {
+            name: picked.guestName, vip: !!picked.vip,
+            destStationId: picked.targetId, fare: picked.reward,
+          });
+        }
+      }
+      this._offerCandidates = [];
+      this.screen = this._offerReturn;
+    }
+  }
+
+  renderMissionOffer(g: Cell[][]) {
+    putText(g, 4, 1, "[ CONTRACT BOARD ]   ENTER accept   D / ESC decline", "#7CFC00");
+    putText(g, 4, 3, this._offerReason, "#9fe");
+    const cands = this._offerCandidates;
+    let row = 5;
+    for (let i = 0; i < cands.length; i++) {
+      const m = cands[i];
+      const sel = i === this._offerCursor;
+      const marker = sel ? "▶" : " ";
+      const color = sel ? "#ffe066" : "#cf6";
+      putText(g, 4, row, `${marker} [${m.kind.toUpperCase()}]  ${m.description}`, color);
+      putText(g, 8, row + 1, `Reward: ${m.reward}cr`, sel ? "#ffd28a" : "#9fe");
+      row += 3;
+    }
+    const skipSel = this._offerCursor === cands.length;
+    putText(g, 4, row, `${skipSel ? "▶" : " "} Skip — no contract this time`,
+            skipSel ? "#ffe066" : "#9fe");
+  }
+
+
   // Quest log screen — full-screen popup showing active mission + description
   // + progress + faction reputation. ESC or U closes it.
   updateQuestLog() {
