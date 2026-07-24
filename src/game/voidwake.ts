@@ -3137,8 +3137,94 @@ function generateCrewMember(role: CrewRole, rng: () => number): CrewMember {
     autopilot: false,
     wage,
     morale: 100,
+    pet: rollPet(rng),
   };
 }
+
+// ---------------- Pets (0.7.4) --------------------------------------------
+// 5% chance at hire that a crewmember shows up with an animal companion.
+// Pets share their owner's berth, catch vermin, and look cute. No stats,
+// no perks, no cost. Kept broad so the flavor never repeats too quickly.
+const PET_TABLE: Pet[] = [
+  { name: "Miso",     kind: "orange tabby cat",      glyph: "^",  quirk: "loves ration crumbs" },
+  { name: "Bolt",     kind: "black ship's cat",      glyph: "^",  quirk: "sleeps in the coolant vent" },
+  { name: "Pico",     kind: "tortoiseshell cat",     glyph: "^",  quirk: "hunts anything smaller than a fist" },
+  { name: "Rusk",     kind: "corgi mix pup",         glyph: "d",  quirk: "barks at every airlock cycle" },
+  { name: "Nell",     kind: "beagle rescue",         glyph: "d",  quirk: "howls in tune with the reactor" },
+  { name: "Chirp",    kind: "songfinch",             glyph: "v",  quirk: "sings during hyperspace jumps" },
+  { name: "Solder",   kind: "ferret",                glyph: "~",  quirk: "steals small tools; returns most" },
+  { name: "Nutmeg",   kind: "dwarf hamster",         glyph: "o",  quirk: "runs the wheel all third watch" },
+  { name: "Widget",   kind: "sugar glider",          glyph: "w",  quirk: "glides between bunk racks at night" },
+  { name: "Poe",      kind: "raven",                 glyph: "V",  quirk: "collects shiny fasteners" },
+  { name: "Zed",      kind: "rock lizard",           glyph: "z",  quirk: "basks under the coolant lamp" },
+  { name: "Mim",      kind: "leaf gecko",            glyph: "g",  quirk: "sticks to any surface" },
+  { name: "Blip",     kind: "axolotl",               glyph: ":",  quirk: "lives in a repurposed water tank" },
+  { name: "Nettle",   kind: "hedgehog",              glyph: "*",  quirk: "keeps the ration hold rodent-free" },
+  { name: "Fig",      kind: "sugar bat",             glyph: "n",  quirk: "hangs upside down over the map table" },
+  { name: "Ozzie",    kind: "bearded dragon",        glyph: "L",  quirk: "does slow push-ups at breakfast" },
+  { name: "Puck",     kind: "chinchilla",            glyph: "%",  quirk: "dust-bathes in the ventilation" },
+  { name: "Kettle",   kind: "guinea pig",            glyph: "o",  quirk: "whistles at meal alerts" },
+  { name: "Twill",    kind: "canary",                glyph: "v",  quirk: "watches the CO2 alarm herself" },
+  { name: "Grep",     kind: "grey parrot",           glyph: "V",  quirk: "quotes intercom chatter back at you" },
+  { name: "Yarrow",   kind: "cockatiel",             glyph: "v",  quirk: "whistles the SPD anthem, badly" },
+  { name: "Fern",     kind: "iguana",                glyph: "T",  quirk: "sunbathes on the console" },
+  { name: "Boots",    kind: "tuxedo cat",            glyph: "^",  quirk: "steals the pilot's seat every shift" },
+  { name: "Gauge",    kind: "russian tortoise",      glyph: "O",  quirk: "moves an inch per week; unphased" },
+  { name: "Sprocket", kind: "mech-mouse (defunct)",  glyph: "M",  quirk: "twitches on power surges; harmless" },
+  { name: "Halcyon",  kind: "gene-mod moth",         glyph: "m",  quirk: "glows in the crew showers" },
+  { name: "Ash",      kind: "grey rabbit",           glyph: "u",  quirk: "thumps at unfamiliar footsteps" },
+  { name: "Marlow",   kind: "shrimp colony",         glyph: "&",  quirk: "lives in a shatterproof jar" },
+  { name: "Peso",     kind: "hermit crab",           glyph: "C",  quirk: "traded shells with a station gift shop" },
+  { name: "Vex",      kind: "spider crab",           glyph: "X",  quirk: "waves at newcomers, terrifyingly" },
+  { name: "Muon",     kind: "void jellyfish",        glyph: "*",  quirk: "phosphoresces during hard burns" },
+  { name: "Rue",      kind: "arctic fox pup",        glyph: "d",  quirk: "hides socks in the escape pod" },
+  { name: "Bramble",  kind: "porcupine",             glyph: "#",  quirk: "keeps the mice honest" },
+  { name: "Cinder",   kind: "salamander",            glyph: "s",  quirk: "sleeps on the plasma coil housing" },
+  { name: "Halo",     kind: "carrier pigeon",        glyph: "V",  quirk: "carries handwritten notes between decks" },
+  { name: "Tock",     kind: "cricket colony",        glyph: ".",  quirk: "chirps you awake at ship-midnight" },
+  { name: "Umbra",    kind: "black moor goldfish",   glyph: "o",  quirk: "kept in a bowl bolted to nav" },
+  { name: "Sprig",    kind: "praying mantis",        glyph: "y",  quirk: "watches the door like a bailiff" },
+  { name: "Rio",      kind: "Aquilan glide-eel",     glyph: "~",  quirk: "swims laps in the fuel-line simulator" },
+  { name: "Nix",      kind: "shadow cat (rescue)",   glyph: "^",  quirk: "makes noise only for the captain" },
+  { name: "Beacon",   kind: "gene-mod firefly",      glyph: "*",  quirk: "flickers when lies are told nearby" },
+  { name: "Motte",    kind: "pygmy goat",            glyph: "h",  quirk: "eats anything soft, twice" },
+  { name: "Quill",    kind: "trained octopus",       glyph: "@",  quirk: "solves the jar puzzle in 12 seconds" },
+  { name: "Anise",    kind: "reef mouse",            glyph: "m",  quirk: "surfs the water recycler" },
+  { name: "Bishop",   kind: "yorkie mix",            glyph: "d",  quirk: "guards the coffee ration violently" },
+];
+function rollPet(rng: () => number): Pet | undefined {
+  if (rng() >= 0.05) return undefined;
+  const p = PET_TABLE[Math.floor(rng() * PET_TABLE.length)];
+  // Return a shallow copy so save/load can't mutate the shared table.
+  return { name: p.name, kind: p.kind, glyph: p.glyph, quirk: p.quirk };
+}
+
+// ---------------- Stowaways (0.7.4) ---------------------------------------
+// One-per-playthrough NPC that squats an unclaimed berth. Attempted on
+// non-trap distress rescues, derelict salvage, and station docks with a
+// free berth. 5% odds per qualifying event, gated on p.stowaway == null.
+const STOWAWAY_HINT_LINES = [
+  "Cmdr — my ration bar is gone. Again.",
+  "Something moved my wrench. Nobody's been on this deck for hours.",
+  "Sensor blip on the crew deck. Went to check — nothing there.",
+  "The pantry's short a few packs. Inventory says otherwise.",
+  "Cmdr, I keep hearing footsteps behind the aft bulkhead.",
+  "My tools were rearranged. Who moves someone's ratchet by mercy?",
+  "There's a bootprint by the maintenance hatch that isn't mine.",
+  "Coffee reserves are down. I'm the only one who touches the pot.",
+  "Life-support is drawing a little too much CO2 scrub for our headcount.",
+  "Cmdr, the light in the aft passage flicked on when nobody was there.",
+  "The rec deck blanket keeps ending up folded when I know I threw it.",
+  "Cmdr — swear I heard humming from the ductwork. Not the reactor.",
+  "Somebody ate the last protein cube and it wasn't me.",
+  "Cmdr, the water recycler's cycling like there's an extra body aboard.",
+];
+function reveallineFor(src: string): string {
+  if (src === "beacon")   return "Turns out I hitched a ride when you answered that mayday. Sorry. Please don't jettison me.";
+  if (src === "derelict") return "Been hiding in your maintenance crawl since you salvaged that wreck. Please don't jettison me.";
+  return "I stowed away at the last dock. Been living in the crawlspace. Please don't jettison me.";
+}
+
 
 
 
