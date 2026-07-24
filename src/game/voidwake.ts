@@ -5153,9 +5153,12 @@ export class Voidwake {
     const hullId = hulls[Math.min(this.hullDraftIdx, hulls.length - 1)]?.id ?? SHIP_HULLS[0].id;
     this.player = makePlayer(this.charDraft, hullId);
     this.player.ship.weaponId = WEAPONS[this.weaponDraftIdx].id;
-    this.player.mission = this.generateMission();
     this.screen = "playing";
     this.pushLog(`Welcome, ${this.player.char.name}.`);
+    if (this.options.questOffers !== false) {
+      const cands = [this.generateMission(), this.generateMission(), this.generateMission()];
+      this.openMissionOffer("Starter contracts — pick one, or skip to fly free.", "playing", cands);
+    }
   }
 
   // --- Playing -------------------------------------------------------------
