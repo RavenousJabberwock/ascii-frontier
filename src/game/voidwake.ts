@@ -4012,6 +4012,13 @@ export class Voidwake {
 
   // HUD message log
   log: { t: number; msg: string }[] = [];
+  // Mission-offer overlay state (0.7.3). When _offerCandidates is non-empty,
+  // the "mission-offer" screen is showing a pick-one board; ESC / D declines
+  // and returns to _offerReturn.
+  _offerCandidates: Mission[] = [];
+  _offerCursor = 0;
+  _offerReturn: ScreenT = "playing";
+  _offerReason = "";
   // Timestamp (seconds) when the player entered the destroyed screen — used
   // for a short input grace period so the death banner is actually readable.
   destroyedAt = 0;
