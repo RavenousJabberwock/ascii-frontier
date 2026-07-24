@@ -3476,6 +3476,7 @@ type Screen =
   | "codex"
   | "howto"
   | "quest-log"
+  | "mission-offer"
   | "character";
 
 
