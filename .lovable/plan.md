@@ -1,3 +1,26 @@
+# 0.7.5 — Salvage, Fragmentation & Upside-Down Fixes
+
+Ships as **0.7.5**.
+
+- Ship debris (`asteroid`s renamed to "debris"/"wreckage" on kill) yields
+  variety when mined: 25% chance per tick of a tech/element commodity
+  crate, or a small scrap-credit payout if cargo is full. Real asteroids
+  stay ore-only.
+- Player bullets can chip natural rocks. 40% roll per hit spawns a small
+  fragment carrying 1–2 ore, **subtracted from the parent** so total ore
+  is conserved. Each rock has a per-instance split budget (max ~3), and
+  chunks won't spawn once the parent falls to 2 ore. Debris/wreckage is
+  excluded to keep salvage single-source.
+- Destroy / scan quest markers redirect to the nearest civilian station
+  once complete — the objective diamond and arrow now point at the
+  reward instead of the drifting corpse.
+- Direction indicators fixed for inverted flight. When the pilot is
+  upside-down (cos(pitch) < 0) the screen frame is 180°-rolled vs the
+  world frame; both the SYSTEM mission arrow (`→ RIGHT` / `↑ UP` / …)
+  and the off-screen edge bracket now mirror x/y so they point where
+  the target actually appears on the pilot's screen. Yaw input inversion
+  is unchanged (still handled by `yawSign` at input time).
+
 # 0.7.4 — Stowaways & Pets
 
 Ships as **0.7.4**.
@@ -6,46 +29,6 @@ Ships as **0.7.4**.
 - Undiscovered stowaway squats a berth: Character Sheet shows it as "OUT OF ORDER"; `effectiveCrewMax` -1 until revealed.
 - Weird-things chatter drips every ~1–3 min (respects Comms frequency); after 3–5 hints they step out and slot into the first vacant role at **10cr/dock**, no perks.
 - 5% chance at hire that any crewmember (or the legacy gunner) has a pet from a 44-entry table. Cosmetic only — appears on their Character Sheet row.
-
-# 0.7.2 — Trade UX + Modding Completeness
-
-Ships as **0.7.2**. Focus: compact commodities UI, faction-relevant filtering, and finishing the modding/scripting surface for the 0.7.x economy.
-
-## 1. Compact Commodities menu
-
-- One row per commodity instead of two (was: `Buy 10 …` + `Sell 10 …`).
-- Page header row + a **Mode toggle row** (`◀ BUY ▶` / `SELL`). LEFT/RIGHT keys or ENTER on the toggle row flip the mode.
-- Row action tag mirrors the current mode: `[BUY 10]` or `[SELL10]`.
-- Faction filter (`stationCommodityFilter`) trims the 18-commodity table to what makes sense at each station:
-  - Federation Gate → relics + tech
-  - Miner / Industrial → elements + tech
-  - Nature colony → food + elements
-  - Pirate → relics + tech (fenced)
-  - Trade Hub → all four classes
-- Result: typical station shows 4–8 rows and everything fits without scrolling off the bottom.
-
-## 2. Scripting / Modding surface
-
-New Lua hooks dispatched from the engine:
-
-- `onCommodityTrade { action, id, name, qty, price, [total], stationId }`
-- `onPassengerBoard { name, vip, destStationId, fare }`
-- `onPassengerDeliver { name, vip, stationId, station }`
-- `onPlayerStationTierUp { stationId, name, tier, unlocks }`
-
-New reader table:
-
-- `frontier.economy.price(id, stationId?) → { buy, sell, stock } | nil`
-
-New content-pack chatter kinds mods can extend via `frontier.chatter.add`:
-
-- `passenger_smalltalk` — ambient VIP/guest lines while ferrying.
-- `player_station_report` — status pings from player-owned stations.
-
-## 3. Docs / bundle
-
-- Bump `VERSION` to `0.7.2`.
-- Rebuild the offline bundle after all edits land.
 
 ## Deferred (stays on the backlog)
 
