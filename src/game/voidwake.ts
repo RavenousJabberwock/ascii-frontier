@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.4";
+const VERSION = "0.7.5";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -6078,6 +6078,42 @@ export class Voidwake {
       // Enemy hit. Stations are eligible only when their faction is hostile
       // to the bullet's faction (currently: pirate bases shot by anyone non-pirate,
       // civilian stations shot by pirates).
+      // 0.7.5 — Player bullets can chip rocks. Small chance to spawn a
+      // fragment carrying part of the parent's ore. Ore is CONSERVED
+      // (fragment ore is subtracted from parent) so this can't be farmed
+      // for infinite generation, and each parent tracks a small split
+      // budget so a rock can only shed a few chunks before it stops
+      // fracturing.
+      if (e.faction === "player") {
+        let consumedByRock = false;
+        for (const t of this.entities) {
+          if (t.kind !== "asteroid") continue;
+          if ((t.ore ?? 0) < 4) continue;
+          if (t.name === "debris" || t.name === "wreckage") continue;
+          if (V.len(V.sub(e.pos, t.pos)) >= 12) continue;
+          consumedByRock = true;
+          const budget = (t as unknown as { _splitLeft?: number })._splitLeft
+            ?? Math.min(3, Math.floor((t.ore ?? 0) / 4));
+          if (budget > 0 && Math.random() < 0.4) {
+            const chunk = 1 + Math.floor(Math.random() * 2); // 1..2
+            const take = Math.min(chunk, (t.ore ?? 0) - 2);
+            if (take > 0) {
+              t.ore = (t.ore ?? 0) - take;
+              (t as unknown as { _splitLeft?: number })._splitLeft = budget - 1;
+              const jitter = () => (Math.random() - 0.5) * 8;
+              this.entities.push({
+                id: nextId(), kind: "asteroid", name: "Rock",
+                pos: { x: t.pos.x + jitter(), y: t.pos.y + jitter(), z: t.pos.z + jitter() },
+                vel: { x: t.vel.x + jitter() * 0.4, y: t.vel.y + jitter() * 0.4, z: t.vel.z + jitter() * 0.4 },
+                faction: "nature", ore: take,
+              });
+              this.beep(560, 0.03, "square");
+            }
+          }
+          break;
+        }
+        if (consumedByRock) return false;
+      }
       for (const t of this.entities) {
         const isShip = t.kind === "hostile" || t.kind === "neutral" || t.kind === "friendly";
         const isStation = t.kind === "station";
@@ -6378,6 +6414,23 @@ export class Voidwake {
     p.cargo.ore = (p.cargo.ore ?? 0) + take;
     awardXP(p, 2);
     this.pushLog(`Mined ${take} ore.`);
+    // 0.7.5 — Salvaging ship debris (kind="asteroid" repurposed on death)
+    // occasionally yields scrap credits or a stray commodity crate on top
+    // of the ore payout. Real asteroids stay ore-only.
+    const isWreck = t.name === "debris" || t.name === "wreckage";
+    if (isWreck && Math.random() < 0.25) {
+      // Bias toward tech/element scrap — this was somebody's ship.
+      const pool = COMMODITIES.filter((c) => c.class === "tech" || c.class === "element");
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      if (pick && cargoTotal(p) < p.ship.cargoMax) {
+        p.cargo[pick.id] = (p.cargo[pick.id] ?? 0) + 1;
+        this.pushLog(`✦ Salvaged 1 ${pick.name} from the wreck.`);
+      } else {
+        const scrap = 8 + Math.floor(Math.random() * 20);
+        p.credits += scrap;
+        this.pushLog(`✦ Scrap sold in-transit — +${scrap}cr`);
+      }
+    }
     // Rare: ~1-in-50 chance the fragment is an "encoded relic" — pays a
     // one-shot credit bonus and a chunk of XP. Kept as an immediate payout
     // (rather than a new cargo item) so it stays a one-line surprise instead
@@ -10902,6 +10955,14 @@ export class Voidwake {
           dx = -x1;
           dy = -y1;
         }
+        // 0.7.5 — When the pilot is flying "upside down" (|pitch| > π/2,
+        // cos(pitch) < 0) the world→screen frame is effectively 180°-rolled
+        // so screen-up is world-down and vice versa. Mirror the arrow so
+        // it still points where the target actually appears on the
+        // pilot's screen (and, symmetrically, where they need to sweep the
+        // reticle). Yaw input inversion is already handled at input time
+        // (yawSign), so this brings the visual cue back into alignment.
+        if (cp < 0) { dx = -dx; dy = -dy; }
         // Degenerate (exactly on the camera axis): pick a stable default so
         // the arrow doesn't collapse to the center. Point down for behind,
         // right for ahead (arbitrary but consistent).
@@ -11023,8 +11084,15 @@ export class Voidwake {
       if (prog) putText(g, qx, qy + 2, prog, m.done ? "#7CFC00" : "#cf6", vpRight);
       // Draw a small ◇ at the projected objective if on-screen.
       let objId: number | undefined = m.targetId;
-      if (m.kind === "deliver") {
-        // Nearest civilian station as the implicit objective.
+      // Once a destroy/scan quest is complete the target has become debris
+      // (or is gone) — redirect the on-screen objective marker to the
+      // nearest civilian station so the arrow guides the player to their
+      // reward instead of the drifting corpse. Delivery quests already
+      // point at the nearest station regardless of state.
+      const needStationObj =
+        m.kind === "deliver" ||
+        ((m.kind === "destroy" || m.kind === "scan") && m.done);
+      if (needStationObj) {
         let bestS: Entity | null = null; let bestD = Infinity;
         for (const e of this.entities) {
           if (e.kind !== "station" || e.faction === "pirate") continue;
