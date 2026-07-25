@@ -11354,13 +11354,18 @@ export class Voidwake {
         const z1 = sy3 * rel.x + cy3 * rel.z;
         const y1 = cp3 * rel.y - sp3 * z1;
         const z2 = sp3 * rel.y + cp3 * z1;
+        // 0.7.5 — When the pilot is upside-down (cp3 < 0) the screen frame
+        // is 180°-rolled vs the world frame; mirror x1/y1 so the arrow
+        // still points where the target appears on the pilot's screen.
+        const ax1 = cp3 < 0 ? -x1 : x1;
+        const ay1 = cp3 < 0 ? -y1 : y1;
         let arrow: string;
         if (z2 < 0) arrow = "↻ TURN AROUND";
         else {
-          const ax = Math.abs(x1), ay = Math.abs(y1);
+          const ax = Math.abs(ax1), ay = Math.abs(ay1);
           if (ax < z2 * 0.1 && ay < z2 * 0.1) arrow = "● AHEAD";
-          else if (ax > ay) arrow = x1 > 0 ? "→ RIGHT" : "← LEFT";
-          else arrow = y1 > 0 ? "↓ DOWN" : "↑ UP";
+          else if (ax > ay) arrow = ax1 > 0 ? "→ RIGHT" : "← LEFT";
+          else arrow = ay1 > 0 ? "↓ DOWN" : "↑ UP";
         }
         const label = m.kind === "deliver" ? `nearest station ${mt.name}` : mt.name;
         putText(g, 28, rTop + 5, `→ ${label}  ${d.toFixed(0)}u  ${arrow}`, "#cf6", sysRight);
