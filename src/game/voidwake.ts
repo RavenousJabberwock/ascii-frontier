@@ -10878,12 +10878,20 @@ export class Voidwake {
         }
       }
 
-      // 0.7.6 — Stellar corona spikes for large stars. Four cardinal spikes
-      // that fade from `+` to `·` to `.`, colored by the star's halo tint.
-      // Skips small/dim classes (WD/M/PSR) whose rx stays below the gate.
+      // 0.7.7 — Animated stellar corona: base cardinal spikes breathe in
+      // and out on a per-star phase, and a rotating "flare tongue" curls
+      // off one pole. When a flare peak lands within audible range of the
+      // player, cue the `flare` sfx (rate-limited via _flareCueAt).
       if (e.kind === "star" && rx >= 3) {
         const col = stellarClassOf(e).halo;
-        const spikeLen = Math.round(rx * 1.4);
+        const now = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+        const phase = hash01(e.id * 331 + 7) * Math.PI * 2;
+        // Slow breathing: 0.85..1.20x base length on a ~7s cycle.
+        const breathe = 1.02 + Math.sin(now * 0.9 + phase) * 0.18;
+        // Flare envelope: 0..1, peaks every ~11s per-star.
+        const flareT = (now * 0.09 + hash01(e.id * 613 + 11)) % 1;
+        const flareEnv = flareT < 0.15 ? flareT / 0.15 : flareT < 0.35 ? 1 - (flareT - 0.15) / 0.20 : 0;
+        const spikeLen = Math.max(2, Math.round(rx * 1.4 * breathe));
         for (let i = 1; i <= spikeLen; i++) {
           const frac = i / spikeLen;
           const ch = frac < 0.4 ? "+" : frac < 0.75 ? "·" : ".";
@@ -10899,6 +10907,50 @@ export class Voidwake {
             const gx = sx, gy = sy2 + dySpike;
             if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
               g[gy][gx] = { ch, color: col, glow };
+            }
+          }
+        }
+        // Diagonal micro-flares that flicker with the breathe cycle.
+        const diagLen = Math.round(rx * 0.6 * (0.5 + breathe * 0.5));
+        for (let i = 1; i <= diagLen; i++) {
+          const jitter = hash01(e.id * 977 + i * 13 + Math.floor(now * 6));
+          if (jitter < 0.35) continue;
+          const chd = i <= 1 ? "*" : i < diagLen * 0.5 ? "+" : "·";
+          for (const [ddx, ddy] of [[i, i], [-i, i], [i, -i], [-i, -i]] as const) {
+            const gx = sx + ddx, gy = sy2 + Math.round(ddy * (CELL_W / CELL_H));
+            if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
+              g[gy][gx] = { ch: chd, color: col, glow: i < 2 };
+            }
+          }
+        }
+        // Flare tongue: a short curved arc erupting from one pole, only
+        // rendered while the envelope is non-zero.
+        if (flareEnv > 0.05) {
+          const arcLen = Math.round(rx * 1.2 * flareEnv) + 2;
+          const dir = Math.floor(hash01(e.id * 401 + 17) * 4); // 0..3 pole
+          const arcCurve = (hash01(e.id * 509 + 19) - 0.5) * 1.8;
+          for (let i = 1; i <= arcLen; i++) {
+            const along = i;
+            const across = Math.round(Math.sin(i / arcLen * Math.PI) * arcCurve * arcLen * 0.4);
+            let ddx = 0, ddy = 0;
+            if (dir === 0) { ddx = along; ddy = across; }
+            else if (dir === 1) { ddx = -along; ddy = across; }
+            else if (dir === 2) { ddx = across; ddy = Math.round(along * (CELL_W / CELL_H)); }
+            else                { ddx = across; ddy = -Math.round(along * (CELL_W / CELL_H)); }
+            const gx = sx + ddx, gy = sy2 + ddy;
+            if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
+              const chFlare = i <= 2 ? "*" : i < arcLen * 0.6 ? "%" : "+";
+              g[gy][gx] = { ch: chFlare, color: col, glow: true };
+            }
+          }
+          // Audible cue at the peak of the flare (env > 0.85) when the
+          // player is close enough. Throttle globally so a swarm of stars
+          // doesn't machine-gun the sfx.
+          if (flareEnv > 0.85 && z < 1200) {
+            const wnow = (typeof performance !== "undefined" ? performance.now() : 0);
+            if (wnow > this._flareCueAt) {
+              this._flareCueAt = wnow + 4500;
+              this.sfx("flare");
             }
           }
         }
