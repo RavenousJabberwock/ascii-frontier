@@ -2746,10 +2746,13 @@ function awardXP(p: PlayerState, n: number) {
   // Player-species XP multiplier (Drift-born / Chorus). Rounded to avoid
   // fractional-XP drift accumulating over long sessions.
   const mul = speciesOf(p.char.species).xpMul ?? 1;
+  const before = p.rank;
   p.xp += Math.max(0, Math.round(n * mul));
   const ranks = ["Harmless", "Mostly Harmless", "Novice", "Competent", "Expert", "Master", "Elite"];
   const idx = Math.min(ranks.length - 1, Math.floor(p.xp / 200));
   p.rank = ranks[idx];
+  // 0.7.7 — Rank-up cue is consumed by the game loop (see updatePlaying).
+  if (p.rank !== before) (p as unknown as { _pendingRankUp?: string })._pendingRankUp = p.rank;
 }
 
 function cargoTotal(p: PlayerState) {
