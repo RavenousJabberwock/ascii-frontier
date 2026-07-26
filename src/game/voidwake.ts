@@ -7884,6 +7884,11 @@ export class Voidwake {
           } else {
             this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
           }
+          // 0.7.7 — 40% of planet mentions get a Computer advisory that
+          // classifies the world (habitable / gas giant / rocky / ice).
+          if (Math.random() < 0.4) {
+            this.pushChatter("Computer", planetHabitabilityLine(pick), "#9fe6ff");
+          }
           break;
       }
     }
