@@ -7816,6 +7816,7 @@ export class Voidwake {
           spawned.pilotName = rname;
           spawned.shield = 60;
           this.pushLog(`⚠ Notorious pirate captain in-system: ${rname}.`);
+          this.sfx("warning");
         }
       }
     }
