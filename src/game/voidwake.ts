@@ -4800,7 +4800,7 @@ export class Voidwake {
 
   // Named 16-bit SFX. Each is a tuned combination of beep() + noise so the
   // event has a recognizable character instead of just "another chirp".
-  sfx(name: "laser" | "hit" | "explode" | "dock" | "click" | "alarm" | "mining" | "chime" | "jettison" | "boom") {
+  sfx(name: "laser" | "hit" | "explode" | "dock" | "click" | "alarm" | "mining" | "chime" | "jettison" | "boom" | "scan" | "warning" | "levelup" | "flare") {
     switch (name) {
       case "laser":
         // Downward-glided square with a tick of noise — classic pew.
@@ -4840,6 +4840,31 @@ export class Voidwake {
         break;
       case "jettison":
         this.beep(340, 0.07, "triangle", { glide: -0.9, noise: 0.3 });
+        break;
+      // 0.7.7 — Sonar-sweep scan cue: two rising triangle chirps.
+      case "scan":
+        this.beep(520, 0.09, "triangle", { glide: 0.9 });
+        setTimeout(() => this.beep(780, 0.11, "triangle", { glide: 0.6 }), 90);
+        break;
+      // 0.7.7 — Threat-alert warble: distinct from `alarm` (hull) — sharper,
+      // used when a hostile locks/aims at the player.
+      case "warning":
+        this.beep(880, 0.08, "square", { glide: -0.4 });
+        setTimeout(() => this.beep(660, 0.08, "square", { glide: -0.3 }), 85);
+        setTimeout(() => this.beep(880, 0.10, "square", { glide: -0.4 }), 170);
+        break;
+      // 0.7.7 — Rank-up fanfare: rising triangle arpeggio.
+      case "levelup":
+        this.beep(660, 0.12, "triangle");
+        setTimeout(() => this.beep(880, 0.12, "triangle"), 100);
+        setTimeout(() => this.beep(1175, 0.14, "triangle"), 200);
+        setTimeout(() => this.beep(1568, 0.20, "triangle"), 310);
+        break;
+      // 0.7.7 — Solar flare rumble: low sawtooth swell + noise burst. Called
+      // when a nearby star's animated corona hits its flare peak.
+      case "flare":
+        this.beep(140, 0.35, "sawtooth", { glide: 0.6, noise: 0.7 });
+        this.beep(220, 0.30, "triangle", { glide: 0.3, noise: 0.4 });
         break;
     }
   }
