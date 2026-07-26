@@ -10862,7 +10862,9 @@ export class Voidwake {
           const gx = sx + dx, gy = sy2 + dy;
           if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
           const onEdge = d2 > 0.7;
-          const ch = surfaceChar(e, gx, gy, onEdge, edge, fill);
+          const ch = e.kind === "planet"
+            ? planetSurfaceChar(e, nx, ny, onEdge, edge)
+            : surfaceChar(e, gx, gy, onEdge, edge, fill);
           let color = onEdge ? tint.edge : tint.fill;
           if (lit) {
             // Lambert-ish: dot of surface-normal proxy with light direction.
