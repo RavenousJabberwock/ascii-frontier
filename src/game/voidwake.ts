@@ -3939,6 +3939,90 @@ function planetRings(e: Entity): PlanetRings {
   return out;
 }
 
+// 0.7.7 — Planet visual category. Drives surface features so different-sized
+// worlds actually look different: giants get gas bands, mid-sized get
+// terran land/water, dwarfs are cratered rocks. Cached per-entity.
+type PlanetCategory = "giant" | "terran" | "rocky" | "ice";
+const _planetCatCache = new WeakMap<Entity, PlanetCategory>();
+function planetCategory(e: Entity): PlanetCategory {
+  const c = _planetCatCache.get(e);
+  if (c) return c;
+  const size = planetSizeMul(e);
+  const h = hash01(e.id * 197 + 41);
+  let out: PlanetCategory;
+  if (size >= 1.55) out = "giant";
+  else if (size < 0.75) out = h < 0.35 ? "ice" : "rocky";
+  else out = h < 0.55 ? "terran" : (h < 0.8 ? "rocky" : "ice");
+  _planetCatCache.set(e, out);
+  return out;
+}
+
+// Descriptive advisory line the Computer/nav droid announces near a planet.
+function planetHabitabilityLine(e: Entity): string {
+  const cat = planetCategory(e);
+  const pop = !!e.populated;
+  if (pop) {
+    return cat === "terran"
+      ? `${e.name}: class-M terran, colonized. Breathable atmosphere, standing water detected.`
+      : cat === "giant"
+      ? `${e.name}: gas-giant orbital colony. Skyhook habitats confirmed.`
+      : cat === "ice"
+      ? `${e.name}: sub-surface ice colony. Subterranean habs, minimal surface exposure.`
+      : `${e.name}: colonized rock. Domed settlement, imported air.`;
+  }
+  return cat === "terran"
+    ? `${e.name}: candidate habitable. Liquid water, oxygen trace — uncolonized.`
+    : cat === "giant"
+    ? `${e.name}: gas giant. No solid surface; scoopable atmosphere only.`
+    : cat === "ice"
+    ? `${e.name}: ice world. Cryogenic surface, no atmosphere to speak of.`
+    : `${e.name}: rocky body. Thin exosphere, high-radiation. Not survivable unaided.`;
+}
+
+// Surface glyph for a planet cell, chosen from its category. `nx`,`ny` are
+// the normalized planet-local coords (-1..1). Deterministic per-cell hash
+// keeps the surface stable across frames.
+function planetSurfaceChar(e: Entity, nx: number, ny: number, onEdge: boolean, edge: string): string {
+  if (onEdge) return edge;
+  const cat = planetCategory(e);
+  const h = hash01(e.id * 131 + Math.floor(nx * 1000) * 1009 + Math.floor(ny * 1000) * 7919);
+  if (cat === "giant") {
+    // Horizontal bands. Six bands across the visible face.
+    const band = Math.floor((ny + 1) * 3) & 3;
+    if (Math.abs(ny) > 0.75) return h < 0.5 ? "~" : "-";
+    // Great-Spot analog: one persistent oval per planet.
+    const spotCx = (hash01(e.id * 719 + 5) - 0.5) * 1.2;
+    const spotCy = (hash01(e.id * 907 + 9) - 0.5) * 0.9;
+    const dx = nx - spotCx, dy = (ny - spotCy) * 2;
+    if (dx * dx + dy * dy < 0.05) return h < 0.5 ? "@" : "O";
+    return band === 0 ? "=" : band === 1 ? "-" : band === 2 ? "~" : "≈";
+  }
+  if (cat === "ice") {
+    if (Math.abs(ny) > 0.55) return h < 0.6 ? "*" : ".";
+    if (h < 0.15) return "o";
+    if (h < 0.35) return "·";
+    return h < 0.7 ? "." : "*";
+  }
+  if (cat === "rocky") {
+    // Cratered surface: sparse rings ('o'/'O') on a dust field.
+    if (h < 0.05) return "O";
+    if (h < 0.14) return "o";
+    if (h < 0.25) return ",";
+    return h < 0.6 ? "." : ":";
+  }
+  // terran
+  // Polar caps
+  if (Math.abs(ny) > 0.72) return h < 0.6 ? "*" : ".";
+  // Noise-driven continents. Use nebulaNoise (already available) at a
+  // coarse frequency so land masses are chunky.
+  const nz = nebulaNoise(e.id * 3, Math.floor((nx + 1) * 6), Math.floor((ny + 1) * 6));
+  if (nz > 0.58) return h < 0.7 ? "#" : "%";   // land
+  if (nz > 0.5)  return h < 0.6 ? "&" : "@";    // coast / islands
+  if (h < 0.06)  return "'";                    // cloud wisp
+  return h < 0.55 ? "~" : "≈";                  // ocean
+}
+
+
 // Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
 // [core, mid, edge] so the noise-driven fill can layer three glyph shades.
 const NEBULA_PALETTES: [string, string, string][] = [
