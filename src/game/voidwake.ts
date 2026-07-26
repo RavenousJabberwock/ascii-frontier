@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.6";
+const VERSION = "0.7.7";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -2746,10 +2746,13 @@ function awardXP(p: PlayerState, n: number) {
   // Player-species XP multiplier (Drift-born / Chorus). Rounded to avoid
   // fractional-XP drift accumulating over long sessions.
   const mul = speciesOf(p.char.species).xpMul ?? 1;
+  const before = p.rank;
   p.xp += Math.max(0, Math.round(n * mul));
   const ranks = ["Harmless", "Mostly Harmless", "Novice", "Competent", "Expert", "Master", "Elite"];
   const idx = Math.min(ranks.length - 1, Math.floor(p.xp / 200));
   p.rank = ranks[idx];
+  // 0.7.7 — Rank-up cue is consumed by the game loop (see updatePlaying).
+  if (p.rank !== before) (p as unknown as { _pendingRankUp?: string })._pendingRankUp = p.rank;
 }
 
 function cargoTotal(p: PlayerState) {
@@ -3939,6 +3942,90 @@ function planetRings(e: Entity): PlanetRings {
   return out;
 }
 
+// 0.7.7 — Planet visual category. Drives surface features so different-sized
+// worlds actually look different: giants get gas bands, mid-sized get
+// terran land/water, dwarfs are cratered rocks. Cached per-entity.
+type PlanetCategory = "giant" | "terran" | "rocky" | "ice";
+const _planetCatCache = new WeakMap<Entity, PlanetCategory>();
+function planetCategory(e: Entity): PlanetCategory {
+  const c = _planetCatCache.get(e);
+  if (c) return c;
+  const size = planetSizeMul(e);
+  const h = hash01(e.id * 197 + 41);
+  let out: PlanetCategory;
+  if (size >= 1.55) out = "giant";
+  else if (size < 0.75) out = h < 0.35 ? "ice" : "rocky";
+  else out = h < 0.55 ? "terran" : (h < 0.8 ? "rocky" : "ice");
+  _planetCatCache.set(e, out);
+  return out;
+}
+
+// Descriptive advisory line the Computer/nav droid announces near a planet.
+function planetHabitabilityLine(e: Entity): string {
+  const cat = planetCategory(e);
+  const pop = !!e.populated;
+  if (pop) {
+    return cat === "terran"
+      ? `${e.name}: class-M terran, colonized. Breathable atmosphere, standing water detected.`
+      : cat === "giant"
+      ? `${e.name}: gas-giant orbital colony. Skyhook habitats confirmed.`
+      : cat === "ice"
+      ? `${e.name}: sub-surface ice colony. Subterranean habs, minimal surface exposure.`
+      : `${e.name}: colonized rock. Domed settlement, imported air.`;
+  }
+  return cat === "terran"
+    ? `${e.name}: candidate habitable. Liquid water, oxygen trace — uncolonized.`
+    : cat === "giant"
+    ? `${e.name}: gas giant. No solid surface; scoopable atmosphere only.`
+    : cat === "ice"
+    ? `${e.name}: ice world. Cryogenic surface, no atmosphere to speak of.`
+    : `${e.name}: rocky body. Thin exosphere, high-radiation. Not survivable unaided.`;
+}
+
+// Surface glyph for a planet cell, chosen from its category. `nx`,`ny` are
+// the normalized planet-local coords (-1..1). Deterministic per-cell hash
+// keeps the surface stable across frames.
+function planetSurfaceChar(e: Entity, nx: number, ny: number, onEdge: boolean, edge: string): string {
+  if (onEdge) return edge;
+  const cat = planetCategory(e);
+  const h = hash01(e.id * 131 + Math.floor(nx * 1000) * 1009 + Math.floor(ny * 1000) * 7919);
+  if (cat === "giant") {
+    // Horizontal bands. Six bands across the visible face.
+    const band = Math.floor((ny + 1) * 3) & 3;
+    if (Math.abs(ny) > 0.75) return h < 0.5 ? "~" : "-";
+    // Great-Spot analog: one persistent oval per planet.
+    const spotCx = (hash01(e.id * 719 + 5) - 0.5) * 1.2;
+    const spotCy = (hash01(e.id * 907 + 9) - 0.5) * 0.9;
+    const dx = nx - spotCx, dy = (ny - spotCy) * 2;
+    if (dx * dx + dy * dy < 0.05) return h < 0.5 ? "@" : "O";
+    return band === 0 ? "=" : band === 1 ? "-" : band === 2 ? "~" : "≈";
+  }
+  if (cat === "ice") {
+    if (Math.abs(ny) > 0.55) return h < 0.6 ? "*" : ".";
+    if (h < 0.15) return "o";
+    if (h < 0.35) return "·";
+    return h < 0.7 ? "." : "*";
+  }
+  if (cat === "rocky") {
+    // Cratered surface: sparse rings ('o'/'O') on a dust field.
+    if (h < 0.05) return "O";
+    if (h < 0.14) return "o";
+    if (h < 0.25) return ",";
+    return h < 0.6 ? "." : ":";
+  }
+  // terran
+  // Polar caps
+  if (Math.abs(ny) > 0.72) return h < 0.6 ? "*" : ".";
+  // Noise-driven continents. Use nebulaNoise (already available) at a
+  // coarse frequency so land masses are chunky.
+  const nz = nebulaNoise(e.id * 3, Math.floor((nx + 1) * 6), Math.floor((ny + 1) * 6));
+  if (nz > 0.58) return h < 0.7 ? "#" : "%";   // land
+  if (nz > 0.5)  return h < 0.6 ? "&" : "@";    // coast / islands
+  if (h < 0.06)  return "'";                    // cloud wisp
+  return h < 0.55 ? "~" : "≈";                  // ocean
+}
+
+
 // Nebula palettes — irregular, colored gas clouds. Each nebula picks one.
 // [core, mid, edge] so the noise-driven fill can layer three glyph shades.
 const NEBULA_PALETTES: [string, string, string][] = [
@@ -4256,6 +4343,8 @@ export class Voidwake {
   // Pause flag toggled on visibilitychange — skip update+render while hidden
   // so backgrounded tabs stop burning CPU.
   private _hidden = false;
+  // 0.7.7 — Rate-limit for stellar flare sfx (ms wall-time; global across stars).
+  private _flareCueAt = 0;
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
   private prevHull = -1;            // tracks hull from previous tick to detect any damage
@@ -4800,7 +4889,7 @@ export class Voidwake {
 
   // Named 16-bit SFX. Each is a tuned combination of beep() + noise so the
   // event has a recognizable character instead of just "another chirp".
-  sfx(name: "laser" | "hit" | "explode" | "dock" | "click" | "alarm" | "mining" | "chime" | "jettison" | "boom") {
+  sfx(name: "laser" | "hit" | "explode" | "dock" | "click" | "alarm" | "mining" | "chime" | "jettison" | "boom" | "scan" | "warning" | "levelup" | "flare") {
     switch (name) {
       case "laser":
         // Downward-glided square with a tick of noise — classic pew.
@@ -4840,6 +4929,31 @@ export class Voidwake {
         break;
       case "jettison":
         this.beep(340, 0.07, "triangle", { glide: -0.9, noise: 0.3 });
+        break;
+      // 0.7.7 — Sonar-sweep scan cue: two rising triangle chirps.
+      case "scan":
+        this.beep(520, 0.09, "triangle", { glide: 0.9 });
+        setTimeout(() => this.beep(780, 0.11, "triangle", { glide: 0.6 }), 90);
+        break;
+      // 0.7.7 — Threat-alert warble: distinct from `alarm` (hull) — sharper,
+      // used when a hostile locks/aims at the player.
+      case "warning":
+        this.beep(880, 0.08, "square", { glide: -0.4 });
+        setTimeout(() => this.beep(660, 0.08, "square", { glide: -0.3 }), 85);
+        setTimeout(() => this.beep(880, 0.10, "square", { glide: -0.4 }), 170);
+        break;
+      // 0.7.7 — Rank-up fanfare: rising triangle arpeggio.
+      case "levelup":
+        this.beep(660, 0.12, "triangle");
+        setTimeout(() => this.beep(880, 0.12, "triangle"), 100);
+        setTimeout(() => this.beep(1175, 0.14, "triangle"), 200);
+        setTimeout(() => this.beep(1568, 0.20, "triangle"), 310);
+        break;
+      // 0.7.7 — Solar flare rumble: low sawtooth swell + noise burst. Called
+      // when a nearby star's animated corona hits its flare peak.
+      case "flare":
+        this.beep(140, 0.35, "sawtooth", { glide: 0.6, noise: 0.7 });
+        this.beep(220, 0.30, "triangle", { glide: 0.3, noise: 0.4 });
         break;
     }
   }
@@ -5597,7 +5711,7 @@ export class Voidwake {
             awardXP(p, 120);
             this.pushLog(`⛭ Scanned alien ruins on ${e.name}: +${cr}cr, +120 XP.`);
             this.pushChatter("Sensors", "Datalog: pre-collapse xeno civilization. Uploading.", "#c8a0ff");
-            this.sfx("chime");
+            this.sfx("scan");
           }
         }
       } else if (e.kind === "ufo") {
@@ -5610,7 +5724,7 @@ export class Voidwake {
             e.state = "observe";
             e.cooldown = 6 + Math.random() * 4;
             this.pushChatter("Sensors", "Unidentified contact holding station off our bow.", "#9effd2");
-            this.sfx("chime");
+            this.sfx("scan");
           } else if ((e.cooldown ?? 0) <= 0) {
             e.cooldown = 3 + Math.random() * 6;
             e.vel = { x: (Math.random() - 0.5) * 14, y: (Math.random() - 0.5) * 14, z: (Math.random() - 0.5) * 14 };
@@ -5869,6 +5983,18 @@ export class Voidwake {
     this.updateTactical(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
+    // player when the label ticks over. Consume here so any call site
+    // (kills, mining, missions) gets a unified fanfare.
+    {
+      const anyP = p as unknown as { _pendingRankUp?: string };
+      if (anyP._pendingRankUp) {
+        const nr = anyP._pendingRankUp;
+        anyP._pendingRankUp = undefined;
+        this.sfx("levelup");
+        this.pushChatter("Computer", `Rank advanced: ${nr}.`, "#ffd28a");
+      }
+    }
     this.tickCrewIdle(dt);
     this.tickCrewBanter(dt);
     this.tickNpcBanter(dt);
@@ -7690,6 +7816,7 @@ export class Voidwake {
           spawned.pilotName = rname;
           spawned.shield = 60;
           this.pushLog(`⚠ Notorious pirate captain in-system: ${rname}.`);
+          this.sfx("warning");
         }
       }
     }
@@ -7757,6 +7884,11 @@ export class Voidwake {
             this.pushChatter(`Colony ${pick.name}`, pickLine("planet_populated", ctx), "#ffd28a");
           } else {
             this.pushChatter(pick.name, pickLine("planet", ctx), "#7ec8ff");
+          }
+          // 0.7.7 — 40% of planet mentions get a Computer advisory that
+          // classifies the world (habitable / gas giant / rocky / ice).
+          if (Math.random() < 0.4) {
+            this.pushChatter("Computer", planetHabitabilityLine(pick), "#9fe6ff");
           }
           break;
       }
@@ -10753,7 +10885,9 @@ export class Voidwake {
           const gx = sx + dx, gy = sy2 + dy;
           if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
           const onEdge = d2 > 0.7;
-          const ch = surfaceChar(e, gx, gy, onEdge, edge, fill);
+          const ch = e.kind === "planet"
+            ? planetSurfaceChar(e, nx, ny, onEdge, edge)
+            : surfaceChar(e, gx, gy, onEdge, edge, fill);
           let color = onEdge ? tint.edge : tint.fill;
           if (lit) {
             // Lambert-ish: dot of surface-normal proxy with light direction.
@@ -10767,12 +10901,20 @@ export class Voidwake {
         }
       }
 
-      // 0.7.6 — Stellar corona spikes for large stars. Four cardinal spikes
-      // that fade from `+` to `·` to `.`, colored by the star's halo tint.
-      // Skips small/dim classes (WD/M/PSR) whose rx stays below the gate.
+      // 0.7.7 — Animated stellar corona: base cardinal spikes breathe in
+      // and out on a per-star phase, and a rotating "flare tongue" curls
+      // off one pole. When a flare peak lands within audible range of the
+      // player, cue the `flare` sfx (rate-limited via _flareCueAt).
       if (e.kind === "star" && rx >= 3) {
         const col = stellarClassOf(e).halo;
-        const spikeLen = Math.round(rx * 1.4);
+        const now = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+        const phase = hash01(e.id * 331 + 7) * Math.PI * 2;
+        // Slow breathing: 0.85..1.20x base length on a ~7s cycle.
+        const breathe = 1.02 + Math.sin(now * 0.9 + phase) * 0.18;
+        // Flare envelope: 0..1, peaks every ~11s per-star.
+        const flareT = (now * 0.09 + hash01(e.id * 613 + 11)) % 1;
+        const flareEnv = flareT < 0.15 ? flareT / 0.15 : flareT < 0.35 ? 1 - (flareT - 0.15) / 0.20 : 0;
+        const spikeLen = Math.max(2, Math.round(rx * 1.4 * breathe));
         for (let i = 1; i <= spikeLen; i++) {
           const frac = i / spikeLen;
           const ch = frac < 0.4 ? "+" : frac < 0.75 ? "·" : ".";
@@ -10788,6 +10930,50 @@ export class Voidwake {
             const gx = sx, gy = sy2 + dySpike;
             if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
               g[gy][gx] = { ch, color: col, glow };
+            }
+          }
+        }
+        // Diagonal micro-flares that flicker with the breathe cycle.
+        const diagLen = Math.round(rx * 0.6 * (0.5 + breathe * 0.5));
+        for (let i = 1; i <= diagLen; i++) {
+          const jitter = hash01(e.id * 977 + i * 13 + Math.floor(now * 6));
+          if (jitter < 0.35) continue;
+          const chd = i <= 1 ? "*" : i < diagLen * 0.5 ? "+" : "·";
+          for (const [ddx, ddy] of [[i, i], [-i, i], [i, -i], [-i, -i]] as const) {
+            const gx = sx + ddx, gy = sy2 + Math.round(ddy * (CELL_W / CELL_H));
+            if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
+              g[gy][gx] = { ch: chd, color: col, glow: i < 2 };
+            }
+          }
+        }
+        // Flare tongue: a short curved arc erupting from one pole, only
+        // rendered while the envelope is non-zero.
+        if (flareEnv > 0.05) {
+          const arcLen = Math.round(rx * 1.2 * flareEnv) + 2;
+          const dir = Math.floor(hash01(e.id * 401 + 17) * 4); // 0..3 pole
+          const arcCurve = (hash01(e.id * 509 + 19) - 0.5) * 1.8;
+          for (let i = 1; i <= arcLen; i++) {
+            const along = i;
+            const across = Math.round(Math.sin(i / arcLen * Math.PI) * arcCurve * arcLen * 0.4);
+            let ddx = 0, ddy = 0;
+            if (dir === 0) { ddx = along; ddy = across; }
+            else if (dir === 1) { ddx = -along; ddy = across; }
+            else if (dir === 2) { ddx = across; ddy = Math.round(along * (CELL_W / CELL_H)); }
+            else                { ddx = across; ddy = -Math.round(along * (CELL_W / CELL_H)); }
+            const gx = sx + ddx, gy = sy2 + ddy;
+            if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
+              const chFlare = i <= 2 ? "*" : i < arcLen * 0.6 ? "%" : "+";
+              g[gy][gx] = { ch: chFlare, color: col, glow: true };
+            }
+          }
+          // Audible cue at the peak of the flare (env > 0.85) when the
+          // player is close enough. Throttle globally so a swarm of stars
+          // doesn't machine-gun the sfx.
+          if (flareEnv > 0.85 && proj.z < 1200) {
+            const wnow = (typeof performance !== "undefined" ? performance.now() : 0);
+            if (wnow > this._flareCueAt) {
+              this._flareCueAt = wnow + 4500;
+              this.sfx("flare");
             }
           }
         }

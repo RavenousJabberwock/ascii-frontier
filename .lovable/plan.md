@@ -1,3 +1,34 @@
+# 0.7.7 — Animate Coronas, Planet Surfaces & New SFX
+
+Ships as **0.7.7**.
+
+- **Animated stellar coronas.** The cardinal spikes now breathe on a per-star
+  phase, diagonal micro-flares flicker with the cycle, and a curling
+  **flare tongue** erupts every ~11s from a random pole. When a flare peaks
+  within 1200u of the pilot it cues a new `flare` sfx (rumbling sawtooth
+  swell), globally rate-limited so a swarm of stars doesn't machine-gun it.
+- **Planet surfaces by category.** New `planetCategory` picks
+  giant / terran / rocky / ice from size + hash and drives a dedicated
+  `planetSurfaceChar`:
+  - Giants get horizontal cloud bands plus a per-planet Great-Spot oval.
+  - Terrans mix `~`/`≈` oceans with `#`/`%` continents (noise-driven)
+    and `*` polar caps.
+  - Rocky worlds sprinkle `o`/`O` craters on a dust field.
+  - Ice worlds get sparkle-speckle poles and pale dot fields.
+- **Computer advisory chatter.** 40% of planet chatter picks now trigger a
+  Computer follow-up that names the world's class ("class-M terran,
+  colonized. Breathable atmosphere, standing water detected." / "gas
+  giant. No solid surface; scoopable atmosphere only.", etc).
+- **New SFX** added to the existing WebAudio bank:
+  - `scan` (sonar sweep) — replaces `chime` on scan-flavored events
+    (alien ruins, UFO first contact).
+  - `warning` (three-tone alert) — cues on notorious pirate captain arrival.
+  - `levelup` (rising arpeggio) — unified rank-up fanfare. `awardXP`
+    stamps `_pendingRankUp` on the player when the rank label ticks over;
+    the game loop consumes it once per frame, plays the fanfare, and
+    posts a Computer line so every XP source shares the same cue.
+  - `flare` — see coronas above.
+
 # 0.7.6 — Skybox Variety
 
 Ships as **0.7.6**.
