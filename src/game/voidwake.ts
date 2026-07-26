@@ -5711,7 +5711,7 @@ export class Voidwake {
             awardXP(p, 120);
             this.pushLog(`⛭ Scanned alien ruins on ${e.name}: +${cr}cr, +120 XP.`);
             this.pushChatter("Sensors", "Datalog: pre-collapse xeno civilization. Uploading.", "#c8a0ff");
-            this.sfx("chime");
+            this.sfx("scan");
           }
         }
       } else if (e.kind === "ufo") {
