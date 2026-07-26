@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.5";
+const VERSION = "0.7.6";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -10766,6 +10766,94 @@ export class Voidwake {
           g[gy][gx] = { ch, color, glow: e.kind === "star" };
         }
       }
+
+      // 0.7.6 — Stellar corona spikes for large stars. Four cardinal spikes
+      // that fade from `+` to `·` to `.`, colored by the star's halo tint.
+      // Skips small/dim classes (WD/M/PSR) whose rx stays below the gate.
+      if (e.kind === "star" && rx >= 3) {
+        const col = stellarClassOf(e).halo;
+        const spikeLen = Math.round(rx * 1.4);
+        for (let i = 1; i <= spikeLen; i++) {
+          const frac = i / spikeLen;
+          const ch = frac < 0.4 ? "+" : frac < 0.75 ? "·" : ".";
+          const glow = frac < 0.5;
+          for (const dxSpike of [i, -i]) {
+            const gx = sx + dxSpike, gy = sy2;
+            if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
+              g[gy][gx] = { ch, color: col, glow };
+            }
+          }
+          const dyy = Math.max(1, Math.round(i * (CELL_W / CELL_H)));
+          for (const dySpike of [dyy, -dyy]) {
+            const gx = sx, gy = sy2 + dySpike;
+            if (gx > vpLeft && gx < vpRight && gy > vpTop && gy < vpBottom && g[gy][gx].ch === " ") {
+              g[gy][gx] = { ch, color: col, glow };
+            }
+          }
+        }
+      }
+
+      // 0.7.6 — Comet tails. Cast a fading ion tail directly away from the
+      // nearest star, projected through the same camera as the coma so it
+      // curves naturally with the viewport. Length varies per-comet via
+      // hash01(id) to break uniformity across a swarm.
+      if (e.kind === "comet") {
+        let bestS: Entity | null = null, bd = Infinity;
+        for (const s of this.entities) {
+          if (s.kind !== "star") continue;
+          const d = V.len(V.sub(s.pos, e.pos));
+          if (d < bd) { bd = d; bestS = s; }
+        }
+        if (bestS) {
+          const dir = V.sub(e.pos, bestS.pos);
+          const dl = V.len(dir);
+          if (dl > 0.01) {
+            const inv = 1 / dl;
+            const ex = dir.x * inv, ey = dir.y * inv, ez = dir.z * inv;
+            const tailLen = 220 + hash01(e.id) * 380;
+            const segs = 12;
+            const tailCh = ["*", "+", "·", "."];
+            for (let i = 1; i <= segs; i++) {
+              const t = (i / segs) * tailLen;
+              const wp = projectPoint(e.pos.x + ex * t, e.pos.y + ey * t, e.pos.z + ez * t);
+              if (!wp) break;
+              if (wp.sx <= vpLeft || wp.sx >= vpRight || wp.sy <= vpTop || wp.sy >= vpBottom) continue;
+              if (g[wp.sy][wp.sx].ch !== " ") continue;
+              const chi = Math.min(3, Math.floor(i / 3));
+              g[wp.sy][wp.sx] = {
+                ch: tailCh[chi],
+                color: i < 4 ? "#e8f8ff" : i < 8 ? "#87c8ff" : "#4a8aa8",
+                glow: i < 5,
+              };
+            }
+          }
+        }
+      }
+
+      // 0.7.6 — Station faction silhouette overlay. Overprint a 3x3 stamp
+      // atop the filled sphere so pirate bases, SPD precincts, Federation
+      // hubs, and Guild trade posts read distinct at a glance instead of
+      // all looking like a beige `#` bubble. Skipped for tiny renders.
+      if (e.kind === "station" && rx >= 2) {
+        const overlay =
+          e.faction === "pirate"     ? ["\\ /", " X ", "/ \\"] :
+          e.faction === "patrol"     ? ["[+]", "|#|", "[+]"] :
+          e.faction === "federation" ? ["_|_", "|H|", " | "] :
+          e.faction === "guild"      ? ["/^\\", "<$>", "\\v/"] :
+          e.faction === "aquila"     ? [".~.", "(o)", "'~'"] :
+                                       ["[=]", "[#]", "[=]"];
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const ch = overlay[dy + 1][dx + 1];
+            if (ch === " ") continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            g[gy][gx] = { ch, color: tint.fill };
+          }
+        }
+      }
+
+
 
       // 0.6.1 — Planetary rings. Roughly 1-in-5 planets (weighted toward
       // giants) get a tilted, colored ring plane. Draws a ring annulus in
