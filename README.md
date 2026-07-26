@@ -104,7 +104,9 @@ clearly labeled sections:
 7. Input              keyboard + optional mouse-steer
 8. Menus              main, character creation, ship customization, options
 9. Save / Load        unencrypted JSON in localStorage + import/export
-10. Renderer          ASCII grid, cockpit HUD, 3D radar, starfield layers
+10. Renderer          ASCII grid, cockpit HUD, 3D radar, starfield layers,
+                      per-class star spikes, comet ion tails, faction
+                      station silhouettes, planetary rings, nebula clouds
 11. Main loop         fixed-timestep update + render
 ```
 
