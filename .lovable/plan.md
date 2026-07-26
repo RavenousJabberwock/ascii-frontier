@@ -1,6 +1,23 @@
+# 0.7.6 — Skybox Variety
+
+Ships as **0.7.6**.
+
+- Stars gained cardinal **corona spikes** that scale with rx and take their
+  color from the class halo, so O/B/RG/RSG giants read as luminous
+  cross-hatched sources instead of amber blobs. WD/M/PSR stay compact.
+- **Comet ion tails** now cast away from the nearest star, projected
+  through the same camera as the coma. Per-comet length hash keeps a
+  swarm from marching in lockstep.
+- **Station faction silhouettes**: after the sphere fill, each station
+  is overprinted with a 3×3 faction stamp — Pirate `\ / X / \`, SPD
+  `[+] |#| [+]`, Federation `_|_ |H| |`, Guild `/^\ <$> \v/`, Aquila
+  `.~. (o) '~'`. Legend still reads them as stations; the shape just
+  tells you at a glance whose it is.
+
 # 0.7.5 — Salvage, Fragmentation & Upside-Down Fixes
 
 Ships as **0.7.5**.
+
 
 - Ship debris (`asteroid`s renamed to "debris"/"wreckage" on kill) yields
   variety when mined: 25% chance per tick of a tech/element commodity
