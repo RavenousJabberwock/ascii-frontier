@@ -5724,7 +5724,7 @@ export class Voidwake {
             e.state = "observe";
             e.cooldown = 6 + Math.random() * 4;
             this.pushChatter("Sensors", "Unidentified contact holding station off our bow.", "#9effd2");
-            this.sfx("chime");
+            this.sfx("scan");
           } else if ((e.cooldown ?? 0) <= 0) {
             e.cooldown = 3 + Math.random() * 6;
             e.vel = { x: (Math.random() - 0.5) * 14, y: (Math.random() - 0.5) * 14, z: (Math.random() - 0.5) * 14 };
