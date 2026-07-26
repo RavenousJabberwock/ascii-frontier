@@ -10946,7 +10946,7 @@ export class Voidwake {
           // Audible cue at the peak of the flare (env > 0.85) when the
           // player is close enough. Throttle globally so a swarm of stars
           // doesn't machine-gun the sfx.
-          if (flareEnv > 0.85 && z < 1200) {
+          if (flareEnv > 0.85 && proj.z < 1200) {
             const wnow = (typeof performance !== "undefined" ? performance.now() : 0);
             if (wnow > this._flareCueAt) {
               this._flareCueAt = wnow + 4500;
