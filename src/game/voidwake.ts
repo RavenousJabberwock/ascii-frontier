@@ -4340,6 +4340,8 @@ export class Voidwake {
   // Pause flag toggled on visibilitychange — skip update+render while hidden
   // so backgrounded tabs stop burning CPU.
   private _hidden = false;
+  // 0.7.7 — Rate-limit for stellar flare sfx (ms wall-time; global across stars).
+  private _flareCueAt = 0;
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
   private prevHull = -1;            // tracks hull from previous tick to detect any damage
