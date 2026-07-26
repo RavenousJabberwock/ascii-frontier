@@ -5983,6 +5983,18 @@ export class Voidwake {
     this.updateTactical(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
+    // player when the label ticks over. Consume here so any call site
+    // (kills, mining, missions) gets a unified fanfare.
+    {
+      const anyP = p as unknown as { _pendingRankUp?: string };
+      if (anyP._pendingRankUp) {
+        const nr = anyP._pendingRankUp;
+        anyP._pendingRankUp = undefined;
+        this.sfx("levelup");
+        this.pushChatter("Computer", `Rank advanced: ${nr}.`, "#ffd28a");
+      }
+    }
     this.tickCrewIdle(dt);
     this.tickCrewBanter(dt);
     this.tickNpcBanter(dt);
