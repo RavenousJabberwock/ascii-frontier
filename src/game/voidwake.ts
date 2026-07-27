@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.7";
+const VERSION = "0.7.8";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1242,7 +1242,31 @@ const TITLE_TIPS = [
 const SPECIES = [
   "Human", "Android", "Reptilian", "Aquilan", "Drift-born",
   "Sylph", "Voidkin", "Chorus",
+  // 0.7.8 additions
+  "Cephalid", "Ferrix", "Lumen", "Stoneborn", "Kobal", "Thallian",
 ] as const;
+
+// 0.7.8 — Appearance palettes shared by character creation and the
+// Character Sheet. Purely cosmetic; no gameplay effect.
+const SKIN_TONES = [
+  "porcelain", "pale", "fair", "sand", "amber", "olive", "bronze", "copper",
+  "umber", "sienna", "ebony", "obsidian", "chrome", "gunmetal", "jade",
+  "cerulean", "ashen", "opal", "verdigris", "rust",
+];
+const EYE_COLORS = [
+  "green", "blue", "brown", "hazel", "amber", "grey", "violet", "silver",
+  "gold", "black", "red", "heterochromic", "white", "copper", "starlit",
+];
+const HAIR_STYLES = [
+  "shaved", "buzzcut", "crop", "undercut", "braids", "locs", "topknot",
+  "ponytail", "mohawk", "long", "curls", "waves", "bob", "bald",
+  "fiber-optic", "none",
+];
+const HAIR_COLORS = [
+  "black", "brown", "auburn", "chestnut", "blonde", "platinum", "silver",
+  "white", "crimson", "teal", "violet", "emerald", "cobalt", "magenta",
+  "copper", "iridescent",
+];
 type SpeciesName = typeof SPECIES[number];
 
 interface SpeciesInfo {
@@ -1281,6 +1305,20 @@ const SPECIES_INFO: Record<SpeciesName, SpeciesInfo> = {
                  shieldMul: 1.10, cargoMul: 0.90, affinity: "engineer", hullUnlocks: ["nomad"] },
   Chorus:      { bonus: "Hive-minded — +8% XP, faster crew perks",      drawback: "-5% top speed",
                  xpMul: 1.08, topSpeedMul: 0.95, affinity: "merchant", hullUnlocks: ["explorer"] },
+  // 0.7.8 — six new origins. Each keeps the same one-up/one-down shape.
+  Cephalid:    { bonus: "Deep-pressure hull lattice — +12% hull max",   drawback: "-8% top speed",
+                 hullMul: 1.12, topSpeedMul: 0.92, affinity: "engineer", hullUnlocks: ["driftbarge"] },
+  Ferrix:      { bonus: "Ore-sense — +350u radar, -5% buy prices",      drawback: "-8% shield max",
+                 radarBonus: 350, buyMul: 0.95, shieldMul: 0.92, affinity: "engineer", hullUnlocks: ["nomad"] },
+  Lumen:       { bonus: "Photosynthetic crew — -20% fuel burn",         drawback: "-12% cargo capacity",
+                 fuelMul: 0.80, cargoMul: 0.88, affinity: "pilot", hullUnlocks: ["skyeye"] },
+  Stoneborn:   { bonus: "Gravity-forged — +18% hull, +6% cargo",        drawback: "-10% top speed, +5% burn",
+                 hullMul: 1.18, cargoMul: 1.06, topSpeedMul: 0.90, fuelMul: 1.05,
+                 affinity: "gunner", hullUnlocks: ["warhawk"] },
+  Kobal:       { bonus: "Scavenger instincts — +6% sell, +6% XP",       drawback: "-8% hull max",
+                 sellMul: 1.06, xpMul: 1.06, hullMul: 0.92, affinity: "merchant", hullUnlocks: ["explorer"] },
+  Thallian:    { bonus: "Reflex lattice — -12% weapon cooldown",        drawback: "-6% cargo capacity",
+                 cooldownMul: 0.88, cargoMul: 0.94, affinity: "gunner", hullUnlocks: ["warhawk"] },
 };
 
 function speciesOf(name: string | undefined): SpeciesInfo {
@@ -1435,6 +1473,9 @@ interface PlayerChar {
   skin: string;
   eyes: string;
   species: string;
+  // 0.7.8 — cosmetic only; optional so older saves load unchanged.
+  hair?: string;
+  hairColor?: string;
 }
 
 interface PlayerShip {
