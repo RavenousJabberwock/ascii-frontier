@@ -5629,6 +5629,19 @@ export class Voidwake {
         // Re-arm so a fresh emptying after refuel prints the warning again.
         this._lastFuelWarnAt = 0;
       }
+    } else if (p.ship.modules.includes("solar-drive")) {
+      // 0.7.8 — Solar Drive: on a dry tank the sail still pushes, but only
+      // up to 20% throttle and with no boost/supercruise. Slow, steerable,
+      // and enough to limp to a station instead of dying to a dead reactor.
+      const sp = effectiveTopSpeed(p) * Math.min(p.throttle, 0.20);
+      const thrustV = V.scale(fwd, sp);
+      p.pos = V.add(p.pos, V.scale(thrustV, dt));
+      p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
+      const nowS = performance.now() / 1000;
+      if (nowS - this._lastFuelWarnAt > 25) {
+        this._lastFuelWarnAt = nowS;
+        this.pushChatter("Computer", "Reactor dry. Solar Drive engaged — 20% throttle ceiling.", "#9fe");
+      }
     } else {
       // Zero fuel: keep last drift velocity. Steering and throttle inputs
       // don't change trajectory — you're a bullet with your name on it.
