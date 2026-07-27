@@ -11015,12 +11015,13 @@ export class Voidwake {
       }
 
       // 0.7.8 — Exotic compact objects draw themselves and skip the generic
-      // disc/halo/corona pipeline entirely.
+      // disc/halo/corona pipeline (name labels below still apply).
+      let exotic = false;
       if (e.kind === "star") {
         const cn = stellarClassOf(e).name;
         if (cn === "BH" || cn === "NS" || cn === "PSR" || cn === "MAG") {
+          exotic = true;
           this.drawExoticStar(g, e, cn, sx, sy2, rx, ry, vpLeft, vpRight, vpTop, vpBottom);
-          continue;
         }
       }
 
@@ -11104,7 +11105,7 @@ export class Voidwake {
       }
       const tBucket = rocheK > 0 ? Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 220) : 0;
 
-      for (let dy = -ry; dy <= ry; dy++) {
+      for (let dy = -ry; dy <= ry && !exotic; dy++) {
         for (let dx = -rx; dx <= rx; dx++) {
           const nx = dx / rx, ny = dy / ry;
           let d2 = nx * nx + ny * ny;
