@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.7";
+const VERSION = "0.7.8";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1242,7 +1242,31 @@ const TITLE_TIPS = [
 const SPECIES = [
   "Human", "Android", "Reptilian", "Aquilan", "Drift-born",
   "Sylph", "Voidkin", "Chorus",
+  // 0.7.8 additions
+  "Cephalid", "Ferrix", "Lumen", "Stoneborn", "Kobal", "Thallian",
 ] as const;
+
+// 0.7.8 — Appearance palettes shared by character creation and the
+// Character Sheet. Purely cosmetic; no gameplay effect.
+const SKIN_TONES = [
+  "porcelain", "pale", "fair", "sand", "amber", "olive", "bronze", "copper",
+  "umber", "sienna", "ebony", "obsidian", "chrome", "gunmetal", "jade",
+  "cerulean", "ashen", "opal", "verdigris", "rust",
+];
+const EYE_COLORS = [
+  "green", "blue", "brown", "hazel", "amber", "grey", "violet", "silver",
+  "gold", "black", "red", "heterochromic", "white", "copper", "starlit",
+];
+const HAIR_STYLES = [
+  "shaved", "buzzcut", "crop", "undercut", "braids", "locs", "topknot",
+  "ponytail", "mohawk", "long", "curls", "waves", "bob", "bald",
+  "fiber-optic", "none",
+];
+const HAIR_COLORS = [
+  "black", "brown", "auburn", "chestnut", "blonde", "platinum", "silver",
+  "white", "crimson", "teal", "violet", "emerald", "cobalt", "magenta",
+  "copper", "iridescent",
+];
 type SpeciesName = typeof SPECIES[number];
 
 interface SpeciesInfo {
@@ -1281,6 +1305,20 @@ const SPECIES_INFO: Record<SpeciesName, SpeciesInfo> = {
                  shieldMul: 1.10, cargoMul: 0.90, affinity: "engineer", hullUnlocks: ["nomad"] },
   Chorus:      { bonus: "Hive-minded — +8% XP, faster crew perks",      drawback: "-5% top speed",
                  xpMul: 1.08, topSpeedMul: 0.95, affinity: "merchant", hullUnlocks: ["explorer"] },
+  // 0.7.8 — six new origins. Each keeps the same one-up/one-down shape.
+  Cephalid:    { bonus: "Deep-pressure hull lattice — +12% hull max",   drawback: "-8% top speed",
+                 hullMul: 1.12, topSpeedMul: 0.92, affinity: "engineer", hullUnlocks: ["driftbarge"] },
+  Ferrix:      { bonus: "Ore-sense — +350u radar, -5% buy prices",      drawback: "-8% shield max",
+                 radarBonus: 350, buyMul: 0.95, shieldMul: 0.92, affinity: "engineer", hullUnlocks: ["nomad"] },
+  Lumen:       { bonus: "Photosynthetic crew — -20% fuel burn",         drawback: "-12% cargo capacity",
+                 fuelMul: 0.80, cargoMul: 0.88, affinity: "pilot", hullUnlocks: ["skyeye"] },
+  Stoneborn:   { bonus: "Gravity-forged — +18% hull, +6% cargo",        drawback: "-10% top speed, +5% burn",
+                 hullMul: 1.18, cargoMul: 1.06, topSpeedMul: 0.90, fuelMul: 1.05,
+                 affinity: "gunner", hullUnlocks: ["warhawk"] },
+  Kobal:       { bonus: "Scavenger instincts — +6% sell, +6% XP",       drawback: "-8% hull max",
+                 sellMul: 1.06, xpMul: 1.06, hullMul: 0.92, affinity: "merchant", hullUnlocks: ["explorer"] },
+  Thallian:    { bonus: "Reflex lattice — -12% weapon cooldown",        drawback: "-6% cargo capacity",
+                 cooldownMul: 0.88, cargoMul: 0.94, affinity: "gunner", hullUnlocks: ["warhawk"] },
 };
 
 function speciesOf(name: string | undefined): SpeciesInfo {
@@ -1435,6 +1473,9 @@ interface PlayerChar {
   skin: string;
   eyes: string;
   species: string;
+  // 0.7.8 — cosmetic only; optional so older saves load unchanged.
+  hair?: string;
+  hairColor?: string;
 }
 
 interface PlayerShip {
@@ -2820,6 +2861,11 @@ const MODULE_CATALOG = [
   { id: "luxury-cabin",       name: "Luxury Cabin",       price: 2400, desc: "+2 passenger berths" },
   { id: "repair-drones",      name: "Repair Drones",      price: 2600, desc: "slow hull regen in flight" },
   { id: "targeting-computer", name: "Targeting Computer", price: 1400, desc: "weapon cooldown -10%" },
+  // 0.7.8 — propulsion tier. Solar Drive is deliberately cheap: it is the
+  // emergency get-home option (limps at ≤20% throttle on a dry tank).
+  { id: "engine-efficiency",  name: "Flux Regulator",     price: 1700, desc: "-25% fuel burn" },
+  { id: "overdrive-coil",     name: "Overdrive Coil",     price: 2600, desc: "+25% top speed, +15% burn" },
+  { id: "solar-drive",        name: "Solar Drive",        price: 900,  desc: "-15% burn; flies dry at ≤20% throttle" },
   { id: "station-core",       name: "Station Core",       price: 250000, desc: "deploy your own station (Fed Gate only)" },
 ];
 
@@ -3026,8 +3072,10 @@ function effectiveRadarRange(p: PlayerState): number {
 function effectiveTopSpeed(p: PlayerState): number {
   const tune  = p.ship.modules.includes("engine-tune")  ? 1.15 : 1.0;
   const aux   = p.ship.modules.includes("aux-thruster") ? 1.10 : 1.0;
+  // 0.7.8 — Overdrive Coil: +25% top speed (burn penalty applied in the tick).
+  const over  = p.ship.modules.includes("overdrive-coil") ? 1.25 : 1.0;
   const speciesMul = speciesOf(p.char.species).topSpeedMul ?? 1;
-  return p.ship.speed * tune * aux * speciesMul;
+  return p.ship.speed * tune * aux * over * speciesMul;
 }
 function effectiveBoostMul(p: PlayerState): number {
   return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
@@ -3856,10 +3904,14 @@ const STELLAR_CLASSES: StellarClass[] = [
   // Black hole — dark core with a thin red-orange accretion glow.
   // Gravity pulls the player in close-approach; see BH handler in updatePlaying.
   { name: "BH", color: "#1a0a10", edge: "#ff6a20", halo: "#5a1a08", sizeMul: 0.9, glyph: "◉" },
+  // 0.7.8 — Neutron star: city-sized, blindingly hot, wrapped in field lines.
+  { name: "NS", color: "#eaf6ff", edge: "#7fa8d8", halo: "#20304f", sizeMul: 0.18, glyph: "•" },
+  // 0.7.8 — Magnetar: neutron star with an absurd magnetic field; violet.
+  { name: "MAG", color: "#ffd6ff", edge: "#a040c0", halo: "#3a0d4a", sizeMul: 0.20, glyph: "◈" },
 ];
 // Weighted picker — main-sequence stars are more common than giants.
-// New entries (PSR, BH) are appended at the end and use very small weights.
-const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1];
+// New entries (PSR, BH, NS, MAG) are appended at the end and use very small weights.
+const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1, 2, 1];
 const _stellarWSum = STELLAR_WEIGHTS.reduce((a, b) => a + b, 0);
 // Stellar class for a star entity. Called from several hot paths per frame
 // (culling, halo tinting, corona scoop math), so results are memoized per
@@ -4201,6 +4253,7 @@ export class Voidwake {
   charDraft: PlayerChar = {
     name: "Cmdr Vex", gender: "Unspecified",
     height: 175, weight: 72, skin: "amber", eyes: "green", species: "Human",
+    hair: "crop", hairColor: "black",
   };
   hullDraftIdx = 0;
   weaponDraftIdx = 0;
@@ -5308,7 +5361,7 @@ export class Voidwake {
   }
 
   // --- Character creation --------------------------------------------------
-  charFields = ["name", "gender", "species", "height", "weight", "skin", "eyes", "Continue →"];
+  charFields = ["name", "gender", "species", "height", "weight", "skin", "hair", "hair color", "eyes", "Continue →"];
   updateCharCreate() {
     this.menuNav(this.charFields.length);
     const field = this.charFields[this.menuCursor];
@@ -5330,13 +5383,23 @@ export class Voidwake {
       if (left) this.charDraft.weight = Math.max(40, this.charDraft.weight - 1);
       if (right) this.charDraft.weight = Math.min(200, this.charDraft.weight + 1);
     } else if (field === "skin") {
-      const arr = ["pale", "fair", "amber", "olive", "umber", "obsidian", "chrome", "jade"];
-      const i = arr.indexOf(this.charDraft.skin);
+      const arr = SKIN_TONES;
+      const i = Math.max(0, arr.indexOf(this.charDraft.skin));
       if (left) this.charDraft.skin = arr[(i - 1 + arr.length) % arr.length];
       if (right) this.charDraft.skin = arr[(i + 1) % arr.length];
+    } else if (field === "hair") {
+      const arr = HAIR_STYLES;
+      const i = Math.max(0, arr.indexOf(this.charDraft.hair ?? "crop"));
+      if (left) this.charDraft.hair = arr[(i - 1 + arr.length) % arr.length];
+      if (right) this.charDraft.hair = arr[(i + 1) % arr.length];
+    } else if (field === "hair color") {
+      const arr = HAIR_COLORS;
+      const i = Math.max(0, arr.indexOf(this.charDraft.hairColor ?? "black"));
+      if (left) this.charDraft.hairColor = arr[(i - 1 + arr.length) % arr.length];
+      if (right) this.charDraft.hairColor = arr[(i + 1) % arr.length];
     } else if (field === "eyes") {
-      const arr = ["green", "blue", "amber", "violet", "silver", "black"];
-      const i = arr.indexOf(this.charDraft.eyes);
+      const arr = EYE_COLORS;
+      const i = Math.max(0, arr.indexOf(this.charDraft.eyes));
       if (left) this.charDraft.eyes = arr[(i - 1 + arr.length) % arr.length];
       if (right) this.charDraft.eyes = arr[(i + 1) % arr.length];
     } else if (field === "name") {
@@ -5536,7 +5599,13 @@ export class Voidwake {
     const engineerMul = (hasCrew(p, "engineer") ? 0.80 : 1.0) * (hasCrew(p, "navigator") ? 0.90 : 1.0);
     const xpSipMul = Math.max(0.5,
       1 - 0.01 * roleLevel(p, "pilot") - 0.01 * roleLevel(p, "engineer"));
-    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * xpSipMul * speciesFuelMul(p);
+    // 0.7.8 — propulsion modules: Flux Regulator sips (-25%), Solar Drive
+    // trims another 15% off (it supplements the reactor with sail intake),
+    // Overdrive Coil costs 15% more for its extra top speed.
+    const propMul = (p.ship.modules.includes("engine-efficiency") ? 0.75 : 1.0)
+      * (p.ship.modules.includes("solar-drive") ? 0.85 : 1.0)
+      * (p.ship.modules.includes("overdrive-coil") ? 1.15 : 1.0);
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * xpSipMul * speciesFuelMul(p) * propMul;
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
@@ -5569,6 +5638,19 @@ export class Voidwake {
       } else if (p.ship.fuel > 1) {
         // Re-arm so a fresh emptying after refuel prints the warning again.
         this._lastFuelWarnAt = 0;
+      }
+    } else if (p.ship.modules.includes("solar-drive")) {
+      // 0.7.8 — Solar Drive: on a dry tank the sail still pushes, but only
+      // up to 20% throttle and with no boost/supercruise. Slow, steerable,
+      // and enough to limp to a station instead of dying to a dead reactor.
+      const sp = effectiveTopSpeed(p) * Math.min(p.throttle, 0.20);
+      const thrustV = V.scale(fwd, sp);
+      p.pos = V.add(p.pos, V.scale(thrustV, dt));
+      p.driftVel = { x: thrustV.x, y: thrustV.y, z: thrustV.z };
+      const nowS = performance.now() / 1000;
+      if (nowS - this._lastFuelWarnAt > 25) {
+        this._lastFuelWarnAt = nowS;
+        this.pushChatter("Computer", "Reactor dry. Solar Drive engaged — 20% throttle ceiling.", "#9fe");
       }
     } else {
       // Zero fuel: keep last drift velocity. Steering and throttle inputs
@@ -5625,7 +5707,7 @@ export class Voidwake {
         const burnR = 90 * szMul;
         // Black holes and pulsars aren't safe to scoop from — their gravity /
         // radiation handlers own that band; skip the fuel bonus entirely.
-        const scoopable = sc.name !== "BH" && sc.name !== "PSR";
+        const scoopable = sc.name !== "BH" && sc.name !== "PSR" && sc.name !== "NS" && sc.name !== "MAG";
         const d = V.len(V.sub(e.pos, p.pos));
         if (scoopable && d < scoopR && d > burnR && p.ship.fuel < p.ship.fuelMax) {
           // ~6 fuel/sec at the sweet spot (d ≈ burnR), tapering to zero at scoopR.
@@ -6491,7 +6573,7 @@ export class Voidwake {
     // 0.5.5 — Navigator crew unlocks three extra categories in [/] cycle.
     { label: "WORMHOLE", match: (e) => e.kind === "wormhole", navigator: true },
     { label: "MISSION",  match: (e) => this.player?.mission?.targetId === e.id, navigator: true },
-    { label: "EXOTIC",   match: (e) => { if (e.kind !== "star") return false; const n = stellarClassOf(e).name; return n === "BH" || n === "PSR"; }, navigator: true },
+    { label: "EXOTIC",   match: (e) => { if (e.kind !== "star") return false; const n = stellarClassOf(e).name; return n === "BH" || n === "PSR" || n === "NS" || n === "MAG"; }, navigator: true },
   ];
   private _targetCatIdx = -1;
 
@@ -7532,6 +7614,12 @@ export class Voidwake {
       Sylph:        " .^^^. ",
       Voidkin:      " .===. ",
       Chorus:       " .***. ",
+      Cephalid:     " (~~~) ",
+      Ferrix:       "[-vvv-]",
+      Lumen:        " \\:::/ ",
+      Stoneborn:    "[#####]",
+      Kobal:        " >www< ",
+      Thallian:     " /^^^\\ ",
     };
     const e = (eyes ?? "").toLowerCase();
     const eyeCh =
@@ -7599,6 +7687,7 @@ export class Voidwake {
     putText(g, ix, iy++, `Cmdr ${cs.name}`, "#fff");
     putText(g, ix, iy++, `${cs.species}, ${cs.gender}`, "#aef");
     putText(g, ix, iy++, `${cs.height}cm  ${cs.weight}kg  skin:${cs.skin}  eyes:${cs.eyes}`, "#9fe");
+    putText(g, ix, iy++, `hair: ${cs.hairColor ?? "black"} ${cs.hair ?? "crop"}`, "#9fe");
     putText(g, ix, iy++, `Trait: ${sinfo.bonus}`, "#7CFC00");
     putText(g, ix, iy++, `Cost:  ${sinfo.drawback}`, "#f88");
     putText(g, ix, iy++, `Credits ${p.credits}cr    XP ${p.xp}    Rank ${p.rank}    Kills ${p.kills ?? 0}`, "#ffe066");
@@ -10010,6 +10099,103 @@ export class Voidwake {
     putText(g, x, y + 1 + lines.length, "└" + "─".repeat(borderW - 2) + "┘", pulseNotice ? "#ffdd66" : "#b86");
   }
 
+  // 0.7.8 — Exotic compact objects (BH / NS / PSR / MAG) get bespoke art
+  // instead of the generic filled disc + corona, so they read at a glance
+  // as something other than "another amber blob".
+  private drawExoticStar(
+    g: Cell[][], e: Entity, cls: string,
+    sx: number, sy: number, rx: number, ry: number,
+    vpLeft: number, vpRight: number, vpTop: number, vpBottom: number,
+  ) {
+    void ry;
+    const now = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+    const AR = CELL_W / CELL_H;
+    const put = (gx: number, gy: number, ch: string, color: string, glow = false, force = false) => {
+      if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) return;
+      if (!force && g[gy][gx].ch !== " ") return;
+      g[gy][gx] = { ch, color, glow };
+    };
+    if (cls === "BH") {
+      // Event horizon — a true black disc that erases whatever is behind it.
+      const hr = Math.max(2, rx);
+      const hrv = Math.max(1, Math.round(hr * AR));
+      for (let dy = -hrv; dy <= hrv; dy++) {
+        for (let dx = -hr; dx <= hr; dx++) {
+          const nx = dx / hr, ny = dy / hrv;
+          if (nx * nx + ny * ny > 1) continue;
+          put(sx + dx, sy + dy, " ", "#000000", false, true);
+        }
+      }
+      // Photon ring: thin, brilliant, just outside the horizon.
+      const steps = Math.max(28, hr * 14);
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        put(sx + Math.round(Math.cos(a) * hr * 1.18),
+            sy + Math.round(Math.sin(a) * hr * 1.18 * AR),
+            "·", "#ffe3b0", true, true);
+      }
+      // Accretion disc: wide plasma ellipse seen near edge-on, doppler-
+      // brightened on the approaching limb, glyphs churning with time.
+      const dr = Math.max(4, Math.round(hr * 2.8));
+      for (let dx = -dr; dx <= dr; dx++) {
+        const t = dx / dr;
+        if (Math.abs(t) < 0.42) continue; // occluded by the horizon
+        const yOff = Math.round(Math.abs(Math.sin(t * Math.PI)) * hr * 0.5 * AR);
+        for (const s of [1, -1]) {
+          const spin = (hash01(e.id * 7 + dx * 13) + now * 1.4) % 1;
+          const ch = spin < 0.33 ? "=" : spin < 0.66 ? "-" : "~";
+          const hot = t > 0;
+          put(sx + dx, sy + s * yOff, ch, hot ? "#ffd9a0" : "#b8481a", hot, true);
+        }
+      }
+      // Relativistic jets along the spin axis.
+      const jet = Math.max(4, Math.round(hr * 3.2 * AR));
+      for (let i = Math.max(1, Math.round(hr * AR)); i <= jet; i++) {
+        if (hash01(e.id * 31 + i * 17 + Math.floor(now * 8)) < 0.35) continue;
+        const ch = i < jet * 0.5 ? "|" : ":";
+        put(sx, sy - i, ch, "#8ad8ff", i < jet * 0.5);
+        put(sx, sy + i, ch, "#8ad8ff", i < jet * 0.5);
+      }
+      return;
+    }
+    // Neutron-star family — pinpoint core, magnetic field arcs, and a pair
+    // of swept lighthouse beams whose rate depends on the class.
+    const coreCol = cls === "MAG" ? "#ffb0ff" : "#dff0ff";
+    put(sx, sy, cls === "MAG" ? "◈" : "•", "#ffffff", true, true);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      put(sx + dx, sy + dy, "·", coreCol, true, true);
+    }
+    const fr = Math.max(3, rx * 3);
+    for (const k of [1, 1.6]) {
+      const steps = Math.max(24, Math.round(fr * 8));
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        if (hash01(e.id + i * 7 + Math.floor(now * 6)) < (cls === "MAG" ? 0.45 : 0.25)) continue;
+        const wob = 1 + Math.sin(a * 3 + now * (cls === "MAG" ? 5 : 1.5)) * 0.18;
+        put(sx + Math.round(Math.cos(a) * fr * k * wob),
+            sy + Math.round(Math.sin(a) * fr * k * wob * AR * 0.7),
+            Math.abs(Math.cos(a)) > 0.7 ? ")" : "-",
+            cls === "MAG" ? "#c060e0" : "#5f7fbf");
+      }
+    }
+    // Lighthouse beams. PSR spins fast, MAG slower but violent, NS lazily.
+    const spin = now * (cls === "PSR" ? 3.4 : cls === "MAG" ? 1.2 : 0.6) + hash01(e.id) * 6.283;
+    const len = Math.max(6, Math.round(fr * 3.5));
+    const pulse = 0.5 + 0.5 * Math.abs(Math.sin(spin * 2));
+    for (let i = 2; i <= len; i++) {
+      const spread = Math.round((i / len) * 2);
+      for (const s of [1, -1]) {
+        const bx = Math.round(Math.cos(spin) * i * s);
+        const by = Math.round(Math.sin(spin) * i * s * AR * 0.8);
+        for (let w = -spread; w <= spread; w++) {
+          if (hash01(e.id * 13 + i * 5 + w * 3 + Math.floor(now * 10)) > pulse) continue;
+          const ch = i < len * 0.4 ? "*" : i < len * 0.75 ? "+" : "·";
+          put(sx + bx + w, sy + by, ch, cls === "MAG" ? "#ff8ae8" : "#bfe4ff", i < len * 0.5);
+        }
+      }
+    }
+  }
+
   renderCharCreate(g: Cell[][]) {
     putText(g, 4, 2, "CREATE COMMANDER", "#7CFC00");
     putText(g, 4, 3, "←/→ adjust   ↑/↓ field   ENTER continue", "#888");
@@ -10021,6 +10207,8 @@ export class Voidwake {
       `height:  ${c.height} cm`,
       `weight:  ${c.weight} kg`,
       `skin:    ${c.skin}`,
+      `hair:    ${c.hair ?? "crop"}`,
+      `hair color: ${c.hairColor ?? "black"}`,
       `eyes:    ${c.eyes}`,
       `Continue →`,
     ];
@@ -10793,11 +10981,55 @@ export class Voidwake {
         }
       }
 
+      // 0.7.8 — Gravitational lensing. Anything more massive than a gas
+      // giant smears the background: glyphs in an annulus around the body
+      // are pulled inward along the radial, so a black hole betrays itself
+      // by the ring of warped starfield around an otherwise empty patch.
+      const lensStrength =
+        e.kind === "star"
+          ? (stellarClassOf(e).name === "BH" ? 1.0
+            : stellarClassOf(e).name === "NS" || stellarClassOf(e).name === "MAG" || stellarClassOf(e).name === "PSR" ? 0.55
+            : rx >= 6 ? 0.30 : 0)
+          : (e.kind === "planet" && rx >= 9 ? 0.22 : 0);
+      if (lensStrength > 0) {
+        const inner = Math.max(2, Math.round(rx * 1.05));
+        const outer = Math.round(rx * (2.2 + lensStrength * 1.6));
+        const ar = CELL_W / CELL_H;
+        for (let dy = -Math.round(outer * ar); dy <= Math.round(outer * ar); dy++) {
+          for (let dx = -outer; dx <= outer; dx++) {
+            const rr = Math.hypot(dx, dy / ar);
+            if (rr < inner || rr > outer) continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            if (g[gy][gx].ch !== " ") continue;
+            // Pull a sample from further out along the same radial.
+            const pull = 1 + lensStrength * (1 - (rr - inner) / Math.max(1, outer - inner)) * 1.5;
+            const sxr = sx + Math.round(dx * pull);
+            const syr = sy2 + Math.round(dy * pull);
+            if (sxr <= vpLeft || sxr >= vpRight || syr <= vpTop || syr >= vpBottom) continue;
+            const src = g[syr][sxr];
+            if (src.ch === " ") continue;
+            g[gy][gx] = { ch: src.ch, color: src.color, glow: src.glow };
+          }
+        }
+      }
+
+      // 0.7.8 — Exotic compact objects draw themselves and skip the generic
+      // disc/halo/corona pipeline (name labels below still apply).
+      let exotic = false;
+      if (e.kind === "star") {
+        const cn = stellarClassOf(e).name;
+        if (cn === "BH" || cn === "NS" || cn === "PSR" || cn === "MAG") {
+          exotic = true;
+          this.drawExoticStar(g, e, cn, sx, sy2, rx, ry, vpLeft, vpRight, vpTop, vpBottom);
+        }
+      }
+
       // Star glow halo — a faint outer ring outside the solid disc so the
       // central star reads as a luminous source rather than a flat blob.
       // Halo color tracks the stellar class so blue giants shed blue light
       // and red dwarves smoulder red rather than every star haloing amber.
-      if (e.kind === "star") {
+      if (e.kind === "star" && !exotic) {
         const haloR = 1.55;
         const haloChars = ["+", "·", "."];
         const haloCol = stellarClassOf(e).halo;
@@ -10873,7 +11105,7 @@ export class Voidwake {
       }
       const tBucket = rocheK > 0 ? Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 220) : 0;
 
-      for (let dy = -ry; dy <= ry; dy++) {
+      for (let dy = -ry; dy <= ry && !exotic; dy++) {
         for (let dx = -rx; dx <= rx; dx++) {
           const nx = dx / rx, ny = dy / ry;
           let d2 = nx * nx + ny * ny;
@@ -10905,7 +11137,7 @@ export class Voidwake {
       // and out on a per-star phase, and a rotating "flare tongue" curls
       // off one pole. When a flare peak lands within audible range of the
       // player, cue the `flare` sfx (rate-limited via _flareCueAt).
-      if (e.kind === "star" && rx >= 3) {
+      if (e.kind === "star" && !exotic && rx >= 3) {
         const col = stellarClassOf(e).halo;
         const now = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
         const phase = hash01(e.id * 331 + 7) * Math.PI * 2;
@@ -10948,7 +11180,12 @@ export class Voidwake {
         }
         // Flare tongue: a short curved arc erupting from one pole, only
         // rendered while the envelope is non-zero.
-        if (flareEnv > 0.05) {
+        // 0.7.8 — Distance gate. `proj.z` is camera depth and stays small
+        // when you fly past a star sideways, which is why flares used to
+        // keep erupting after you left. Gate on true world distance
+        // instead: tongue inside 6000u, audio cue inside 3000u.
+        const flareDist = V.len(V.sub(e.pos, p.pos));
+        if (flareEnv > 0.05 && flareDist < 6000) {
           const arcLen = Math.round(rx * 1.2 * flareEnv) + 2;
           const dir = Math.floor(hash01(e.id * 401 + 17) * 4); // 0..3 pole
           const arcCurve = (hash01(e.id * 509 + 19) - 0.5) * 1.8;
@@ -10969,7 +11206,7 @@ export class Voidwake {
           // Audible cue at the peak of the flare (env > 0.85) when the
           // player is close enough. Throttle globally so a swarm of stars
           // doesn't machine-gun the sfx.
-          if (flareEnv > 0.85 && proj.z < 1200) {
+          if (flareEnv > 0.85 && flareDist < 3000) {
             const wnow = (typeof performance !== "undefined" ? performance.now() : 0);
             if (wnow > this._flareCueAt) {
               this._flareCueAt = wnow + 4500;

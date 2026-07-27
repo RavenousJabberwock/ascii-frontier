@@ -1,3 +1,30 @@
+# 0.7.8 — Exotic Stars, Lensing & Propulsion
+
+Ships as **0.7.8**.
+
+- **Flares are distance-gated.** The flare tongue and the `flare` rumble now
+  test true world distance (`|e.pos - p.pos|`), not camera depth: tongue
+  inside 6000u, audio inside 3000u. Flying past a star sideways no longer
+  leaves it erupting forever.
+- **Exotic compact objects** (`BH`, `PSR`, plus new `NS` neutron star and
+  `MAG` magnetar) bypass the disc/halo/corona pipeline for `drawExoticStar`:
+  - Black hole: true black horizon that erases the background, a photon
+    ring, a churning doppler-brightened accretion disc, and polar jets.
+  - NS/PSR/MAG: pinpoint core, crackling magnetic field arcs, and swept
+    twin lighthouse beams (PSR fast, MAG violent violet, NS lazy).
+  - Both are unscoopable and register under the EXOTIC target category.
+- **Gravitational lensing.** Bodies larger than a gas giant smear the
+  background: glyphs in an annulus are pulled inward along the radial.
+  Strength scales BH 1.0 → compact 0.55 → big star 0.30 → giant planet 0.22,
+  so an "empty" patch ringed by warped starfield betrays a black hole.
+- **Propulsion modules**: `Flux Regulator` (-25% burn), `Overdrive Coil`
+  (+25% top speed / +15% burn), and the cheap `Solar Drive` (-15% burn and,
+  on a dry tank, steerable flight capped at 20% throttle).
+- **Character customization**: six new species (Cephalid, Ferrix, Lumen,
+  Stoneborn, Kobal, Thallian) each with portrait crests and a bonus/drawback
+  pair, plus expanded skin/eye palettes and new hair style + hair color
+  fields shown on the Character Sheet.
+
 # 0.7.7 — Animate Coronas, Planet Surfaces & New SFX
 
 Ships as **0.7.7**.
