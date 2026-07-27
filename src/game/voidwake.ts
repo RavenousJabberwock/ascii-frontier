@@ -2861,6 +2861,11 @@ const MODULE_CATALOG = [
   { id: "luxury-cabin",       name: "Luxury Cabin",       price: 2400, desc: "+2 passenger berths" },
   { id: "repair-drones",      name: "Repair Drones",      price: 2600, desc: "slow hull regen in flight" },
   { id: "targeting-computer", name: "Targeting Computer", price: 1400, desc: "weapon cooldown -10%" },
+  // 0.7.8 — propulsion tier. Solar Drive is deliberately cheap: it is the
+  // emergency get-home option (limps at ≤20% throttle on a dry tank).
+  { id: "engine-efficiency",  name: "Flux Regulator",     price: 1700, desc: "-25% fuel burn" },
+  { id: "overdrive-coil",     name: "Overdrive Coil",     price: 2600, desc: "+25% top speed, +15% burn" },
+  { id: "solar-drive",        name: "Solar Drive",        price: 900,  desc: "-15% burn; flies dry at ≤20% throttle" },
   { id: "station-core",       name: "Station Core",       price: 250000, desc: "deploy your own station (Fed Gate only)" },
 ];
 
@@ -3067,6 +3072,8 @@ function effectiveRadarRange(p: PlayerState): number {
 function effectiveTopSpeed(p: PlayerState): number {
   const tune  = p.ship.modules.includes("engine-tune")  ? 1.15 : 1.0;
   const aux   = p.ship.modules.includes("aux-thruster") ? 1.10 : 1.0;
+  // 0.7.8 — Overdrive Coil: +25% top speed (burn penalty applied in the tick).
+  const over  = p.ship.modules.includes("overdrive-coil") ? 1.25 : 1.0;
   const speciesMul = speciesOf(p.char.species).topSpeedMul ?? 1;
   return p.ship.speed * tune * aux * speciesMul;
 }
@@ -3897,10 +3904,14 @@ const STELLAR_CLASSES: StellarClass[] = [
   // Black hole — dark core with a thin red-orange accretion glow.
   // Gravity pulls the player in close-approach; see BH handler in updatePlaying.
   { name: "BH", color: "#1a0a10", edge: "#ff6a20", halo: "#5a1a08", sizeMul: 0.9, glyph: "◉" },
+  // 0.7.8 — Neutron star: city-sized, blindingly hot, wrapped in field lines.
+  { name: "NS", color: "#eaf6ff", edge: "#7fa8d8", halo: "#20304f", sizeMul: 0.18, glyph: "•" },
+  // 0.7.8 — Magnetar: neutron star with an absurd magnetic field; violet.
+  { name: "MAG", color: "#ffd6ff", edge: "#a040c0", halo: "#3a0d4a", sizeMul: 0.20, glyph: "◈" },
 ];
 // Weighted picker — main-sequence stars are more common than giants.
-// New entries (PSR, BH) are appended at the end and use very small weights.
-const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1];
+// New entries (PSR, BH, NS, MAG) are appended at the end and use very small weights.
+const STELLAR_WEIGHTS = [2, 5, 8, 10, 14, 12, 6, 2, 20, 8, 2, 1, 2, 1];
 const _stellarWSum = STELLAR_WEIGHTS.reduce((a, b) => a + b, 0);
 // Stellar class for a star entity. Called from several hot paths per frame
 // (culling, halo tinting, corona scoop math), so results are memoized per
@@ -4242,6 +4253,7 @@ export class Voidwake {
   charDraft: PlayerChar = {
     name: "Cmdr Vex", gender: "Unspecified",
     height: 175, weight: 72, skin: "amber", eyes: "green", species: "Human",
+    hair: "crop", hairColor: "black",
   };
   hullDraftIdx = 0;
   weaponDraftIdx = 0;
