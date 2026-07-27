@@ -10207,6 +10207,8 @@ export class Voidwake {
       `height:  ${c.height} cm`,
       `weight:  ${c.weight} kg`,
       `skin:    ${c.skin}`,
+      `hair:    ${c.hair ?? "crop"}`,
+      `hair color: ${c.hairColor ?? "black"}`,
       `eyes:    ${c.eyes}`,
       `Continue →`,
     ];
