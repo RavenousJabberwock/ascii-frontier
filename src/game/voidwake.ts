@@ -10099,6 +10099,103 @@ export class Voidwake {
     putText(g, x, y + 1 + lines.length, "└" + "─".repeat(borderW - 2) + "┘", pulseNotice ? "#ffdd66" : "#b86");
   }
 
+  // 0.7.8 — Exotic compact objects (BH / NS / PSR / MAG) get bespoke art
+  // instead of the generic filled disc + corona, so they read at a glance
+  // as something other than "another amber blob".
+  private drawExoticStar(
+    g: Cell[][], e: Entity, cls: string,
+    sx: number, sy: number, rx: number, ry: number,
+    vpLeft: number, vpRight: number, vpTop: number, vpBottom: number,
+  ) {
+    void ry;
+    const now = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+    const AR = CELL_W / CELL_H;
+    const put = (gx: number, gy: number, ch: string, color: string, glow = false, force = false) => {
+      if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) return;
+      if (!force && g[gy][gx].ch !== " ") return;
+      g[gy][gx] = { ch, color, glow };
+    };
+    if (cls === "BH") {
+      // Event horizon — a true black disc that erases whatever is behind it.
+      const hr = Math.max(2, rx);
+      const hrv = Math.max(1, Math.round(hr * AR));
+      for (let dy = -hrv; dy <= hrv; dy++) {
+        for (let dx = -hr; dx <= hr; dx++) {
+          const nx = dx / hr, ny = dy / hrv;
+          if (nx * nx + ny * ny > 1) continue;
+          put(sx + dx, sy + dy, " ", "#000000", false, true);
+        }
+      }
+      // Photon ring: thin, brilliant, just outside the horizon.
+      const steps = Math.max(28, hr * 14);
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        put(sx + Math.round(Math.cos(a) * hr * 1.18),
+            sy + Math.round(Math.sin(a) * hr * 1.18 * AR),
+            "·", "#ffe3b0", true, true);
+      }
+      // Accretion disc: wide plasma ellipse seen near edge-on, doppler-
+      // brightened on the approaching limb, glyphs churning with time.
+      const dr = Math.max(4, Math.round(hr * 2.8));
+      for (let dx = -dr; dx <= dr; dx++) {
+        const t = dx / dr;
+        if (Math.abs(t) < 0.42) continue; // occluded by the horizon
+        const yOff = Math.round(Math.abs(Math.sin(t * Math.PI)) * hr * 0.5 * AR);
+        for (const s of [1, -1]) {
+          const spin = (hash01(e.id * 7 + dx * 13) + now * 1.4) % 1;
+          const ch = spin < 0.33 ? "=" : spin < 0.66 ? "-" : "~";
+          const hot = t > 0;
+          put(sx + dx, sy + s * yOff, ch, hot ? "#ffd9a0" : "#b8481a", hot, true);
+        }
+      }
+      // Relativistic jets along the spin axis.
+      const jet = Math.max(4, Math.round(hr * 3.2 * AR));
+      for (let i = Math.max(1, Math.round(hr * AR)); i <= jet; i++) {
+        if (hash01(e.id * 31 + i * 17 + Math.floor(now * 8)) < 0.35) continue;
+        const ch = i < jet * 0.5 ? "|" : ":";
+        put(sx, sy - i, ch, "#8ad8ff", i < jet * 0.5);
+        put(sx, sy + i, ch, "#8ad8ff", i < jet * 0.5);
+      }
+      return;
+    }
+    // Neutron-star family — pinpoint core, magnetic field arcs, and a pair
+    // of swept lighthouse beams whose rate depends on the class.
+    const coreCol = cls === "MAG" ? "#ffb0ff" : "#dff0ff";
+    put(sx, sy, cls === "MAG" ? "◈" : "•", "#ffffff", true, true);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      put(sx + dx, sy + dy, "·", coreCol, true, true);
+    }
+    const fr = Math.max(3, rx * 3);
+    for (const k of [1, 1.6]) {
+      const steps = Math.max(24, Math.round(fr * 8));
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        if (hash01(e.id + i * 7 + Math.floor(now * 6)) < (cls === "MAG" ? 0.45 : 0.25)) continue;
+        const wob = 1 + Math.sin(a * 3 + now * (cls === "MAG" ? 5 : 1.5)) * 0.18;
+        put(sx + Math.round(Math.cos(a) * fr * k * wob),
+            sy + Math.round(Math.sin(a) * fr * k * wob * AR * 0.7),
+            Math.abs(Math.cos(a)) > 0.7 ? ")" : "-",
+            cls === "MAG" ? "#c060e0" : "#5f7fbf");
+      }
+    }
+    // Lighthouse beams. PSR spins fast, MAG slower but violent, NS lazily.
+    const spin = now * (cls === "PSR" ? 3.4 : cls === "MAG" ? 1.2 : 0.6) + hash01(e.id) * 6.283;
+    const len = Math.max(6, Math.round(fr * 3.5));
+    const pulse = 0.5 + 0.5 * Math.abs(Math.sin(spin * 2));
+    for (let i = 2; i <= len; i++) {
+      const spread = Math.round((i / len) * 2);
+      for (const s of [1, -1]) {
+        const bx = Math.round(Math.cos(spin) * i * s);
+        const by = Math.round(Math.sin(spin) * i * s * AR * 0.8);
+        for (let w = -spread; w <= spread; w++) {
+          if (hash01(e.id * 13 + i * 5 + w * 3 + Math.floor(now * 10)) > pulse) continue;
+          const ch = i < len * 0.4 ? "*" : i < len * 0.75 ? "+" : "·";
+          put(sx + bx + w, sy + by, ch, cls === "MAG" ? "#ff8ae8" : "#bfe4ff", i < len * 0.5);
+        }
+      }
+    }
+  }
+
   renderCharCreate(g: Cell[][]) {
     putText(g, 4, 2, "CREATE COMMANDER", "#7CFC00");
     putText(g, 4, 3, "←/→ adjust   ↑/↓ field   ENTER continue", "#888");
