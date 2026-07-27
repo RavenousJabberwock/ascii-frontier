@@ -3075,7 +3075,7 @@ function effectiveTopSpeed(p: PlayerState): number {
   // 0.7.8 — Overdrive Coil: +25% top speed (burn penalty applied in the tick).
   const over  = p.ship.modules.includes("overdrive-coil") ? 1.25 : 1.0;
   const speciesMul = speciesOf(p.char.species).topSpeedMul ?? 1;
-  return p.ship.speed * tune * aux * speciesMul;
+  return p.ship.speed * tune * aux * over * speciesMul;
 }
 function effectiveBoostMul(p: PlayerState): number {
   return p.ship.modules.includes("afterburner-od") ? 1.6 * 1.20 : 1.6;
@@ -5589,7 +5589,13 @@ export class Voidwake {
     const engineerMul = (hasCrew(p, "engineer") ? 0.80 : 1.0) * (hasCrew(p, "navigator") ? 0.90 : 1.0);
     const xpSipMul = Math.max(0.5,
       1 - 0.01 * roleLevel(p, "pilot") - 0.01 * roleLevel(p, "engineer"));
-    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * xpSipMul * speciesFuelMul(p);
+    // 0.7.8 — propulsion modules: Flux Regulator sips (-25%), Solar Drive
+    // trims another 15% off (it supplements the reactor with sail intake),
+    // Overdrive Coil costs 15% more for its extra top speed.
+    const propMul = (p.ship.modules.includes("engine-efficiency") ? 0.75 : 1.0)
+      * (p.ship.modules.includes("solar-drive") ? 0.85 : 1.0)
+      * (p.ship.modules.includes("overdrive-coil") ? 1.15 : 1.0);
+    const fuelMul  = (boosting ? 4.0 : 1.0) * (supercruise ? 3.0 : 1.0) * engineerMul * xpSipMul * speciesFuelMul(p) * propMul;
 
     // Forward direction from heading
     const fwd = headingToVec(p.heading.yaw, p.heading.pitch);
