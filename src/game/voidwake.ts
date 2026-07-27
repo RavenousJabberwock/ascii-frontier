@@ -10981,6 +10981,49 @@ export class Voidwake {
         }
       }
 
+      // 0.7.8 — Gravitational lensing. Anything more massive than a gas
+      // giant smears the background: glyphs in an annulus around the body
+      // are pulled inward along the radial, so a black hole betrays itself
+      // by the ring of warped starfield around an otherwise empty patch.
+      const lensStrength =
+        e.kind === "star"
+          ? (stellarClassOf(e).name === "BH" ? 1.0
+            : stellarClassOf(e).name === "NS" || stellarClassOf(e).name === "MAG" || stellarClassOf(e).name === "PSR" ? 0.55
+            : rx >= 6 ? 0.30 : 0)
+          : (e.kind === "planet" && rx >= 9 ? 0.22 : 0);
+      if (lensStrength > 0) {
+        const inner = Math.max(2, Math.round(rx * 1.05));
+        const outer = Math.round(rx * (2.2 + lensStrength * 1.6));
+        const ar = CELL_W / CELL_H;
+        for (let dy = -Math.round(outer * ar); dy <= Math.round(outer * ar); dy++) {
+          for (let dx = -outer; dx <= outer; dx++) {
+            const rr = Math.hypot(dx, dy / ar);
+            if (rr < inner || rr > outer) continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            if (g[gy][gx].ch !== " ") continue;
+            // Pull a sample from further out along the same radial.
+            const pull = 1 + lensStrength * (1 - (rr - inner) / Math.max(1, outer - inner)) * 1.5;
+            const sxr = sx + Math.round(dx * pull);
+            const syr = sy2 + Math.round(dy * pull);
+            if (sxr <= vpLeft || sxr >= vpRight || syr <= vpTop || syr >= vpBottom) continue;
+            const src = g[syr][sxr];
+            if (src.ch === " ") continue;
+            g[gy][gx] = { ch: src.ch, color: src.color, glow: src.glow };
+          }
+        }
+      }
+
+      // 0.7.8 — Exotic compact objects draw themselves and skip the generic
+      // disc/halo/corona pipeline entirely.
+      if (e.kind === "star") {
+        const cn = stellarClassOf(e).name;
+        if (cn === "BH" || cn === "NS" || cn === "PSR" || cn === "MAG") {
+          this.drawExoticStar(g, e, cn, sx, sy2, rx, ry, vpLeft, vpRight, vpTop, vpBottom);
+          continue;
+        }
+      }
+
       // Star glow halo — a faint outer ring outside the solid disc so the
       // central star reads as a luminous source rather than a flat blob.
       // Halo color tracks the stellar class so blue giants shed blue light
