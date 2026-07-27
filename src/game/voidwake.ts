@@ -11180,7 +11180,12 @@ export class Voidwake {
         }
         // Flare tongue: a short curved arc erupting from one pole, only
         // rendered while the envelope is non-zero.
-        if (flareEnv > 0.05) {
+        // 0.7.8 — Distance gate. `proj.z` is camera depth and stays small
+        // when you fly past a star sideways, which is why flares used to
+        // keep erupting after you left. Gate on true world distance
+        // instead: tongue inside 6000u, audio cue inside 3000u.
+        const flareDist = V.len(V.sub(e.pos, p.pos));
+        if (flareEnv > 0.05 && flareDist < 6000) {
           const arcLen = Math.round(rx * 1.2 * flareEnv) + 2;
           const dir = Math.floor(hash01(e.id * 401 + 17) * 4); // 0..3 pole
           const arcCurve = (hash01(e.id * 509 + 19) - 0.5) * 1.8;
@@ -11201,7 +11206,7 @@ export class Voidwake {
           // Audible cue at the peak of the flare (env > 0.85) when the
           // player is close enough. Throttle globally so a swarm of stars
           // doesn't machine-gun the sfx.
-          if (flareEnv > 0.85 && proj.z < 1200) {
+          if (flareEnv > 0.85 && flareDist < 3000) {
             const wnow = (typeof performance !== "undefined" ? performance.now() : 0);
             if (wnow > this._flareCueAt) {
               this._flareCueAt = wnow + 4500;
