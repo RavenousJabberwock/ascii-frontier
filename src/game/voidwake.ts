@@ -11029,7 +11029,7 @@ export class Voidwake {
       // central star reads as a luminous source rather than a flat blob.
       // Halo color tracks the stellar class so blue giants shed blue light
       // and red dwarves smoulder red rather than every star haloing amber.
-      if (e.kind === "star") {
+      if (e.kind === "star" && !exotic) {
         const haloR = 1.55;
         const haloChars = ["+", "·", "."];
         const haloCol = stellarClassOf(e).halo;
@@ -11137,7 +11137,7 @@ export class Voidwake {
       // and out on a per-star phase, and a rotating "flare tongue" curls
       // off one pole. When a flare peak lands within audible range of the
       // player, cue the `flare` sfx (rate-limited via _flareCueAt).
-      if (e.kind === "star" && rx >= 3) {
+      if (e.kind === "star" && !exotic && rx >= 3) {
         const col = stellarClassOf(e).halo;
         const now = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
         const phase = hash01(e.id * 331 + 7) * Math.PI * 2;
