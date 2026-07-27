@@ -5361,7 +5361,7 @@ export class Voidwake {
   }
 
   // --- Character creation --------------------------------------------------
-  charFields = ["name", "gender", "species", "height", "weight", "skin", "eyes", "Continue →"];
+  charFields = ["name", "gender", "species", "height", "weight", "skin", "hair", "hair color", "eyes", "Continue →"];
   updateCharCreate() {
     this.menuNav(this.charFields.length);
     const field = this.charFields[this.menuCursor];
@@ -5383,13 +5383,23 @@ export class Voidwake {
       if (left) this.charDraft.weight = Math.max(40, this.charDraft.weight - 1);
       if (right) this.charDraft.weight = Math.min(200, this.charDraft.weight + 1);
     } else if (field === "skin") {
-      const arr = ["pale", "fair", "amber", "olive", "umber", "obsidian", "chrome", "jade"];
-      const i = arr.indexOf(this.charDraft.skin);
+      const arr = SKIN_TONES;
+      const i = Math.max(0, arr.indexOf(this.charDraft.skin));
       if (left) this.charDraft.skin = arr[(i - 1 + arr.length) % arr.length];
       if (right) this.charDraft.skin = arr[(i + 1) % arr.length];
+    } else if (field === "hair") {
+      const arr = HAIR_STYLES;
+      const i = Math.max(0, arr.indexOf(this.charDraft.hair ?? "crop"));
+      if (left) this.charDraft.hair = arr[(i - 1 + arr.length) % arr.length];
+      if (right) this.charDraft.hair = arr[(i + 1) % arr.length];
+    } else if (field === "hair color") {
+      const arr = HAIR_COLORS;
+      const i = Math.max(0, arr.indexOf(this.charDraft.hairColor ?? "black"));
+      if (left) this.charDraft.hairColor = arr[(i - 1 + arr.length) % arr.length];
+      if (right) this.charDraft.hairColor = arr[(i + 1) % arr.length];
     } else if (field === "eyes") {
-      const arr = ["green", "blue", "amber", "violet", "silver", "black"];
-      const i = arr.indexOf(this.charDraft.eyes);
+      const arr = EYE_COLORS;
+      const i = Math.max(0, arr.indexOf(this.charDraft.eyes));
       if (left) this.charDraft.eyes = arr[(i - 1 + arr.length) % arr.length];
       if (right) this.charDraft.eyes = arr[(i + 1) % arr.length];
     } else if (field === "name") {
@@ -5697,7 +5707,7 @@ export class Voidwake {
         const burnR = 90 * szMul;
         // Black holes and pulsars aren't safe to scoop from — their gravity /
         // radiation handlers own that band; skip the fuel bonus entirely.
-        const scoopable = sc.name !== "BH" && sc.name !== "PSR";
+        const scoopable = sc.name !== "BH" && sc.name !== "PSR" && sc.name !== "NS" && sc.name !== "MAG";
         const d = V.len(V.sub(e.pos, p.pos));
         if (scoopable && d < scoopR && d > burnR && p.ship.fuel < p.ship.fuelMax) {
           // ~6 fuel/sec at the sweet spot (d ≈ burnR), tapering to zero at scoopR.
@@ -6563,7 +6573,7 @@ export class Voidwake {
     // 0.5.5 — Navigator crew unlocks three extra categories in [/] cycle.
     { label: "WORMHOLE", match: (e) => e.kind === "wormhole", navigator: true },
     { label: "MISSION",  match: (e) => this.player?.mission?.targetId === e.id, navigator: true },
-    { label: "EXOTIC",   match: (e) => { if (e.kind !== "star") return false; const n = stellarClassOf(e).name; return n === "BH" || n === "PSR"; }, navigator: true },
+    { label: "EXOTIC",   match: (e) => { if (e.kind !== "star") return false; const n = stellarClassOf(e).name; return n === "BH" || n === "PSR" || n === "NS" || n === "MAG"; }, navigator: true },
   ];
   private _targetCatIdx = -1;
 
@@ -7604,6 +7614,12 @@ export class Voidwake {
       Sylph:        " .^^^. ",
       Voidkin:      " .===. ",
       Chorus:       " .***. ",
+      Cephalid:     " (~~~) ",
+      Ferrix:       "[-vvv-]",
+      Lumen:        " \\:::/ ",
+      Stoneborn:    "[#####]",
+      Kobal:        " >www< ",
+      Thallian:     " /^^^\\ ",
     };
     const e = (eyes ?? "").toLowerCase();
     const eyeCh =
@@ -7671,6 +7687,7 @@ export class Voidwake {
     putText(g, ix, iy++, `Cmdr ${cs.name}`, "#fff");
     putText(g, ix, iy++, `${cs.species}, ${cs.gender}`, "#aef");
     putText(g, ix, iy++, `${cs.height}cm  ${cs.weight}kg  skin:${cs.skin}  eyes:${cs.eyes}`, "#9fe");
+    putText(g, ix, iy++, `hair: ${cs.hairColor ?? "black"} ${cs.hair ?? "crop"}`, "#9fe");
     putText(g, ix, iy++, `Trait: ${sinfo.bonus}`, "#7CFC00");
     putText(g, ix, iy++, `Cost:  ${sinfo.drawback}`, "#f88");
     putText(g, ix, iy++, `Credits ${p.credits}cr    XP ${p.xp}    Rank ${p.rank}    Kills ${p.kills ?? 0}`, "#ffe066");
