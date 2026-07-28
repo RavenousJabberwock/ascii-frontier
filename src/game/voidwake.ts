@@ -11348,8 +11348,8 @@ export class Voidwake {
           const outerY = Math.max(1, Math.round(ry * rings.outer * Math.abs(rings.tiltCos) + 0.5));
           const innerRatio = rings.inner / rings.outer;
           const ringGlyphs = ["·", "-", "=", "~"];
-          for (let dy = -outerY; dy <= outerY; dy++) {
-            for (let dx = -outerX; dx <= outerX; dx++) {
+          for (let dy = loY(outerY); dy <= hiY(outerY); dy++) {
+            for (let dx = loX(outerX); dx <= hiX(outerX); dx++) {
               // Un-shear: map screen (dx,dy) back to the planet's ring
               // plane. Ring plane is horizontal, tilted by (tiltCos on Y,
               // tiltSin adds a slight horizontal skew for asymmetry).
