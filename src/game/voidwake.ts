@@ -11118,8 +11118,8 @@ export class Voidwake {
         // it that way; the noise threshold makes most cells transparent.
         const nrx = Math.max(3, Math.round(rCells));
         const nry = Math.max(2, Math.round(rCells * (CELL_W / CELL_H)));
-        for (let dy = -nry; dy <= nry; dy++) {
-          for (let dx = -nrx; dx <= nrx; dx++) {
+        for (let dy = loY(nry); dy <= hiY(nry); dy++) {
+          for (let dx = loX(nrx); dx <= hiX(nrx); dx++) {
             const nx = dx / nrx, ny = dy / nry;
             const d2 = nx * nx + ny * ny;
             if (d2 > 1.15) continue;
