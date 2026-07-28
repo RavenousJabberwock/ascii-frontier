@@ -10985,6 +10985,19 @@ export class Voidwake {
       // --- Close non-ship body: textured filled sprite ---------------------
       const rx = Math.max(1, Math.round(rCells));
       const ry = Math.max(1, Math.round(rCells * (CELL_W / CELL_H)));
+      // 0.7.8 perf — visible-cell clamps. When you fly up to a star the
+      // projected radius can reach thousands of cells, and the naive
+      // `for dy=-ry..ry / dx=-rx..rx` loops then iterate millions of cells
+      // that are all off-viewport. These bounds restrict every sprite pass
+      // to the cells that can actually land inside the viewport, which is
+      // what caused the stutter near large / exotic bodies. Visuals are
+      // identical — only invisible work is skipped.
+      const clipXLo = vpLeft + 1 - sx, clipXHi = vpRight - 1 - sx;
+      const clipYLo = vpTop + 1 - sy2, clipYHi = vpBottom - 1 - sy2;
+      const loX = (r: number) => Math.max(-r, clipXLo);
+      const hiX = (r: number) => Math.min(r, clipXHi);
+      const loY = (r: number) => Math.max(-r, clipYLo);
+      const hiY = (r: number) => Math.min(r, clipYHi);
       const fill =
         e.kind === "star" ? "*" :
         e.kind === "planet" ? "O" :
@@ -10999,22 +11012,18 @@ export class Voidwake {
       // stations / asteroids. The "light" is the nearest star to the entity,
       // projected into the same camera basis the sprite is drawn in. Stars
       // themselves and tiny bodies skip shading.
+      // 0.7.8 perf — nearest star comes from the memoized cache instead of a
+      // full entity scan per drawn body.
       let lightX = 0, lightY = 0, lit = false;
       if (e.kind === "planet" || e.kind === "station" || e.kind === "asteroid") {
-        let star: Entity | null = null;
-        let bestD = Infinity;
-        for (const s of this.entities) {
-          if (s.kind !== "star") continue;
-          const d = V.len(V.sub(s.pos, e.pos));
-          if (d < bestD) { bestD = d; star = s; }
-        }
+        const star = this.nearestStarTo(e);
         if (star) {
           const lr = V.sub(star.pos, e.pos);
           const lx1 = cy * lr.x - sy * lr.z;
           const lz1 = sy * lr.x + cy * lr.z;
           const ly1 = cp * lr.y - sp * lz1;
           // Screen Y grows downward, so flip the math-Y to match.
-          let lvx = lx1, lvy = -ly1;
+          const lvx = lx1, lvy = -ly1;
           const llen = Math.hypot(lvx, lvy);
           if (llen > 0.001) {
             lightX = lvx / llen;
@@ -11038,13 +11047,18 @@ export class Voidwake {
         const inner = Math.max(2, Math.round(rx * 1.05));
         const outer = Math.round(rx * (2.2 + lensStrength * 1.6));
         const ar = CELL_W / CELL_H;
-        for (let dy = -Math.round(outer * ar); dy <= Math.round(outer * ar); dy++) {
-          for (let dx = -outer; dx <= outer; dx++) {
-            const rr = Math.hypot(dx, dy / ar);
-            if (rr < inner || rr > outer) continue;
-            const gx = sx + dx, gy = sy2 + dy;
-            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+        const oy = Math.round(outer * ar);
+        const inner2 = inner * inner, outer2 = outer * outer;
+        const dyLo = loY(oy), dyHi = hiY(oy);
+        const dxLo = loX(outer), dxHi = hiX(outer);
+        for (let dy = dyLo; dy <= dyHi; dy++) {
+          const yy = dy / ar;
+          for (let dx = dxLo; dx <= dxHi; dx++) {
+            const rr2 = dx * dx + yy * yy;
+            if (rr2 < inner2 || rr2 > outer2) continue;
+            const gy = sy2 + dy, gx = sx + dx;
             if (g[gy][gx].ch !== " ") continue;
+            const rr = Math.sqrt(rr2);
             // Pull a sample from further out along the same radial.
             const pull = 1 + lensStrength * (1 - (rr - inner) / Math.max(1, outer - inner)) * 1.5;
             const sxr = sx + Math.round(dx * pull);
@@ -11056,6 +11070,7 @@ export class Voidwake {
           }
         }
       }
+
 
       // 0.7.8 — Exotic compact objects draw themselves and skip the generic
       // disc/halo/corona pipeline (name labels below still apply).
