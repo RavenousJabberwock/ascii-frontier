@@ -10794,8 +10794,41 @@ export class Voidwake {
     putText(g, 4, g.length - 2, "↑/↓ or tap   ENTER / swipe →   ESC / swipe ←", "#888");
   }
 
+  // 0.7.8 perf — rebuild the per-frame celestial caches. Called once at the
+  // top of renderPlaying so the draw loop never scans `this.entities` again.
+  private buildRenderCaches() {
+    this._frameStars.length = 0;
+    this._framePlanets.length = 0;
+    for (const e of this.entities) {
+      if (e.kind === "star") this._frameStars.push(e);
+      else if (e.kind === "planet") this._framePlanets.push(e);
+    }
+    // Nearest-star answers are stable for seconds; recompute on a slow tick.
+    const now = typeof performance !== "undefined" ? performance.now() : 0;
+    if (now - this._nearestStarAt > 2000) {
+      this._nearestStarAt = now;
+      this._nearestStar.clear();
+    }
+  }
+
+  // Nearest star to an entity, memoized. Falls back to the cached list scan
+  // (small: a handful of stars) only on a miss.
+  private nearestStarTo(e: Entity): Entity | null {
+    const hit = this._nearestStar.get(e.id);
+    if (hit !== undefined) return hit;
+    let best: Entity | null = null, bestD = Infinity;
+    for (const s of this._frameStars) {
+      const dx = s.pos.x - e.pos.x, dy = s.pos.y - e.pos.y, dz = s.pos.z - e.pos.z;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    this._nearestStar.set(e.id, best);
+    return best;
+  }
+
   // Playing: cockpit + world ------------------------------------------------
   renderPlaying(g: Cell[][]) {
+    this.buildRenderCaches();
     const p = this.player; if (!p) return;
     const cols = g[0].length, rows = g.length;
 
