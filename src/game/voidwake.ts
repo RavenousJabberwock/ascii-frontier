@@ -11392,8 +11392,8 @@ export class Voidwake {
         const ringR = 1.15;
         const rrx = Math.max(2, Math.round(rx * ringR));
         const rry = Math.max(1, Math.round(ry * ringR));
-        for (let dy = -rry; dy <= rry; dy++) {
-          for (let dx = -rrx; dx <= rrx; dx++) {
+        for (let dy = loY(rry); dy <= hiY(rry); dy++) {
+          for (let dx = loX(rrx); dx <= hiX(rrx); dx++) {
             const nx = dx / rrx, ny = dy / rry;
             const d2 = nx * nx + ny * ny;
             if (d2 <= 1.02 || d2 > ringR * ringR) continue;
