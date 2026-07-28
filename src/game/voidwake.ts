@@ -11280,12 +11280,8 @@ export class Voidwake {
       // curves naturally with the viewport. Length varies per-comet via
       // hash01(id) to break uniformity across a swarm.
       if (e.kind === "comet") {
-        let bestS: Entity | null = null, bd = Infinity;
-        for (const s of this.entities) {
-          if (s.kind !== "star") continue;
-          const d = V.len(V.sub(s.pos, e.pos));
-          if (d < bd) { bd = d; bestS = s; }
-        }
+        // 0.7.8 perf — memoized nearest-star lookup instead of a full scan.
+        const bestS = this.nearestStarTo(e);
         if (bestS) {
           const dir = V.sub(e.pos, bestS.pos);
           const dl = V.len(dir);
