@@ -4398,6 +4398,16 @@ export class Voidwake {
   private _hidden = false;
   // 0.7.7 — Rate-limit for stellar flare sfx (ms wall-time; global across stars).
   private _flareCueAt = 0;
+  // 0.7.8 perf — per-frame render caches. `_frameStars` / `_framePlanets` are
+  // rebuilt once per rendered frame so per-entity draw code stops doing an
+  // O(entities) scan for "nearest star" / "nearest planet"; `_nearestStar`
+  // memoizes the result per entity id (celestial bodies barely move, so the
+  // cache is refreshed on a slow cadence rather than every frame).
+  private _frameStars: Entity[] = [];
+  private _framePlanets: Entity[] = [];
+  private _nearestStar = new Map<number, Entity | null>();
+  private _nearestStarAt = 0;
+
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
   private prevHull = -1;            // tracks hull from previous tick to detect any damage
