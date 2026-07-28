@@ -4398,6 +4398,16 @@ export class Voidwake {
   private _hidden = false;
   // 0.7.7 — Rate-limit for stellar flare sfx (ms wall-time; global across stars).
   private _flareCueAt = 0;
+  // 0.7.8 perf — per-frame render caches. `_frameStars` / `_framePlanets` are
+  // rebuilt once per rendered frame so per-entity draw code stops doing an
+  // O(entities) scan for "nearest star" / "nearest planet"; `_nearestStar`
+  // memoizes the result per entity id (celestial bodies barely move, so the
+  // cache is refreshed on a slow cadence rather than every frame).
+  private _frameStars: Entity[] = [];
+  private _framePlanets: Entity[] = [];
+  private _nearestStar = new Map<number, Entity | null>();
+  private _nearestStarAt = 0;
+
   // --- Damage feedback state (set in updatePlaying, consumed by renderPlaying) ---
   private prevShield = -1;          // tracks shield from previous tick to detect drop-to-0
   private prevHull = -1;            // tracks hull from previous tick to detect any damage
@@ -10119,8 +10129,13 @@ export class Voidwake {
       // Event horizon — a true black disc that erases whatever is behind it.
       const hr = Math.max(2, rx);
       const hrv = Math.max(1, Math.round(hr * AR));
-      for (let dy = -hrv; dy <= hrv; dy++) {
-        for (let dx = -hr; dx <= hr; dx++) {
+      // 0.7.8 perf — clamp the horizon fill to visible cells; a near black
+      // hole can project thousands of cells wide and the naive full-disc
+      // loop was a frame-time spike for pixels that are all clipped anyway.
+      const hyLo = Math.max(-hrv, vpTop + 1 - sy), hyHi = Math.min(hrv, vpBottom - 1 - sy);
+      const hxLo = Math.max(-hr, vpLeft + 1 - sx), hxHi = Math.min(hr, vpRight - 1 - sx);
+      for (let dy = hyLo; dy <= hyHi; dy++) {
+        for (let dx = hxLo; dx <= hxHi; dx++) {
           const nx = dx / hr, ny = dy / hrv;
           if (nx * nx + ny * ny > 1) continue;
           put(sx + dx, sy + dy, " ", "#000000", false, true);
@@ -10784,8 +10799,41 @@ export class Voidwake {
     putText(g, 4, g.length - 2, "↑/↓ or tap   ENTER / swipe →   ESC / swipe ←", "#888");
   }
 
+  // 0.7.8 perf — rebuild the per-frame celestial caches. Called once at the
+  // top of renderPlaying so the draw loop never scans `this.entities` again.
+  private buildRenderCaches() {
+    this._frameStars.length = 0;
+    this._framePlanets.length = 0;
+    for (const e of this.entities) {
+      if (e.kind === "star") this._frameStars.push(e);
+      else if (e.kind === "planet") this._framePlanets.push(e);
+    }
+    // Nearest-star answers are stable for seconds; recompute on a slow tick.
+    const now = typeof performance !== "undefined" ? performance.now() : 0;
+    if (now - this._nearestStarAt > 2000) {
+      this._nearestStarAt = now;
+      this._nearestStar.clear();
+    }
+  }
+
+  // Nearest star to an entity, memoized. Falls back to the cached list scan
+  // (small: a handful of stars) only on a miss.
+  private nearestStarTo(e: Entity): Entity | null {
+    const hit = this._nearestStar.get(e.id);
+    if (hit !== undefined) return hit;
+    let best: Entity | null = null, bestD = Infinity;
+    for (const s of this._frameStars) {
+      const dx = s.pos.x - e.pos.x, dy = s.pos.y - e.pos.y, dz = s.pos.z - e.pos.z;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    this._nearestStar.set(e.id, best);
+    return best;
+  }
+
   // Playing: cockpit + world ------------------------------------------------
   renderPlaying(g: Cell[][]) {
+    this.buildRenderCaches();
     const p = this.player; if (!p) return;
     const cols = g[0].length, rows = g.length;
 
@@ -10942,6 +10990,19 @@ export class Voidwake {
       // --- Close non-ship body: textured filled sprite ---------------------
       const rx = Math.max(1, Math.round(rCells));
       const ry = Math.max(1, Math.round(rCells * (CELL_W / CELL_H)));
+      // 0.7.8 perf — visible-cell clamps. When you fly up to a star the
+      // projected radius can reach thousands of cells, and the naive
+      // `for dy=-ry..ry / dx=-rx..rx` loops then iterate millions of cells
+      // that are all off-viewport. These bounds restrict every sprite pass
+      // to the cells that can actually land inside the viewport, which is
+      // what caused the stutter near large / exotic bodies. Visuals are
+      // identical — only invisible work is skipped.
+      const clipXLo = vpLeft + 1 - sx, clipXHi = vpRight - 1 - sx;
+      const clipYLo = vpTop + 1 - sy2, clipYHi = vpBottom - 1 - sy2;
+      const loX = (r: number) => Math.max(-r, clipXLo);
+      const hiX = (r: number) => Math.min(r, clipXHi);
+      const loY = (r: number) => Math.max(-r, clipYLo);
+      const hiY = (r: number) => Math.min(r, clipYHi);
       const fill =
         e.kind === "star" ? "*" :
         e.kind === "planet" ? "O" :
@@ -10956,22 +11017,18 @@ export class Voidwake {
       // stations / asteroids. The "light" is the nearest star to the entity,
       // projected into the same camera basis the sprite is drawn in. Stars
       // themselves and tiny bodies skip shading.
+      // 0.7.8 perf — nearest star comes from the memoized cache instead of a
+      // full entity scan per drawn body.
       let lightX = 0, lightY = 0, lit = false;
       if (e.kind === "planet" || e.kind === "station" || e.kind === "asteroid") {
-        let star: Entity | null = null;
-        let bestD = Infinity;
-        for (const s of this.entities) {
-          if (s.kind !== "star") continue;
-          const d = V.len(V.sub(s.pos, e.pos));
-          if (d < bestD) { bestD = d; star = s; }
-        }
+        const star = this.nearestStarTo(e);
         if (star) {
           const lr = V.sub(star.pos, e.pos);
           const lx1 = cy * lr.x - sy * lr.z;
           const lz1 = sy * lr.x + cy * lr.z;
           const ly1 = cp * lr.y - sp * lz1;
           // Screen Y grows downward, so flip the math-Y to match.
-          let lvx = lx1, lvy = -ly1;
+          const lvx = lx1, lvy = -ly1;
           const llen = Math.hypot(lvx, lvy);
           if (llen > 0.001) {
             lightX = lvx / llen;
@@ -10995,13 +11052,18 @@ export class Voidwake {
         const inner = Math.max(2, Math.round(rx * 1.05));
         const outer = Math.round(rx * (2.2 + lensStrength * 1.6));
         const ar = CELL_W / CELL_H;
-        for (let dy = -Math.round(outer * ar); dy <= Math.round(outer * ar); dy++) {
-          for (let dx = -outer; dx <= outer; dx++) {
-            const rr = Math.hypot(dx, dy / ar);
-            if (rr < inner || rr > outer) continue;
-            const gx = sx + dx, gy = sy2 + dy;
-            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+        const oy = Math.round(outer * ar);
+        const inner2 = inner * inner, outer2 = outer * outer;
+        const dyLo = loY(oy), dyHi = hiY(oy);
+        const dxLo = loX(outer), dxHi = hiX(outer);
+        for (let dy = dyLo; dy <= dyHi; dy++) {
+          const yy = dy / ar;
+          for (let dx = dxLo; dx <= dxHi; dx++) {
+            const rr2 = dx * dx + yy * yy;
+            if (rr2 < inner2 || rr2 > outer2) continue;
+            const gy = sy2 + dy, gx = sx + dx;
             if (g[gy][gx].ch !== " ") continue;
+            const rr = Math.sqrt(rr2);
             // Pull a sample from further out along the same radial.
             const pull = 1 + lensStrength * (1 - (rr - inner) / Math.max(1, outer - inner)) * 1.5;
             const sxr = sx + Math.round(dx * pull);
@@ -11013,6 +11075,7 @@ export class Voidwake {
           }
         }
       }
+
 
       // 0.7.8 — Exotic compact objects draw themselves and skip the generic
       // disc/halo/corona pipeline (name labels below still apply).
@@ -11035,8 +11098,8 @@ export class Voidwake {
         const haloCol = stellarClassOf(e).halo;
         const hrx = Math.max(2, Math.round(rx * haloR));
         const hry = Math.max(1, Math.round(ry * haloR));
-        for (let dy = -hry; dy <= hry; dy++) {
-          for (let dx = -hrx; dx <= hrx; dx++) {
+        for (let dy = loY(hry); dy <= hiY(hry); dy++) {
+          for (let dx = loX(hrx); dx <= hiX(hrx); dx++) {
             const nx = dx / hrx, ny = dy / hry;
             const d2 = nx * nx + ny * ny;
             if (d2 <= 1.0 || d2 > haloR * haloR) continue;
@@ -11060,8 +11123,8 @@ export class Voidwake {
         // it that way; the noise threshold makes most cells transparent.
         const nrx = Math.max(3, Math.round(rCells));
         const nry = Math.max(2, Math.round(rCells * (CELL_W / CELL_H)));
-        for (let dy = -nry; dy <= nry; dy++) {
-          for (let dx = -nrx; dx <= nrx; dx++) {
+        for (let dy = loY(nry); dy <= hiY(nry); dy++) {
+          for (let dx = loX(nrx); dx <= hiX(nrx); dx++) {
             const nx = dx / nrx, ny = dy / nry;
             const d2 = nx * nx + ny * ny;
             if (d2 > 1.15) continue;
@@ -11092,10 +11155,11 @@ export class Voidwake {
       // `dy`, and a coarse time bucket for a slow shimmer.
       let rocheK = 0;
       if (e.kind === "asteroid" || e.kind === "comet") {
+        // 0.7.8 perf — scan the cached planet list, not every entity.
         let nearestPR = 0, nearestPD = Infinity;
-        for (const q of this.entities) {
-          if (q.kind !== "planet") continue;
-          const dq = V.len(V.sub(q.pos, e.pos));
+        for (const q of this._framePlanets) {
+          const qx = q.pos.x - e.pos.x, qy = q.pos.y - e.pos.y, qz = q.pos.z - e.pos.z;
+          const dq = Math.sqrt(qx * qx + qy * qy + qz * qz);
           if (dq < nearestPD) { nearestPD = dq; nearestPR = worldRadius.planet ?? 30; }
         }
         if (nearestPD < nearestPR * 3) {
@@ -11105,8 +11169,8 @@ export class Voidwake {
       }
       const tBucket = rocheK > 0 ? Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 220) : 0;
 
-      for (let dy = -ry; dy <= ry && !exotic; dy++) {
-        for (let dx = -rx; dx <= rx; dx++) {
+      for (let dy = loY(ry); dy <= hiY(ry) && !exotic; dy++) {
+        for (let dx = loX(rx); dx <= hiX(rx); dx++) {
           const nx = dx / rx, ny = dy / ry;
           let d2 = nx * nx + ny * ny;
           if (rocheK > 0) {
@@ -11221,12 +11285,8 @@ export class Voidwake {
       // curves naturally with the viewport. Length varies per-comet via
       // hash01(id) to break uniformity across a swarm.
       if (e.kind === "comet") {
-        let bestS: Entity | null = null, bd = Infinity;
-        for (const s of this.entities) {
-          if (s.kind !== "star") continue;
-          const d = V.len(V.sub(s.pos, e.pos));
-          if (d < bd) { bd = d; bestS = s; }
-        }
+        // 0.7.8 perf — memoized nearest-star lookup instead of a full scan.
+        const bestS = this.nearestStarTo(e);
         if (bestS) {
           const dir = V.sub(e.pos, bestS.pos);
           const dl = V.len(dir);
@@ -11293,8 +11353,8 @@ export class Voidwake {
           const outerY = Math.max(1, Math.round(ry * rings.outer * Math.abs(rings.tiltCos) + 0.5));
           const innerRatio = rings.inner / rings.outer;
           const ringGlyphs = ["·", "-", "=", "~"];
-          for (let dy = -outerY; dy <= outerY; dy++) {
-            for (let dx = -outerX; dx <= outerX; dx++) {
+          for (let dy = loY(outerY); dy <= hiY(outerY); dy++) {
+            for (let dx = loX(outerX); dx <= hiX(outerX); dx++) {
               // Un-shear: map screen (dx,dy) back to the planet's ring
               // plane. Ring plane is horizontal, tilted by (tiltCos on Y,
               // tiltSin adds a slight horizontal skew for asymmetry).
@@ -11337,8 +11397,8 @@ export class Voidwake {
         const ringR = 1.15;
         const rrx = Math.max(2, Math.round(rx * ringR));
         const rry = Math.max(1, Math.round(ry * ringR));
-        for (let dy = -rry; dy <= rry; dy++) {
-          for (let dx = -rrx; dx <= rrx; dx++) {
+        for (let dy = loY(rry); dy <= hiY(rry); dy++) {
+          for (let dx = loX(rrx); dx <= hiX(rrx); dx++) {
             const nx = dx / rrx, ny = dy / rry;
             const d2 = nx * nx + ny * ny;
             if (d2 <= 1.02 || d2 > ringR * ringR) continue;

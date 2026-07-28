@@ -2,6 +2,22 @@
 
 Ships as **0.7.8**.
 
+- **Renderer performance pass (no version bump — correction only).**
+  - Per-frame caches: star and planet lists are built once per frame, and
+    "nearest star" is memoized per entity on a 2s cadence. Kills the old
+    O(entities × entities) scans that ran for lighting, comet tails, and
+    Roche deformation on every drawn body.
+  - Viewport clipping of sprite loops: the filled disc, star halo, nebula
+    field, lensing annulus, planetary rings, colony ring, and the black-hole
+    event horizon now iterate only cells that can land inside the viewport.
+    Previously a nearby large body projected thousands of cells wide and the
+    full-disc loops burned millions of clipped iterations per frame — the
+    source of the stutter near stars and exotic objects.
+  - Lensing uses squared-radius tests and defers `sqrt` to accepted cells.
+- **Player manual** added at `MANUAL.md` (flight, fuel, economy, mining,
+  combat, missions, crew, station building, options, saves, modding).
+
+
 - **Flares are distance-gated.** The flare tongue and the `flare` rumble now
   test true world distance (`|e.pos - p.pos|`), not camera depth: tongue
   inside 6000u, audio inside 3000u. Flying past a star sideways no longer
