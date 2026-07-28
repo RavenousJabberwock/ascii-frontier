@@ -11093,8 +11093,8 @@ export class Voidwake {
         const haloCol = stellarClassOf(e).halo;
         const hrx = Math.max(2, Math.round(rx * haloR));
         const hry = Math.max(1, Math.round(ry * haloR));
-        for (let dy = -hry; dy <= hry; dy++) {
-          for (let dx = -hrx; dx <= hrx; dx++) {
+        for (let dy = loY(hry); dy <= hiY(hry); dy++) {
+          for (let dx = loX(hrx); dx <= hiX(hrx); dx++) {
             const nx = dx / hrx, ny = dy / hry;
             const d2 = nx * nx + ny * ny;
             if (d2 <= 1.0 || d2 > haloR * haloR) continue;
