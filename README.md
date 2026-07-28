@@ -112,7 +112,8 @@ clearly labeled sections:
 11. Main loop         fixed-timestep update + render
 ```
 
-See [`src/game/README.md`](src/game/README.md) for extension recipes.
+See [`src/game/README.md`](src/game/README.md) for extension recipes, and
+[`MANUAL.md`](MANUAL.md) for the player-facing gameplay guide.
 
 ---
 
