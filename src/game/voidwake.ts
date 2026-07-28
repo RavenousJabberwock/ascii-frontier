@@ -10129,8 +10129,13 @@ export class Voidwake {
       // Event horizon — a true black disc that erases whatever is behind it.
       const hr = Math.max(2, rx);
       const hrv = Math.max(1, Math.round(hr * AR));
-      for (let dy = -hrv; dy <= hrv; dy++) {
-        for (let dx = -hr; dx <= hr; dx++) {
+      // 0.7.8 perf — clamp the horizon fill to visible cells; a near black
+      // hole can project thousands of cells wide and the naive full-disc
+      // loop was a frame-time spike for pixels that are all clipped anyway.
+      const hyLo = Math.max(-hrv, vpTop + 1 - sy), hyHi = Math.min(hrv, vpBottom - 1 - sy);
+      const hxLo = Math.max(-hr, vpLeft + 1 - sx), hxHi = Math.min(hr, vpRight - 1 - sx);
+      for (let dy = hyLo; dy <= hyHi; dy++) {
+        for (let dx = hxLo; dx <= hxHi; dx++) {
           const nx = dx / hr, ny = dy / hrv;
           if (nx * nx + ny * ny > 1) continue;
           put(sx + dx, sy + dy, " ", "#000000", false, true);
