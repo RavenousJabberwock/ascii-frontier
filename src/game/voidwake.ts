@@ -11150,10 +11150,11 @@ export class Voidwake {
       // `dy`, and a coarse time bucket for a slow shimmer.
       let rocheK = 0;
       if (e.kind === "asteroid" || e.kind === "comet") {
+        // 0.7.8 perf — scan the cached planet list, not every entity.
         let nearestPR = 0, nearestPD = Infinity;
-        for (const q of this.entities) {
-          if (q.kind !== "planet") continue;
-          const dq = V.len(V.sub(q.pos, e.pos));
+        for (const q of this._framePlanets) {
+          const qx = q.pos.x - e.pos.x, qy = q.pos.y - e.pos.y, qz = q.pos.z - e.pos.z;
+          const dq = Math.sqrt(qx * qx + qy * qy + qz * qz);
           if (dq < nearestPD) { nearestPD = dq; nearestPR = worldRadius.planet ?? 30; }
         }
         if (nearestPD < nearestPR * 3) {
@@ -11163,8 +11164,8 @@ export class Voidwake {
       }
       const tBucket = rocheK > 0 ? Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 220) : 0;
 
-      for (let dy = -ry; dy <= ry && !exotic; dy++) {
-        for (let dx = -rx; dx <= rx; dx++) {
+      for (let dy = loY(ry); dy <= hiY(ry) && !exotic; dy++) {
+        for (let dx = loX(rx); dx <= hiX(rx); dx++) {
           const nx = dx / rx, ny = dy / ry;
           let d2 = nx * nx + ny * ny;
           if (rocheK > 0) {
