@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.8";
+const VERSION = "0.7.9";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1597,7 +1597,8 @@ interface PlayerState {
   // 0.7.1 — player-owned space stations. Deployed via the Station Core
   // module. Tier 0 = shell, T5 = fully upgraded. Treasury accrues per
   // dock and is withdrawn when the player docks at their own station.
-  ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number> }[];
+  // 0.7.9 — `motif` indexes STATION_MOTIFS (cosmetic silhouette/accent).
+  ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number>; motif?: number }[];
   // 0.7.4 — stowaway aboard. One per playthrough, max.
   stowaway?: Stowaway;
 }
@@ -2966,6 +2967,37 @@ function stationCommodityFilter(faction: string): Set<CommodityClass> {
   if (faction === "pirate")     return new Set(["relic", "tech"] as CommodityClass[]);
   return new Set(["element", "food"] as CommodityClass[]);
 }
+
+// 0.7.9 — Faction contraband bans. Lawful factions refuse to list banned
+// legality tiers at all, and run a customs scan on dock: banned cargo is
+// confiscated, fined, and dinged against that faction's reputation.
+// Pirates ban nothing (that's the point of a black market).
+type Legality = "clean" | "grey" | "restricted";
+function factionBans(faction: string): Set<Legality> {
+  if (faction === "federation" || faction === "patrol") return new Set<Legality>(["grey", "restricted"]);
+  if (faction === "nature")                             return new Set<Legality>(["restricted"]);
+  if (faction === "guild")                              return new Set<Legality>(["restricted"]);
+  return new Set<Legality>();
+}
+function isContraband(commodityId: string, faction: string): boolean {
+  const meta = COMMODITIES.find((m) => m.id === commodityId);
+  if (!meta) return false;
+  return factionBans(faction).has(meta.legality);
+}
+
+// 0.7.9 — Player-station cosmetic motifs. Purely visual: picks the 3x3
+// silhouette stamp and label accent used for the player's own stations.
+const STATION_MOTIFS: { name: string; art: [string, string, string]; color: string }[] = [
+  { name: "Bastion", art: ["[=]", "[#]", "[=]"], color: "#7CFC00" },
+  { name: "Halo",    art: ["/o\\", "(*)", "\\o/"], color: "#8fd8ff" },
+  { name: "Spire",   art: [" ^ ", "|I|", "/_\\"], color: "#ffd28a" },
+  { name: "Forge",   art: ["<->", "[@]", "<->"], color: "#ff9c6b" },
+  { name: "Nest",    art: [".^.", "(w)", "'v'"], color: "#c2a3ff" },
+];
+const STATION_NAME_POOL = [
+  "Bastion", "Anvil", "Lighthouse", "Redoubt", "Waypoint", "Hearth",
+  "Sentinel", "Refuge", "Crossroads", "Longshore", "Kestrel", "Ironhold",
+];
 
 function generateStationStock(stationId: number, faction: string = "guild", day: number = marketDay()): StationStock {
   // Seed mixes station id with the market day so inventory rotates every
@@ -4855,6 +4887,118 @@ export class Voidwake {
     return s;
   }
 
+  // 0.7.9 — Commodity rows a given dock will openly list: economic identity
+  // filter (0.7.2) minus anything that faction bans outright.
+  shownCommodities(stationId: number, faction: string) {
+    const stock = this.getStock(stationId);
+    const allowed = stationCommodityFilter(faction);
+    const bans = factionBans(faction);
+    return stock.commodities.filter((c) => {
+      const meta = COMMODITIES.find((m) => m.id === c.id);
+      if (!meta) return true;
+      return allowed.has(meta.class) && !bans.has(meta.legality);
+    });
+  }
+
+  // 0.7.9 — Route hint HUD. For a commodity you can buy here, find the best
+  // paying station among the markets already generated this session and
+  // report the margin: "→ Guild Hub +42%". Cached per (station, market day)
+  // because buildStationLines() runs every frame.
+  private _routeHintCache: { key: string; hints: Map<string, string> } = { key: "", hints: new Map() };
+  routeHint(stationId: number, commodityId: string, buyPrice: number): string {
+    const key = `${stationId}:${marketDay()}:${this.stationStocks.size}`;
+    if (this._routeHintCache.key !== key) this._routeHintCache = { key, hints: new Map() };
+    const cached = this._routeHintCache.hints.get(commodityId);
+    if (cached !== undefined) return cached;
+    let best = 0, bestName = "";
+    for (const [sid, st] of this.stationStocks) {
+      if (sid === stationId) continue;
+      const ent = this.entities.find((e) => e.id === sid);
+      if (!ent) continue;
+      if (isContraband(commodityId, ent.faction ?? "guild")) continue;
+      const row = st.commodities.find((c) => c.id === commodityId);
+      if (!row) continue;
+      if (row.sell > best) { best = row.sell; bestName = ent.name; }
+    }
+    let hint = "";
+    if (bestName && buyPrice > 0) {
+      const pct = Math.round(((best - buyPrice) / buyPrice) * 100);
+      if (pct >= 5) hint = `  → ${bestName} +${pct}%`;
+    }
+    this._routeHintCache.hints.set(commodityId, hint);
+    return hint;
+  }
+
+  // 0.7.9 — Customs scan. Lawful docks inspect the hold: banned cargo is
+  // confiscated, fined at half its local value, and costs reputation.
+  customsScan(t: Entity) {
+    const p = this.player; if (!p) return;
+    const faction = t.faction ?? "guild";
+    const bans = factionBans(faction);
+    if (!bans.size) return;
+    const stock = this.getStock(t.id);
+    let seized = 0, fine = 0;
+    const names: string[] = [];
+    for (const meta of COMMODITIES) {
+      if (!bans.has(meta.legality)) continue;
+      const have = p.cargo[meta.id] ?? 0;
+      if (have <= 0) continue;
+      const row = stock.commodities.find((c) => c.id === meta.id);
+      const unit = row?.sell ?? meta.base;
+      seized += have; fine += Math.round(have * unit * 0.5);
+      names.push(`${have} ${meta.name}`);
+      delete p.cargo[meta.id];
+    }
+    if (seized <= 0) return;
+    fine = Math.min(fine, Math.max(0, p.credits));
+    p.credits -= fine;
+    adjustRep(p, faction, -Math.min(10, 2 + Math.floor(seized / 5)));
+    adjustRep(p, "pirate", 2);
+    this.pushLog(`Customs seized ${names.join(", ")}. Fined ${fine}cr.`);
+    this.pushChatter(`Customs ${t.name}`,
+      "Hold scan flagged prohibited cargo. Contraband impounded, fine levied. Fly clean next time.",
+      "#ff8a8a");
+    this.sfx("warning");
+  }
+
+  // 0.7.9 — NPC trade AI. Every ~12s an off-screen hauler moves a batch of
+  // one commodity from the cheapest market to the dearest among the markets
+  // the player has generated. Stock and prices converge as a result, so
+  // fat arbitrage spreads decay if you sit on them instead of running them.
+  private _tradeSimAt = 0;
+  tickTradeSim(dt: number) {
+    this._tradeSimAt -= dt;
+    if (this._tradeSimAt > 0) return;
+    this._tradeSimAt = 12;
+    const ids = [...this.stationStocks.keys()];
+    if (ids.length < 2) return;
+    const meta = COMMODITIES[Math.floor(Math.random() * COMMODITIES.length)];
+    let src: StationStock | null = null, dst: StationStock | null = null;
+    let lo = Infinity, hi = -Infinity;
+    for (const sid of ids) {
+      const st = this.stationStocks.get(sid)!;
+      const ent = this.entities.find((e) => e.id === sid);
+      if (ent && isContraband(meta.id, ent.faction ?? "guild")) continue;
+      const row = st.commodities.find((c) => c.id === meta.id);
+      if (!row) continue;
+      if (row.sell < lo && row.stock > 20) { lo = row.sell; src = st; }
+      if (row.buy  > hi)                   { hi = row.buy;  dst = st; }
+    }
+    if (!src || !dst || src === dst || hi <= lo) return;
+    const a = src.commodities.find((c) => c.id === meta.id)!;
+    const b = dst.commodities.find((c) => c.id === meta.id)!;
+    const moved = Math.min(12, Math.floor(a.stock * 0.15));
+    if (moved <= 0) return;
+    a.stock -= moved; b.stock += moved;
+    // Scarcity at source lifts its prices; glut at destination softens its.
+    a.buy = Math.max(1, Math.round(a.buy * 1.03));
+    a.sell = Math.max(1, Math.round(a.sell * 1.03));
+    b.buy = Math.max(1, Math.round(b.buy * 0.97));
+    b.sell = Math.max(1, Math.round(b.sell * 0.97));
+  }
+
+
+
   // Centralized death handler. Pass a human reason ("Killed by Hostile Reaver",
   // "Collided with Planet P-42", "Hull breach: fuel detonation").
   die(reason: string, killer?: string) {
@@ -6075,6 +6219,7 @@ export class Voidwake {
     this.updateTactical(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    this.tickTradeSim(dt);
     // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
     // player when the label ticks over. Consume here so any call site
     // (kills, mining, missions) gets a unified fanfare.
@@ -6751,6 +6896,7 @@ export class Voidwake {
     this.pushChatter(`Dock ${t.name}`, this.getStock(t.id).rumor, "#c2c2ff");
     this.sfx("dock");
     this.tryPickupStowaway("station");
+    this.customsScan(t);
     // 0.6.2 — dock trickle XP for all crew (rest, drills, shore leave).
     grantCrewXP(p, 3);
     dispatchHook("onPlayerDock", { entity: t, kind: "station" });
@@ -9196,13 +9342,12 @@ export class Voidwake {
       // 0.7.2 — Compact layout: one row per relevant commodity. A
       // page-level mode toggle (BUY / SELL) drives the action. Rows are
       // faction-filtered so each dock offers 4-8 items, not 18.
+      // 0.7.9 — banned legality tiers are dropped entirely (contraband is
+      // not traded openly at lawful docks) and buy rows carry a route hint.
       const faction = dockedEnt?.faction ?? "guild";
-      const allowed = stationCommodityFilter(faction);
-      const shown = stock.commodities.filter((c) => {
-        const meta = COMMODITIES.find((m) => m.id === c.id);
-        return meta ? allowed.has(meta.class) : true;
-      });
+      const shown = this.shownCommodities(sid, faction);
       const mode = this.commodityMode.toUpperCase();
+      const bans = factionBans(faction);
       const rows: string[] = [
         `~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`,
         `Mode: ◀ ${mode} ▶   (←/→ toggle, ENTER to trade 10)`,
@@ -9211,8 +9356,10 @@ export class Voidwake {
         const have = p.cargo[c.id] ?? 0;
         const price = this.commodityMode === "buy" ? c.buy : c.sell;
         const tag   = this.commodityMode === "buy" ? "[BUY 10]" : "[SELL10]";
-        rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}`);
+        const hint  = this.commodityMode === "buy" ? this.routeHint(sid, c.id, c.buy) : "";
+        rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}${hint}`);
       }
+      if (bans.size) rows.push(`! Customs: ${[...bans].join("/")} goods banned here — scanned on dock.`);
       rows.push("Back");
       return rows;
     }
@@ -9235,6 +9382,10 @@ export class Voidwake {
       } else {
         rows.push("Maximum tier reached.");
       }
+      // 0.7.9 — cosmetic customization for the player's own holdings.
+      const motif = STATION_MOTIFS[(mine.motif ?? 0) % STATION_MOTIFS.length];
+      rows.push(`Silhouette: ◀ ${motif.name} ▶   (ENTER cycles)`);
+      rows.push("Rename station →");
       rows.push("Back");
       return rows;
     }
@@ -9439,11 +9590,7 @@ export class Voidwake {
       }
       const dockedEnt = this.entities.find((e) => e.id === sid);
       const faction = dockedEnt?.faction ?? "guild";
-      const allowed = stationCommodityFilter(faction);
-      const shown = stock.commodities.filter((c) => {
-        const meta = COMMODITIES.find((m) => m.id === c.id);
-        return meta ? allowed.has(meta.class) : true;
-      });
+      const shown = this.shownCommodities(sid, faction);
       const idx = i - 2;
       const c = shown[idx];
       if (!c) return;                             // Back row
@@ -9477,6 +9624,21 @@ export class Voidwake {
       const mine = p.ownedStations?.find((s) => s.entityId === sid);
       if (!mine) return;
       const row = lines[i] ?? "";
+      // 0.7.9 — cosmetic rows work at any tier, including max.
+      if (row.startsWith("Silhouette:")) {
+        mine.motif = ((mine.motif ?? 0) + 1) % STATION_MOTIFS.length;
+        this.pushLog(`${mine.name} silhouette set to ${STATION_MOTIFS[mine.motif].name}.`);
+        return;
+      }
+      if (row.startsWith("Rename station")) {
+        const idx = STATION_NAME_POOL.indexOf(mine.name.replace(/-.*$/, ""));
+        const base = STATION_NAME_POOL[(idx + 1 + STATION_NAME_POOL.length) % STATION_NAME_POOL.length];
+        mine.name = `${base}-${mine.entityId.toString(36).toUpperCase()}`;
+        const ent0 = this.entities.find((e) => e.id === mine.entityId);
+        if (ent0) ent0.name = `${mine.name} T${mine.tier}`;
+        this.pushLog(`Station renamed to ${mine.name}.`);
+        return;
+      }
       const next = PLAYER_STATION_TIERS.find((r) => r.tier === mine.tier + 1);
       if (!next) return;
       if (row.startsWith("Deliver from cargo")) {
@@ -9534,7 +9696,7 @@ export class Voidwake {
     };
     this.entities.push(ent);
     p.ownedStations = p.ownedStations ?? [];
-    p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {} });
+    p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {}, motif: 0 });
     this.pushLog(`Station Core deployed as ${name}. Fly to it and dock to build.`);
     this.pushChatter("Computer", `${name} beacon online. Awaiting construction crews.`, "#7fd0ff");
     // Auto-undock so the player can fly to it.
@@ -11318,7 +11480,12 @@ export class Voidwake {
       // hubs, and Guild trade posts read distinct at a glance instead of
       // all looking like a beige `#` bubble. Skipped for tiny renders.
       if (e.kind === "station" && rx >= 2) {
+        // 0.7.9 — player-owned stations use the owner's chosen motif.
+        const owned = e.faction === "player"
+          ? this.player?.ownedStations?.find((s) => s.entityId === e.id)
+          : undefined;
         const overlay =
+          owned                      ? STATION_MOTIFS[(owned.motif ?? 0) % STATION_MOTIFS.length].art :
           e.faction === "pirate"     ? ["\\ /", " X ", "/ \\"] :
           e.faction === "patrol"     ? ["[+]", "|#|", "[+]"] :
           e.faction === "federation" ? ["_|_", "|H|", " | "] :
