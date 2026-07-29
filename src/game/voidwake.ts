@@ -9228,13 +9228,12 @@ export class Voidwake {
       // 0.7.2 — Compact layout: one row per relevant commodity. A
       // page-level mode toggle (BUY / SELL) drives the action. Rows are
       // faction-filtered so each dock offers 4-8 items, not 18.
+      // 0.7.9 — banned legality tiers are dropped entirely (contraband is
+      // not traded openly at lawful docks) and buy rows carry a route hint.
       const faction = dockedEnt?.faction ?? "guild";
-      const allowed = stationCommodityFilter(faction);
-      const shown = stock.commodities.filter((c) => {
-        const meta = COMMODITIES.find((m) => m.id === c.id);
-        return meta ? allowed.has(meta.class) : true;
-      });
+      const shown = this.shownCommodities(sid, faction);
       const mode = this.commodityMode.toUpperCase();
+      const bans = factionBans(faction);
       const rows: string[] = [
         `~ Cargo ${cargoTotal(p)}/${p.ship.cargoMax}  Credits ${p.credits}cr ~`,
         `Mode: ◀ ${mode} ▶   (←/→ toggle, ENTER to trade 10)`,
@@ -9243,8 +9242,10 @@ export class Voidwake {
         const have = p.cargo[c.id] ?? 0;
         const price = this.commodityMode === "buy" ? c.buy : c.sell;
         const tag   = this.commodityMode === "buy" ? "[BUY 10]" : "[SELL10]";
-        rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}`);
+        const hint  = this.commodityMode === "buy" ? this.routeHint(sid, c.id, c.buy) : "";
+        rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}${hint}`);
       }
+      if (bans.size) rows.push(`! Customs: ${[...bans].join("/")} goods banned here — scanned on dock.`);
       rows.push("Back");
       return rows;
     }
@@ -9267,6 +9268,10 @@ export class Voidwake {
       } else {
         rows.push("Maximum tier reached.");
       }
+      // 0.7.9 — cosmetic customization for the player's own holdings.
+      const motif = STATION_MOTIFS[(mine.motif ?? 0) % STATION_MOTIFS.length];
+      rows.push(`Silhouette: ◀ ${motif.name} ▶   (ENTER cycles)`);
+      rows.push("Rename station →");
       rows.push("Back");
       return rows;
     }
