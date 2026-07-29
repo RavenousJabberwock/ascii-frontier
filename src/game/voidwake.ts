@@ -9590,11 +9590,7 @@ export class Voidwake {
       }
       const dockedEnt = this.entities.find((e) => e.id === sid);
       const faction = dockedEnt?.faction ?? "guild";
-      const allowed = stationCommodityFilter(faction);
-      const shown = stock.commodities.filter((c) => {
-        const meta = COMMODITIES.find((m) => m.id === c.id);
-        return meta ? allowed.has(meta.class) : true;
-      });
+      const shown = this.shownCommodities(sid, faction);
       const idx = i - 2;
       const c = shown[idx];
       if (!c) return;                             // Back row
