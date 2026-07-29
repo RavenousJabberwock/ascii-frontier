@@ -4887,6 +4887,118 @@ export class Voidwake {
     return s;
   }
 
+  // 0.7.9 — Commodity rows a given dock will openly list: economic identity
+  // filter (0.7.2) minus anything that faction bans outright.
+  shownCommodities(stationId: number, faction: string) {
+    const stock = this.getStock(stationId);
+    const allowed = stationCommodityFilter(faction);
+    const bans = factionBans(faction);
+    return stock.commodities.filter((c) => {
+      const meta = COMMODITIES.find((m) => m.id === c.id);
+      if (!meta) return true;
+      return allowed.has(meta.class) && !bans.has(meta.legality);
+    });
+  }
+
+  // 0.7.9 — Route hint HUD. For a commodity you can buy here, find the best
+  // paying station among the markets already generated this session and
+  // report the margin: "→ Guild Hub +42%". Cached per (station, market day)
+  // because buildStationLines() runs every frame.
+  private _routeHintCache: { key: string; hints: Map<string, string> } = { key: "", hints: new Map() };
+  routeHint(stationId: number, commodityId: string, buyPrice: number): string {
+    const key = `${stationId}:${marketDay()}:${this.stationStocks.size}`;
+    if (this._routeHintCache.key !== key) this._routeHintCache = { key, hints: new Map() };
+    const cached = this._routeHintCache.hints.get(commodityId);
+    if (cached !== undefined) return cached;
+    let best = 0, bestName = "";
+    for (const [sid, st] of this.stationStocks) {
+      if (sid === stationId) continue;
+      const ent = this.entities.find((e) => e.id === sid);
+      if (!ent) continue;
+      if (isContraband(commodityId, ent.faction ?? "guild")) continue;
+      const row = st.commodities.find((c) => c.id === commodityId);
+      if (!row) continue;
+      if (row.sell > best) { best = row.sell; bestName = ent.name; }
+    }
+    let hint = "";
+    if (bestName && buyPrice > 0) {
+      const pct = Math.round(((best - buyPrice) / buyPrice) * 100);
+      if (pct >= 5) hint = `  → ${bestName} +${pct}%`;
+    }
+    this._routeHintCache.hints.set(commodityId, hint);
+    return hint;
+  }
+
+  // 0.7.9 — Customs scan. Lawful docks inspect the hold: banned cargo is
+  // confiscated, fined at half its local value, and costs reputation.
+  customsScan(t: Entity) {
+    const p = this.player; if (!p) return;
+    const faction = t.faction ?? "guild";
+    const bans = factionBans(faction);
+    if (!bans.size) return;
+    const stock = this.getStock(t.id);
+    let seized = 0, fine = 0;
+    const names: string[] = [];
+    for (const meta of COMMODITIES) {
+      if (!bans.has(meta.legality)) continue;
+      const have = p.cargo[meta.id] ?? 0;
+      if (have <= 0) continue;
+      const row = stock.commodities.find((c) => c.id === meta.id);
+      const unit = row?.sell ?? meta.base;
+      seized += have; fine += Math.round(have * unit * 0.5);
+      names.push(`${have} ${meta.name}`);
+      delete p.cargo[meta.id];
+    }
+    if (seized <= 0) return;
+    fine = Math.min(fine, Math.max(0, p.credits));
+    p.credits -= fine;
+    adjustRep(p, faction, -Math.min(10, 2 + Math.floor(seized / 5)));
+    adjustRep(p, "pirate", 2);
+    this.pushLog(`Customs seized ${names.join(", ")}. Fined ${fine}cr.`);
+    this.pushChatter(`Customs ${t.name}`,
+      "Hold scan flagged prohibited cargo. Contraband impounded, fine levied. Fly clean next time.",
+      "#ff8a8a");
+    this.sfx("warning");
+  }
+
+  // 0.7.9 — NPC trade AI. Every ~12s an off-screen hauler moves a batch of
+  // one commodity from the cheapest market to the dearest among the markets
+  // the player has generated. Stock and prices converge as a result, so
+  // fat arbitrage spreads decay if you sit on them instead of running them.
+  private _tradeSimAt = 0;
+  tickTradeSim(dt: number) {
+    this._tradeSimAt -= dt;
+    if (this._tradeSimAt > 0) return;
+    this._tradeSimAt = 12;
+    const ids = [...this.stationStocks.keys()];
+    if (ids.length < 2) return;
+    const meta = COMMODITIES[Math.floor(Math.random() * COMMODITIES.length)];
+    let src: StationStock | null = null, dst: StationStock | null = null;
+    let lo = Infinity, hi = -Infinity;
+    for (const sid of ids) {
+      const st = this.stationStocks.get(sid)!;
+      const ent = this.entities.find((e) => e.id === sid);
+      if (ent && isContraband(meta.id, ent.faction ?? "guild")) continue;
+      const row = st.commodities.find((c) => c.id === meta.id);
+      if (!row) continue;
+      if (row.sell < lo && row.stock > 20) { lo = row.sell; src = st; }
+      if (row.buy  > hi)                   { hi = row.buy;  dst = st; }
+    }
+    if (!src || !dst || src === dst || hi <= lo) return;
+    const a = src.commodities.find((c) => c.id === meta.id)!;
+    const b = dst.commodities.find((c) => c.id === meta.id)!;
+    const moved = Math.min(12, Math.floor(a.stock * 0.15));
+    if (moved <= 0) return;
+    a.stock -= moved; b.stock += moved;
+    // Scarcity at source lifts its prices; glut at destination softens its.
+    a.buy = Math.max(1, Math.round(a.buy * 1.03));
+    a.sell = Math.max(1, Math.round(a.sell * 1.03));
+    b.buy = Math.max(1, Math.round(b.buy * 0.97));
+    b.sell = Math.max(1, Math.round(b.sell * 0.97));
+  }
+
+
+
   // Centralized death handler. Pass a human reason ("Killed by Hostile Reaver",
   // "Collided with Planet P-42", "Hull breach: fuel detonation").
   die(reason: string, killer?: string) {
