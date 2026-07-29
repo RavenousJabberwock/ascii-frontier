@@ -11480,7 +11480,12 @@ export class Voidwake {
       // hubs, and Guild trade posts read distinct at a glance instead of
       // all looking like a beige `#` bubble. Skipped for tiny renders.
       if (e.kind === "station" && rx >= 2) {
+        // 0.7.9 — player-owned stations use the owner's chosen motif.
+        const owned = e.faction === "player"
+          ? this.player?.ownedStations?.find((s) => s.entityId === e.id)
+          : undefined;
         const overlay =
+          owned                      ? STATION_MOTIFS[(owned.motif ?? 0) % STATION_MOTIFS.length].art :
           e.faction === "pirate"     ? ["\\ /", " X ", "/ \\"] :
           e.faction === "patrol"     ? ["[+]", "|#|", "[+]"] :
           e.faction === "federation" ? ["_|_", "|H|", " | "] :
