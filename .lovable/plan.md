@@ -1,4 +1,28 @@
+# 0.7.9 — Living Economy & Station Identity
+
+Ships as **0.7.9**. Clears the last four deferred backlog items.
+
+- **Faction contraband bans.** `factionBans()` gives each faction a banned
+  legality set (Federation/SPD ban grey + restricted, Guild and colonies ban
+  restricted, pirates ban nothing). Banned goods vanish from the Commodities
+  page, the page warns which tiers are prohibited, and docking runs a
+  **customs scan**: contraband is confiscated, fined at half local value,
+  costs rep with that faction and *gains* a little pirate rep.
+- **Route-hint HUD.** Buy rows now read
+  `[BUY 10] Titanium @  61cr  stock  44  have 0  → Kepler Hub +42%`, naming
+  the best-paying market seen this session. Cached per station/market-day so
+  the per-frame menu build stays cheap; contraband destinations are excluded.
+- **NPC trade AI.** `tickTradeSim()` fires every ~12s: an off-screen hauler
+  moves a batch of one commodity from the cheapest market to the dearest,
+  shifting stock and nudging both stations' prices ~3% toward each other.
+  Fat spreads decay if you don't run them.
+- **Player-station customization.** Owned stations get a cosmetic
+  `Silhouette:` cycle across five motifs (Bastion / Halo / Spire / Forge /
+  Nest) that renders as the station's 3x3 stamp, plus `Rename station →`
+  cycling a twelve-name pool. Available at every tier, including max.
+
 # 0.7.8 — Exotic Stars, Lensing & Propulsion
+
 
 Ships as **0.7.8**.
 
