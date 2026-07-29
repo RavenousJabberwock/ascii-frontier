@@ -9624,6 +9624,21 @@ export class Voidwake {
       const mine = p.ownedStations?.find((s) => s.entityId === sid);
       if (!mine) return;
       const row = lines[i] ?? "";
+      // 0.7.9 — cosmetic rows work at any tier, including max.
+      if (row.startsWith("Silhouette:")) {
+        mine.motif = ((mine.motif ?? 0) + 1) % STATION_MOTIFS.length;
+        this.pushLog(`${mine.name} silhouette set to ${STATION_MOTIFS[mine.motif].name}.`);
+        return;
+      }
+      if (row.startsWith("Rename station")) {
+        const idx = STATION_NAME_POOL.indexOf(mine.name.replace(/-.*$/, ""));
+        const base = STATION_NAME_POOL[(idx + 1 + STATION_NAME_POOL.length) % STATION_NAME_POOL.length];
+        mine.name = `${base}-${mine.entityId.toString(36).toUpperCase()}`;
+        const ent0 = this.entities.find((e) => e.id === mine.entityId);
+        if (ent0) ent0.name = `${mine.name} T${mine.tier}`;
+        this.pushLog(`Station renamed to ${mine.name}.`);
+        return;
+      }
       const next = PLAYER_STATION_TIERS.find((r) => r.tier === mine.tier + 1);
       if (!next) return;
       if (row.startsWith("Deliver from cargo")) {
