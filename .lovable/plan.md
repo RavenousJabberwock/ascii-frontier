@@ -147,7 +147,6 @@ Ships as **0.7.4**.
 
 ## Deferred (stays on the backlog)
 
-- Player-station cosmetic customization.
-- NPC trade AI actually moving cargo between stations.
-- Faction-specific commodity bans beyond the relic rep hint.
-- Route-hint HUD ("Buy X here, sell at Industrial +42%").
+- Player-to-NPC comms (hail a target, template replies keyed to reputation).
+- Player-station income scaling beyond flat treasury accrual.
+- Smuggling counterplay: hidden cargo bays and bribe options at customs.
