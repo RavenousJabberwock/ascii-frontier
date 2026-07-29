@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.8";
+const VERSION = "0.7.9";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -9696,7 +9696,7 @@ export class Voidwake {
     };
     this.entities.push(ent);
     p.ownedStations = p.ownedStations ?? [];
-    p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {} });
+    p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {}, motif: 0 });
     this.pushLog(`Station Core deployed as ${name}. Fly to it and dock to build.`);
     this.pushChatter("Computer", `${name} beacon online. Awaiting construction crews.`, "#7fd0ff");
     // Auto-undock so the player can fly to it.
