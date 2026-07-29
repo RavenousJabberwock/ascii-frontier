@@ -2967,6 +2967,37 @@ function stationCommodityFilter(faction: string): Set<CommodityClass> {
   return new Set(["element", "food"] as CommodityClass[]);
 }
 
+// 0.7.9 — Faction contraband bans. Lawful factions refuse to list banned
+// legality tiers at all, and run a customs scan on dock: banned cargo is
+// confiscated, fined, and dinged against that faction's reputation.
+// Pirates ban nothing (that's the point of a black market).
+type Legality = "clean" | "grey" | "restricted";
+function factionBans(faction: string): Set<Legality> {
+  if (faction === "federation" || faction === "patrol") return new Set<Legality>(["grey", "restricted"]);
+  if (faction === "nature")                             return new Set<Legality>(["restricted"]);
+  if (faction === "guild")                              return new Set<Legality>(["restricted"]);
+  return new Set<Legality>();
+}
+function isContraband(commodityId: string, faction: string): boolean {
+  const meta = COMMODITIES.find((m) => m.id === commodityId);
+  if (!meta) return false;
+  return factionBans(faction).has(meta.legality);
+}
+
+// 0.7.9 — Player-station cosmetic motifs. Purely visual: picks the 3x3
+// silhouette stamp and label accent used for the player's own stations.
+const STATION_MOTIFS: { name: string; art: [string, string, string]; color: string }[] = [
+  { name: "Bastion", art: ["[=]", "[#]", "[=]"], color: "#7CFC00" },
+  { name: "Halo",    art: ["/o\\", "(*)", "\\o/"], color: "#8fd8ff" },
+  { name: "Spire",   art: [" ^ ", "|I|", "/_\\"], color: "#ffd28a" },
+  { name: "Forge",   art: ["<->", "[@]", "<->"], color: "#ff9c6b" },
+  { name: "Nest",    art: [".^.", "(w)", "'v'"], color: "#c2a3ff" },
+];
+const STATION_NAME_POOL = [
+  "Bastion", "Anvil", "Lighthouse", "Redoubt", "Waypoint", "Hearth",
+  "Sentinel", "Refuge", "Crossroads", "Longshore", "Kestrel", "Ironhold",
+];
+
 function generateStationStock(stationId: number, faction: string = "guild", day: number = marketDay()): StationStock {
   // Seed mixes station id with the market day so inventory rotates every
   // ~10 real minutes. Deterministic within a day, different across days.
