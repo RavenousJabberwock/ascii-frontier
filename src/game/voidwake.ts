@@ -6219,6 +6219,7 @@ export class Voidwake {
     this.updateTactical(dt, fwd);
     this.pickupLoot();
     this.tickAmbientChatter(dt);
+    this.tickTradeSim(dt);
     // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
     // player when the label ticks over. Consume here so any call site
     // (kills, mining, missions) gets a unified fanfare.
