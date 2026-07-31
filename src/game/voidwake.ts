@@ -1974,6 +1974,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   questLog: "u",         // open the toggle-able Quest Log popup
   pinRep: "r",           // toggle the compact reputation panel
   characterSheet: "c",   // open the full Character Sheet overlay
+  hail: "h",             // 0.8.0 — open a comms channel to the current target
 };
 
 // User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
@@ -1981,6 +1982,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
 // `mission` is intentionally omitted — it aliases `questLog` and only the
 // latter is actually consumed by the input handlers.
 const KEYBIND_ACTIONS: { id: string; label: string }[] = [
+  { id: "hail",         label: "Hail Target" },
   { id: "throttleUp",   label: "Throttle Up" },
   { id: "throttleDown", label: "Throttle Down" },
   { id: "yawLeft",      label: "Yaw Left" },
@@ -5158,6 +5160,10 @@ export class Voidwake {
     };
     this.menuCursor = 0;
     this.screen = "customs";
+    dispatchHook("onCustomsScan", {
+      station: t.name, stationId: t.id, faction,
+      seized, hidden, fine, bribe: this._customs.bribe,
+    });
     this.sfx("warning");
   }
 
@@ -6632,6 +6638,11 @@ export class Voidwake {
       this._codexReturn = "playing";
       this.screen = "quest-log";
       this.menuCursor = 0;
+      return;
+    }
+    // 0.8.0 — hail the current target (ships, stations, colonies).
+    if (this.input.consume(k.hail)) {
+      this.openHail();
       return;
     }
     // Toggle the pinned quest tracker.
