@@ -3065,6 +3065,34 @@ const PLAYER_STATION_TIERS: { tier: number; needs: Record<string, number>; unloc
   { tier: 5, needs: { antimatter: 5, ai_cores: 10, quantum_drives: 5 }, unlocks: "Defense drones (1000cr/dock)", incomePerDock: 1000 },
 ];
 
+// 0.8.0 — Station income scaling. Treasury no longer only ticks on docks:
+// a station earns credits per minute of real play, scaled by tier, by how
+// much surplus material you've fed it beyond its tier requirement, and by
+// a hired Quartermaster's logistics grade. Treasury is capped so a station
+// left alone for an hour doesn't print a fortune — collect it by docking.
+type OwnedStation = NonNullable<PlayerState["ownedStations"]>[number];
+
+function stationSurplusBonus(s: OwnedStation): number {
+  // Total units delivered vs. what the current tier needed. Every 100
+  // surplus units adds 10% throughput, capped at +100%.
+  const need = PLAYER_STATION_TIERS
+    .filter((r) => r.tier <= s.tier)
+    .reduce((a, r) => a + Object.values(r.needs).reduce((x, y) => x + y, 0), 0);
+  const delivered = Object.values(s.delivered ?? {}).reduce((a, b) => a + b, 0);
+  return Math.max(0, Math.min(1, (delivered - need) / 1000));
+}
+
+function stationIncomePerMinute(p: PlayerState, s: OwnedStation): number {
+  const row = PLAYER_STATION_TIERS.find((x) => x.tier === s.tier);
+  if (!row || row.incomePerDock <= 0) return 0;
+  const qm = 1 + roleLevel(p, "quartermaster") * 0.03;
+  return Math.round(row.incomePerDock * 0.5 * (1 + stationSurplusBonus(s)) * qm);
+}
+
+function stationTreasuryCap(s: OwnedStation): number {
+  return Math.max(500, s.tier * s.tier * 2000);
+}
+
 // 0.7.1 — Commodity catalog. Every entry is a valid cargo key (single
 // slot per unit, matching the existing 'ore' convention). Classes drive
 // per-station price bias: Mining stations underprice elements, Industrial
@@ -7394,12 +7422,13 @@ export class Voidwake {
       }
     }
     // Passive income accrual for the player's OTHER stations while they
-    // dock elsewhere — represents NPCs docking at their unattended holdings.
+    // dock elsewhere — a docking bonus on top of the per-minute accrual
+    // handled by tickStationIncome().
     if (p.ownedStations) {
       for (const s of p.ownedStations) {
         if (s.entityId === t.id) continue;
         const tierRow = PLAYER_STATION_TIERS.find((x) => x.tier === s.tier);
-        if (tierRow) s.treasury += tierRow.incomePerDock;
+        if (tierRow) s.treasury = Math.min(stationTreasuryCap(s), s.treasury + tierRow.incomePerDock);
       }
     }
 
