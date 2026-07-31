@@ -5105,37 +5105,149 @@ export class Voidwake {
     return hint;
   }
 
-  // 0.7.9 — Customs scan. Lawful docks inspect the hold: banned cargo is
-  // confiscated, fined at half its local value, and costs reputation.
+  // 0.7.9 / 0.8.0 — Customs scan. Lawful docks inspect the hold. A
+  // Shielded Hold conceals a slice of every banned stack; whatever is left
+  // showing opens the interactive customs screen (surrender / bribe /
+  // refuse) instead of auto-seizing.
   customsScan(t: Entity) {
     const p = this.player; if (!p) return;
     const faction = t.faction ?? "guild";
     const bans = factionBans(faction);
     if (!bans.size) return;
     const stock = this.getStock(t.id);
-    let seized = 0, fine = 0;
-    const names: string[] = [];
+    // Shielded Hold: each fitted unit conceals 8 units of each banned good.
+    const conceal = p.ship.modules.filter((m) => m === "shielded-hold").length * 8;
+    let seized = 0, fine = 0, hidden = 0;
+    const found: { id: string; name: string; qty: number; unit: number }[] = [];
     for (const meta of COMMODITIES) {
       if (!bans.has(meta.legality)) continue;
       const have = p.cargo[meta.id] ?? 0;
       if (have <= 0) continue;
+      const shown = Math.max(0, have - conceal);
+      hidden += have - shown;
+      if (shown <= 0) continue;
       const row = stock.commodities.find((c) => c.id === meta.id);
       const unit = row?.sell ?? meta.base;
-      seized += have; fine += Math.round(have * unit * 0.5);
-      names.push(`${have} ${meta.name}`);
-      delete p.cargo[meta.id];
+      seized += shown; fine += Math.round(shown * unit * 0.5);
+      found.push({ id: meta.id, name: meta.name, qty: shown, unit });
     }
-    if (seized <= 0) return;
-    fine = Math.min(fine, Math.max(0, p.credits));
-    p.credits -= fine;
-    adjustRep(p, faction, -Math.min(10, 2 + Math.floor(seized / 5)));
-    adjustRep(p, "pirate", 2);
-    this.pushLog(`Customs seized ${names.join(", ")}. Fined ${fine}cr.`);
-    this.pushChatter(`Customs ${t.name}`,
-      "Hold scan flagged prohibited cargo. Contraband impounded, fine levied. Fly clean next time.",
-      "#ff8a8a");
+    if (seized <= 0) {
+      if (hidden > 0) {
+        this.pushChatter(`Customs ${t.name}`,
+          "Scan complete. Hold reads clean. Welcome to the station.", "#9fe");
+      }
+      return;
+    }
+    // Bribe price scales with the fine; the Encoder makes it stick.
+    const encoder = p.ship.modules.includes("bribe-encoder");
+    const qm = roleLevel(p, "quartermaster");
+    const rep = p.reputation?.[faction] ?? 0;
+    let odds = (encoder ? 0.75 : 0.30) + qm * 0.02 + Math.max(-0.2, Math.min(0.15, rep * 0.004));
+    odds = Math.max(0.05, Math.min(0.95, odds));
+    this._customs = {
+      stationId: t.id, station: t.name, faction,
+      goods: found, seized, fine, hidden,
+      bribe: Math.max(150, Math.round(fine * 0.8)), odds,
+    };
+    this.menuCursor = 0;
+    this.screen = "customs";
     this.sfx("warning");
   }
+
+  // Interactive customs resolution (0.8.0).
+  _customs?: {
+    stationId: number; station: string; faction: string;
+    goods: { id: string; name: string; qty: number; unit: number }[];
+    seized: number; fine: number; hidden: number; bribe: number; odds: number;
+  };
+
+  // Confiscate the flagged goods, levy the fine, take the reputation hit.
+  private customsSurrender() {
+    const p = this.player, c = this._customs; if (!p || !c) return;
+    for (const g of c.goods) {
+      const have = p.cargo[g.id] ?? 0;
+      const left = Math.max(0, have - g.qty);
+      if (left > 0) p.cargo[g.id] = left; else delete p.cargo[g.id];
+    }
+    const fine = Math.min(c.fine, Math.max(0, p.credits));
+    p.credits -= fine;
+    adjustRep(p, c.faction, -Math.min(10, 2 + Math.floor(c.seized / 5)));
+    adjustRep(p, "pirate", 2);
+    this.pushLog(`Customs seized ${c.goods.map((g) => `${g.qty} ${g.name}`).join(", ")}. Fined ${fine}cr.`);
+    this.pushChatter(`Customs ${c.station}`,
+      "Contraband impounded, fine levied. Fly clean next time.", "#ff8a8a");
+    this._customs = undefined;
+    this.screen = "station";
+  }
+
+  updateCustoms() {
+    const c = this._customs;
+    if (!c) { this.screen = "station"; return; }
+    const p = this.player; if (!p) { this.screen = "station"; return; }
+    const canBribe = p.credits >= c.bribe;
+    this.menuNav(3);
+    if (this.input.consume("enter")) {
+      if (this.menuCursor === 0) { this.customsSurrender(); return; }
+      if (this.menuCursor === 1) {
+        if (!canBribe) { this.pushLog("Not enough credits for that."); return; }
+        p.credits -= c.bribe;
+        if (Math.random() < c.odds) {
+          this.pushLog(`Bribe accepted. ${c.bribe}cr changed hands; hold stays sealed.`);
+          this.pushChatter(`Customs ${c.station}`,
+            "Manifest looks in order. Move along, Captain.", "#ffd28a");
+          adjustRep(p, "pirate", 1);
+          this._customs = undefined;
+          this.screen = "station";
+        } else {
+          this.pushLog("Bribe refused — attempted bribery logged.");
+          adjustRep(p, c.faction, -6);
+          c.fine = Math.round(c.fine * 1.5);
+          this.customsSurrender();
+        }
+        return;
+      }
+      // Refuse the search: keep the cargo, undock immediately, wear the
+      // reputation hit and a patrol alert.
+      adjustRep(p, c.faction, -12);
+      adjustRep(p, "federation", -4);
+      adjustRep(p, "pirate", 4);
+      this.pushLog("You broke the clamps and ran the scan. Patrols have been notified.");
+      this.pushChatter(`Customs ${c.station}`,
+        "Vessel fleeing inspection! Patrol, we have a runner.", "#ff8a8a");
+      this.alertPatrols();
+      this._customs = undefined;
+      this.dockedStationId = undefined;
+      this.screen = "playing";
+    }
+  }
+
+  renderCustoms(g: Cell[][]) {
+    const c = this._customs, p = this.player;
+    if (!c || !p) return;
+    putText(g, 4, 1, `[ CUSTOMS INSPECTION — ${c.station.toUpperCase()} ]`, "#ff8a8a");
+    putText(g, 4, 3, `${c.faction.toUpperCase()} officers flagged prohibited cargo:`, "#9fe");
+    let row = 4;
+    for (const item of c.goods) {
+      putText(g, 6, row++, `${item.qty} × ${item.name}  (valued ${item.qty * item.unit}cr)`, "#ffd28a");
+    }
+    if (c.hidden > 0) {
+      putText(g, 6, row++, `${c.hidden} units stayed hidden in the shielded hold.`, "#7CFC00");
+    }
+    row += 1;
+    const opts = [
+      `Surrender cargo — pay ${c.fine}cr fine, lose standing`,
+      `Offer a bribe — ${c.bribe}cr (${Math.round(c.odds * 100)}% chance)`,
+      `Refuse the search — undock hot, patrols alerted`,
+    ];
+    for (let i = 0; i < opts.length; i++) {
+      const sel = i === this.menuCursor;
+      const affordable = i !== 1 || p.credits >= c.bribe;
+      putText(g, 4, row + i * 2, `${sel ? "▶" : " "} ${opts[i]}`,
+              !affordable ? "#666" : sel ? "#ffe066" : "#cf6");
+    }
+    putText(g, 4, row + 7, `Credits: ${p.credits}cr    ENTER select`, "#9fe");
+  }
+
 
   // 0.7.9 — NPC trade AI. Every ~12s an off-screen hauler moves a batch of
   // one commodity from the cheapest market to the dearest among the markets
