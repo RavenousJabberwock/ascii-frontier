@@ -38,6 +38,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onWorldGenerate", "onTick", "onPlayerFire", "onPlayerDock",
   "onEntityDestroyed", "onChatter", "onSave", "onLoad", "onPlanetLand",
   "onCommodityTrade", "onPassengerBoard", "onPassengerDeliver", "onPlayerStationTierUp",
+  // 0.8.0
+  "onPlayerHail", "onCustomsScan",
 ];
 
 export interface LuaHostBridge {
