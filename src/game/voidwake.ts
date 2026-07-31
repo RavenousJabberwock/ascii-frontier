@@ -5442,6 +5442,35 @@ export class Voidwake {
   // one commodity from the cheapest market to the dearest among the markets
   // the player has generated. Stock and prices converge as a result, so
   // fat arbitrage spreads decay if you sit on them instead of running them.
+  // 0.8.0 — Player-station income accrues in real time, scaled by tier and
+  // surplus supply, capped per station. Every ~2 minutes an owned station
+  // files a short Comms report so the income is visible, not invisible.
+  private _stationIncomeAt = 0;
+  private _stationReportAt = 0;
+  tickStationIncome(dt: number) {
+    const p = this.player; if (!p?.ownedStations?.length) return;
+    this._stationIncomeAt += dt;
+    if (this._stationIncomeAt < 10) return;
+    const minutes = this._stationIncomeAt / 60;
+    this._stationIncomeAt = 0;
+    for (const s of p.ownedStations) {
+      const rate = stationIncomePerMinute(p, s);
+      if (rate <= 0) continue;
+      s.treasury = Math.min(stationTreasuryCap(s), s.treasury + Math.round(rate * minutes));
+    }
+    this._stationReportAt += 10;
+    if (this._stationReportAt >= 120) {
+      this._stationReportAt = 0;
+      const s = p.ownedStations[Math.floor(Math.random() * p.ownedStations.length)];
+      const full = s.treasury >= stationTreasuryCap(s);
+      this.pushChatter(s.name,
+        full
+          ? `Vaults are full at ${s.treasury}cr, Captain. Nothing more accrues until you collect.`
+          : pickLine("player_station_report", this.chatterCtx(undefined, { a: s.name })),
+        "#7CFC00", "external");
+    }
+  }
+
   private _tradeSimAt = 0;
   tickTradeSim(dt: number) {
     this._tradeSimAt -= dt;
@@ -6712,6 +6741,7 @@ export class Voidwake {
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickTradeSim(dt);
+    this.tickStationIncome(dt);
     // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
     // player when the label ticks over. Consume here so any call site
     // (kills, mining, missions) gets a unified fanfare.
