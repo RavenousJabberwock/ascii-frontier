@@ -1,3 +1,35 @@
+# 0.8.0 — Comms, Contraband Counterplay & Living Holdings
+
+Ships as **0.8.0**. Clears the three remaining backlog items.
+
+- **Player-to-NPC comms.** `H` opens a channel to the current target
+  (ship, station or colony within 4000u; aliens answer in static). Options
+  are filtered by what the target could plausibly do: greet, ask for local
+  news/market word, request an emergency fuel transfer, warn a hostile off,
+  or offer 500cr restitution to Patrol/Federation. Replies are keyed to
+  disposition (faction reputation + current hostility) via new
+  `hail_*` chatter buckets. Fires the `onPlayerHail` Lua hook.
+- **Smuggling counterplay.** Two new modules: **Shielded Hold** (hides 8
+  units of each banned good per fitted unit) and **Bribe Encoder** (raises
+  bribe odds from ~30% to ~75%). Customs is now interactive: an inspection
+  that finds anything opens a screen with **Surrender** (seizure + fine +
+  rep hit), **Bribe** (cost ~80% of the fine, odds shown; a refused bribe
+  costs extra rep and a 1.5x fine), or **Refuse the search** (keep the
+  cargo, undock hot, nearby lawful ships flag you and Patrol hunts you).
+  Fires `onCustomsScan`.
+- **Station income scaling.** Treasury accrues per minute of real play, not
+  only on docks: `tier income x (1 + surplus bonus) x Quartermaster grade`,
+  where surplus is material delivered beyond the tier requirement (up to
+  +100%). Treasury caps at `tier^2 x 2000` so an ignored station stops
+  printing; owned stations file periodic Comms reports, including a
+  "vaults are full" warning.
+- **Context-sensitive crew chatter.** ~70% of idle barks are now chosen by
+  shipboard situation instead of at random: low fuel, low hull, low
+  shields, full hold, hostiles in range, deep space, broke, flush,
+  carrying contraband, close to a star, active contract, low morale,
+  passenger aboard, or all-quiet — each spoken by the role most likely to
+  raise it, across 14 new chatter buckets.
+
 # 0.7.9 — Living Economy & Station Identity
 
 Ships as **0.7.9**. Clears the last four deferred backlog items.

@@ -56,6 +56,7 @@ Everything else is recoverable.
 | `J`         | Mission / contract board while docked                |
 | `C`         | Character Sheet (crew, ship, modules, pets)          |
 | `R`         | Reputation panel                                     |
+| `H`         | Hail the current target (comms channel)              |
 | `ESC`       | Main menu (New / Save / Load / Options / Quit)       |
 
 Gamepads (any standard mapping) and touch controls are supported and can be
@@ -198,10 +199,29 @@ plain-language description of every fitted module.
 
 Buy a **Station Core** module, deploy it, then feed it raw materials.
 Stations progress T0 → T5; each tier raises capacity and passive income.
+Income accrues per minute of play, scaled by tier, by surplus material
+delivered beyond the tier requirement, and by a hired Quartermaster. It caps
+per station, so collect by docking — your holdings will tell you over Comms
+when the vaults are full.
 Supply runs are the price of a paycheck that keeps arriving while you do
 something else.
 
 ---
+
+## 11a. Hailing and customs
+
+Press `H` with a ship, station or colony targeted inside 4000u to open a
+channel. What you can say depends on who they are: greet them, ask for local
+news and market word, beg an emergency fuel transfer, warn a hostile off
+(they may break away — bluffing works better with kills behind you), or pay
+500cr restitution to Patrol/Federation to repair standing. Aliens answer in
+static.
+
+Lawful docks scan the hold. A **Shielded Hold** conceals eight units of each
+banned good; whatever still shows opens an inspection where you may
+surrender the cargo and pay the fine, offer a bribe (a **Bribe Encoder**
+makes it stick), or refuse the search — which keeps your cargo, undocks you
+hot, and puts patrols on your tail.
 
 ## 12. Comms
 
