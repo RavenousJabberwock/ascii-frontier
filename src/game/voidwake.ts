@@ -3856,6 +3856,8 @@ type Screen =
   | "howto"
   | "quest-log"
   | "mission-offer"
+  | "customs"
+  | "hail"
   | "character";
 
 
