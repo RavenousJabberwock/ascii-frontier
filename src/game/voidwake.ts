@@ -5660,6 +5660,8 @@ export class Voidwake {
       case "howto": this.updateHowto(); break;
       case "quest-log": this.updateQuestLog(); break;
       case "mission-offer": this.updateMissionOffer(); break;
+      case "customs": this.updateCustoms(); break;
+      case "hail": this.updateHail(); break;
       case "character": this.updateCharacterSheet(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
