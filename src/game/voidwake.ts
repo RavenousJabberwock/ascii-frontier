@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.9";
+const VERSION = "0.8.0";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -94,7 +94,10 @@ export type ScriptHookName =
   | "onCommodityTrade"
   | "onPassengerBoard"
   | "onPassengerDeliver"
-  | "onPlayerStationTierUp";
+  | "onPlayerStationTierUp"
+  // 0.8.0 — comms & customs hooks
+  | "onPlayerHail"
+  | "onCustomsScan";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -113,6 +116,8 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPassengerBoard:     [],
   onPassengerDeliver:   [],
   onPlayerStationTierUp:[],
+  onPlayerHail:         [],
+  onCustomsScan:        [],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
@@ -203,6 +208,17 @@ type ChatterKind =
   | "tactical_idle" | "tactical_greet" | "tactical_hostile"
   | "tactical_farewell_good" | "tactical_farewell_bad"
   | "passenger_smalltalk" | "player_station_report"
+  // 0.8.0 — context-sensitive crew barks. Chosen by shipboard situation
+  // rather than at random, so the crew reacts to what is actually happening.
+  | "crew_ctx_lowfuel" | "crew_ctx_lowhull" | "crew_ctx_lowshield"
+  | "crew_ctx_cargofull" | "crew_ctx_combat" | "crew_ctx_deepspace"
+  | "crew_ctx_broke" | "crew_ctx_rich" | "crew_ctx_contraband"
+  | "crew_ctx_nearstar" | "crew_ctx_mission" | "crew_ctx_lowmorale"
+  | "crew_ctx_passenger" | "crew_ctx_quiet"
+  // 0.8.0 — player-initiated hail replies, keyed by disposition.
+  | "hail_greet_friendly" | "hail_greet_neutral" | "hail_greet_hostile"
+  | "hail_tip" | "hail_fuel_yes" | "hail_fuel_no"
+  | "hail_threat_yield" | "hail_threat_refuse" | "hail_apology_ok" | "hail_apology_no"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1188,6 +1204,166 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{station}: Requesting more Titanium at your convenience, Captain.",
     "{station}: A pirate scout sniffed the perimeter. Waved off.",
   ],
+
+  // 0.8.0 — Context-sensitive crew barks. tickCrewIdle() inspects ship
+  // state and picks one of these buckets before falling back to the
+  // per-role idle tables, so the crew comments on what's happening now.
+  crew_ctx_lowfuel: [
+    "Fuel's at {fuel}%, Captain. I'd like to see a station before it's a rounding error.",
+    "We're burning reserve now. {fuel}% and dropping.",
+    "At {fuel}% I start doing the mental math about walking home.",
+    "Tank reads {fuel}%. Suggest we stop admiring the scenery.",
+    "Reactor's thirsty. {fuel}% left and no pumps out here.",
+    "Every burn from here is a choice, boss. {fuel}% in the tank.",
+    "I've plotted the nearest fuel. It's further than {fuel}% likes.",
+    "If we scoop a star it had better be soon. {fuel}%.",
+  ],
+  crew_ctx_lowhull: [
+    "Hull's at {hull}%. I can hear the frame complaining from here.",
+    "{hull}% plating. One more solid hit and we're breathing vacuum.",
+    "Patch kits are out. Hull {hull}% and holding — barely.",
+    "Captain, {hull}% hull. Dock or we die tired.",
+    "There's a crack in section three you could post a letter through.",
+    "I've stopped counting hull alarms. {hull}%, if you're curious.",
+    "Structural integrity {hull}%. That's not a number, that's a warning.",
+  ],
+  crew_ctx_lowshield: [
+    "Shields at {shield}%. Emitters need a minute to catch their breath.",
+    "Shield grid's thin — {shield}%. Don't take the next hit for me.",
+    "{shield}% shielding. Recommend we disengage and let it cycle.",
+    "Capacitors are sulking. {shield}% and slow to climb.",
+  ],
+  crew_ctx_cargofull: [
+    "Hold's full at {cargo}%. We're hauling, not collecting.",
+    "No room left, Captain. {cargo}% and I'm stacking crates in the corridor.",
+    "Cargo's maxed. Anything else we find, we admire and leave.",
+    "{cargo}% capacity. Sell something before the deck plates buckle.",
+    "I can't fit another canister without jettisoning your chair.",
+  ],
+  crew_ctx_combat: [
+    "{nearest} is on us. Orders, Captain?",
+    "Contact hot — {nearest}. Weapons free when you are.",
+    "That's {nearest} closing. I'd rather not find out what they want.",
+    "Hostile in the pocket. Hull {hull}%, shields {shield}%.",
+    "Brace up. {nearest} isn't here to trade recipes.",
+    "Firing solution's yours whenever you'd like it, boss.",
+    "{nearest} again. Some people just can't take a hint.",
+  ],
+  crew_ctx_deepspace: [
+    "Nothing out here but us and the dark. Long way from anywhere.",
+    "Deep space. No beacons, no traffic, no help. Just so we're clear.",
+    "Sensors are empty in every direction. It's peaceful. It's also awful.",
+    "This far out, the nearest rescue is a rumor.",
+    "I like the quiet. I don't like what the quiet means.",
+    "Charts stop being useful about here, {cmdr}.",
+  ],
+  crew_ctx_broke: [
+    "Ledger says {credits}cr. That's not a balance, that's a punchline.",
+    "We're down to {credits}cr. Payday might be optimistic.",
+    "At {credits}cr I'm rationing the good coffee.",
+    "Books are thin, Captain. {credits}cr and rising costs.",
+    "Might be time for honest work. Or the other kind.",
+  ],
+  crew_ctx_rich: [
+    "{credits}cr in the account. I've never seen the ledger this healthy.",
+    "We're properly solvent for once. {credits}cr.",
+    "With {credits}cr banked, maybe we finally refit the drive.",
+    "Treasury's fat, boss. Don't let it make you brave.",
+  ],
+  crew_ctx_contraband: [
+    "Reminder: what's in the aft hold does not survive a customs scan.",
+    "We're carrying flagged cargo. Suggest we avoid lawful docks.",
+    "I've stopped reading the manifest. Plausible deniability.",
+    "If a patrol hails us, let me do the talking.",
+    "Restricted goods aboard. Fly boring, look boring.",
+  ],
+  crew_ctx_nearstar: [
+    "Radiation's climbing. That star's closer than the plot suggests.",
+    "Hull temp is up. Lovely view, terrible neighborhood.",
+    "Scoop range if you want it, Captain — mind the flares.",
+    "Photosphere's throwing a tantrum. Keep some distance.",
+  ],
+  crew_ctx_mission: [
+    "Contract's still open. Clock doesn't care about scenery.",
+    "Objective's logged and waiting, Captain.",
+    "We're being paid for a job. Just saying it out loud.",
+    "Whenever you're ready to finish the contract, I'm ready too.",
+  ],
+  crew_ctx_lowmorale: [
+    "Mess hall's quiet lately. Not the good kind of quiet.",
+    "People are counting wages instead of stars, boss.",
+    "Morale's low enough that I've heard the word 'transfer'.",
+    "Fix the pay or fix the mood. Either works.",
+  ],
+  crew_ctx_passenger: [
+    "Our guest has opinions about the coffee. And the seats. And us.",
+    "Passenger's asking again how long the trip takes.",
+    "Berth's occupied. Try not to fly like we're being shot at.",
+    "Our fare is watching you steer. No pressure.",
+  ],
+  crew_ctx_quiet: [
+    "Sector's calm. I'll take calm.",
+    "All boards green, {cmdr}. Rare and suspicious.",
+    "Nothing to report. Enjoying that while it lasts.",
+    "Systems nominal. Coffee's terrible. Situation normal.",
+  ],
+
+  // 0.8.0 — Hail replies. Chosen by the target's disposition toward the
+  // player (faction + reputation), then filled with the usual context.
+  hail_greet_friendly: [
+    "{speaker} here. Good to hear a clean transponder, {cmdr}. Fly safe.",
+    "Reading you, {cmdr}. Lanes are clear ahead — mostly.",
+    "Always a pleasure. Anything you need out here, ask.",
+    "{cmdr}! Heard about you at the last dock. Good things, for once.",
+  ],
+  hail_greet_neutral: [
+    "{speaker}. State your business or clear the channel.",
+    "Acknowledged. We're hauling, not chatting.",
+    "Channel's open. Keep it short.",
+    "You're the third hail this shift. Make it worth it.",
+  ],
+  hail_greet_hostile: [
+    "You've got a lot of nerve opening a channel, {cmdr}.",
+    "Talking won't unload our guns.",
+    "Save the pleasantries for whoever scrapes you off the rock.",
+    "We know that hull. We're already firing solutions.",
+  ],
+  hail_tip: [
+    "Word is {target} pays over the odds this rotation. Take it or leave it.",
+    "Traffic control says the lanes near {sector} are thick with raiders.",
+    "If you're buying, buy before the market day rolls. That's all I'll say.",
+    "Heard a hauler got fat on relics out of {sector}. Heard he got shot too.",
+  ],
+  hail_fuel_yes: [
+    "Transferring fuel now, {cmdr}. Pay it forward.",
+    "We can spare some. Nobody should die dry out here.",
+    "Cracking the line. Don't make a habit of running empty.",
+  ],
+  hail_fuel_no: [
+    "We're tight ourselves. Sorry, {cmdr}.",
+    "Not for you. Not at that reputation.",
+    "Negative. Try a station — they take credits, not charm.",
+  ],
+  hail_threat_yield: [
+    "Easy! Easy. We're breaking off — don't shoot.",
+    "Not worth it. Disengaging.",
+    "Alright, you've made your point. We're gone.",
+  ],
+  hail_threat_refuse: [
+    "Bold, from a hull that scans like {hull}% plating.",
+    "You'll need more than a voice, {cmdr}.",
+    "Threats are cheap. Come collect.",
+  ],
+  hail_apology_ok: [
+    "Restitution logged. Consider the incident closed — this once.",
+    "Credits received. Your file gets a note, not a warrant.",
+    "Fine paid. Fly clean, {cmdr}, we're watching.",
+  ],
+  hail_apology_no: [
+    "You can't pay your way out of that one.",
+    "Not enough credits, not enough contrition.",
+    "Save it for the magistrate.",
+  ],
 };
 
 interface ChatterCtx {
@@ -1798,6 +1974,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   questLog: "u",         // open the toggle-able Quest Log popup
   pinRep: "r",           // toggle the compact reputation panel
   characterSheet: "c",   // open the full Character Sheet overlay
+  hail: "h",             // 0.8.0 — open a comms channel to the current target
 };
 
 // User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
@@ -1805,6 +1982,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
 // `mission` is intentionally omitted — it aliases `questLog` and only the
 // latter is actually consumed by the input handlers.
 const KEYBIND_ACTIONS: { id: string; label: string }[] = [
+  { id: "hail",         label: "Hail Target" },
   { id: "throttleUp",   label: "Throttle Up" },
   { id: "throttleDown", label: "Throttle Down" },
   { id: "yawLeft",      label: "Yaw Left" },
@@ -2867,6 +3045,11 @@ const MODULE_CATALOG = [
   { id: "engine-efficiency",  name: "Flux Regulator",     price: 1700, desc: "-25% fuel burn" },
   { id: "overdrive-coil",     name: "Overdrive Coil",     price: 2600, desc: "+25% top speed, +15% burn" },
   { id: "solar-drive",        name: "Solar Drive",        price: 900,  desc: "-15% burn; flies dry at ≤20% throttle" },
+  // 0.8.0 — smuggling counterplay. Shielded Hold hides a slice of each
+  // contraband stack from a customs scan; Bribe Encoder makes the bribe
+  // option at customs far likelier to land.
+  { id: "shielded-hold",      name: "Shielded Hold",      price: 3200, desc: "hides 8 units/good from customs" },
+  { id: "bribe-encoder",      name: "Bribe Encoder",      price: 2100, desc: "customs bribes far likelier to work" },
   { id: "station-core",       name: "Station Core",       price: 250000, desc: "deploy your own station (Fed Gate only)" },
 ];
 
@@ -2881,6 +3064,34 @@ const PLAYER_STATION_TIERS: { tier: number; needs: Record<string, number>; unloc
   { tier: 4, needs: { titanium: 80, robotics: 20, uranium: 10 }, unlocks: "Recruits + missions (500cr/dock)", incomePerDock: 500 },
   { tier: 5, needs: { antimatter: 5, ai_cores: 10, quantum_drives: 5 }, unlocks: "Defense drones (1000cr/dock)", incomePerDock: 1000 },
 ];
+
+// 0.8.0 — Station income scaling. Treasury no longer only ticks on docks:
+// a station earns credits per minute of real play, scaled by tier, by how
+// much surplus material you've fed it beyond its tier requirement, and by
+// a hired Quartermaster's logistics grade. Treasury is capped so a station
+// left alone for an hour doesn't print a fortune — collect it by docking.
+type OwnedStation = NonNullable<PlayerState["ownedStations"]>[number];
+
+function stationSurplusBonus(s: OwnedStation): number {
+  // Total units delivered vs. what the current tier needed. Every 100
+  // surplus units adds 10% throughput, capped at +100%.
+  const need = PLAYER_STATION_TIERS
+    .filter((r) => r.tier <= s.tier)
+    .reduce((a, r) => a + Object.values(r.needs).reduce((x, y) => x + y, 0), 0);
+  const delivered = Object.values(s.delivered ?? {}).reduce((a, b) => a + b, 0);
+  return Math.max(0, Math.min(1, (delivered - need) / 1000));
+}
+
+function stationIncomePerMinute(p: PlayerState, s: OwnedStation): number {
+  const row = PLAYER_STATION_TIERS.find((x) => x.tier === s.tier);
+  if (!row || row.incomePerDock <= 0) return 0;
+  const qm = 1 + roleLevel(p, "quartermaster") * 0.03;
+  return Math.round(row.incomePerDock * 0.5 * (1 + stationSurplusBonus(s)) * qm);
+}
+
+function stationTreasuryCap(s: OwnedStation): number {
+  return Math.max(500, s.tier * s.tier * 2000);
+}
 
 // 0.7.1 — Commodity catalog. Every entry is a valid cargo key (single
 // slot per unit, matching the existing 'ore' convention). Classes drive
@@ -3680,6 +3891,8 @@ type Screen =
   | "howto"
   | "quest-log"
   | "mission-offer"
+  | "customs"
+  | "hail"
   | "character";
 
 
@@ -4929,42 +5142,338 @@ export class Voidwake {
     return hint;
   }
 
-  // 0.7.9 — Customs scan. Lawful docks inspect the hold: banned cargo is
-  // confiscated, fined at half its local value, and costs reputation.
+  // 0.7.9 / 0.8.0 — Customs scan. Lawful docks inspect the hold. A
+  // Shielded Hold conceals a slice of every banned stack; whatever is left
+  // showing opens the interactive customs screen (surrender / bribe /
+  // refuse) instead of auto-seizing.
   customsScan(t: Entity) {
     const p = this.player; if (!p) return;
     const faction = t.faction ?? "guild";
     const bans = factionBans(faction);
     if (!bans.size) return;
     const stock = this.getStock(t.id);
-    let seized = 0, fine = 0;
-    const names: string[] = [];
+    // Shielded Hold: each fitted unit conceals 8 units of each banned good.
+    const conceal = p.ship.modules.filter((m) => m === "shielded-hold").length * 8;
+    let seized = 0, fine = 0, hidden = 0;
+    const found: { id: string; name: string; qty: number; unit: number }[] = [];
     for (const meta of COMMODITIES) {
       if (!bans.has(meta.legality)) continue;
       const have = p.cargo[meta.id] ?? 0;
       if (have <= 0) continue;
+      const shown = Math.max(0, have - conceal);
+      hidden += have - shown;
+      if (shown <= 0) continue;
       const row = stock.commodities.find((c) => c.id === meta.id);
       const unit = row?.sell ?? meta.base;
-      seized += have; fine += Math.round(have * unit * 0.5);
-      names.push(`${have} ${meta.name}`);
-      delete p.cargo[meta.id];
+      seized += shown; fine += Math.round(shown * unit * 0.5);
+      found.push({ id: meta.id, name: meta.name, qty: shown, unit });
     }
-    if (seized <= 0) return;
-    fine = Math.min(fine, Math.max(0, p.credits));
-    p.credits -= fine;
-    adjustRep(p, faction, -Math.min(10, 2 + Math.floor(seized / 5)));
-    adjustRep(p, "pirate", 2);
-    this.pushLog(`Customs seized ${names.join(", ")}. Fined ${fine}cr.`);
-    this.pushChatter(`Customs ${t.name}`,
-      "Hold scan flagged prohibited cargo. Contraband impounded, fine levied. Fly clean next time.",
-      "#ff8a8a");
+    if (seized <= 0) {
+      if (hidden > 0) {
+        this.pushChatter(`Customs ${t.name}`,
+          "Scan complete. Hold reads clean. Welcome to the station.", "#9fe");
+      }
+      return;
+    }
+    // Bribe price scales with the fine; the Encoder makes it stick.
+    const encoder = p.ship.modules.includes("bribe-encoder");
+    const qm = roleLevel(p, "quartermaster");
+    const rep = p.reputation?.[faction] ?? 0;
+    let odds = (encoder ? 0.75 : 0.30) + qm * 0.02 + Math.max(-0.2, Math.min(0.15, rep * 0.004));
+    odds = Math.max(0.05, Math.min(0.95, odds));
+    this._customs = {
+      stationId: t.id, station: t.name, faction,
+      goods: found, seized, fine, hidden,
+      bribe: Math.max(150, Math.round(fine * 0.8)), odds,
+    };
+    this.menuCursor = 0;
+    this.screen = "customs";
+    dispatchHook("onCustomsScan", {
+      station: t.name, stationId: t.id, faction,
+      seized, hidden, fine, bribe: this._customs.bribe,
+    });
     this.sfx("warning");
   }
+
+  // Interactive customs resolution (0.8.0).
+  _customs?: {
+    stationId: number; station: string; faction: string;
+    goods: { id: string; name: string; qty: number; unit: number }[];
+    seized: number; fine: number; hidden: number; bribe: number; odds: number;
+  };
+
+  // Confiscate the flagged goods, levy the fine, take the reputation hit.
+  private customsSurrender() {
+    const p = this.player, c = this._customs; if (!p || !c) return;
+    for (const g of c.goods) {
+      const have = p.cargo[g.id] ?? 0;
+      const left = Math.max(0, have - g.qty);
+      if (left > 0) p.cargo[g.id] = left; else delete p.cargo[g.id];
+    }
+    const fine = Math.min(c.fine, Math.max(0, p.credits));
+    p.credits -= fine;
+    adjustRep(p, c.faction, -Math.min(10, 2 + Math.floor(c.seized / 5)));
+    adjustRep(p, "pirate", 2);
+    this.pushLog(`Customs seized ${c.goods.map((g) => `${g.qty} ${g.name}`).join(", ")}. Fined ${fine}cr.`);
+    this.pushChatter(`Customs ${c.station}`,
+      "Contraband impounded, fine levied. Fly clean next time.", "#ff8a8a");
+    this._customs = undefined;
+    this.screen = "station";
+  }
+
+  updateCustoms() {
+    const c = this._customs;
+    if (!c) { this.screen = "station"; return; }
+    const p = this.player; if (!p) { this.screen = "station"; return; }
+    const canBribe = p.credits >= c.bribe;
+    this.menuNav(3);
+    if (this.input.consume("enter")) {
+      if (this.menuCursor === 0) { this.customsSurrender(); return; }
+      if (this.menuCursor === 1) {
+        if (!canBribe) { this.pushLog("Not enough credits for that."); return; }
+        p.credits -= c.bribe;
+        if (Math.random() < c.odds) {
+          this.pushLog(`Bribe accepted. ${c.bribe}cr changed hands; hold stays sealed.`);
+          this.pushChatter(`Customs ${c.station}`,
+            "Manifest looks in order. Move along, Captain.", "#ffd28a");
+          adjustRep(p, "pirate", 1);
+          this._customs = undefined;
+          this.screen = "station";
+        } else {
+          this.pushLog("Bribe refused — attempted bribery logged.");
+          adjustRep(p, c.faction, -6);
+          c.fine = Math.round(c.fine * 1.5);
+          this.customsSurrender();
+        }
+        return;
+      }
+      // Refuse the search: keep the cargo, undock immediately, wear the
+      // reputation hit and a patrol alert.
+      adjustRep(p, c.faction, -12);
+      adjustRep(p, "federation", -4);
+      adjustRep(p, "pirate", 4);
+      this.pushLog("You broke the clamps and ran the scan. Patrols have been notified.");
+      this.pushChatter(`Customs ${c.station}`,
+        "Vessel fleeing inspection! Patrol, we have a runner.", "#ff8a8a");
+      // Witnesses light up: nearby lawful ships flag the player as a
+      // fugitive, which is exactly the condition patrol AI hunts on.
+      const now = performance.now() / 1000;
+      for (const x of this.entities) {
+        if (x.kind !== "friendly" && x.kind !== "neutral") continue;
+        if (V.len(V.sub(x.pos, p.pos)) > 5000) continue;
+        x.hostileUntil = now + 45;
+      }
+      this._customs = undefined;
+      this.dockedStationId = null;
+      this.screen = "playing";
+    }
+  }
+
+  renderCustoms(g: Cell[][]) {
+    const c = this._customs, p = this.player;
+    if (!c || !p) return;
+    putText(g, 4, 1, `[ CUSTOMS INSPECTION — ${c.station.toUpperCase()} ]`, "#ff8a8a");
+    putText(g, 4, 3, `${c.faction.toUpperCase()} officers flagged prohibited cargo:`, "#9fe");
+    let row = 4;
+    for (const item of c.goods) {
+      putText(g, 6, row++, `${item.qty} × ${item.name}  (valued ${item.qty * item.unit}cr)`, "#ffd28a");
+    }
+    if (c.hidden > 0) {
+      putText(g, 6, row++, `${c.hidden} units stayed hidden in the shielded hold.`, "#7CFC00");
+    }
+    row += 1;
+    const opts = [
+      `Surrender cargo — pay ${c.fine}cr fine, lose standing`,
+      `Offer a bribe — ${c.bribe}cr (${Math.round(c.odds * 100)}% chance)`,
+      `Refuse the search — undock hot, patrols alerted`,
+    ];
+    for (let i = 0; i < opts.length; i++) {
+      const sel = i === this.menuCursor;
+      const affordable = i !== 1 || p.credits >= c.bribe;
+      putText(g, 4, row + i * 2, `${sel ? "▶" : " "} ${opts[i]}`,
+              !affordable ? "#666" : sel ? "#ffe066" : "#cf6");
+    }
+    putText(g, 4, row + 7, `Credits: ${p.credits}cr    ENTER select`, "#9fe");
+  }
+
+  // --- 0.8.0 — Player-to-NPC comms ----------------------------------------
+  // H opens a channel to the current target (ships, stations and colonies
+  // within 4000u; aliens don't answer). Options are filtered by what the
+  // target could plausibly do for you, and replies are keyed to their
+  // disposition: faction reputation plus whether they're currently hostile.
+  _hail?: { id: number; options: { id: string; label: string }[]; log: string[] };
+
+  hailDisposition(t: Entity): "friendly" | "neutral" | "hostile" {
+    const p = this.player;
+    if (t.kind === "hostile") return "hostile";
+    const rep = p?.reputation?.[t.faction ?? "guild"] ?? 0;
+    if (rep <= -20) return "hostile";
+    if (rep >= 20 || t.kind === "friendly") return "friendly";
+    return "neutral";
+  }
+
+  openHail() {
+    const p = this.player; if (!p) return;
+    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    if (!t) { this.pushLog("No target to hail — press T first."); return; }
+    if (t.kind === "thargoid" || t.kind === "ufo") { this.pushLog("The alien craft answers only in static."); return; }
+    const hailable = t.kind === "hostile" || t.kind === "friendly" || t.kind === "neutral" || t.kind === "station";
+    if (!hailable) { this.pushLog(`${t.name} has no comms transponder.`); return; }
+    const d = V.len(V.sub(t.pos, p.pos));
+    if (d > 4000) { this.pushLog(`${t.name} is out of comms range (${Math.round(d)}u).`); return; }
+    const disp = this.hailDisposition(t);
+    const options: { id: string; label: string }[] = [{ id: "greet", label: "Open with a greeting" }];
+    options.push({ id: "tip", label: "Ask for local news and market word" });
+    if (disp !== "hostile") options.push({ id: "fuel", label: "Request an emergency fuel transfer" });
+    if (disp === "hostile") options.push({ id: "threat", label: "Warn them off — break contact or be fired on" });
+    if (t.faction === "patrol" || t.faction === "federation") {
+      options.push({ id: "apology", label: "Offer restitution for prior incidents (500cr)" });
+    }
+    options.push({ id: "close", label: "Close the channel" });
+    this._hail = { id: t.id, options, log: [] };
+    this.menuCursor = 0;
+    this.screen = "hail";
+    this.sfx("scan");
+  }
+
+  private hailReply(t: Entity, kind: ChatterKind) {
+    const line = pickLine(kind, this.chatterCtx(t, { target: t }));
+    this._hail?.log.push(`${t.name}: ${line}`);
+    this.pushChatter(t.name, line, t.kind === "hostile" ? "#ff8a8a" : "#c2c2ff", "external");
+  }
+
+  updateHail() {
+    const p = this.player, h = this._hail;
+    if (!p || !h) { this.screen = "playing"; return; }
+    const t = this.entities.find((e) => e.id === h.id);
+    if (!t) { this.pushLog("Channel lost."); this._hail = undefined; this.screen = "playing"; return; }
+    this.menuNav(h.options.length);
+    if (!this.input.consume("enter")) return;
+    const choice = h.options[this.menuCursor].id;
+    const disp = this.hailDisposition(t);
+    switch (choice) {
+      case "greet": {
+        h.log.push(`You: hail ${t.name}, identifying as ${p.char.name}.`);
+        this.hailReply(t, disp === "friendly" ? "hail_greet_friendly"
+          : disp === "hostile" ? "hail_greet_hostile" : "hail_greet_neutral");
+        if (disp === "neutral" && Math.random() < 0.25) adjustRep(p, t.faction ?? "guild", 1);
+        break;
+      }
+      case "tip": {
+        h.log.push("You: asking for local traffic and market word.");
+        this.hailReply(t, "hail_tip");
+        break;
+      }
+      case "fuel": {
+        h.log.push("You: requesting an emergency fuel transfer.");
+        const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
+        const ok = disp === "friendly" || (disp === "neutral" && rep >= 0 && Math.random() < 0.45);
+        if (ok && p.ship.fuel < p.ship.fuelMax) {
+          const amt = Math.min(25, p.ship.fuelMax - p.ship.fuel);
+          p.ship.fuel += amt;
+          this.hailReply(t, "hail_fuel_yes");
+          this.pushLog(`${t.name} transferred ${Math.round(amt)} fuel.`);
+        } else {
+          this.hailReply(t, "hail_fuel_no");
+        }
+        break;
+      }
+      case "threat": {
+        h.log.push("You: warning them off.");
+        const kills = p.kills ?? 0;
+        const strength = kills * 0.03 + (p.ship.hull / Math.max(1, p.ship.hullMax)) * 0.25
+          - Math.max(0, (p.reputation?.pirate ?? 0)) * 0.002;
+        if (Math.random() < Math.min(0.7, 0.15 + strength)) {
+          this.hailReply(t, "hail_threat_yield");
+          t.state = "flee";
+          t.hostileUntil = undefined;
+          this.pushLog(`${t.name} breaks off.`);
+        } else {
+          this.hailReply(t, "hail_threat_refuse");
+        }
+        break;
+      }
+      case "apology": {
+        h.log.push("You: offering restitution.");
+        const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
+        if (p.credits >= 500 && rep > -40) {
+          p.credits -= 500;
+          adjustRep(p, t.faction ?? "federation", 8);
+          this.hailReply(t, "hail_apology_ok");
+        } else {
+          this.hailReply(t, "hail_apology_no");
+        }
+        break;
+      }
+      default:
+        this._hail = undefined;
+        this.screen = "playing";
+        return;
+    }
+    dispatchHook("onPlayerHail", { targetId: t.id, target: t.name, option: choice, disposition: disp });
+  }
+
+  renderHail(g: Cell[][]) {
+    const h = this._hail, p = this.player;
+    if (!h || !p) return;
+    const t = this.entities.find((e) => e.id === h.id);
+    putText(g, 4, 1, `[ COMMS CHANNEL — ${(t?.name ?? "signal lost").toUpperCase()} ]   ESC close`, "#9fe");
+    if (t) {
+      const disp = this.hailDisposition(t);
+      const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
+      putText(g, 4, 2, `${(t.faction ?? "independent").toUpperCase()}  ·  disposition ${disp}  ·  standing ${repLabel(rep)}`,
+              disp === "hostile" ? "#ff8a8a" : disp === "friendly" ? "#7CFC00" : "#ffd28a");
+    }
+    let row = 4;
+    for (const line of h.log.slice(-6)) {
+      putText(g, 4, row++, line.slice(0, Math.max(10, g[0].length - 8)),
+              line.startsWith("You:") ? "#8fd8ff" : "#c2c2ff");
+    }
+    row += 1;
+    for (let i = 0; i < h.options.length; i++) {
+      const sel = i === this.menuCursor;
+      putText(g, 4, row + i, `${sel ? "▶" : " "} ${h.options[i].label}`, sel ? "#ffe066" : "#cf6");
+    }
+  }
+
+
 
   // 0.7.9 — NPC trade AI. Every ~12s an off-screen hauler moves a batch of
   // one commodity from the cheapest market to the dearest among the markets
   // the player has generated. Stock and prices converge as a result, so
   // fat arbitrage spreads decay if you sit on them instead of running them.
+  // 0.8.0 — Player-station income accrues in real time, scaled by tier and
+  // surplus supply, capped per station. Every ~2 minutes an owned station
+  // files a short Comms report so the income is visible, not invisible.
+  private _stationIncomeAt = 0;
+  private _stationReportAt = 0;
+  tickStationIncome(dt: number) {
+    const p = this.player; if (!p?.ownedStations?.length) return;
+    this._stationIncomeAt += dt;
+    if (this._stationIncomeAt < 10) return;
+    const minutes = this._stationIncomeAt / 60;
+    this._stationIncomeAt = 0;
+    for (const s of p.ownedStations) {
+      const rate = stationIncomePerMinute(p, s);
+      if (rate <= 0) continue;
+      s.treasury = Math.min(stationTreasuryCap(s), s.treasury + Math.round(rate * minutes));
+    }
+    this._stationReportAt += 10;
+    if (this._stationReportAt >= 120) {
+      this._stationReportAt = 0;
+      const s = p.ownedStations[Math.floor(Math.random() * p.ownedStations.length)];
+      const full = s.treasury >= stationTreasuryCap(s);
+      this.pushChatter(s.name,
+        full
+          ? `Vaults are full at ${s.treasury}cr, Captain. Nothing more accrues until you collect.`
+          // Templates carry a "{station}: " prefix for legacy log use;
+          // the Comms speaker column already names the station.
+          : pickLine("player_station_report", this.chatterCtx(undefined, { a: s.name }))
+              .replace(/^:\s*/, ""),
+        "#7CFC00", "external");
+    }
+  }
+
   private _tradeSimAt = 0;
   tickTradeSim(dt: number) {
     this._tradeSimAt -= dt;
@@ -5337,6 +5846,14 @@ export class Voidwake {
       } else if (this.screen === "character") {
         this.screen = this._characterReturn;
         this.menuCursor = 0;
+      } else if (this.screen === "hail") {
+        // Closing the channel is always allowed.
+        this._hail = undefined;
+        this.screen = "playing";
+        this.menuCursor = 0;
+      } else if (this.screen === "customs") {
+        // You cannot walk away from an inspection — ESC surrenders.
+        this.customsSurrender();
       } else if (this.screen === "mission-offer") {
         // ESC on the contract board = decline all.
         this._offerCandidates = [];
@@ -5363,6 +5880,8 @@ export class Voidwake {
       case "howto": this.updateHowto(); break;
       case "quest-log": this.updateQuestLog(); break;
       case "mission-offer": this.updateMissionOffer(); break;
+      case "customs": this.updateCustoms(); break;
+      case "hail": this.updateHail(); break;
       case "character": this.updateCharacterSheet(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
@@ -6181,6 +6700,11 @@ export class Voidwake {
       this.menuCursor = 0;
       return;
     }
+    // 0.8.0 — hail the current target (ships, stations, colonies).
+    if (this.input.consume(k.hail)) {
+      this.openHail();
+      return;
+    }
     // Toggle the pinned quest tracker.
     if (this.input.consume(k.pinQuest)) {
       this.questPinned = !this.questPinned;
@@ -6220,6 +6744,7 @@ export class Voidwake {
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickTradeSim(dt);
+    this.tickStationIncome(dt);
     // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
     // player when the label ticks over. Consume here so any call site
     // (kills, mining, missions) gets a unified fanfare.
@@ -6930,12 +7455,13 @@ export class Voidwake {
       }
     }
     // Passive income accrual for the player's OTHER stations while they
-    // dock elsewhere — represents NPCs docking at their unattended holdings.
+    // dock elsewhere — a docking bonus on top of the per-minute accrual
+    // handled by tickStationIncome().
     if (p.ownedStations) {
       for (const s of p.ownedStations) {
         if (s.entityId === t.id) continue;
         const tierRow = PLAYER_STATION_TIERS.find((x) => x.tier === s.tier);
-        if (tierRow) s.treasury += tierRow.incomePerDock;
+        if (tierRow) s.treasury = Math.min(stationTreasuryCap(s), s.treasury + tierRow.incomePerDock);
       }
     }
 
@@ -7535,12 +8061,63 @@ export class Voidwake {
     const roles: CrewRole[] = [];
     if (p.crew) for (const c of p.crew) roles.push(c.role);
     if (roles.length === 0) return;
-    const r = roles[Math.floor(Math.random() * roles.length)];
+    // 0.8.0 — situational barks. Gather every context bucket whose
+    // condition currently holds, each with the roles most likely to raise
+    // it; if any fire, ~70% of barks come from context rather than the
+    // generic per-role idle table.
+    const ctxOpts = this.crewContextBuckets(p);
+    let r: CrewRole;
+    let kind: ChatterKind;
+    if (ctxOpts.length && Math.random() < 0.7) {
+      const pick = ctxOpts[Math.floor(Math.random() * ctxOpts.length)];
+      const eligible = pick.roles.filter((x) => roles.includes(x));
+      r = eligible.length
+        ? eligible[Math.floor(Math.random() * eligible.length)]
+        : roles[Math.floor(Math.random() * roles.length)];
+      kind = pick.kind;
+    } else {
+      r = roles[Math.floor(Math.random() * roles.length)];
+      kind = (r + "_idle") as ChatterKind;
+    }
     const c = getCrew(p, r);
     if (!c) return;
-    const kind: ChatterKind = (r + "_idle") as ChatterKind;
     this.pushChatter(`${CREW_ROLE_INFO[r].title} ${c.name.split(" ")[0]}`,
       pickLine(kind, this.chatterCtx()), CREW_ROLE_INFO[r].color);
+  }
+
+  // Which situational chatter buckets apply right now, and which crew
+  // roles would plausibly be the one to say it.
+  crewContextBuckets(p: PlayerState): { kind: ChatterKind; roles: CrewRole[] }[] {
+    const out: { kind: ChatterKind; roles: CrewRole[] }[] = [];
+    const fuelPct = p.ship.fuel / Math.max(1, p.ship.fuelMax);
+    const hullPct = p.ship.hull / Math.max(1, p.ship.hullMax);
+    const shieldPct = p.ship.shield / Math.max(1, p.ship.shieldMax);
+    const cargoPct = cargoTotal(p) / Math.max(1, effectiveCargoMax(p));
+    if (fuelPct < 0.25) out.push({ kind: "crew_ctx_lowfuel", roles: ["engineer", "navigator", "pilot"] });
+    if (hullPct < 0.5) out.push({ kind: "crew_ctx_lowhull", roles: ["engineer", "tactical"] });
+    if (shieldPct < 0.35) out.push({ kind: "crew_ctx_lowshield", roles: ["engineer", "tactical"] });
+    if (cargoPct > 0.92) out.push({ kind: "crew_ctx_cargofull", roles: ["quartermaster", "merchant"] });
+    // Hostile within scanner range?
+    const hostile = this.entities.some((e) =>
+      e.kind === "hostile" && V.len(V.sub(e.pos, p.pos)) < 2500);
+    if (hostile) out.push({ kind: "crew_ctx_combat", roles: ["tactical", "gunner", "pilot"] });
+    if (V.len(p.pos) > WORLD_RADIUS * 1.2) out.push({ kind: "crew_ctx_deepspace", roles: ["navigator", "pilot"] });
+    if (p.credits < 400) out.push({ kind: "crew_ctx_broke", roles: ["merchant", "quartermaster"] });
+    if (p.credits > 250000) out.push({ kind: "crew_ctx_rich", roles: ["merchant", "quartermaster"] });
+    const carryingBanned = COMMODITIES.some((m) =>
+      (m.legality === "grey" || m.legality === "restricted") && (p.cargo[m.id] ?? 0) > 0);
+    if (carryingBanned) out.push({ kind: "crew_ctx_contraband", roles: ["quartermaster", "merchant", "tactical"] });
+    const star = this.entities.find((e) => e.kind === "star" && V.len(V.sub(e.pos, p.pos)) < 4000);
+    if (star) out.push({ kind: "crew_ctx_nearstar", roles: ["engineer", "navigator"] });
+    if (p.mission && !p.mission.done) out.push({ kind: "crew_ctx_mission", roles: ["navigator", "recruiter", "tactical"] });
+    if (p.crew?.some((c) => (c.morale ?? 100) < 45)) {
+      out.push({ kind: "crew_ctx_lowmorale", roles: ["recruiter", "quartermaster"] });
+    }
+    if (p.mission?.kind === "passenger" && !p.mission.done) {
+      out.push({ kind: "crew_ctx_passenger", roles: ["quartermaster", "recruiter", "pilot"] });
+    }
+    if (!out.length && !hostile) out.push({ kind: "crew_ctx_quiet", roles: ["navigator", "pilot", "engineer"] });
+    return out;
   }
 
   // Occasional inter-NPC exchange — pick two nearby non-alien speakers
@@ -9780,6 +10357,8 @@ export class Voidwake {
       case "howto": this.renderHowto(grid); break;
       case "quest-log": this.renderQuestLog(grid); break;
       case "mission-offer": this.renderMissionOffer(grid); break;
+      case "customs": this.renderCustoms(grid); break;
+      case "hail": this.renderHail(grid); break;
       case "character": this.renderCharacterSheet(grid); break;
     }
 
