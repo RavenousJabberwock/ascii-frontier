@@ -1199,6 +1199,166 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{station}: Requesting more Titanium at your convenience, Captain.",
     "{station}: A pirate scout sniffed the perimeter. Waved off.",
   ],
+
+  // 0.8.0 — Context-sensitive crew barks. tickCrewIdle() inspects ship
+  // state and picks one of these buckets before falling back to the
+  // per-role idle tables, so the crew comments on what's happening now.
+  crew_ctx_lowfuel: [
+    "Fuel's at {fuel}%, Captain. I'd like to see a station before it's a rounding error.",
+    "We're burning reserve now. {fuel}% and dropping.",
+    "At {fuel}% I start doing the mental math about walking home.",
+    "Tank reads {fuel}%. Suggest we stop admiring the scenery.",
+    "Reactor's thirsty. {fuel}% left and no pumps out here.",
+    "Every burn from here is a choice, boss. {fuel}% in the tank.",
+    "I've plotted the nearest fuel. It's further than {fuel}% likes.",
+    "If we scoop a star it had better be soon. {fuel}%.",
+  ],
+  crew_ctx_lowhull: [
+    "Hull's at {hull}%. I can hear the frame complaining from here.",
+    "{hull}% plating. One more solid hit and we're breathing vacuum.",
+    "Patch kits are out. Hull {hull}% and holding — barely.",
+    "Captain, {hull}% hull. Dock or we die tired.",
+    "There's a crack in section three you could post a letter through.",
+    "I've stopped counting hull alarms. {hull}%, if you're curious.",
+    "Structural integrity {hull}%. That's not a number, that's a warning.",
+  ],
+  crew_ctx_lowshield: [
+    "Shields at {shield}%. Emitters need a minute to catch their breath.",
+    "Shield grid's thin — {shield}%. Don't take the next hit for me.",
+    "{shield}% shielding. Recommend we disengage and let it cycle.",
+    "Capacitors are sulking. {shield}% and slow to climb.",
+  ],
+  crew_ctx_cargofull: [
+    "Hold's full at {cargo}%. We're hauling, not collecting.",
+    "No room left, Captain. {cargo}% and I'm stacking crates in the corridor.",
+    "Cargo's maxed. Anything else we find, we admire and leave.",
+    "{cargo}% capacity. Sell something before the deck plates buckle.",
+    "I can't fit another canister without jettisoning your chair.",
+  ],
+  crew_ctx_combat: [
+    "{nearest} is on us. Orders, Captain?",
+    "Contact hot — {nearest}. Weapons free when you are.",
+    "That's {nearest} closing. I'd rather not find out what they want.",
+    "Hostile in the pocket. Hull {hull}%, shields {shield}%.",
+    "Brace up. {nearest} isn't here to trade recipes.",
+    "Firing solution's yours whenever you'd like it, boss.",
+    "{nearest} again. Some people just can't take a hint.",
+  ],
+  crew_ctx_deepspace: [
+    "Nothing out here but us and the dark. Long way from anywhere.",
+    "Deep space. No beacons, no traffic, no help. Just so we're clear.",
+    "Sensors are empty in every direction. It's peaceful. It's also awful.",
+    "This far out, the nearest rescue is a rumor.",
+    "I like the quiet. I don't like what the quiet means.",
+    "Charts stop being useful about here, {cmdr}.",
+  ],
+  crew_ctx_broke: [
+    "Ledger says {credits}cr. That's not a balance, that's a punchline.",
+    "We're down to {credits}cr. Payday might be optimistic.",
+    "At {credits}cr I'm rationing the good coffee.",
+    "Books are thin, Captain. {credits}cr and rising costs.",
+    "Might be time for honest work. Or the other kind.",
+  ],
+  crew_ctx_rich: [
+    "{credits}cr in the account. I've never seen the ledger this healthy.",
+    "We're properly solvent for once. {credits}cr.",
+    "With {credits}cr banked, maybe we finally refit the drive.",
+    "Treasury's fat, boss. Don't let it make you brave.",
+  ],
+  crew_ctx_contraband: [
+    "Reminder: what's in the aft hold does not survive a customs scan.",
+    "We're carrying flagged cargo. Suggest we avoid lawful docks.",
+    "I've stopped reading the manifest. Plausible deniability.",
+    "If a patrol hails us, let me do the talking.",
+    "Restricted goods aboard. Fly boring, look boring.",
+  ],
+  crew_ctx_nearstar: [
+    "Radiation's climbing. That star's closer than the plot suggests.",
+    "Hull temp is up. Lovely view, terrible neighborhood.",
+    "Scoop range if you want it, Captain — mind the flares.",
+    "Photosphere's throwing a tantrum. Keep some distance.",
+  ],
+  crew_ctx_mission: [
+    "Contract's still open. Clock doesn't care about scenery.",
+    "Objective's logged and waiting, Captain.",
+    "We're being paid for a job. Just saying it out loud.",
+    "Whenever you're ready to finish the contract, I'm ready too.",
+  ],
+  crew_ctx_lowmorale: [
+    "Mess hall's quiet lately. Not the good kind of quiet.",
+    "People are counting wages instead of stars, boss.",
+    "Morale's low enough that I've heard the word 'transfer'.",
+    "Fix the pay or fix the mood. Either works.",
+  ],
+  crew_ctx_passenger: [
+    "Our guest has opinions about the coffee. And the seats. And us.",
+    "Passenger's asking again how long the trip takes.",
+    "Berth's occupied. Try not to fly like we're being shot at.",
+    "Our fare is watching you steer. No pressure.",
+  ],
+  crew_ctx_quiet: [
+    "Sector's calm. I'll take calm.",
+    "All boards green, {cmdr}. Rare and suspicious.",
+    "Nothing to report. Enjoying that while it lasts.",
+    "Systems nominal. Coffee's terrible. Situation normal.",
+  ],
+
+  // 0.8.0 — Hail replies. Chosen by the target's disposition toward the
+  // player (faction + reputation), then filled with the usual context.
+  hail_greet_friendly: [
+    "{speaker} here. Good to hear a clean transponder, {cmdr}. Fly safe.",
+    "Reading you, {cmdr}. Lanes are clear ahead — mostly.",
+    "Always a pleasure. Anything you need out here, ask.",
+    "{cmdr}! Heard about you at the last dock. Good things, for once.",
+  ],
+  hail_greet_neutral: [
+    "{speaker}. State your business or clear the channel.",
+    "Acknowledged. We're hauling, not chatting.",
+    "Channel's open. Keep it short.",
+    "You're the third hail this shift. Make it worth it.",
+  ],
+  hail_greet_hostile: [
+    "You've got a lot of nerve opening a channel, {cmdr}.",
+    "Talking won't unload our guns.",
+    "Save the pleasantries for whoever scrapes you off the rock.",
+    "We know that hull. We're already firing solutions.",
+  ],
+  hail_tip: [
+    "Word is {target} pays over the odds this rotation. Take it or leave it.",
+    "Traffic control says the lanes near {sector} are thick with raiders.",
+    "If you're buying, buy before the market day rolls. That's all I'll say.",
+    "Heard a hauler got fat on relics out of {sector}. Heard he got shot too.",
+  ],
+  hail_fuel_yes: [
+    "Transferring fuel now, {cmdr}. Pay it forward.",
+    "We can spare some. Nobody should die dry out here.",
+    "Cracking the line. Don't make a habit of running empty.",
+  ],
+  hail_fuel_no: [
+    "We're tight ourselves. Sorry, {cmdr}.",
+    "Not for you. Not at that reputation.",
+    "Negative. Try a station — they take credits, not charm.",
+  ],
+  hail_threat_yield: [
+    "Easy! Easy. We're breaking off — don't shoot.",
+    "Not worth it. Disengaging.",
+    "Alright, you've made your point. We're gone.",
+  ],
+  hail_threat_refuse: [
+    "Bold, from a hull that scans like {hull}% plating.",
+    "You'll need more than a voice, {cmdr}.",
+    "Threats are cheap. Come collect.",
+  ],
+  hail_apology_ok: [
+    "Restitution logged. Consider the incident closed — this once.",
+    "Credits received. Your file gets a note, not a warrant.",
+    "Fine paid. Fly clean, {cmdr}, we're watching.",
+  ],
+  hail_apology_no: [
+    "You can't pay your way out of that one.",
+    "Not enough credits, not enough contrition.",
+    "Save it for the magistrate.",
+  ],
 };
 
 interface ChatterCtx {
