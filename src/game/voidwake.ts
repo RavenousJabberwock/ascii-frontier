@@ -94,7 +94,10 @@ export type ScriptHookName =
   | "onCommodityTrade"
   | "onPassengerBoard"
   | "onPassengerDeliver"
-  | "onPlayerStationTierUp";
+  | "onPlayerStationTierUp"
+  // 0.8.0 — comms & customs hooks
+  | "onPlayerHail"
+  | "onCustomsScan";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -113,6 +116,8 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPassengerBoard:     [],
   onPassengerDeliver:   [],
   onPlayerStationTierUp:[],
+  onPlayerHail:         [],
+  onCustomsScan:        [],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
@@ -5277,7 +5282,7 @@ export class Voidwake {
     const p = this.player; if (!p) return;
     const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
     if (!t) { this.pushLog("No target to hail — press T first."); return; }
-    if (t.kind === "alien") { this.pushLog("The alien craft answers only in static."); return; }
+    if (t.kind === "thargoid" || t.kind === "ufo") { this.pushLog("The alien craft answers only in static."); return; }
     const hailable = t.kind === "hostile" || t.kind === "friendly" || t.kind === "neutral" || t.kind === "station";
     if (!hailable) { this.pushLog(`${t.name} has no comms transponder.`); return; }
     const d = V.len(V.sub(t.pos, p.pos));
@@ -5314,7 +5319,7 @@ export class Voidwake {
     const disp = this.hailDisposition(t);
     switch (choice) {
       case "greet": {
-        h.log.push(`You: hail ${t.name}, identifying as ${p.name}.`);
+        h.log.push(`You: hail ${t.name}, identifying as ${p.char.name}.`);
         this.hailReply(t, disp === "friendly" ? "hail_greet_friendly"
           : disp === "hostile" ? "hail_greet_hostile" : "hail_greet_neutral");
         if (disp === "neutral" && Math.random() < 0.25) adjustRep(p, t.faction ?? "guild", 1);
