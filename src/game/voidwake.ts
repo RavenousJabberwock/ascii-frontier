@@ -3038,6 +3038,11 @@ const MODULE_CATALOG = [
   { id: "engine-efficiency",  name: "Flux Regulator",     price: 1700, desc: "-25% fuel burn" },
   { id: "overdrive-coil",     name: "Overdrive Coil",     price: 2600, desc: "+25% top speed, +15% burn" },
   { id: "solar-drive",        name: "Solar Drive",        price: 900,  desc: "-15% burn; flies dry at ≤20% throttle" },
+  // 0.8.0 — smuggling counterplay. Shielded Hold hides a slice of each
+  // contraband stack from a customs scan; Bribe Encoder makes the bribe
+  // option at customs far likelier to land.
+  { id: "shielded-hold",      name: "Shielded Hold",      price: 3200, desc: "hides 8 units/good from customs" },
+  { id: "bribe-encoder",      name: "Bribe Encoder",      price: 2100, desc: "customs bribes far likelier to work" },
   { id: "station-core",       name: "Station Core",       price: 250000, desc: "deploy your own station (Fed Gate only)" },
 ];
 
