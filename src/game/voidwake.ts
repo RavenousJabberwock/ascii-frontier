@@ -5214,9 +5214,16 @@ export class Voidwake {
       this.pushLog("You broke the clamps and ran the scan. Patrols have been notified.");
       this.pushChatter(`Customs ${c.station}`,
         "Vessel fleeing inspection! Patrol, we have a runner.", "#ff8a8a");
-      this.alertPatrols();
+      // Witnesses light up: nearby lawful ships flag the player as a
+      // fugitive, which is exactly the condition patrol AI hunts on.
+      const now = performance.now() / 1000;
+      for (const x of this.entities) {
+        if (x.kind !== "friendly" && x.kind !== "neutral") continue;
+        if (V.len(V.sub(x.pos, p.pos)) > 5000) continue;
+        x.hostileUntil = now + 45;
+      }
       this._customs = undefined;
-      this.dockedStationId = undefined;
+      this.dockedStationId = null;
       this.screen = "playing";
     }
   }
