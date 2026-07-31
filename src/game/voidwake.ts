@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.7.9";
+const VERSION = "0.8.0";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -8061,12 +8061,63 @@ export class Voidwake {
     const roles: CrewRole[] = [];
     if (p.crew) for (const c of p.crew) roles.push(c.role);
     if (roles.length === 0) return;
-    const r = roles[Math.floor(Math.random() * roles.length)];
+    // 0.8.0 — situational barks. Gather every context bucket whose
+    // condition currently holds, each with the roles most likely to raise
+    // it; if any fire, ~70% of barks come from context rather than the
+    // generic per-role idle table.
+    const ctxOpts = this.crewContextBuckets(p);
+    let r: CrewRole;
+    let kind: ChatterKind;
+    if (ctxOpts.length && Math.random() < 0.7) {
+      const pick = ctxOpts[Math.floor(Math.random() * ctxOpts.length)];
+      const eligible = pick.roles.filter((x) => roles.includes(x));
+      r = eligible.length
+        ? eligible[Math.floor(Math.random() * eligible.length)]
+        : roles[Math.floor(Math.random() * roles.length)];
+      kind = pick.kind;
+    } else {
+      r = roles[Math.floor(Math.random() * roles.length)];
+      kind = (r + "_idle") as ChatterKind;
+    }
     const c = getCrew(p, r);
     if (!c) return;
-    const kind: ChatterKind = (r + "_idle") as ChatterKind;
     this.pushChatter(`${CREW_ROLE_INFO[r].title} ${c.name.split(" ")[0]}`,
       pickLine(kind, this.chatterCtx()), CREW_ROLE_INFO[r].color);
+  }
+
+  // Which situational chatter buckets apply right now, and which crew
+  // roles would plausibly be the one to say it.
+  crewContextBuckets(p: PlayerState): { kind: ChatterKind; roles: CrewRole[] }[] {
+    const out: { kind: ChatterKind; roles: CrewRole[] }[] = [];
+    const fuelPct = p.ship.fuel / Math.max(1, p.ship.fuelMax);
+    const hullPct = p.ship.hull / Math.max(1, p.ship.hullMax);
+    const shieldPct = p.ship.shield / Math.max(1, p.ship.shieldMax);
+    const cargoPct = cargoTotal(p) / Math.max(1, effectiveCargoMax(p));
+    if (fuelPct < 0.25) out.push({ kind: "crew_ctx_lowfuel", roles: ["engineer", "navigator", "pilot"] });
+    if (hullPct < 0.5) out.push({ kind: "crew_ctx_lowhull", roles: ["engineer", "tactical"] });
+    if (shieldPct < 0.35) out.push({ kind: "crew_ctx_lowshield", roles: ["engineer", "tactical"] });
+    if (cargoPct > 0.92) out.push({ kind: "crew_ctx_cargofull", roles: ["quartermaster", "merchant"] });
+    // Hostile within scanner range?
+    const hostile = this.entities.some((e) =>
+      e.kind === "hostile" && V.len(V.sub(e.pos, p.pos)) < 2500);
+    if (hostile) out.push({ kind: "crew_ctx_combat", roles: ["tactical", "gunner", "pilot"] });
+    if (V.len(p.pos) > WORLD_RADIUS * 1.2) out.push({ kind: "crew_ctx_deepspace", roles: ["navigator", "pilot"] });
+    if (p.credits < 400) out.push({ kind: "crew_ctx_broke", roles: ["merchant", "quartermaster"] });
+    if (p.credits > 250000) out.push({ kind: "crew_ctx_rich", roles: ["merchant", "quartermaster"] });
+    const carryingBanned = COMMODITIES.some((m) =>
+      (m.legality === "grey" || m.legality === "restricted") && (p.cargo[m.id] ?? 0) > 0);
+    if (carryingBanned) out.push({ kind: "crew_ctx_contraband", roles: ["quartermaster", "merchant", "tactical"] });
+    const star = this.entities.find((e) => e.kind === "star" && V.len(V.sub(e.pos, p.pos)) < 4000);
+    if (star) out.push({ kind: "crew_ctx_nearstar", roles: ["engineer", "navigator"] });
+    if (p.mission && !p.mission.done) out.push({ kind: "crew_ctx_mission", roles: ["navigator", "recruiter", "tactical"] });
+    if (p.crew?.some((c) => (c.morale ?? 100) < 45)) {
+      out.push({ kind: "crew_ctx_lowmorale", roles: ["recruiter", "quartermaster", "medic"] });
+    }
+    if (p.mission?.kind === "passenger" && !p.mission.done) {
+      out.push({ kind: "crew_ctx_passenger", roles: ["quartermaster", "recruiter", "pilot"] });
+    }
+    if (!out.length && !hostile) out.push({ kind: "crew_ctx_quiet", roles: ["navigator", "pilot", "engineer"] });
+    return out;
   }
 
   // Occasional inter-NPC exchange — pick two nearby non-alien speakers
