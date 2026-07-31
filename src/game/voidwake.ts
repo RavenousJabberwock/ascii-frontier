@@ -8111,7 +8111,7 @@ export class Voidwake {
     if (star) out.push({ kind: "crew_ctx_nearstar", roles: ["engineer", "navigator"] });
     if (p.mission && !p.mission.done) out.push({ kind: "crew_ctx_mission", roles: ["navigator", "recruiter", "tactical"] });
     if (p.crew?.some((c) => (c.morale ?? 100) < 45)) {
-      out.push({ kind: "crew_ctx_lowmorale", roles: ["recruiter", "quartermaster", "medic"] });
+      out.push({ kind: "crew_ctx_lowmorale", roles: ["recruiter", "quartermaster"] });
     }
     if (p.mission?.kind === "passenger" && !p.mission.done) {
       out.push({ kind: "crew_ctx_passenger", roles: ["quartermaster", "recruiter", "pilot"] });
