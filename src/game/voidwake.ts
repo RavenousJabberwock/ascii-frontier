@@ -203,6 +203,17 @@ type ChatterKind =
   | "tactical_idle" | "tactical_greet" | "tactical_hostile"
   | "tactical_farewell_good" | "tactical_farewell_bad"
   | "passenger_smalltalk" | "player_station_report"
+  // 0.8.0 — context-sensitive crew barks. Chosen by shipboard situation
+  // rather than at random, so the crew reacts to what is actually happening.
+  | "crew_ctx_lowfuel" | "crew_ctx_lowhull" | "crew_ctx_lowshield"
+  | "crew_ctx_cargofull" | "crew_ctx_combat" | "crew_ctx_deepspace"
+  | "crew_ctx_broke" | "crew_ctx_rich" | "crew_ctx_contraband"
+  | "crew_ctx_nearstar" | "crew_ctx_mission" | "crew_ctx_lowmorale"
+  | "crew_ctx_passenger" | "crew_ctx_quiet"
+  // 0.8.0 — player-initiated hail replies, keyed by disposition.
+  | "hail_greet_friendly" | "hail_greet_neutral" | "hail_greet_hostile"
+  | "hail_tip" | "hail_fuel_yes" | "hail_fuel_no"
+  | "hail_threat_yield" | "hail_threat_refuse" | "hail_apology_ok" | "hail_apology_no"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
