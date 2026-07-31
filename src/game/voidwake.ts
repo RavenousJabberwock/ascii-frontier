@@ -5466,7 +5466,10 @@ export class Voidwake {
       this.pushChatter(s.name,
         full
           ? `Vaults are full at ${s.treasury}cr, Captain. Nothing more accrues until you collect.`
-          : pickLine("player_station_report", this.chatterCtx(undefined, { a: s.name })),
+          // Templates carry a "{station}: " prefix for legacy log use;
+          // the Comms speaker column already names the station.
+          : pickLine("player_station_report", this.chatterCtx(undefined, { a: s.name }))
+              .replace(/^:\s*/, ""),
         "#7CFC00", "external");
     }
   }
