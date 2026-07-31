@@ -5634,6 +5634,14 @@ export class Voidwake {
       } else if (this.screen === "character") {
         this.screen = this._characterReturn;
         this.menuCursor = 0;
+      } else if (this.screen === "hail") {
+        // Closing the channel is always allowed.
+        this._hail = undefined;
+        this.screen = "playing";
+        this.menuCursor = 0;
+      } else if (this.screen === "customs") {
+        // You cannot walk away from an inspection — ESC surrenders.
+        this.customsSurrender();
       } else if (this.screen === "mission-offer") {
         // ESC on the contract board = decline all.
         this._offerCandidates = [];
