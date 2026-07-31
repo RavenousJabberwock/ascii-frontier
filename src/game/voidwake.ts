@@ -5257,6 +5257,147 @@ export class Voidwake {
     putText(g, 4, row + 7, `Credits: ${p.credits}cr    ENTER select`, "#9fe");
   }
 
+  // --- 0.8.0 — Player-to-NPC comms ----------------------------------------
+  // H opens a channel to the current target (ships, stations and colonies
+  // within 4000u; aliens don't answer). Options are filtered by what the
+  // target could plausibly do for you, and replies are keyed to their
+  // disposition: faction reputation plus whether they're currently hostile.
+  _hail?: { id: number; options: { id: string; label: string }[]; log: string[] };
+
+  hailDisposition(t: Entity): "friendly" | "neutral" | "hostile" {
+    const p = this.player;
+    if (t.kind === "hostile") return "hostile";
+    const rep = p?.reputation?.[t.faction ?? "guild"] ?? 0;
+    if (rep <= -20) return "hostile";
+    if (rep >= 20 || t.kind === "friendly") return "friendly";
+    return "neutral";
+  }
+
+  openHail() {
+    const p = this.player; if (!p) return;
+    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    if (!t) { this.pushLog("No target to hail — press T first."); return; }
+    if (t.kind === "alien") { this.pushLog("The alien craft answers only in static."); return; }
+    const hailable = t.kind === "hostile" || t.kind === "friendly" || t.kind === "neutral" || t.kind === "station";
+    if (!hailable) { this.pushLog(`${t.name} has no comms transponder.`); return; }
+    const d = V.len(V.sub(t.pos, p.pos));
+    if (d > 4000) { this.pushLog(`${t.name} is out of comms range (${Math.round(d)}u).`); return; }
+    const disp = this.hailDisposition(t);
+    const options: { id: string; label: string }[] = [{ id: "greet", label: "Open with a greeting" }];
+    options.push({ id: "tip", label: "Ask for local news and market word" });
+    if (disp !== "hostile") options.push({ id: "fuel", label: "Request an emergency fuel transfer" });
+    if (disp === "hostile") options.push({ id: "threat", label: "Warn them off — break contact or be fired on" });
+    if (t.faction === "patrol" || t.faction === "federation") {
+      options.push({ id: "apology", label: "Offer restitution for prior incidents (500cr)" });
+    }
+    options.push({ id: "close", label: "Close the channel" });
+    this._hail = { id: t.id, options, log: [] };
+    this.menuCursor = 0;
+    this.screen = "hail";
+    this.sfx("scan");
+  }
+
+  private hailReply(t: Entity, kind: ChatterKind) {
+    const line = pickLine(kind, this.chatterCtx(t, { target: t }));
+    this._hail?.log.push(`${t.name}: ${line}`);
+    this.pushChatter(t.name, line, t.kind === "hostile" ? "#ff8a8a" : "#c2c2ff", "external");
+  }
+
+  updateHail() {
+    const p = this.player, h = this._hail;
+    if (!p || !h) { this.screen = "playing"; return; }
+    const t = this.entities.find((e) => e.id === h.id);
+    if (!t) { this.pushLog("Channel lost."); this._hail = undefined; this.screen = "playing"; return; }
+    this.menuNav(h.options.length);
+    if (!this.input.consume("enter")) return;
+    const choice = h.options[this.menuCursor].id;
+    const disp = this.hailDisposition(t);
+    switch (choice) {
+      case "greet": {
+        h.log.push(`You: hail ${t.name}, identifying as ${p.name}.`);
+        this.hailReply(t, disp === "friendly" ? "hail_greet_friendly"
+          : disp === "hostile" ? "hail_greet_hostile" : "hail_greet_neutral");
+        if (disp === "neutral" && Math.random() < 0.25) adjustRep(p, t.faction ?? "guild", 1);
+        break;
+      }
+      case "tip": {
+        h.log.push("You: asking for local traffic and market word.");
+        this.hailReply(t, "hail_tip");
+        break;
+      }
+      case "fuel": {
+        h.log.push("You: requesting an emergency fuel transfer.");
+        const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
+        const ok = disp === "friendly" || (disp === "neutral" && rep >= 0 && Math.random() < 0.45);
+        if (ok && p.ship.fuel < p.ship.fuelMax) {
+          const amt = Math.min(25, p.ship.fuelMax - p.ship.fuel);
+          p.ship.fuel += amt;
+          this.hailReply(t, "hail_fuel_yes");
+          this.pushLog(`${t.name} transferred ${Math.round(amt)} fuel.`);
+        } else {
+          this.hailReply(t, "hail_fuel_no");
+        }
+        break;
+      }
+      case "threat": {
+        h.log.push("You: warning them off.");
+        const kills = p.kills ?? 0;
+        const strength = kills * 0.03 + (p.ship.hull / Math.max(1, p.ship.hullMax)) * 0.25
+          - Math.max(0, (p.reputation?.pirate ?? 0)) * 0.002;
+        if (Math.random() < Math.min(0.7, 0.15 + strength)) {
+          this.hailReply(t, "hail_threat_yield");
+          t.state = "flee";
+          t.hostileUntil = undefined;
+          this.pushLog(`${t.name} breaks off.`);
+        } else {
+          this.hailReply(t, "hail_threat_refuse");
+        }
+        break;
+      }
+      case "apology": {
+        h.log.push("You: offering restitution.");
+        const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
+        if (p.credits >= 500 && rep > -40) {
+          p.credits -= 500;
+          adjustRep(p, t.faction ?? "federation", 8);
+          this.hailReply(t, "hail_apology_ok");
+        } else {
+          this.hailReply(t, "hail_apology_no");
+        }
+        break;
+      }
+      default:
+        this._hail = undefined;
+        this.screen = "playing";
+        return;
+    }
+    dispatchHook("onPlayerHail", { targetId: t.id, target: t.name, option: choice, disposition: disp });
+  }
+
+  renderHail(g: Cell[][]) {
+    const h = this._hail, p = this.player;
+    if (!h || !p) return;
+    const t = this.entities.find((e) => e.id === h.id);
+    putText(g, 4, 1, `[ COMMS CHANNEL — ${(t?.name ?? "signal lost").toUpperCase()} ]   ESC close`, "#9fe");
+    if (t) {
+      const disp = this.hailDisposition(t);
+      const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
+      putText(g, 4, 2, `${(t.faction ?? "independent").toUpperCase()}  ·  disposition ${disp}  ·  standing ${repLabel(rep)}`,
+              disp === "hostile" ? "#ff8a8a" : disp === "friendly" ? "#7CFC00" : "#ffd28a");
+    }
+    let row = 4;
+    for (const line of h.log.slice(-6)) {
+      putText(g, 4, row++, line.slice(0, Math.max(10, g[0].length - 8)),
+              line.startsWith("You:") ? "#8fd8ff" : "#c2c2ff");
+    }
+    row += 1;
+    for (let i = 0; i < h.options.length; i++) {
+      const sel = i === this.menuCursor;
+      putText(g, 4, row + i, `${sel ? "▶" : " "} ${h.options[i].label}`, sel ? "#ffe066" : "#cf6");
+    }
+  }
+
+
 
   // 0.7.9 — NPC trade AI. Every ~12s an off-screen hauler moves a batch of
   // one commodity from the cheapest market to the dearest among the markets
