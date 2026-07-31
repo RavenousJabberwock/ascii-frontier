@@ -10079,6 +10079,8 @@ export class Voidwake {
       case "howto": this.renderHowto(grid); break;
       case "quest-log": this.renderQuestLog(grid); break;
       case "mission-offer": this.renderMissionOffer(grid); break;
+      case "customs": this.renderCustoms(grid); break;
+      case "hail": this.renderHail(grid); break;
       case "character": this.renderCharacterSheet(grid); break;
     }
 
