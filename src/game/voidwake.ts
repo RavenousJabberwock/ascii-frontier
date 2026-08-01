@@ -8898,11 +8898,29 @@ export class Voidwake {
       .filter((x) => x.d < 1500)
       .sort((a, b) => a.d - b.d);
     if (near.length === 0) return;
-    const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
+    const chosen = near[Math.floor(Math.random() * Math.min(4, near.length))];
+    const pick = chosen.e;
     const ctx = this.chatterCtx(pick);
     // 0.5.6 — Stranded ships broadcast mayday on the ext channel.
     if (pick.stranded && pick.state === "stranded" && (pick.kind === "friendly" || pick.kind === "neutral")) {
       this.pushChatter(pick.name, pickLine("stranded_mayday", ctx), "#ffcc55");
+      return;
+    }
+    // 0.8.1 — situational NPC line first: ~65% of the time a speaker with a
+    // notable condition (damaged, fleeing, laden, near a compact object,
+    // reacting to the player's file) says something about it rather than
+    // reading from the flat per-kind table.
+    const npcCtx = this.npcContextBuckets(pick, chosen.d);
+    if (npcCtx.length && Math.random() < 0.65) {
+      const kind = npcCtx[Math.floor(Math.random() * npcCtx.length)];
+      const color = pick.kind === "hostile" ? "#ff8a8a"
+        : pick.kind === "station" ? "#c2c2ff"
+        : pick.kind === "planet" ? "#ffd28a"
+        : pick.faction === "patrol" ? "#7fd0ff"
+        : pick.kind === "friendly" ? "#aef58a" : "#dddddd";
+      const tag = pick.kind === "station" ? `Beacon ${pick.name}`
+        : pick.kind === "planet" ? `Colony ${pick.name}` : pick.name;
+      this.pushChatter(tag, pickLine(kind, ctx), color, "external");
       return;
     }
     // Patrols speak with a distinct "SPD" cyan tag rather than the generic
