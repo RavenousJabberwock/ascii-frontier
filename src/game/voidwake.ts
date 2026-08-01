@@ -8267,7 +8267,78 @@ export class Voidwake {
     if (p.mission?.kind === "passenger" && !p.mission.done) {
       out.push({ kind: "crew_ctx_passenger", roles: ["quartermaster", "recruiter", "pilot"] });
     }
+    // 0.8.1 — further situational buckets.
+    if (p.ship.fuel <= 0.5) out.push({ kind: "crew_ctx_stranded", roles: ["engineer", "navigator", "pilot"] });
+    if ((this as unknown as { _inNebula?: boolean })._inNebula) {
+      out.push({ kind: "crew_ctx_nebula", roles: ["navigator", "engineer", "tactical"] });
+    }
+    const exotic = this.entities.some((e) => {
+      if (e.kind !== "star") return false;
+      const n = stellarClassOf(e).name;
+      if (n !== "BH" && n !== "PSR" && n !== "NS" && n !== "MAG") return false;
+      return V.len(V.sub(e.pos, p.pos)) < 6000;
+    });
+    if (exotic) out.push({ kind: "crew_ctx_exotic", roles: ["navigator", "engineer", "tactical"] });
+    const rock = this.entities.some((e) =>
+      e.kind === "asteroid" && (e.ore ?? 0) > 0 && V.len(V.sub(e.pos, p.pos)) < 700);
+    if (rock) out.push({ kind: "crew_ctx_mining", roles: ["engineer", "quartermaster", "merchant"] });
+    const flagged = Math.min(
+      p.reputation?.federation ?? 0,
+      p.reputation?.guild ?? 0,
+    ) <= -15;
+    const lawNear = this.entities.some((e) =>
+      e.faction === "patrol" && V.len(V.sub(e.pos, p.pos)) < 2500);
+    if (flagged && lawNear) out.push({ kind: "crew_ctx_wanted", roles: ["tactical", "pilot", "quartermaster"] });
+    if ((p.ownedStations?.length ?? 0) > 0) {
+      out.push({ kind: "crew_ctx_ownedstation", roles: ["quartermaster", "merchant", "recruiter"] });
+    }
+    if ((p.kills ?? 0) >= 40) out.push({ kind: "crew_ctx_veteran", roles: ["gunner", "tactical", "recruiter"] });
+    if (p.crew?.some((c) => c.pet)) out.push({ kind: "crew_ctx_pet", roles: ["quartermaster", "engineer", "recruiter"] });
+    if (p.mission?.deadlineAt && !p.mission.done
+      && p.mission.deadlineAt - performance.now() / 1000 < 120) {
+      out.push({ kind: "crew_ctx_deadline", roles: ["navigator", "pilot", "quartermaster"] });
+    }
     if (!out.length && !hostile) out.push({ kind: "crew_ctx_quiet", roles: ["navigator", "pilot", "engineer"] });
+    return out;
+  }
+
+  // 0.8.1 — Which situational NPC bucket a nearby speaker would raise right
+  // now, given its own condition (hull, AI state, faction), the player's
+  // standing and reputation, and the local environment. Returns null when
+  // nothing notable applies so the caller falls back to the flat per-kind
+  // chatter tables.
+  npcContextBuckets(e: Entity, d: number): ChatterKind[] {
+    const p = this.player; if (!p) return [];
+    const out: ChatterKind[] = [];
+    const ship = e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral";
+    const playerHullPct = p.ship.hull / Math.max(1, p.ship.hullMax);
+    if (ship && (e.hull ?? 99) < 25) out.push("npc_ctx_damaged");
+    if (ship && (e.state === "flee" || e.state === "fleeing")) out.push("npc_ctx_fleeing");
+    if (e.kind === "neutral" && cargoCount(e) > 0) out.push("npc_ctx_hauler");
+    const flagged = Math.min(p.reputation?.federation ?? 0, p.reputation?.guild ?? 0) <= -15;
+    if (e.faction === "patrol" && flagged) out.push("npc_ctx_wanted");
+    if (e.kind === "hostile" && playerHullPct < 0.45) out.push("npc_ctx_prey");
+    if (e.kind === "hostile" && (p.kills ?? 0) >= 60 && Math.random() < 0.6) out.push("npc_ctx_feared");
+    if (e.kind === "station") {
+      const traffic = this.entities.filter((x) =>
+        (x.kind === "friendly" || x.kind === "neutral" || x.kind === "hostile")
+        && V.len(V.sub(x.pos, e.pos)) < 1200).length;
+      if (traffic >= 3) out.push("npc_ctx_traffic");
+    }
+    if ((this as unknown as { _inNebula?: boolean })._inNebula) out.push("npc_ctx_nebula");
+    const exotic = this.entities.some((x) => {
+      if (x.kind !== "star") return false;
+      const n = stellarClassOf(x).name;
+      if (n !== "BH" && n !== "PSR" && n !== "NS" && n !== "MAG") return false;
+      return V.len(V.sub(x.pos, e.pos)) < 8000;
+    });
+    if (exotic) out.push("npc_ctx_exotic");
+    if (ship && V.len(e.pos) > WORLD_RADIUS * 1.2) out.push("npc_ctx_deepspace");
+    if (ship && this.entities.some((x) =>
+      x.stranded && x.state === "stranded" && V.len(V.sub(x.pos, e.pos)) < 3000)) {
+      out.push("npc_ctx_rescue_nearby");
+    }
+    if (e.kind === "planet" && e.populated && d < 1200) out.push("npc_ctx_colony_quiet");
     return out;
   }
 
