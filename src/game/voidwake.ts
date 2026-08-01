@@ -8314,7 +8314,7 @@ export class Voidwake {
     const playerHullPct = p.ship.hull / Math.max(1, p.ship.hullMax);
     if (ship && (e.hull ?? 99) < 25) out.push("npc_ctx_damaged");
     if (ship && (e.state === "flee" || e.state === "fleeing")) out.push("npc_ctx_fleeing");
-    if (e.kind === "neutral" && cargoCount(e) > 0) out.push("npc_ctx_hauler");
+    if (e.kind === "neutral" && Object.keys(e.cargo ?? {}).length > 0) out.push("npc_ctx_hauler");
     const flagged = Math.min(p.reputation?.federation ?? 0, p.reputation?.guild ?? 0) <= -15;
     if (e.faction === "patrol" && flagged) out.push("npc_ctx_wanted");
     if (e.kind === "hostile" && playerHullPct < 0.45) out.push("npc_ctx_prey");
