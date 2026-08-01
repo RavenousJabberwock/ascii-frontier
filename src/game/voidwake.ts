@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -219,6 +219,16 @@ type ChatterKind =
   | "hail_greet_friendly" | "hail_greet_neutral" | "hail_greet_hostile"
   | "hail_tip" | "hail_fuel_yes" | "hail_fuel_no"
   | "hail_threat_yield" | "hail_threat_refuse" | "hail_apology_ok" | "hail_apology_no"
+  // 0.8.1 — further situational crew barks.
+  | "crew_ctx_stranded" | "crew_ctx_nebula" | "crew_ctx_exotic"
+  | "crew_ctx_mining" | "crew_ctx_wanted" | "crew_ctx_ownedstation"
+  | "crew_ctx_veteran" | "crew_ctx_pet" | "crew_ctx_deadline"
+  // 0.8.1 — situational NPC barks, keyed to the speaker's own condition
+  // and the player's standing rather than a flat per-kind table.
+  | "npc_ctx_damaged" | "npc_ctx_fleeing" | "npc_ctx_hauler"
+  | "npc_ctx_wanted" | "npc_ctx_prey" | "npc_ctx_feared"
+  | "npc_ctx_traffic" | "npc_ctx_nebula" | "npc_ctx_exotic"
+  | "npc_ctx_deepspace" | "npc_ctx_rescue_nearby" | "npc_ctx_colony_quiet"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
