@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -219,6 +219,16 @@ type ChatterKind =
   | "hail_greet_friendly" | "hail_greet_neutral" | "hail_greet_hostile"
   | "hail_tip" | "hail_fuel_yes" | "hail_fuel_no"
   | "hail_threat_yield" | "hail_threat_refuse" | "hail_apology_ok" | "hail_apology_no"
+  // 0.8.1 — further situational crew barks.
+  | "crew_ctx_stranded" | "crew_ctx_nebula" | "crew_ctx_exotic"
+  | "crew_ctx_mining" | "crew_ctx_wanted" | "crew_ctx_ownedstation"
+  | "crew_ctx_veteran" | "crew_ctx_pet" | "crew_ctx_deadline"
+  // 0.8.1 — situational NPC barks, keyed to the speaker's own condition
+  // and the player's standing rather than a flat per-kind table.
+  | "npc_ctx_damaged" | "npc_ctx_fleeing" | "npc_ctx_hauler"
+  | "npc_ctx_wanted" | "npc_ctx_prey" | "npc_ctx_feared"
+  | "npc_ctx_traffic" | "npc_ctx_nebula" | "npc_ctx_exotic"
+  | "npc_ctx_deepspace" | "npc_ctx_rescue_nearby" | "npc_ctx_colony_quiet"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1363,6 +1373,147 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "You can't pay your way out of that one.",
     "Not enough credits, not enough contrition.",
     "Save it for the magistrate.",
+  ],
+
+  // 0.8.1 — additional situational crew buckets. Same selection path as the
+  // 0.8.0 ones: crewContextBuckets() tests the condition, tickCrewIdle()
+  // picks a plausible role to voice it.
+  crew_ctx_stranded: [
+    "Tank's dry, Captain. We're a very expensive rock now.",
+    "No fuel, no burn. Suggest we squawk and look pitiful.",
+    "Drifting. I've seen Patrol tow ships in for less.",
+    "Reactor's cold. Hope somebody's listening on the emergency band.",
+    "If a scoop-capable star drifts past, do let me know.",
+  ],
+  crew_ctx_nebula: [
+    "Nebula wash is chewing the shield grid. Sensors are guessing.",
+    "I can't see three hundred units in this soup, {cmdr}.",
+    "Pretty gas. Corrosive gas. Same gas.",
+    "Comms are half static in here. Perfect place for an ambush.",
+    "Instruments are drunk. Fly by feel for a bit.",
+  ],
+  crew_ctx_exotic: [
+    "That thing's bending the starlight. Please respect it, Captain.",
+    "Gravity gradient's off the scale. Do not get curious.",
+    "Tidal read is climbing. We're inside somebody's bad idea.",
+    "I've never seen the nav clock disagree with itself before.",
+    "Whatever that is, it eats ships for a living.",
+  ],
+  crew_ctx_mining: [
+    "Ore's good grade here. Keep the beam steady.",
+    "Rock's yielding — hold this vector and I'll fill the hold.",
+    "Assay says {ore} in the seam. Worth the dust.",
+    "Belt's rich. Miners would kill for these numbers.",
+    "Careful with the fragments, they bite the paint.",
+  ],
+  crew_ctx_wanted: [
+    "Patrol's in range and our file isn't pretty. Just saying.",
+    "Lawful hull nearby, Captain. We're on somebody's list.",
+    "If they scan us we're explaining things for an hour.",
+    "That's SPD colours. Suggest we look extremely ordinary.",
+    "Our standing won't survive another traffic stop.",
+  ],
+  crew_ctx_ownedstation: [
+    "Our own station's reporting in. Feels good to own something.",
+    "Holdings are ticking over, boss. Treasury's growing.",
+    "Station crew asked after you. I said you were busy being heroic.",
+    "We could dock at ours and not pay a berth fee for once.",
+  ],
+  crew_ctx_veteran: [
+    "{kills} kills on the board. Word's getting around, {cmdr}.",
+    "People stop hailing us to trade and start hailing to check.",
+    "{kills} confirmed. Pirates know this transponder now.",
+    "Reputation's a weapon too. Ours is loaded.",
+  ],
+  crew_ctx_pet: [
+    "The cat's asleep in the reactor housing again. It's warm, apparently.",
+    "Something furry got into the ration locker. Case closed, no charges.",
+    "Our mascot has claimed your chair. I'd negotiate.",
+    "Vermin count is zero. Somebody earned their rations.",
+  ],
+  crew_ctx_deadline: [
+    "Clock's short on the delivery, Captain. Suggest fewer detours.",
+    "Our fare keeps checking the time. So do I.",
+    "The contract has a deadline. It is not a suggestion.",
+    "We're going to be late unless you get greedy with the throttle.",
+  ],
+
+  // 0.8.1 — Situational NPC barks. npcContextBuckets() inspects the
+  // speaker's hull, AI state, faction and the player's standing before
+  // falling back to the flat per-kind tables.
+  npc_ctx_damaged: [
+    "{speaker}, running on {hull}... we're venting. Any hull nearby, respond.",
+    "Took a bad one. Limping toward the nearest clamp.",
+    "This is {speaker} — structural damage, reduced manoeuvre. Give us room.",
+    "Half our systems are cosmetic now. Wonderful.",
+    "{speaker} declaring distress-adjacent. Not proud of it.",
+  ],
+  npc_ctx_fleeing: [
+    "Breaking off! {speaker} disengaging — not paid enough for this.",
+    "That's it, we're gone. Someone else can hold the line.",
+    "Running dark and running fast. Don't follow us.",
+    "{speaker} withdrawing. Log it however you like.",
+  ],
+  npc_ctx_hauler: [
+    "{speaker}, laden and slow, requesting a clean lane to {sector}.",
+    "Full hold, tight margins, long haul. Story of my life.",
+    "Freight run {sector}. If you're pirates, we're insured.",
+    "Manifest's boring on purpose. Move along.",
+    "Anyone know if the clamps at {sector} are still charging double?",
+  ],
+  npc_ctx_wanted: [
+    "{cmdr}, your transponder's flagged. Keep your hands where we can see them.",
+    "We know that hull. Behave and this stays a conversation.",
+    "Flagged vessel in the lane. Everyone note the vector.",
+    "You've got a file, {cmdr}. Try not to add pages.",
+  ],
+  npc_ctx_prey: [
+    "That {ship} is bleeding, boys. Hull {hull}%.",
+    "Wounded bird at {dist}. Easy purse.",
+    "Look at that hull. Somebody softened them up for us.",
+    "{cmdr}, you're leaking. Let's finish the paperwork.",
+  ],
+  npc_ctx_feared: [
+    "That's the one with {kills} kills. Give them the lane.",
+    "Not that hull. Anything but that hull. Break off.",
+    "I've heard about {cmdr}. Heard enough.",
+    "Let them pass. Pride's cheaper than a refit.",
+  ],
+  npc_ctx_traffic: [
+    "{speaker}: lane's crowded, everyone hold your assigned vector.",
+    "{speaker}: four hulls in the approach. Berths are first-come.",
+    "{speaker}: traffic control's overloaded. Expect delays at the clamps.",
+    "{speaker}: whoever's drifting across the approach — stop that.",
+  ],
+  npc_ctx_nebula: [
+    "{speaker}: sensors are useless in this cloud. Watch your spacing.",
+    "{speaker}: nebula's fouling our comms. Repeat everything twice.",
+    "Ion wash in here is brutal. Shields aren't happy.",
+    "{speaker}: we lost a contact in the murk. Or it lost us.",
+  ],
+  npc_ctx_exotic: [
+    "{speaker}: gravity's wrong here. Everything reads wrong here.",
+    "Do not cross the ring. We've lost hulls to that.",
+    "{speaker}: navigation advisory — compact object, wide berth advised.",
+    "Light's bending around something out there. Beautiful. Awful.",
+  ],
+  npc_ctx_deepspace: [
+    "{speaker}: no beacons this far out. We're on dead reckoning.",
+    "{speaker}: long-range survey, nothing to report but dark.",
+    "Anyone else out here? Genuinely asking.",
+    "{speaker}: past the charts. Past the help, too.",
+  ],
+  npc_ctx_rescue_nearby: [
+    "{speaker}: picking up a mayday nearby — anyone closer than us?",
+    "{speaker}: drifting hull on scope. Somebody should scoop them.",
+    "There's a ship dead in the lane. Relaying to Patrol.",
+    "{speaker}: cold reactor signature bearing on {sector}. Not our contract.",
+  ],
+  npc_ctx_colony_quiet: [
+    "{speaker} ground control: skies clear, harvest steady, nothing to report.",
+    "{speaker}: kids came out to watch your burn. Do a nice one.",
+    "{speaker}: we get one supply run a month. You're early or very late.",
+    "{speaker}: weather's holding. Landing pad is yours if you want it.",
   ],
 };
 
@@ -8116,7 +8267,78 @@ export class Voidwake {
     if (p.mission?.kind === "passenger" && !p.mission.done) {
       out.push({ kind: "crew_ctx_passenger", roles: ["quartermaster", "recruiter", "pilot"] });
     }
+    // 0.8.1 — further situational buckets.
+    if (p.ship.fuel <= 0.5) out.push({ kind: "crew_ctx_stranded", roles: ["engineer", "navigator", "pilot"] });
+    if ((this as unknown as { _inNebula?: boolean })._inNebula) {
+      out.push({ kind: "crew_ctx_nebula", roles: ["navigator", "engineer", "tactical"] });
+    }
+    const exotic = this.entities.some((e) => {
+      if (e.kind !== "star") return false;
+      const n = stellarClassOf(e).name;
+      if (n !== "BH" && n !== "PSR" && n !== "NS" && n !== "MAG") return false;
+      return V.len(V.sub(e.pos, p.pos)) < 6000;
+    });
+    if (exotic) out.push({ kind: "crew_ctx_exotic", roles: ["navigator", "engineer", "tactical"] });
+    const rock = this.entities.some((e) =>
+      e.kind === "asteroid" && (e.ore ?? 0) > 0 && V.len(V.sub(e.pos, p.pos)) < 700);
+    if (rock) out.push({ kind: "crew_ctx_mining", roles: ["engineer", "quartermaster", "merchant"] });
+    const flagged = Math.min(
+      p.reputation?.federation ?? 0,
+      p.reputation?.guild ?? 0,
+    ) <= -15;
+    const lawNear = this.entities.some((e) =>
+      e.faction === "patrol" && V.len(V.sub(e.pos, p.pos)) < 2500);
+    if (flagged && lawNear) out.push({ kind: "crew_ctx_wanted", roles: ["tactical", "pilot", "quartermaster"] });
+    if ((p.ownedStations?.length ?? 0) > 0) {
+      out.push({ kind: "crew_ctx_ownedstation", roles: ["quartermaster", "merchant", "recruiter"] });
+    }
+    if ((p.kills ?? 0) >= 40) out.push({ kind: "crew_ctx_veteran", roles: ["gunner", "tactical", "recruiter"] });
+    if (p.crew?.some((c) => c.pet)) out.push({ kind: "crew_ctx_pet", roles: ["quartermaster", "engineer", "recruiter"] });
+    if (p.mission?.deadlineAt && !p.mission.done
+      && p.mission.deadlineAt - performance.now() / 1000 < 120) {
+      out.push({ kind: "crew_ctx_deadline", roles: ["navigator", "pilot", "quartermaster"] });
+    }
     if (!out.length && !hostile) out.push({ kind: "crew_ctx_quiet", roles: ["navigator", "pilot", "engineer"] });
+    return out;
+  }
+
+  // 0.8.1 — Which situational NPC bucket a nearby speaker would raise right
+  // now, given its own condition (hull, AI state, faction), the player's
+  // standing and reputation, and the local environment. Returns null when
+  // nothing notable applies so the caller falls back to the flat per-kind
+  // chatter tables.
+  npcContextBuckets(e: Entity, d: number): ChatterKind[] {
+    const p = this.player; if (!p) return [];
+    const out: ChatterKind[] = [];
+    const ship = e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral";
+    const playerHullPct = p.ship.hull / Math.max(1, p.ship.hullMax);
+    if (ship && (e.hull ?? 99) < 25) out.push("npc_ctx_damaged");
+    if (ship && (e.state === "flee" || e.state === "fleeing")) out.push("npc_ctx_fleeing");
+    if (e.kind === "neutral" && Object.keys(e.cargo ?? {}).length > 0) out.push("npc_ctx_hauler");
+    const flagged = Math.min(p.reputation?.federation ?? 0, p.reputation?.guild ?? 0) <= -15;
+    if (e.faction === "patrol" && flagged) out.push("npc_ctx_wanted");
+    if (e.kind === "hostile" && playerHullPct < 0.45) out.push("npc_ctx_prey");
+    if (e.kind === "hostile" && (p.kills ?? 0) >= 60 && Math.random() < 0.6) out.push("npc_ctx_feared");
+    if (e.kind === "station") {
+      const traffic = this.entities.filter((x) =>
+        (x.kind === "friendly" || x.kind === "neutral" || x.kind === "hostile")
+        && V.len(V.sub(x.pos, e.pos)) < 1200).length;
+      if (traffic >= 3) out.push("npc_ctx_traffic");
+    }
+    if ((this as unknown as { _inNebula?: boolean })._inNebula) out.push("npc_ctx_nebula");
+    const exotic = this.entities.some((x) => {
+      if (x.kind !== "star") return false;
+      const n = stellarClassOf(x).name;
+      if (n !== "BH" && n !== "PSR" && n !== "NS" && n !== "MAG") return false;
+      return V.len(V.sub(x.pos, e.pos)) < 8000;
+    });
+    if (exotic) out.push("npc_ctx_exotic");
+    if (ship && V.len(e.pos) > WORLD_RADIUS * 1.2) out.push("npc_ctx_deepspace");
+    if (ship && this.entities.some((x) =>
+      x.stranded && x.state === "stranded" && V.len(V.sub(x.pos, e.pos)) < 3000)) {
+      out.push("npc_ctx_rescue_nearby");
+    }
+    if (e.kind === "planet" && e.populated && d < 1200) out.push("npc_ctx_colony_quiet");
     return out;
   }
 
@@ -8676,11 +8898,29 @@ export class Voidwake {
       .filter((x) => x.d < 1500)
       .sort((a, b) => a.d - b.d);
     if (near.length === 0) return;
-    const pick = near[Math.floor(Math.random() * Math.min(4, near.length))].e;
+    const chosen = near[Math.floor(Math.random() * Math.min(4, near.length))];
+    const pick = chosen.e;
     const ctx = this.chatterCtx(pick);
     // 0.5.6 — Stranded ships broadcast mayday on the ext channel.
     if (pick.stranded && pick.state === "stranded" && (pick.kind === "friendly" || pick.kind === "neutral")) {
       this.pushChatter(pick.name, pickLine("stranded_mayday", ctx), "#ffcc55");
+      return;
+    }
+    // 0.8.1 — situational NPC line first: ~65% of the time a speaker with a
+    // notable condition (damaged, fleeing, laden, near a compact object,
+    // reacting to the player's file) says something about it rather than
+    // reading from the flat per-kind table.
+    const npcCtx = this.npcContextBuckets(pick, chosen.d);
+    if (npcCtx.length && Math.random() < 0.65) {
+      const kind = npcCtx[Math.floor(Math.random() * npcCtx.length)];
+      const color = pick.kind === "hostile" ? "#ff8a8a"
+        : pick.kind === "station" ? "#c2c2ff"
+        : pick.kind === "planet" ? "#ffd28a"
+        : pick.faction === "patrol" ? "#7fd0ff"
+        : pick.kind === "friendly" ? "#aef58a" : "#dddddd";
+      const tag = pick.kind === "station" ? `Beacon ${pick.name}`
+        : pick.kind === "planet" ? `Colony ${pick.name}` : pick.name;
+      this.pushChatter(tag, pickLine(kind, ctx), color, "external");
       return;
     }
     // Patrols speak with a distinct "SPD" cyan tag rather than the generic
