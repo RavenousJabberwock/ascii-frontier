@@ -1,3 +1,21 @@
+# 0.8.1 — Situational NPC Comms
+
+Ships as **0.8.1**. Extends the 0.8.0 context-bark system outward from the
+crew to everyone else in the sector.
+
+- **Situational NPC chatter.** `npcContextBuckets()` inspects a nearby
+  speaker's own condition before it talks: badly damaged hull, fleeing,
+  laden hauler, crowded station approach, nebula wash, proximity to a
+  compact object, deep space beyond the charts, or a mayday nearby.
+  Patrols react to a flagged player file, pirates smell a wounded ship,
+  and pirates with sense give a high-kill pilot the lane. Colonies get a
+  quiet ground-control voice. ~65% of ambient external lines now come
+  from these 12 buckets instead of the flat per-kind tables.
+- **More crew situational barks.** Nine new buckets: dry tank / drifting,
+  inside a nebula, near an exotic compact object, actively mining, law
+  nearby with bad standing, owned-station report, veteran kill count, a
+  crew pet aboard, and a contract deadline inside two minutes.
+
 # 0.8.0 — Comms, Contraband Counterplay & Living Holdings
 
 Ships as **0.8.0**. Clears the three remaining backlog items.
