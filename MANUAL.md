@@ -3,7 +3,8 @@
 A gameplay guide for the ASCII space sim. Everything here is playable in the
 browser build (`bun run dev`), the hosted build, or the single-file offline
 build. For engine internals see [`src/game/README.md`](src/game/README.md);
-for release notes see [`.lovable/plan.md`](.lovable/plan.md).
+for release notes see [`.lovable/plan.md`](.lovable/plan.md). A shorter
+new-pilot guide (with system requirements) lives in [`GUIDE.md`](GUIDE.md).
 
 ---
 
@@ -192,6 +193,23 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
 
 Press `C` for the full sheet: portraits, attributes, ship silhouette, and a
 plain-language description of every fitted module.
+
+---
+
+## 10a. The shipyard
+
+Every station keeps **0–3 hulls** on the pad, rotating with the market day —
+Federation yards list the most, pirate holds the fewest, colonies none at all.
+The price shown is already net of the **trade-in on your current hull** (55%
+of list), and Merchant/Quartermaster perks discount yard work like anything
+else. Modules and both weapon mounts transfer to the new frame, and its
+bonuses are re-applied to the new base stats.
+
+Two sales are refused outright, before any credits move: a hull whose hold is
+smaller than your current cargo, and a hull with fewer berths than your crew.
+The message tells you how much to sell down or pay off. Hulls locked to a
+species or to veteran commanders are listed but flagged `LOCKED` so you can
+see what else flies out there.
 
 ---
 

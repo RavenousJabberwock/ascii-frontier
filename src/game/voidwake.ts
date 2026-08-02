@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.1";
+const VERSION = "0.8.2";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -97,7 +97,8 @@ export type ScriptHookName =
   | "onPlayerStationTierUp"
   // 0.8.0 — comms & customs hooks
   | "onPlayerHail"
-  | "onCustomsScan";
+  | "onCustomsScan"
+  | "onShipHullChange";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -118,6 +119,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPlayerStationTierUp:[],
   onPlayerHail:         [],
   onCustomsScan:        [],
+  onShipHullChange:     [],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
@@ -1710,6 +1712,21 @@ function unlockedShipHulls(species: string): typeof SHIP_HULLS {
   });
 }
 
+// 0.8.2 — Shipyard pricing. Derived from the hull's own stats so new hulls
+// added to SHIP_HULLS are priced automatically and stay in rough balance.
+// Trade-in on your current hull returns 55% of list.
+function hullPrice(h: typeof SHIP_HULLS[number]): number {
+  return Math.round(
+    900 + h.hull * 24 + h.shield * 22 + h.cargo * 30 + h.speed * 28 + h.crewSlots * 240,
+  );
+}
+function hullTradeIn(hullId: string): number {
+  const h = SHIP_HULLS.find((x) => x.id === hullId);
+  return h ? Math.round(hullPrice(h) * 0.55) : 0;
+}
+
+
+
 const WEAPONS = [
   { id: "pulse", name: "Pulse Laser", dmg: 6, cooldown: 0.25, range: 350 },
   { id: "rail", name: "Railgun", dmg: 22, cooldown: 1.1, range: 600 },
@@ -1966,6 +1983,9 @@ interface StationStock {
   day: number;                // marketDay() when this stock was generated
   recruitSlots: number;       // 0..4 crew hires available today
   commodities: { id: string; name: string; buy: number; sell: number; stock: number }[];
+  // 0.8.2 — Shipyard berth: 0..3 hull ids listed today (empty at colonies).
+  hulls: string[];
+
 }
 
 // One line in the comms / chatter feed. "who" is the speaker label
@@ -3404,11 +3424,18 @@ function generateStationStock(stationId: number, faction: string = "guild", day:
       stock: Math.floor(20 + rng() * 80),
     };
   });
+  // 0.8.2 — Shipyard listings. Big lawful docks keep more berths free than
+  // frontier outposts; pirate holds fence whatever came through last night.
+  const berths = faction === "federation" ? 1 + Math.floor(rng() * 3)
+    : faction === "pirate" ? Math.floor(rng() * 2)
+    : Math.floor(rng() * 3);
+  const hulls = shuffled(SHIP_HULLS).slice(0, berths).map((h) => h.id);
   return {
     fuelPrice, orePrice, weapons, modules, gunnerFee,
     rumor: rumors[Math.floor(rng() * rumors.length)],
-    day, recruitSlots, commodities,
+    day, recruitSlots, commodities, hulls,
   };
+
 }
 
 // Effective ship caps after module installs.
@@ -3429,6 +3456,33 @@ function effectiveCrewMax(p: PlayerState): number {
   const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
   return Math.max(1, base + quarters - stow);
 }
+
+// 0.8.2 — Recompute every derived ship cap from (hull x species x modules).
+// Used by the Shipyard when the player changes hulls: module bonuses are
+// re-applied on top of the new frame rather than lost or double-counted.
+// `fresh` fills hull/shield (a bought ship comes out of the yard whole).
+function recomputeShipStats(p: PlayerState, fresh = false): void {
+  const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
+  const s = speciesOf(p.char.species);
+  const n = (id: string) => p.ship.modules.filter((m) => m === id).length;
+  const hullMax = Math.max(1, Math.round(hull.hull * (s.hullMul ?? 1)))
+    + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80;
+  const shieldMax = Math.max(0, Math.round(hull.shield * (s.shieldMul ?? 1)))
+    + n("shield-booster") * 25;
+  const cargoMax = Math.max(1, Math.round(hull.cargo * (s.cargoMul ?? 1)))
+    + n("cargo-expander") * 12;
+  const fuelMax = 100 + n("aux-fuel-tank") * 50;
+  p.ship.hullMax = hullMax;
+  p.ship.shieldMax = shieldMax;
+  p.ship.cargoMax = cargoMax;
+  p.ship.fuelMax = fuelMax;
+  p.ship.speed = hull.speed;
+  p.ship.hull = fresh ? hullMax : Math.min(p.ship.hull, hullMax);
+  p.ship.shield = fresh ? shieldMax : Math.min(p.ship.shield, shieldMax);
+  p.ship.fuel = Math.min(p.ship.fuel, fuelMax);
+}
+
+
 
 // 0.7.1 — Passenger berths: 2 per Luxury Cabin module. Kept independent
 // of crew so cabins can be added without giving up crew slots.
@@ -4724,7 +4778,7 @@ export class Voidwake {
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" | "shipyard" = "main";
   // 0.7.2 — Commodities page mode toggle. Cycled with LEFT/RIGHT arrows.
   commodityMode: "buy" | "sell" = "buy";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
@@ -5238,6 +5292,8 @@ export class Voidwake {
         s.orePrice = Math.round(s.orePrice * 1.25);
         s.fuelPrice = Math.round(s.fuelPrice * 1.10);
         s.weapons = [];
+        s.hulls = [];      // 0.8.2 — no orbital yard dirtside
+
         const colonyRumors = [
           "Colony gossip: militia recruiting anyone with a straight trigger finger.",
           "Bazaar buzz: ore buyers offering above spot for the next cycle.",
@@ -10024,7 +10080,72 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
+  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Shipyard", "Crew", "Undock"];
+
+  // 0.8.2 — Shipyard offers for the docked station: the rotating hull list
+  // minus the hull you already fly, each with its net cost after trade-in and
+  // a lock reason when a species / veteran gate blocks the sale.
+  shipyardOffers(): Array<{ hull: typeof SHIP_HULLS[number]; net: number; reason: string }> {
+    const p = this.player;
+    const sid = this.dockedStationId;
+    if (!p || sid == null) return [];
+    const stock = this.getStock(sid);
+    const trade = hullTradeIn(p.ship.hullId);
+    const prior = hasPriorSave();
+    const out: Array<{ hull: typeof SHIP_HULLS[number]; net: number; reason: string }> = [];
+    for (const id of stock.hulls) {
+      const h = SHIP_HULLS.find((x) => x.id === id);
+      if (!h || h.id === p.ship.hullId) continue;
+      let reason = "";
+      if (h.unlockSpecies && !h.unlockSpecies.includes(p.char.species as SpeciesName)) {
+        reason = `${h.unlockSpecies.join("/")} frames only`;
+      } else if (h.unlockPriorSave && !prior) {
+        reason = "veteran commanders only";
+      }
+      // Merchant/Quartermaster discounts apply to yard work too.
+      const net = Math.round(hullPrice(h) * merchantBuyMult(p)) - trade;
+      out.push({ hull: h, net, reason });
+    }
+    return out;
+  }
+
+  // Complete a hull swap: charge the net, move the frame, re-derive caps from
+  // (hull x species x modules), and keep cargo/crew only if they still fit.
+  buyHull(offer: { hull: typeof SHIP_HULLS[number]; net: number; reason: string }): void {
+    const p = this.player; if (!p) return;
+    const h = offer.hull;
+    if (offer.reason) { this.pushLog(`${h.name} is not cleared for you — ${offer.reason}.`); return; }
+    if (offer.net > 0 && p.credits < offer.net) { this.pushLog(`Yard wants ${offer.net}cr after trade-in.`); return; }
+    // Fit checks BEFORE taking money: cargo must fit the new hold, and the
+    // crew (plus any squatting stowaway) must fit the new berth count.
+    const s = speciesOf(p.char.species);
+    const newCargo = Math.max(1, Math.round(h.cargo * (s.cargoMul ?? 1)))
+      + p.ship.modules.filter((m) => m === "cargo-expander").length * 12;
+    if (cargoTotal(p) > newCargo) {
+      this.pushLog(`${h.name} holds only ${newCargo} units — sell down ${cargoTotal(p) - newCargo} first.`);
+      return;
+    }
+    const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
+    const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
+    const newBerths = Math.max(1, h.crewSlots + quarters - stow);
+    if (crewCount(p) > newBerths) {
+      this.pushLog(`${h.name} berths ${newBerths} — pay off ${crewCount(p) - newBerths} crew first.`);
+      return;
+    }
+    const old = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
+    p.credits -= offer.net;
+    p.ship.hullId = h.id;
+    recomputeShipStats(p, true);
+    this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred.`);
+    this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. All systems nominal.`, "#9fe");
+    dispatchHook("onShipHullChange", {
+      hullId: h.id, name: h.name, net: offer.net, previous: old,
+      stationId: this.dockedStationId,
+    });
+    this.sfx("levelup");
+  }
+
+
 
   buildStationLines(): string[] {
     const p = this.player!;
@@ -10105,6 +10226,28 @@ export class Voidwake {
         "Back",
       ];
     }
+    // ---- Shipyard (0.8.2) ---------------------------------------------------
+    // Rotating hull berths. Locked hulls (species / veteran gates) are listed
+    // but not sellable, so the player can see what other commanders fly.
+    if (this.stationPage === "shipyard") {
+      const cur = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
+      const trade = hullTradeIn(p.ship.hullId);
+      const rows: string[] = [
+        `~ Flying: ${cur.name}  HP ${cur.hull}  SH ${cur.shield}  cargo ${cur.cargo}  spd ${cur.speed}  berths ${cur.crewSlots} ~`,
+        `~ Trade-in value ${trade}cr   Credits ${p.credits}cr   (modules and weapons transfer) ~`,
+      ];
+      const offers = this.shipyardOffers();
+      if (!offers.length) rows.push("~ No hulls on the pad this rotation — check back next cycle ~");
+      for (const o of offers) {
+        const h = o.hull;
+        const stat = `HP ${h.hull} SH ${h.shield} cargo ${h.cargo} spd ${h.speed} berths ${h.crewSlots}`;
+        if (o.reason) rows.push(`${h.name} — ${stat} — LOCKED (${o.reason})`);
+        else rows.push(`${h.name} — ${o.net >= 0 ? `${o.net}cr` : `refund ${-o.net}cr`} — ${stat}`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+
     if (this.stationPage === "crew") {
       const cap = effectiveCrewMax(p);
       const cur = crewCount(p);
@@ -10233,6 +10376,7 @@ export class Voidwake {
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
+      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
       else if (c && c.startsWith("Withdraw treasury")) {
@@ -10331,6 +10475,17 @@ export class Voidwake {
       if (offer.id === "luxury-cabin") this.pushLog("Luxury Cabin installed — +2 passenger berths.");
       if (offer.id === "station-core") this.pushLog("Station Core secured — head to open space, dock menu ▸ 'Deploy Station Core'.");
       this.pushLog(`Installed ${offer.name}.`);
+      return;
+    }
+
+    // ---- Shipyard page (0.8.2) ---------------------------------------------
+    // Layout: [0] current hull, [1] trade-in header, [2..N] offers, [N+1] Back.
+    if (this.stationPage === "shipyard") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~") || row === "Back") return;
+      const offer = this.shipyardOffers().find((o) => row.startsWith(o.hull.name));
+      if (!offer) return;
+      this.buyHull(offer);
       return;
     }
 

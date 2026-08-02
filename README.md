@@ -112,8 +112,10 @@ clearly labeled sections:
 11. Main loop         fixed-timestep update + render
 ```
 
-See [`src/game/README.md`](src/game/README.md) for extension recipes, and
-[`MANUAL.md`](MANUAL.md) for the player-facing gameplay guide.
+See [`src/game/README.md`](src/game/README.md) for extension recipes,
+[`GUIDE.md`](GUIDE.md) for the short new-pilot guide (including estimated
+system requirements), and [`MANUAL.md`](MANUAL.md) for the full player-facing
+gameplay reference.
 
 ---
 
@@ -121,7 +123,7 @@ See [`src/game/README.md`](src/game/README.md) for extension recipes, and
 
 | Want to add…          | Where                                                                    |
 | --------------------- | ------------------------------------------------------------------------ |
-| New ship hull         | Append to `SHIP_HULLS` in `voidwake.ts` (add `unlockSpecies` / `unlockPriorSave` for gated hulls) |
+| New ship hull         | Append to `SHIP_HULLS` in `voidwake.ts` (add `unlockSpecies` / `unlockPriorSave` for gated hulls; `hullPrice()` prices it for the Shipyard automatically) |
 | New species           | Append to `SPECIES` **and** `SPECIES_INFO` (bonus / drawback / affinity) |
 | New weapon            | Append to `WEAPONS` (works in both pilot and gunner slots)               |
 | New entity kind       | Extend `EntityKind`, add generator + AI handler + entry in `GLYPHS`      |
