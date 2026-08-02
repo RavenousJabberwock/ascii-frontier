@@ -1981,6 +1981,9 @@ interface StationStock {
   day: number;                // marketDay() when this stock was generated
   recruitSlots: number;       // 0..4 crew hires available today
   commodities: { id: string; name: string; buy: number; sell: number; stock: number }[];
+  // 0.8.2 — Shipyard berth: 0..3 hull ids listed today (empty at colonies).
+  hulls: string[];
+
 }
 
 // One line in the comms / chatter feed. "who" is the speaker label
