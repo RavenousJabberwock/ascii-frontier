@@ -5290,6 +5290,8 @@ export class Voidwake {
         s.orePrice = Math.round(s.orePrice * 1.25);
         s.fuelPrice = Math.round(s.fuelPrice * 1.10);
         s.weapons = [];
+        s.hulls = [];      // 0.8.2 — no orbital yard dirtside
+
         const colonyRumors = [
           "Colony gossip: militia recruiting anyone with a straight trigger finger.",
           "Bazaar buzz: ore buyers offering above spot for the next cycle.",
