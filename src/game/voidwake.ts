@@ -10080,6 +10080,71 @@ export class Voidwake {
   // pages. Prices come from the cached StationStock for this station.
   stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Shipyard", "Crew", "Undock"];
 
+  // 0.8.2 — Shipyard offers for the docked station: the rotating hull list
+  // minus the hull you already fly, each with its net cost after trade-in and
+  // a lock reason when a species / veteran gate blocks the sale.
+  shipyardOffers(): Array<{ hull: typeof SHIP_HULLS[number]; net: number; reason: string }> {
+    const p = this.player;
+    const sid = this.dockedStationId;
+    if (!p || sid == null) return [];
+    const stock = this.getStock(sid);
+    const trade = hullTradeIn(p.ship.hullId);
+    const prior = hasPriorSave();
+    const out: Array<{ hull: typeof SHIP_HULLS[number]; net: number; reason: string }> = [];
+    for (const id of stock.hulls) {
+      const h = SHIP_HULLS.find((x) => x.id === id);
+      if (!h || h.id === p.ship.hullId) continue;
+      let reason = "";
+      if (h.unlockSpecies && !h.unlockSpecies.includes(p.char.species as SpeciesName)) {
+        reason = `${h.unlockSpecies.join("/")} frames only`;
+      } else if (h.unlockPriorSave && !prior) {
+        reason = "veteran commanders only";
+      }
+      // Merchant/Quartermaster discounts apply to yard work too.
+      const net = Math.round(hullPrice(h) * merchantBuyMult(p)) - trade;
+      out.push({ hull: h, net, reason });
+    }
+    return out;
+  }
+
+  // Complete a hull swap: charge the net, move the frame, re-derive caps from
+  // (hull x species x modules), and keep cargo/crew only if they still fit.
+  buyHull(offer: { hull: typeof SHIP_HULLS[number]; net: number; reason: string }): void {
+    const p = this.player; if (!p) return;
+    const h = offer.hull;
+    if (offer.reason) { this.pushLog(`${h.name} is not cleared for you — ${offer.reason}.`); return; }
+    if (offer.net > 0 && p.credits < offer.net) { this.pushLog(`Yard wants ${offer.net}cr after trade-in.`); return; }
+    // Fit checks BEFORE taking money: cargo must fit the new hold, and the
+    // crew (plus any squatting stowaway) must fit the new berth count.
+    const s = speciesOf(p.char.species);
+    const newCargo = Math.max(1, Math.round(h.cargo * (s.cargoMul ?? 1)))
+      + p.ship.modules.filter((m) => m === "cargo-expander").length * 12;
+    if (cargoTotal(p) > newCargo) {
+      this.pushLog(`${h.name} holds only ${newCargo} units — sell down ${cargoTotal(p) - newCargo} first.`);
+      return;
+    }
+    const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
+    const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
+    const newBerths = Math.max(1, h.crewSlots + quarters - stow);
+    if (crewCount(p) > newBerths) {
+      this.pushLog(`${h.name} berths ${newBerths} — pay off ${crewCount(p) - newBerths} crew first.`);
+      return;
+    }
+    const old = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
+    p.credits -= offer.net;
+    p.ship.hullId = h.id;
+    recomputeShipStats(p, true);
+    this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred.`);
+    this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. All systems nominal.`, "#9fe");
+    dispatchHook("onShipHullChange", {
+      hullId: h.id, name: h.name, net: offer.net, previous: old,
+      stationId: this.dockedStationId,
+    });
+    this.sfx("rankup");
+  }
+
+
+
   buildStationLines(): string[] {
     const p = this.player!;
     const sid = this.dockedStationId;
