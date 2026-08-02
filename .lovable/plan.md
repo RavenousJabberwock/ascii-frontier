@@ -1,3 +1,24 @@
+# 0.8.2 — Shipyard & Player's Guide
+
+Ships as **0.8.2**.
+
+- **Shipyard.** Docked ▸ Shipyard lists 0–3 hulls per station, rotating with
+  the market day (Federation yards keep the most berths, pirate holds the
+  fewest, colonies none). Prices come from `hullPrice()` — derived from the
+  hull's own stats so new frames self-price — shown net of a 55% trade-in on
+  your current hull and discounted by Merchant/Quartermaster perks.
+  Species-locked and veteran-locked frames are listed but flagged LOCKED.
+- **Safe frame swaps.** `recomputeShipStats()` re-derives hull/shield/cargo/
+  fuel/speed from (hull × species × modules), so module bonuses transfer
+  instead of being lost or double-counted. Purchases are blocked (before any
+  credits move) if the new hold can't take your cargo or the new berth count
+  can't take your crew, with a message naming how much to shed.
+- **Lua.** New `onShipHullChange` hook (hullId, name, net, previous,
+  stationId), registered in the Lua host.
+- **Player's guide.** New `GUIDE.md`: scenario, first flight, controls,
+  survival, an encounter table, income routes, ship/crew/upgrades, Comms,
+  options, modding/scripting, and estimated minimum + recommended specs.
+
 # 0.8.1 — Situational NPC Comms
 
 Ships as **0.8.1**. Extends the 0.8.0 context-bark system outward from the
