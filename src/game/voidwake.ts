@@ -3455,6 +3455,33 @@ function effectiveCrewMax(p: PlayerState): number {
   return Math.max(1, base + quarters - stow);
 }
 
+// 0.8.2 — Recompute every derived ship cap from (hull x species x modules).
+// Used by the Shipyard when the player changes hulls: module bonuses are
+// re-applied on top of the new frame rather than lost or double-counted.
+// `fresh` fills hull/shield (a bought ship comes out of the yard whole).
+function recomputeShipStats(p: PlayerState, fresh = false): void {
+  const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
+  const s = speciesOf(p.char.species);
+  const n = (id: string) => p.ship.modules.filter((m) => m === id).length;
+  const hullMax = Math.max(1, Math.round(hull.hull * (s.hullMul ?? 1)))
+    + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80;
+  const shieldMax = Math.max(0, Math.round(hull.shield * (s.shieldMul ?? 1)))
+    + n("shield-booster") * 25;
+  const cargoMax = Math.max(1, Math.round(hull.cargo * (s.cargoMul ?? 1)))
+    + n("cargo-expander") * 12;
+  const fuelMax = 100 + n("aux-fuel-tank") * 50;
+  p.ship.hullMax = hullMax;
+  p.ship.shieldMax = shieldMax;
+  p.ship.cargoMax = cargoMax;
+  p.ship.fuelMax = fuelMax;
+  p.ship.speed = hull.speed;
+  p.ship.hull = fresh ? hullMax : Math.min(p.ship.hull, hullMax);
+  p.ship.shield = fresh ? shieldMax : Math.min(p.ship.shield, shieldMax);
+  p.ship.fuel = Math.min(p.ship.fuel, fuelMax);
+}
+
+
+
 // 0.7.1 — Passenger berths: 2 per Luxury Cabin module. Kept independent
 // of crew so cabins can be added without giving up crew slots.
 function effectiveBerthMax(p: PlayerState): number {
