@@ -10376,6 +10376,7 @@ export class Voidwake {
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
+      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
       else if (c && c.startsWith("Withdraw treasury")) {
@@ -10474,6 +10475,17 @@ export class Voidwake {
       if (offer.id === "luxury-cabin") this.pushLog("Luxury Cabin installed — +2 passenger berths.");
       if (offer.id === "station-core") this.pushLog("Station Core secured — head to open space, dock menu ▸ 'Deploy Station Core'.");
       this.pushLog(`Installed ${offer.name}.`);
+      return;
+    }
+
+    // ---- Shipyard page (0.8.2) ---------------------------------------------
+    // Layout: [0] current hull, [1] trade-in header, [2..N] offers, [N+1] Back.
+    if (this.stationPage === "shipyard") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~") || row === "Back") return;
+      const offer = this.shipyardOffers().find((o) => row.startsWith(o.hull.name));
+      if (!offer) return;
+      this.buyHull(offer);
       return;
     }
 
