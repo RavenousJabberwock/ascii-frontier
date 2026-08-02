@@ -3422,11 +3422,18 @@ function generateStationStock(stationId: number, faction: string = "guild", day:
       stock: Math.floor(20 + rng() * 80),
     };
   });
+  // 0.8.2 — Shipyard listings. Big lawful docks keep more berths free than
+  // frontier outposts; pirate holds fence whatever came through last night.
+  const berths = faction === "federation" ? 1 + Math.floor(rng() * 3)
+    : faction === "pirate" ? Math.floor(rng() * 2)
+    : Math.floor(rng() * 3);
+  const hulls = shuffled(SHIP_HULLS).slice(0, berths).map((h) => h.id);
   return {
     fuelPrice, orePrice, weapons, modules, gunnerFee,
     rumor: rumors[Math.floor(rng() * rumors.length)],
-    day, recruitSlots, commodities,
+    day, recruitSlots, commodities, hulls,
   };
+
 }
 
 // Effective ship caps after module installs.
