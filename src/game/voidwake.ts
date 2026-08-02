@@ -97,7 +97,8 @@ export type ScriptHookName =
   | "onPlayerStationTierUp"
   // 0.8.0 — comms & customs hooks
   | "onPlayerHail"
-  | "onCustomsScan";
+  | "onCustomsScan"
+  | "onShipHullChange";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -118,6 +119,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPlayerStationTierUp:[],
   onPlayerHail:         [],
   onCustomsScan:        [],
+  onShipHullChange:     [],
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
@@ -10140,7 +10142,7 @@ export class Voidwake {
       hullId: h.id, name: h.name, net: offer.net, previous: old,
       stationId: this.dockedStationId,
     });
-    this.sfx("rankup");
+    this.sfx("levelup");
   }
 
 
