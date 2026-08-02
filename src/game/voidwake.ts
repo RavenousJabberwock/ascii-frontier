@@ -10159,6 +10159,28 @@ export class Voidwake {
         "Back",
       ];
     }
+    // ---- Shipyard (0.8.2) ---------------------------------------------------
+    // Rotating hull berths. Locked hulls (species / veteran gates) are listed
+    // but not sellable, so the player can see what other commanders fly.
+    if (this.stationPage === "shipyard") {
+      const cur = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
+      const trade = hullTradeIn(p.ship.hullId);
+      const rows: string[] = [
+        `~ Flying: ${cur.name}  HP ${cur.hull}  SH ${cur.shield}  cargo ${cur.cargo}  spd ${cur.speed}  berths ${cur.crewSlots} ~`,
+        `~ Trade-in value ${trade}cr   Credits ${p.credits}cr   (modules and weapons transfer) ~`,
+      ];
+      const offers = this.shipyardOffers();
+      if (!offers.length) rows.push("~ No hulls on the pad this rotation — check back next cycle ~");
+      for (const o of offers) {
+        const h = o.hull;
+        const stat = `HP ${h.hull} SH ${h.shield} cargo ${h.cargo} spd ${h.speed} berths ${h.crewSlots}`;
+        if (o.reason) rows.push(`${h.name} — ${stat} — LOCKED (${o.reason})`);
+        else rows.push(`${h.name} — ${o.net >= 0 ? `${o.net}cr` : `refund ${-o.net}cr`} — ${stat}`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+
     if (this.stationPage === "crew") {
       const cap = effectiveCrewMax(p);
       const cur = crewCount(p);
