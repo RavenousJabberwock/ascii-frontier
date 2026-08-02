@@ -1710,6 +1710,21 @@ function unlockedShipHulls(species: string): typeof SHIP_HULLS {
   });
 }
 
+// 0.8.2 — Shipyard pricing. Derived from the hull's own stats so new hulls
+// added to SHIP_HULLS are priced automatically and stay in rough balance.
+// Trade-in on your current hull returns 55% of list.
+function hullPrice(h: typeof SHIP_HULLS[number]): number {
+  return Math.round(
+    900 + h.hull * 24 + h.shield * 22 + h.cargo * 30 + h.speed * 28 + h.crewSlots * 240,
+  );
+}
+function hullTradeIn(hullId: string): number {
+  const h = SHIP_HULLS.find((x) => x.id === hullId);
+  return h ? Math.round(hullPrice(h) * 0.55) : 0;
+}
+
+
+
 const WEAPONS = [
   { id: "pulse", name: "Pulse Laser", dmg: 6, cooldown: 0.25, range: 350 },
   { id: "rail", name: "Railgun", dmg: 22, cooldown: 1.1, range: 600 },
