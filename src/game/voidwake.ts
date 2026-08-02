@@ -10078,7 +10078,7 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Crew", "Undock"];
+  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Shipyard", "Crew", "Undock"];
 
   buildStationLines(): string[] {
     const p = this.player!;
