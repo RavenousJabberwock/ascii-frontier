@@ -1923,6 +1923,10 @@ interface PlayerShip {
   // weapon in that case.
   gunnerWeaponId?: string;
   modules: string[];
+  // 0.8.3 — Hull insurance policy bought at a Shipyard. Burns on the first
+  // claim (respawn) and lapses when the frame is traded in. Optional so
+  // older saves load unchanged.
+  insured?: boolean;
 }
 
 // A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
