@@ -10680,6 +10680,22 @@ export class Voidwake {
     if (this.stationPage === "shipyard") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~") || row === "Back") return;
+      if (row.startsWith("Hull policy:")) {
+        this.pushLog("You already carry a policy on this frame.");
+        return;
+      }
+      if (row.startsWith("Buy hull insurance")) {
+        const cost = insurancePremium(p);
+        if (p.credits < cost) { this.pushLog(`The underwriter wants ${cost}cr.`); return; }
+        p.credits -= cost;
+        p.ship.insured = true;
+        this.pushLog(`Hull policy written for ${cost}cr. Covers one rescue.`);
+        if (this.dockedStationId != null) {
+          this.dealerPitch(this.dockedStationId, dockedEnt?.name ?? "Yard");
+        }
+        this.sfx("chime");
+        return;
+      }
       const offer = this.shipyardOffers().find((o) => row.startsWith(o.hull.name));
       if (!offer) return;
       this.buyHull(offer);
