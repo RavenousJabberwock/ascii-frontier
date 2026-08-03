@@ -6298,15 +6298,34 @@ export class Voidwake {
     p.ship.hull = p.ship.hullMax;
     p.ship.shield = p.ship.shieldMax;
     p.ship.fuel = Math.max(p.ship.fuel, Math.floor(p.ship.fuelMax * 0.5));
-    // Rescue fee: 25% of credits, capped so brand-new commanders aren't wiped.
-    const fee = Math.min(p.credits, Math.max(0, Math.floor(p.credits * 0.25)));
-    p.credits -= fee;
+    // 0.8.3 — Hull policy bought at a Shipyard. A claim waives the rescue
+    // fee, tops the tank off, and pays 60cr per unit of lost cargo as
+    // freight compensation. One claim per policy: it burns on use.
+    const insured = !!p.ship.insured;
+    const lost = cargoTotal(p);
+    let fee = 0;
+    let payout = 0;
+    if (insured) {
+      p.ship.insured = false;
+      p.ship.fuel = p.ship.fuelMax;
+      payout = lost * 60;
+      p.credits += payout;
+    } else {
+      // Rescue fee: 25% of credits, capped so brand-new commanders aren't wiped.
+      fee = Math.min(p.credits, Math.max(0, Math.floor(p.credits * 0.25)));
+      p.credits -= fee;
+    }
     // Cargo is lost with the wreck.
     p.cargo = {};
     this.deathReason = null;
     this.deathKiller = null;
     this.screen = "playing";
-    this.pushLog(`Rescued by ${best.name}. Hull restored. Fee: ${fee}cr. Cargo lost.`);
+    if (insured) {
+      this.pushLog(`Rescued by ${best.name}. Hull policy claimed: fee waived, ${payout}cr freight compensation. Policy expired.`);
+      this.pushChatter("Computer", "Underwriter paid out. Recommend renewing the policy at the next yard.", "#9fe");
+    } else {
+      this.pushLog(`Rescued by ${best.name}. Hull restored. Fee: ${fee}cr. Cargo lost.`);
+    }
     this.beep(440, 0.2, "sine");
   }
 
