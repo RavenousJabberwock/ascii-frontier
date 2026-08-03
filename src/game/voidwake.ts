@@ -231,6 +231,12 @@ type ChatterKind =
   | "npc_ctx_wanted" | "npc_ctx_prey" | "npc_ctx_feared"
   | "npc_ctx_traffic" | "npc_ctx_nebula" | "npc_ctx_exotic"
   | "npc_ctx_deepspace" | "npc_ctx_rescue_nearby" | "npc_ctx_colony_quiet"
+  // 0.8.3 — shipyard dealer patter, keyed to what the pilot is flying,
+  // carrying and can afford. Corny on purpose.
+  | "dealer_generic" | "dealer_broke" | "dealer_flush" | "dealer_damaged"
+  | "dealer_cargofull" | "dealer_crewfull" | "dealer_starter"
+  | "dealer_veteran" | "dealer_lowfuel" | "dealer_contraband"
+  | "dealer_locked" | "dealer_insurance"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
