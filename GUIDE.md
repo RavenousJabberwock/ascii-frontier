@@ -123,7 +123,15 @@ Everything else is recoverable.
   rotating with the market day. Prices are shown net of the trade-in on your
   current frame; modules and weapons transfer across. You can't downsize into
   a hull that won't hold your cargo or your crew — sell down or pay off first.
-  Some hulls are locked to a species, others to veteran commanders.
+  Some hulls are locked to a species, others to veteran commanders. Offers
+  list a signed delta against the frame you fly now.
+- **Hull insurance** (Shipyard, 15% of your frame's list price). Covers one
+  rescue: the 25% rescue fee is waived, your tank comes back full, and you're
+  paid 60cr per unit of cargo lost with the wreck. The policy burns on the
+  claim and lapses if you trade the frame in.
+- **The lot.** Yards with hulls on the pad advertise on the open channel, and
+  the pitch is keyed to what you're flying, hauling and can afford. It is very
+  corny. This is intentional.
 - **Modules.** 0–5 per station, rotating: cargo expanders, plating, shield
   boosters, aux tanks, fuel scoops, repair drones, engine tuning, luxury
   cabins, shielded holds, bribe encoders, station cores.
