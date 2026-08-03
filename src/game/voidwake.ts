@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.2";
+const VERSION = "0.8.3";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -10573,7 +10573,7 @@ export class Voidwake {
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
-      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; }
+      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; if (this.dockedStationId != null) this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard"); }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
       else if (c && c.startsWith("Withdraw treasury")) {
@@ -10691,7 +10691,7 @@ export class Voidwake {
         p.ship.insured = true;
         this.pushLog(`Hull policy written for ${cost}cr. Covers one rescue.`);
         if (this.dockedStationId != null) {
-          this.dealerPitch(this.dockedStationId, dockedEnt?.name ?? "Yard");
+          this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard");
         }
         this.sfx("chime");
         return;
