@@ -1446,6 +1446,87 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "We're going to be late unless you get greedy with the throttle.",
   ],
 
+  // 0.8.3 — Shipyard dealer patter. dealerBuckets() picks by what the pilot
+  // is flying, hauling and can afford. Deliberately corny: this is a used
+  // spacecraft lot with a coffee machine and a banner.
+  dealer_generic: [
+    "{speaker} Yard here — every hull certified pre-flown, {cmdr}!",
+    "You're not buying a ship, you're buying a *lifestyle*. Also a ship.",
+    "Kick the plating. Go on. That's real plating, that is.",
+    "One careful owner. Well. One owner. 'Careful' is doing some work there.",
+    "Low parsecs, garage-kept, never flown into a sun on purpose.",
+    "Prices this low, my accountant weeps openly. Ignore him, he's decorative.",
+    "Sign today and I'll throw in the seat cushions. The seats are extra.",
+    "That frame's got soul, {cmdr}. And nav. Mostly nav.",
+    "No haggling. Unless you haggle, in which case, extensive haggling.",
+    "Every hull comes with a full tank of promises.",
+  ],
+  dealer_broke: [
+    "Credit's a bit thin, {cmdr}? Good news — we finance dreams. Bad news: interest.",
+    "I can do zero down. I can't do zero total. Sadly.",
+    "Bring back some ore and we'll talk frames, friend.",
+    "Window shopping's free! Breathing our air is technically also free.",
+    "Come back with credits and I'll come back with enthusiasm.",
+  ],
+  dealer_flush: [
+    "Oh, a *serious* buyer. {cmdr}, step into my pad, mind the coolant.",
+    "That balance says 'flagship'. Who am I to argue with a balance?",
+    "You can afford better. I say that with love, and with a price list.",
+    "Big credits, bigger berths. Let's get you something that intimidates customs.",
+  ],
+  dealer_damaged: [
+    "That hull's holding air out of sheer stubbornness. Trade it in!",
+    "I can hear your frame from here, {cmdr}. It's asking for retirement.",
+    "We'll take her as-is. We won't be *happy*, but we'll take her.",
+    "Scratch on the port side? Wonderful — that's called 'character' at trade-in.",
+    "You brought me a wreck and called it a trade-in. I respect the hustle.",
+  ],
+  dealer_cargofull: [
+    "Hold's bursting, {cmdr}. Bigger hold, bigger hauls, bigger me.",
+    "Cargo stacked to the ceiling? That's not a ship, that's a suitcase.",
+    "Sell that freight before you buy — the yard doesn't move cargo, only frames.",
+    "Some pilots buy speed. Smart pilots buy *volume*.",
+  ],
+  dealer_crewfull: [
+    "Berths all full? Then you don't need a ship, you need a *hotel*.",
+    "Crowded bridge, that. I've got frames with doors and everything.",
+    "More bunks means fewer arguments over the ration locker. Science.",
+  ],
+  dealer_starter: [
+    "Still flying the trainer? Bless. Everyone starts somewhere, {cmdr}.",
+    "That frame was cutting-edge. During a previous administration.",
+    "First hull, is it? Sentimental. Sentiment doesn't stop pirates, though.",
+    "I'll be honest, the trade-in value is mostly the scrap and the goodwill.",
+  ],
+  dealer_veteran: [
+    "{kills} kills on your file and *that's* the hull you're in? Criminal.",
+    "A pilot of your record deserves a frame people flinch at.",
+    "Word travels. So should you — faster, in something from my pad.",
+  ],
+  dealer_lowfuel: [
+    "Coasting in on fumes, {cmdr}? Ask about our efficiency frames.",
+    "Tank's dry. Buy a bigger tank. It's not complicated, it's just expensive.",
+    "You didn't glide in here for the view, did you. Fuel's two doors down.",
+  ],
+  dealer_contraband: [
+    "I don't ask what's in the hold. I do ask about the trade-in value.",
+    "Discreet hulls available. Very smooth lines. Very few questions.",
+    "No cargo scan on my pad, {cmdr}. Just a scan of your credit balance.",
+  ],
+  dealer_locked: [
+    "That one? Not cleared for you, friend. Beautiful, though, isn't she.",
+    "Look all you like at the roped-off frame. Looking's free.",
+    "Papers first, keys second. That's the order the Guild insists on.",
+  ],
+  dealer_insurance: [
+    "Add the hull policy, {cmdr}. Space is mostly fine. 'Mostly'.",
+    "Insurance is a bet you hope to lose. Place it anyway.",
+    "Policy covers the rescue fee and pays out on your hold. Cheap peace of mind.",
+    "Uninsured, in *this* sector? Bold. Stupid, but bold.",
+  ],
+
+
+
   // 0.8.1 — Situational NPC barks. npcContextBuckets() inspects the
   // speaker's hull, AI state, faction and the player's standing before
   // falling back to the flat per-kind tables.
