@@ -8509,6 +8509,68 @@ export class Voidwake {
     return out;
   }
 
+  // --- 0.8.3 — Used-spacecraft dealer patter ------------------------------
+  // Which sales pitch the lot would run right now, given what the pilot is
+  // flying, hauling and can afford. Corny by design; the yard is a used lot.
+  dealerBuckets(sid: number): ChatterKind[] {
+    const p = this.player; if (!p) return [];
+    const out: ChatterKind[] = ["dealer_generic", "dealer_generic"];
+    const stock = this.getStock(sid);
+    const hullPct = p.ship.hull / Math.max(1, p.ship.hullMax);
+    if (p.credits < 800) out.push("dealer_broke");
+    if (p.credits > 20000) out.push("dealer_flush");
+    if (hullPct < 0.55) out.push("dealer_damaged");
+    if (cargoTotal(p) >= p.ship.cargoMax - 2) out.push("dealer_cargofull");
+    if (crewCount(p) >= effectiveCrewMax(p)) out.push("dealer_crewfull");
+    if (p.ship.hullId === SHIP_HULLS[0].id) out.push("dealer_starter");
+    if ((p.kills ?? 0) >= 40) out.push("dealer_veteran");
+    if (p.ship.fuel / Math.max(1, p.ship.fuelMax) < 0.25) out.push("dealer_lowfuel");
+    if (COMMODITIES.some((c) => c.legality !== "legal" && (p.cargo[c.id] ?? 0) > 0)) {
+      out.push("dealer_contraband");
+    }
+    if (!p.ship.insured) out.push("dealer_insurance");
+    if (stock.hulls.some((id) => {
+      const h = SHIP_HULLS.find((x) => x.id === id);
+      return !!h && (!!h.unlockSpecies || !!h.unlockPriorSave);
+    })) out.push("dealer_locked");
+    return out;
+  }
+
+  // Post one dealer line. Used by the ambient scheduler and once on entering
+  // the Shipyard page so the salesman greets you at the door.
+  dealerPitch(sid: number, name: string) {
+    const buckets = this.dealerBuckets(sid);
+    if (!buckets.length) return;
+    const kind = buckets[Math.floor(Math.random() * buckets.length)];
+    const ent = this.entities.find((e) => e.id === sid);
+    this.pushChatter(`${name} Yard`, pickLine(kind, this.chatterCtx(ent, { a: name })),
+                     "#ffc36b", "external");
+  }
+
+  // Ambient: within 2500u of a station that actually has hulls on the pad,
+  // the lot broadcasts an advert on the open channel. Gated by chatterFreq
+  // like every other ambient scheduler.
+  private _nextDealerPitchAt = 40;
+  tickDealerPitch(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.5 : 1.0;
+    this._nextDealerPitchAt -= dt;
+    if (this._nextDealerPitchAt > 0) return;
+    this._nextDealerPitchAt = (35 + Math.random() * 40) * mul;
+    const yard = this.entities
+      .filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 1) > 0)
+      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
+      .filter((x) => x.d < 2500)
+      .sort((a, b) => a.d - b.d)[0];
+    if (!yard) return;
+    if (!this.getStock(yard.e.id).hulls.length) return;
+    this.dealerPitch(yard.e.id, yard.e.name);
+  }
+
+
+
   // Occasional inter-NPC exchange — pick two nearby non-alien speakers
   // (ships, stations, or planets) within scanner range of the player and
   // post a short back-and-forth so the Comms feed reads like a lived-in
