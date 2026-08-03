@@ -1812,6 +1812,15 @@ function hullTradeIn(hullId: string): number {
   return h ? Math.round(hullPrice(h) * 0.55) : 0;
 }
 
+// 0.8.3 — Hull insurance premium: 15% of the frame's list price, softened by
+// the same Merchant/Quartermaster haggling that applies to yard work.
+function insurancePremium(p: PlayerState): number {
+  const h = SHIP_HULLS.find((x) => x.id === p.ship.hullId) ?? SHIP_HULLS[0];
+  return Math.max(120, Math.round(hullPrice(h) * 0.15 * merchantBuyMult(p)));
+}
+
+
+
 
 
 const WEAPONS = [
