@@ -8525,7 +8525,7 @@ export class Voidwake {
     if (p.ship.hullId === SHIP_HULLS[0].id) out.push("dealer_starter");
     if ((p.kills ?? 0) >= 40) out.push("dealer_veteran");
     if (p.ship.fuel / Math.max(1, p.ship.fuelMax) < 0.25) out.push("dealer_lowfuel");
-    if (COMMODITIES.some((c) => c.legality !== "legal" && (p.cargo[c.id] ?? 0) > 0)) {
+    if (COMMODITIES.some((c) => c.legality !== "clean" && (p.cargo[c.id] ?? 0) > 0)) {
       out.push("dealer_contraband");
     }
     if (!p.ship.insured) out.push("dealer_insurance");
