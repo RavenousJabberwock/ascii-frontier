@@ -10309,6 +10309,12 @@ export class Voidwake {
     p.credits -= offer.net;
     p.ship.hullId = h.id;
     recomputeShipStats(p, true);
+    // 0.8.3 — a policy is written against a specific frame, so it lapses on
+    // trade-in. The yard will happily sell you another one.
+    if (p.ship.insured) {
+      p.ship.insured = false;
+      this.pushLog("Hull policy lapsed with the trade-in — buy a new one for this frame.");
+    }
     this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred.`);
     this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. All systems nominal.`, "#9fe");
     dispatchHook("onShipHullChange", {
