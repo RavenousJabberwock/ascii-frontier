@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.2";
+const VERSION = "0.8.3";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -231,6 +231,12 @@ type ChatterKind =
   | "npc_ctx_wanted" | "npc_ctx_prey" | "npc_ctx_feared"
   | "npc_ctx_traffic" | "npc_ctx_nebula" | "npc_ctx_exotic"
   | "npc_ctx_deepspace" | "npc_ctx_rescue_nearby" | "npc_ctx_colony_quiet"
+  // 0.8.3 — shipyard dealer patter, keyed to what the pilot is flying,
+  // carrying and can afford. Corny on purpose.
+  | "dealer_generic" | "dealer_broke" | "dealer_flush" | "dealer_damaged"
+  | "dealer_cargofull" | "dealer_crewfull" | "dealer_starter"
+  | "dealer_veteran" | "dealer_lowfuel" | "dealer_contraband"
+  | "dealer_locked" | "dealer_insurance"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1440,6 +1446,87 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "We're going to be late unless you get greedy with the throttle.",
   ],
 
+  // 0.8.3 — Shipyard dealer patter. dealerBuckets() picks by what the pilot
+  // is flying, hauling and can afford. Deliberately corny: this is a used
+  // spacecraft lot with a coffee machine and a banner.
+  dealer_generic: [
+    "{speaker} Yard here — every hull certified pre-flown, {cmdr}!",
+    "You're not buying a ship, you're buying a *lifestyle*. Also a ship.",
+    "Kick the plating. Go on. That's real plating, that is.",
+    "One careful owner. Well. One owner. 'Careful' is doing some work there.",
+    "Low parsecs, garage-kept, never flown into a sun on purpose.",
+    "Prices this low, my accountant weeps openly. Ignore him, he's decorative.",
+    "Sign today and I'll throw in the seat cushions. The seats are extra.",
+    "That frame's got soul, {cmdr}. And nav. Mostly nav.",
+    "No haggling. Unless you haggle, in which case, extensive haggling.",
+    "Every hull comes with a full tank of promises.",
+  ],
+  dealer_broke: [
+    "Credit's a bit thin, {cmdr}? Good news — we finance dreams. Bad news: interest.",
+    "I can do zero down. I can't do zero total. Sadly.",
+    "Bring back some ore and we'll talk frames, friend.",
+    "Window shopping's free! Breathing our air is technically also free.",
+    "Come back with credits and I'll come back with enthusiasm.",
+  ],
+  dealer_flush: [
+    "Oh, a *serious* buyer. {cmdr}, step into my pad, mind the coolant.",
+    "That balance says 'flagship'. Who am I to argue with a balance?",
+    "You can afford better. I say that with love, and with a price list.",
+    "Big credits, bigger berths. Let's get you something that intimidates customs.",
+  ],
+  dealer_damaged: [
+    "That hull's holding air out of sheer stubbornness. Trade it in!",
+    "I can hear your frame from here, {cmdr}. It's asking for retirement.",
+    "We'll take her as-is. We won't be *happy*, but we'll take her.",
+    "Scratch on the port side? Wonderful — that's called 'character' at trade-in.",
+    "You brought me a wreck and called it a trade-in. I respect the hustle.",
+  ],
+  dealer_cargofull: [
+    "Hold's bursting, {cmdr}. Bigger hold, bigger hauls, bigger me.",
+    "Cargo stacked to the ceiling? That's not a ship, that's a suitcase.",
+    "Sell that freight before you buy — the yard doesn't move cargo, only frames.",
+    "Some pilots buy speed. Smart pilots buy *volume*.",
+  ],
+  dealer_crewfull: [
+    "Berths all full? Then you don't need a ship, you need a *hotel*.",
+    "Crowded bridge, that. I've got frames with doors and everything.",
+    "More bunks means fewer arguments over the ration locker. Science.",
+  ],
+  dealer_starter: [
+    "Still flying the trainer? Bless. Everyone starts somewhere, {cmdr}.",
+    "That frame was cutting-edge. During a previous administration.",
+    "First hull, is it? Sentimental. Sentiment doesn't stop pirates, though.",
+    "I'll be honest, the trade-in value is mostly the scrap and the goodwill.",
+  ],
+  dealer_veteran: [
+    "{kills} kills on your file and *that's* the hull you're in? Criminal.",
+    "A pilot of your record deserves a frame people flinch at.",
+    "Word travels. So should you — faster, in something from my pad.",
+  ],
+  dealer_lowfuel: [
+    "Coasting in on fumes, {cmdr}? Ask about our efficiency frames.",
+    "Tank's dry. Buy a bigger tank. It's not complicated, it's just expensive.",
+    "You didn't glide in here for the view, did you. Fuel's two doors down.",
+  ],
+  dealer_contraband: [
+    "I don't ask what's in the hold. I do ask about the trade-in value.",
+    "Discreet hulls available. Very smooth lines. Very few questions.",
+    "No cargo scan on my pad, {cmdr}. Just a scan of your credit balance.",
+  ],
+  dealer_locked: [
+    "That one? Not cleared for you, friend. Beautiful, though, isn't she.",
+    "Look all you like at the roped-off frame. Looking's free.",
+    "Papers first, keys second. That's the order the Guild insists on.",
+  ],
+  dealer_insurance: [
+    "Add the hull policy, {cmdr}. Space is mostly fine. 'Mostly'.",
+    "Insurance is a bet you hope to lose. Place it anyway.",
+    "Policy covers the rescue fee and pays out on your hold. Cheap peace of mind.",
+    "Uninsured, in *this* sector? Bold. Stupid, but bold.",
+  ],
+
+
+
   // 0.8.1 — Situational NPC barks. npcContextBuckets() inspects the
   // speaker's hull, AI state, faction and the player's standing before
   // falling back to the flat per-kind tables.
@@ -1725,6 +1812,15 @@ function hullTradeIn(hullId: string): number {
   return h ? Math.round(hullPrice(h) * 0.55) : 0;
 }
 
+// 0.8.3 — Hull insurance premium: 15% of the frame's list price, softened by
+// the same Merchant/Quartermaster haggling that applies to yard work.
+function insurancePremium(p: PlayerState): number {
+  const h = SHIP_HULLS.find((x) => x.id === p.ship.hullId) ?? SHIP_HULLS[0];
+  return Math.max(120, Math.round(hullPrice(h) * 0.15 * merchantBuyMult(p)));
+}
+
+
+
 
 
 const WEAPONS = [
@@ -1836,6 +1932,10 @@ interface PlayerShip {
   // weapon in that case.
   gunnerWeaponId?: string;
   modules: string[];
+  // 0.8.3 — Hull insurance policy bought at a Shipyard. Burns on the first
+  // claim (respawn) and lapses when the frame is traded in. Optional so
+  // older saves load unchanged.
+  insured?: boolean;
 }
 
 // A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
@@ -6211,15 +6311,34 @@ export class Voidwake {
     p.ship.hull = p.ship.hullMax;
     p.ship.shield = p.ship.shieldMax;
     p.ship.fuel = Math.max(p.ship.fuel, Math.floor(p.ship.fuelMax * 0.5));
-    // Rescue fee: 25% of credits, capped so brand-new commanders aren't wiped.
-    const fee = Math.min(p.credits, Math.max(0, Math.floor(p.credits * 0.25)));
-    p.credits -= fee;
+    // 0.8.3 — Hull policy bought at a Shipyard. A claim waives the rescue
+    // fee, tops the tank off, and pays 60cr per unit of lost cargo as
+    // freight compensation. One claim per policy: it burns on use.
+    const insured = !!p.ship.insured;
+    const lost = cargoTotal(p);
+    let fee = 0;
+    let payout = 0;
+    if (insured) {
+      p.ship.insured = false;
+      p.ship.fuel = p.ship.fuelMax;
+      payout = lost * 60;
+      p.credits += payout;
+    } else {
+      // Rescue fee: 25% of credits, capped so brand-new commanders aren't wiped.
+      fee = Math.min(p.credits, Math.max(0, Math.floor(p.credits * 0.25)));
+      p.credits -= fee;
+    }
     // Cargo is lost with the wreck.
     p.cargo = {};
     this.deathReason = null;
     this.deathKiller = null;
     this.screen = "playing";
-    this.pushLog(`Rescued by ${best.name}. Hull restored. Fee: ${fee}cr. Cargo lost.`);
+    if (insured) {
+      this.pushLog(`Rescued by ${best.name}. Hull policy claimed: fee waived, ${payout}cr freight compensation. Policy expired.`);
+      this.pushChatter("Computer", "Underwriter paid out. Recommend renewing the policy at the next yard.", "#9fe");
+    } else {
+      this.pushLog(`Rescued by ${best.name}. Hull restored. Fee: ${fee}cr. Cargo lost.`);
+    }
     this.beep(440, 0.2, "sine");
   }
 
@@ -6967,6 +7086,7 @@ export class Voidwake {
     this.tickCrewIdle(dt);
     this.tickCrewBanter(dt);
     this.tickNpcBanter(dt);
+    this.tickDealerPitch(dt);
     this.tickStowaway(dt);
     this.tickRetaliation();
     this.tickRespawns(dt);
@@ -8397,6 +8517,68 @@ export class Voidwake {
     if (e.kind === "planet" && e.populated && d < 1200) out.push("npc_ctx_colony_quiet");
     return out;
   }
+
+  // --- 0.8.3 — Used-spacecraft dealer patter ------------------------------
+  // Which sales pitch the lot would run right now, given what the pilot is
+  // flying, hauling and can afford. Corny by design; the yard is a used lot.
+  dealerBuckets(sid: number): ChatterKind[] {
+    const p = this.player; if (!p) return [];
+    const out: ChatterKind[] = ["dealer_generic", "dealer_generic"];
+    const stock = this.getStock(sid);
+    const hullPct = p.ship.hull / Math.max(1, p.ship.hullMax);
+    if (p.credits < 800) out.push("dealer_broke");
+    if (p.credits > 20000) out.push("dealer_flush");
+    if (hullPct < 0.55) out.push("dealer_damaged");
+    if (cargoTotal(p) >= p.ship.cargoMax - 2) out.push("dealer_cargofull");
+    if (crewCount(p) >= effectiveCrewMax(p)) out.push("dealer_crewfull");
+    if (p.ship.hullId === SHIP_HULLS[0].id) out.push("dealer_starter");
+    if ((p.kills ?? 0) >= 40) out.push("dealer_veteran");
+    if (p.ship.fuel / Math.max(1, p.ship.fuelMax) < 0.25) out.push("dealer_lowfuel");
+    if (COMMODITIES.some((c) => c.legality !== "clean" && (p.cargo[c.id] ?? 0) > 0)) {
+      out.push("dealer_contraband");
+    }
+    if (!p.ship.insured) out.push("dealer_insurance");
+    if (stock.hulls.some((id) => {
+      const h = SHIP_HULLS.find((x) => x.id === id);
+      return !!h && (!!h.unlockSpecies || !!h.unlockPriorSave);
+    })) out.push("dealer_locked");
+    return out;
+  }
+
+  // Post one dealer line. Used by the ambient scheduler and once on entering
+  // the Shipyard page so the salesman greets you at the door.
+  dealerPitch(sid: number, name: string) {
+    const buckets = this.dealerBuckets(sid);
+    if (!buckets.length) return;
+    const kind = buckets[Math.floor(Math.random() * buckets.length)];
+    const ent = this.entities.find((e) => e.id === sid);
+    this.pushChatter(`${name} Yard`, pickLine(kind, this.chatterCtx(ent, { a: name })),
+                     "#ffc36b", "external");
+  }
+
+  // Ambient: within 2500u of a station that actually has hulls on the pad,
+  // the lot broadcasts an advert on the open channel. Gated by chatterFreq
+  // like every other ambient scheduler.
+  private _nextDealerPitchAt = 40;
+  tickDealerPitch(dt: number) {
+    const p = this.player; if (!p) return;
+    const freq = this.options.chatterFreq ?? "normal";
+    if (freq === "off") return;
+    const mul = freq === "rare" ? 3.0 : freq === "lively" ? 0.5 : 1.0;
+    this._nextDealerPitchAt -= dt;
+    if (this._nextDealerPitchAt > 0) return;
+    this._nextDealerPitchAt = (35 + Math.random() * 40) * mul;
+    const yard = this.entities
+      .filter((e) => e.kind === "station" && e.faction !== "pirate" && (e.hull ?? 1) > 0)
+      .map((e) => ({ e, d: V.len(V.sub(e.pos, p.pos)) }))
+      .filter((x) => x.d < 2500)
+      .sort((a, b) => a.d - b.d)[0];
+    if (!yard) return;
+    if (!this.getStock(yard.e.id).hulls.length) return;
+    this.dealerPitch(yard.e.id, yard.e.name);
+  }
+
+
 
   // Occasional inter-NPC exchange — pick two nearby non-alien speakers
   // (ships, stations, or planets) within scanner range of the player and
@@ -10136,6 +10318,12 @@ export class Voidwake {
     p.credits -= offer.net;
     p.ship.hullId = h.id;
     recomputeShipStats(p, true);
+    // 0.8.3 — a policy is written against a specific frame, so it lapses on
+    // trade-in. The yard will happily sell you another one.
+    if (p.ship.insured) {
+      p.ship.insured = false;
+      this.pushLog("Hull policy lapsed with the trade-in — buy a new one for this frame.");
+    }
     this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred.`);
     this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. All systems nominal.`, "#9fe");
     dispatchHook("onShipHullChange", {
@@ -10238,12 +10426,21 @@ export class Voidwake {
       ];
       const offers = this.shipyardOffers();
       if (!offers.length) rows.push("~ No hulls on the pad this rotation — check back next cycle ~");
+      // 0.8.3 — each offer carries a signed delta against the frame you fly
+      // now, so you can read the trade at a glance instead of doing sums.
+      const d = (a: number, b: number) => { const n = a - b; return n === 0 ? "  ·" : (n > 0 ? `+${n}` : `${n}`); };
       for (const o of offers) {
         const h = o.hull;
-        const stat = `HP ${h.hull} SH ${h.shield} cargo ${h.cargo} spd ${h.speed} berths ${h.crewSlots}`;
+        const stat = `HP ${h.hull}(${d(h.hull, cur.hull)}) SH ${h.shield}(${d(h.shield, cur.shield)})`
+          + ` cargo ${h.cargo}(${d(h.cargo, cur.cargo)}) spd ${h.speed}(${d(h.speed, cur.speed)})`
+          + ` berths ${h.crewSlots}(${d(h.crewSlots, cur.crewSlots)})`;
         if (o.reason) rows.push(`${h.name} — ${stat} — LOCKED (${o.reason})`);
         else rows.push(`${h.name} — ${o.net >= 0 ? `${o.net}cr` : `refund ${-o.net}cr`} — ${stat}`);
       }
+      // 0.8.3 — hull insurance. One claim: waives the respawn rescue fee,
+      // refills the tank and pays 60cr per unit of cargo lost with the wreck.
+      if (p.ship.insured) rows.push("Hull policy: ACTIVE — covers one rescue (fee waived + freight payout)");
+      else rows.push(`Buy hull insurance — ${insurancePremium(p)}cr — waives the rescue fee, pays 60cr per cargo unit lost`);
       rows.push("Back");
       return rows;
     }
@@ -10376,7 +10573,7 @@ export class Voidwake {
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
-      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; }
+      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; if (this.dockedStationId != null) this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard"); }
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
       else if (c && c.startsWith("Withdraw treasury")) {
@@ -10483,6 +10680,22 @@ export class Voidwake {
     if (this.stationPage === "shipyard") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~") || row === "Back") return;
+      if (row.startsWith("Hull policy:")) {
+        this.pushLog("You already carry a policy on this frame.");
+        return;
+      }
+      if (row.startsWith("Buy hull insurance")) {
+        const cost = insurancePremium(p);
+        if (p.credits < cost) { this.pushLog(`The underwriter wants ${cost}cr.`); return; }
+        p.credits -= cost;
+        p.ship.insured = true;
+        this.pushLog(`Hull policy written for ${cost}cr. Covers one rescue.`);
+        if (this.dockedStationId != null) {
+          this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard");
+        }
+        this.sfx("chime");
+        return;
+      }
       const offer = this.shipyardOffers().find((o) => row.startsWith(o.hull.name));
       if (!offer) return;
       this.buyHull(offer);

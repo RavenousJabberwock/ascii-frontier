@@ -211,6 +211,17 @@ The message tells you how much to sell down or pay off. Hulls locked to a
 species or to veteran commanders are listed but flagged `LOCKED` so you can
 see what else flies out there.
 
+**Hull insurance.** The yard writes a policy on your current frame for 15% of
+its list price (Merchant/Quartermaster discounts apply). One claim: on a
+respawn it waives the rescue fee, refills the tank, and pays 60cr per unit of
+cargo lost with the wreck. It burns on use and lapses on trade-in.
+
+**Dealer patter.** Stations with hulls on the pad broadcast adverts within
+2500u, and the line is chosen from what your ship's condition suggests — dry
+tank, cracked hull, stuffed hold, full berths, starter frame, fat balance,
+empty balance, contraband aboard, a locked frame on display, or no policy.
+Gated by the Comms frequency option like every other ambient scheduler.
+
 ---
 
 ## 11. Your own station

@@ -1,3 +1,23 @@
+# 0.8.3 — Dealer Patter & Hull Insurance
+
+Ships as **0.8.3**.
+
+- **Used-spacecraft dealer chatter.** Stations holding hulls on the pad now
+  advertise on the open channel within 2500u. `dealerBuckets()` picks the
+  pitch from the pilot's own condition across 12 buckets: broke, flush,
+  cracked hull, stuffed hold, full berths, still-flying-the-starter,
+  veteran kill count, dry tank, contraband aboard, a locked frame on the
+  pad, no insurance, and generic patter. The salesman also greets you at
+  the door when you open Docked ▸ Shipyard. ~70 new corny lines.
+- **Hull insurance.** The Shipyard sells a policy on your current frame for
+  15% of its list price (Merchant/Quartermaster discounts apply). One claim:
+  `respawnAtStation()` waives the 25% rescue fee, refills the tank, and pays
+  60cr per unit of cargo lost with the wreck. The policy burns on the claim
+  and lapses when the frame is traded in.
+- **Shipyard offer deltas.** Each listing now shows signed deltas against the
+  frame you fly (`HP 320(+80) SH 90(-10) cargo 60(+12) …`) so the trade reads
+  at a glance.
+
 # 0.8.2 — Shipyard & Player's Guide
 
 Ships as **0.8.2**.
