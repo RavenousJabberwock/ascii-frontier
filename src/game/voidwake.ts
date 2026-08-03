@@ -10417,12 +10417,21 @@ export class Voidwake {
       ];
       const offers = this.shipyardOffers();
       if (!offers.length) rows.push("~ No hulls on the pad this rotation — check back next cycle ~");
+      // 0.8.3 — each offer carries a signed delta against the frame you fly
+      // now, so you can read the trade at a glance instead of doing sums.
+      const d = (a: number, b: number) => { const n = a - b; return n === 0 ? "  ·" : (n > 0 ? `+${n}` : `${n}`); };
       for (const o of offers) {
         const h = o.hull;
-        const stat = `HP ${h.hull} SH ${h.shield} cargo ${h.cargo} spd ${h.speed} berths ${h.crewSlots}`;
+        const stat = `HP ${h.hull}(${d(h.hull, cur.hull)}) SH ${h.shield}(${d(h.shield, cur.shield)})`
+          + ` cargo ${h.cargo}(${d(h.cargo, cur.cargo)}) spd ${h.speed}(${d(h.speed, cur.speed)})`
+          + ` berths ${h.crewSlots}(${d(h.crewSlots, cur.crewSlots)})`;
         if (o.reason) rows.push(`${h.name} — ${stat} — LOCKED (${o.reason})`);
         else rows.push(`${h.name} — ${o.net >= 0 ? `${o.net}cr` : `refund ${-o.net}cr`} — ${stat}`);
       }
+      // 0.8.3 — hull insurance. One claim: waives the respawn rescue fee,
+      // refills the tank and pays 60cr per unit of cargo lost with the wreck.
+      if (p.ship.insured) rows.push("Hull policy: ACTIVE — covers one rescue (fee waived + freight payout)");
+      else rows.push(`Buy hull insurance — ${insurancePremium(p)}cr — waives the rescue fee, pays 60cr per cargo unit lost`);
       rows.push("Back");
       return rows;
     }
