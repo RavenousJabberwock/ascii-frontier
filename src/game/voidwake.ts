@@ -7483,10 +7483,17 @@ export class Voidwake {
                   },
                 });
               }
-              if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
+              // 0.8.4 — "bounty" warrants complete on the same kill path as
+              // "destroy" contracts; previously only "destroy" was checked, so
+              // Bounty Office marks could never be closed out.
+              if (p.mission && (p.mission.kind === "destroy" || p.mission.kind === "bounty") && p.mission.targetId === t.id) {
                 p.mission.done = true;
                 this.pushLog("Bounty completed — return to a station.");
+                if (p.mission.kind === "bounty") {
+                  dispatchHook("onBountyClaimed", { name: t.name, reward: p.mission.reward, targetId: t.id });
+                }
               }
+
             } else {
               // NPC-on-NPC kill — just log it as ambient color.
               if (Math.random() < 0.4) this.pushLog(`${t.name} was destroyed in a skirmish.`);
