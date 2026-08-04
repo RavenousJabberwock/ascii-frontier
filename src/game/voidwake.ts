@@ -10304,7 +10304,10 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Shipyard", "Crew", "Undock"];
+  // 0.8.4 — "Bounty Office" sits between the yard and the crew desk. It is
+  // filtered out at pirate holds and mini-docks in buildStationLines().
+  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Shipyard", "Bounty Office", "Crew", "Undock"];
+
 
   // 0.8.2 — Shipyard offers for the docked station: the rotating hull list
   // minus the hull you already fly, each with its net cost after trade-in and
