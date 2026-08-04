@@ -13187,7 +13187,7 @@ export class Voidwake {
       if (m.kind === "deliver" && m.cargoItem) {
         const have = p.cargo[m.cargoItem] ?? 0;
         prog = `${have}/${m.cargoQty} ${m.cargoItem}` + (m.done ? "  ✓ DOCK" : "");
-      } else if (m.kind === "destroy" && m.targetId != null) {
+      } else if ((m.kind === "destroy" || m.kind === "bounty") && m.targetId != null) {
         const tt = this.entities.find((e) => e.id === m.targetId);
         if (tt && (tt.hull ?? 0) > 0) {
           const d = V.len(V.sub(tt.pos, p.pos));
