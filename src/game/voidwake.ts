@@ -3281,6 +3281,12 @@ function adjustRep(p: PlayerState, faction: string, delta: number) {
   if (!p.reputation) p.reputation = { federation: 0, guild: 0, pirate: 0 };
   p.reputation[faction] = (p.reputation[faction] ?? 0) + delta;
 }
+// 0.8.4 — Price of an expungement at a Bounty Office: 120cr per point of
+// standing bought back, floored at 300cr so it's never trivially cheap.
+function recordFine(rep: number): number {
+  return Math.max(300, Math.round((-5 - rep) * 120));
+}
+
 function repLabel(v: number): string {
   if (v >= 50) return "Allied";
   if (v >= 20) return "Friendly";
