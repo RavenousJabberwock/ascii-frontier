@@ -13210,7 +13210,8 @@ export class Voidwake {
       // point at the nearest station regardless of state.
       const needStationObj =
         m.kind === "deliver" ||
-        ((m.kind === "destroy" || m.kind === "scan") && m.done);
+        ((m.kind === "destroy" || m.kind === "bounty" || m.kind === "scan") && m.done);
+
       if (needStationObj) {
         let bestS: Entity | null = null; let bestD = Infinity;
         for (const e of this.entities) {
