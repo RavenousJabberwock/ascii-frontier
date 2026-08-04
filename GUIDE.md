@@ -182,7 +182,8 @@ editing and no build step.
 
 - Scripts register hooks: `onCommodityTrade`, `onPassengerBoard`,
   `onPlayerStationTierUp`, `onPlayerHail`, `onCustomsScan`,
-  `onShipHullChange`, and many more.
+  `onShipHullChange`, `onBountyAccepted`, `onBountyClaimed`, and many more.
+
 - They call into the `frontier.*` API for entities, world state, economy
   queries, chatter injection, and grants.
 - Content packs can add chatter lines without any Lua at all.
