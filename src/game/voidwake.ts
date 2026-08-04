@@ -10802,6 +10802,38 @@ export class Voidwake {
       return;
     }
 
+    // ---- Bounty Office page (0.8.4) ----------------------------------------
+    // Warrant rows spawn the mark and write the mission; the expungement row
+    // buys your standing with this faction back up to "Wary".
+    if (this.stationPage === "bounty-office") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~")) return;
+      if (row.startsWith("Clear your record")) {
+        const dockedEnt = this.entities.find((e) => e.id === sid);
+        const faction = dockedEnt?.faction ?? "guild";
+        const rep = p.reputation?.[faction] ?? 0;
+        if (rep >= -5) { this.pushLog("Your file's already clean enough here."); return; }
+        const fine = recordFine(rep);
+        if (p.credits < fine) { this.pushLog(`The clerk wants ${fine}cr to lose the paperwork.`); return; }
+        p.credits -= fine;
+        adjustRep(p, faction, -5 - rep);
+        this.pushLog(`Paid ${fine}cr in fines — ${faction} record expunged to Wary.`);
+        this.pushChatter("Computer", `${faction} judicial database updated. Outstanding charges cleared.`, "#9fe");
+        this.sfx("chime");
+        return;
+      }
+      if (!row.startsWith("WARRANT ")) return;
+      const b = stock.bounties.find((x) => row.startsWith(`WARRANT ${x.name} `));
+      if (!b) return;
+      if (p.mission && !p.mission.done) {
+        this.pushLog("Finish or hand in your current contract before taking a warrant.");
+        return;
+      }
+      this.acceptBounty(b, sid);
+      return;
+    }
+
+
     if (this.stationPage === "crew") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~")) return;
