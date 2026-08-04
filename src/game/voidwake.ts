@@ -10402,6 +10402,13 @@ export class Voidwake {
         return rows;
       }
       const base = isMini ? ["Market", "Commodities", "Undock"] : this.stationItems.slice();
+      // 0.8.4 — no warrants office in a pirate hold: they don't post bounties
+      // on their own captains, and there's no clean record to buy back.
+      if (dockedEnt?.faction === "pirate") {
+        const bi = base.indexOf("Bounty Office");
+        if (bi >= 0) base.splice(bi, 1);
+      }
+
       // Deploy Station Core is main-menu action if the module is installed
       // AND we're at a Federation Gate (required deploy location).
       if (p.ship.modules.includes("station-core") && dockedEnt?.faction === "federation") {
