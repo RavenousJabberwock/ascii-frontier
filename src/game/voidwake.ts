@@ -10662,6 +10662,8 @@ export class Voidwake {
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; if (this.dockedStationId != null) this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard"); }
+      else if (c === "Bounty Office") { this.stationPage = "bounty-office"; this.menuCursor = 0; }
+
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
       else if (c && c.startsWith("Withdraw treasury")) {
