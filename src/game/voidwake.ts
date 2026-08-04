@@ -10702,8 +10702,18 @@ export class Voidwake {
         if (cost === 0) { this.pushLog("Tanks already full."); return; }
         if (p.credits >= cost) { p.credits -= cost; p.ship.fuel = p.ship.fuelMax; this.pushLog(`Refueled (${cost}cr).`); }
         else this.pushLog("Not enough credits.");
+      } else if (i === 2) {
+        // 0.8.4 — partial top-off (up to 25u, or whatever the tank still takes).
+        const units = Math.min(Math.ceil(p.ship.fuelMax - p.ship.fuel), 25);
+        if (units <= 0) { this.pushLog("Tanks already full."); return; }
+        const cost = Math.ceil(units * stock.fuelPrice * merchantBuyMult(p));
+        if (p.credits < cost) { this.pushLog("Not enough credits."); return; }
+        p.credits -= cost;
+        p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + units);
+        this.pushLog(`Took on ${units}u of fuel (${cost}cr).`);
       }
       return;
+
     }
 
     if (this.stationPage === "weapons") {
