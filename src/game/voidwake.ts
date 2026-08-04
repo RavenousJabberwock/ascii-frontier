@@ -124,6 +124,9 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPlayerHail:         [],
   onCustomsScan:        [],
   onShipHullChange:     [],
+  onBountyAccepted:     [],
+  onBountyClaimed:      [],
+
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
