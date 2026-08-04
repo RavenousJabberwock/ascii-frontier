@@ -10874,8 +10874,27 @@ export class Voidwake {
       const dockedEnt = this.entities.find((e) => e.id === sid);
       const faction = dockedEnt?.faction ?? "guild";
       const shown = this.shownCommodities(sid, faction);
+      const row = lines[i] ?? "";
+      // 0.8.4 — bulk liquidation row (only present in SELL mode).
+      if (row.startsWith("[SELL ALL]")) {
+        let total = 0; let units = 0;
+        for (const c of shown) {
+          const have = p.cargo[c.id] ?? 0;
+          if (have <= 0) continue;
+          total += Math.round(have * c.sell * merchantSellMult(p));
+          units += have;
+          c.stock += have;
+          p.cargo[c.id] = 0;
+          dispatchHook("onCommodityTrade", { action: "sell", id: c.id, name: c.name, qty: have, price: c.sell, stationId: sid });
+        }
+        if (!units) { this.pushLog("Nothing in the hold this dock will buy."); return; }
+        p.credits += total;
+        this.pushLog(`Liquidated ${units} units for ${total}cr.`);
+        return;
+      }
       const idx = i - 2;
       const c = shown[idx];
+
       if (!c) return;                             // Back row
       const qty = 10;
       if (this.commodityMode === "buy") {
