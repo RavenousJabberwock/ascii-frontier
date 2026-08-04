@@ -10420,12 +10420,35 @@ export class Voidwake {
       const ore = p.cargo.ore ?? 0;
       const fuelNeed = Math.ceil(p.ship.fuelMax - p.ship.fuel);
       const fuelCost = fuelNeed * stock.fuelPrice;
+      // 0.8.4 — a partial top-off row so a broke pilot can buy just enough
+      // fuel to reach the next dock instead of being priced out entirely.
+      const partial = Math.min(fuelNeed, 25);
       return [
         `Sell all ore (${ore} × ${stock.orePrice}cr = ${ore * stock.orePrice}cr)`,
         `Buy fuel (${fuelNeed}u × ${stock.fuelPrice}cr = ${fuelCost}cr)`,
+        `Buy ${partial}u fuel (${partial * stock.fuelPrice}cr)`,
         "Back",
       ];
     }
+    // ---- Bounty Office (0.8.4) ---------------------------------------------
+    // Warrants rotate with the market day. Accepting one spawns the mark a
+    // few thousand units out and writes a bounty mission; the Office also
+    // sells a records-expungement if your file with this faction is dirty.
+    if (this.stationPage === "bounty-office") {
+      const faction = dockedEnt?.faction ?? "guild";
+      const rows: string[] = [`~ ${faction.toUpperCase()} warrants office — payouts settle on hand-in ~`];
+      if (!stock.bounties.length) rows.push("~ Board is clean this rotation — no warrants posted ~");
+      for (const b of stock.bounties) {
+        rows.push(`WARRANT ${b.name} — ${b.reward}cr — ${b.threat === "heavy" ? "HEAVY (shielded, hits hard)" : "light escort-class"}`);
+      }
+      const rep = p.reputation?.[faction] ?? 0;
+      if (rep < -5) {
+        rows.push(`Clear your record with ${faction} (${recordFine(rep)}cr) — rep ${rep} → -5`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+
     if (this.stationPage === "weapons") {
       return [
         ...stock.weapons.map((w) => {
