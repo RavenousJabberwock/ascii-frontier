@@ -10598,6 +10598,13 @@ export class Voidwake {
         rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}${hint}`);
       }
       if (bans.size) rows.push(`! Customs: ${[...bans].join("/")} goods banned here — scanned on dock.`);
+      // 0.8.4 — one-key liquidation of everything this dock will legally buy,
+      // so a full hold doesn't mean eighteen menu presses.
+      if (this.commodityMode === "sell") {
+        const worth = shown.reduce((a, c) => a + (p.cargo[c.id] ?? 0) * c.sell, 0);
+        if (worth > 0) rows.push(`[SELL ALL] everything this dock buys — ${Math.round(worth * merchantSellMult(p))}cr`);
+      }
+
       rows.push("Back");
       return rows;
     }
