@@ -2072,7 +2072,19 @@ interface Mission {
 // so prices and stock are stable between visits within a single session, but
 // vary station-to-station (a refinery sells cheap fuel, a frontier outpost
 // charges double). Persisted lazily in Voidwake.stationStocks at runtime.
+// 0.8.4 — One posted warrant on a station's Bounty Office board. `hull` and
+// `reward` scale with the mark's threat tier; the mark itself doesn't exist in
+// the world until the player accepts (then it spawns 2.5–5k out).
+interface StationBounty {
+  key: string;                // stable id within the day's board
+  name: string;               // captain callsign, e.g. "Warlord Vex Krev"
+  hull: number;               // spawn hull points
+  reward: number;             // credits paid on hand-in
+  threat: "light" | "heavy";  // heavy marks fly a shield and hit harder
+}
+
 interface StationStock {
+
   fuelPrice: number;          // cr per unit
   orePrice: number;           // cr per unit sold to station (legacy 'ore')
   weapons: { id: string; price: number }[];
