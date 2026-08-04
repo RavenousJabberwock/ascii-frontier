@@ -3547,11 +3547,29 @@ function generateStationStock(stationId: number, faction: string = "guild", day:
     : faction === "pirate" ? Math.floor(rng() * 2)
     : Math.floor(rng() * 3);
   const hulls = shuffled(SHIP_HULLS).slice(0, berths).map((h) => h.id);
+  // 0.8.4 — Bounty Office board. Lawful docks post warrants on named pirate
+  // captains; Federation offices keep the fattest board, pirate holds post
+  // nothing at all (they ARE the marks). Heavy marks fly shields and pay ~2x.
+  const warrants = faction === "pirate" ? 0
+    : faction === "federation" ? 1 + Math.floor(rng() * 3)
+    : Math.floor(rng() * 3);
+  const bounties: StationBounty[] = [];
+  for (let i = 0; i < warrants; i++) {
+    const heavy = rng() < 0.35;
+    bounties.push({
+      key: `${stationId}:${day}:${i}`,
+      name: pirateBossNameFor(rng),
+      hull: heavy ? 140 : 80,
+      reward: heavy ? 1400 + Math.floor(rng() * 900) : 600 + Math.floor(rng() * 500),
+      threat: heavy ? "heavy" : "light",
+    });
+  }
   return {
     fuelPrice, orePrice, weapons, modules, gunnerFee,
     rumor: rumors[Math.floor(rng() * rumors.length)],
-    day, recruitSlots, commodities, hulls,
+    day, recruitSlots, commodities, hulls, bounties,
   };
+
 
 }
 
