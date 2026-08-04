@@ -129,6 +129,12 @@ Everything else is recoverable.
   rescue: the 25% rescue fee is waived, your tank comes back full, and you're
   paid 60cr per unit of cargo lost with the wreck. The policy burns on the
   claim and lapses if you trade the frame in.
+- **Bounty Office** (lawful docks). 0–3 warrants per market day on named pirate
+  captains — light marks pay ~600–1100cr, heavy shielded marks ~1400–2300cr.
+  Sign one and the mark spawns a few thousand units out; kill it and dock to
+  collect. The same clerk will expunge a bad record with the local faction for
+  a fine.
+
 - **The lot.** Yards with hulls on the pad advertise on the open channel, and
   the pitch is keyed to what you're flying, hauling and can afford. It is very
   corny. This is intentional.
@@ -182,7 +188,8 @@ editing and no build step.
 
 - Scripts register hooks: `onCommodityTrade`, `onPassengerBoard`,
   `onPlayerStationTierUp`, `onPlayerHail`, `onCustomsScan`,
-  `onShipHullChange`, and many more.
+  `onShipHullChange`, `onBountyAccepted`, `onBountyClaimed`, and many more.
+
 - They call into the `frontier.*` API for entities, world state, economy
   queries, chatter injection, and grants.
 - Content packs can add chatter lines without any Lua at all.

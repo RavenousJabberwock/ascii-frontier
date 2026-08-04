@@ -130,6 +130,10 @@ compact **[Buy] / [Sell]** view (LEFT/RIGHT switches mode).
   a station whose faction wants it. Industrial and relic markets swing widest.
 - Relics move reputation as well as credits; some factions dislike you
   trafficking them.
+- In SELL mode a **[SELL ALL]** row liquidates everything the dock legally
+  buys in one press. The Market page also has a **partial refuel** row (up to
+  25u) for when a full top-off is out of reach.
+
 
 ---
 
@@ -170,8 +174,18 @@ compact **[Buy] / [Sell]** view (LEFT/RIGHT switches mode).
   cargo between outposts, fuel a stranded ship, and crew-specific quest lines
   offered when you hire someone.
 - **Passengers** occupy a berth and have a delivery deadline. They also talk.
-- Completed destroy/scan objectives redirect the marker to the nearest
+- **Bounty Office** (docked ▸ Bounty Office, lawful stations only). Lawful
+  docks post 0–3 warrants per market day on named pirate captains; Federation
+  offices keep the fattest board and pirate holds post nothing. Light marks pay
+  ~600–1100cr; heavy marks fly shields and a railgun and pay ~1400–2300cr.
+  Signing a warrant spawns the mark 2.5–5k out and loads it into your tracker.
+  Kill it, then dock anywhere to collect. One warrant at a time.
+- **Clearing your record.** If your standing with the local faction is below
+  Wary, the same office will lose the paperwork for 120cr per point of
+  standing (minimum 300cr), restoring you to Wary.
+- Completed destroy/bounty/scan objectives redirect the marker to the nearest
   civilian station for your payout — follow the diamond.
+
 
 ---
 

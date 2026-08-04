@@ -40,6 +40,9 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onCommodityTrade", "onPassengerBoard", "onPassengerDeliver", "onPlayerStationTierUp",
   // 0.8.0
   "onPlayerHail", "onCustomsScan", "onShipHullChange",
+  // 0.8.4 — Bounty Office
+  "onBountyAccepted", "onBountyClaimed",
+
 ];
 
 export interface LuaHostBridge {

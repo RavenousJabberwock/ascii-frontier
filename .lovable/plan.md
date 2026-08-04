@@ -1,4 +1,31 @@
+# 0.8.4 — Bounty Office & Market Polish
+
+Ships as **0.8.4**.
+
+- **Bounty Office.** Lawful docks post 0–3 warrants per market day on named
+  pirate captains (`generateStationStock` → `StationBounty[]`); Federation
+  offices keep the fattest board, pirate holds post none. Signing a warrant
+  spawns the mark 2.5–5k out as a boss-tagged pirate (heavy marks carry a
+  shield and a railgun and pay ~2x) and writes a `bounty` mission so the
+  tracker and objective diamond point at it. Warrants splice out of the
+  board on accept so they can't be double-claimed within a day.
+- **Bounty kill fix.** The bullet-hit completion check only tested
+  `kind === "destroy"`, so `bounty` missions could never close. Both kinds
+  now complete on kill, show live distance in the mission pane, and redirect
+  the objective marker to the nearest civilian dock once done.
+- **Records expungement.** With local standing below Wary, the Bounty Office
+  clears your file for `120cr` per point of standing (min 300cr) via
+  `recordFine()`, restoring you to -5.
+- **Market polish.** Commodities SELL mode gained a `[SELL ALL]` row that
+  liquidates everything the dock legally buys in one press; the Market page
+  gained a partial refuel row (up to 25u) for pilots who can't afford a full
+  top-off.
+- **Lua.** New `onBountyAccepted` (name, reward, threat, targetId, stationId)
+  and `onBountyClaimed` (name, reward, targetId) hooks, registered in the Lua
+  host.
+
 # 0.8.3 — Dealer Patter & Hull Insurance
+
 
 Ships as **0.8.3**.
 

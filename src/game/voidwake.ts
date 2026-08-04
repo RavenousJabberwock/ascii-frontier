@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.3";
+const VERSION = "0.8.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -98,7 +98,11 @@ export type ScriptHookName =
   // 0.8.0 — comms & customs hooks
   | "onPlayerHail"
   | "onCustomsScan"
-  | "onShipHullChange";
+  | "onShipHullChange"
+  // 0.8.4 — bounty office hooks
+  | "onBountyAccepted"
+  | "onBountyClaimed";
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
@@ -120,6 +124,9 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPlayerHail:         [],
   onCustomsScan:        [],
   onShipHullChange:     [],
+  onBountyAccepted:     [],
+  onBountyClaimed:      [],
+
 };
 
 export function registerScriptHook(name: ScriptHookName, fn: ScriptHookFn): () => void {
@@ -2072,7 +2079,19 @@ interface Mission {
 // so prices and stock are stable between visits within a single session, but
 // vary station-to-station (a refinery sells cheap fuel, a frontier outpost
 // charges double). Persisted lazily in Voidwake.stationStocks at runtime.
+// 0.8.4 — One posted warrant on a station's Bounty Office board. `hull` and
+// `reward` scale with the mark's threat tier; the mark itself doesn't exist in
+// the world until the player accepts (then it spawns 2.5–5k out).
+interface StationBounty {
+  key: string;                // stable id within the day's board
+  name: string;               // captain callsign, e.g. "Warlord Vex Krev"
+  hull: number;               // spawn hull points
+  reward: number;             // credits paid on hand-in
+  threat: "light" | "heavy";  // heavy marks fly a shield and hit harder
+}
+
 interface StationStock {
+
   fuelPrice: number;          // cr per unit
   orePrice: number;           // cr per unit sold to station (legacy 'ore')
   weapons: { id: string; price: number }[];
@@ -2085,6 +2104,11 @@ interface StationStock {
   commodities: { id: string; name: string; buy: number; sell: number; stock: number }[];
   // 0.8.2 — Shipyard berth: 0..3 hull ids listed today (empty at colonies).
   hulls: string[];
+  // 0.8.4 — Bounty Office board: 0..3 marks posted today at lawful docks.
+  // Accepting one splices it out of this array so the same warrant can't be
+  // taken twice in a market day. Pirate holds never post warrants.
+  bounties: StationBounty[];
+
 
 }
 
@@ -3257,6 +3281,12 @@ function adjustRep(p: PlayerState, faction: string, delta: number) {
   if (!p.reputation) p.reputation = { federation: 0, guild: 0, pirate: 0 };
   p.reputation[faction] = (p.reputation[faction] ?? 0) + delta;
 }
+// 0.8.4 — Price of an expungement at a Bounty Office: 120cr per point of
+// standing bought back, floored at 300cr so it's never trivially cheap.
+function recordFine(rep: number): number {
+  return Math.max(300, Math.round((-5 - rep) * 120));
+}
+
 function repLabel(v: number): string {
   if (v >= 50) return "Allied";
   if (v >= 20) return "Friendly";
@@ -3530,11 +3560,29 @@ function generateStationStock(stationId: number, faction: string = "guild", day:
     : faction === "pirate" ? Math.floor(rng() * 2)
     : Math.floor(rng() * 3);
   const hulls = shuffled(SHIP_HULLS).slice(0, berths).map((h) => h.id);
+  // 0.8.4 — Bounty Office board. Lawful docks post warrants on named pirate
+  // captains; Federation offices keep the fattest board, pirate holds post
+  // nothing at all (they ARE the marks). Heavy marks fly shields and pay ~2x.
+  const warrants = faction === "pirate" ? 0
+    : faction === "federation" ? 1 + Math.floor(rng() * 3)
+    : Math.floor(rng() * 3);
+  const bounties: StationBounty[] = [];
+  for (let i = 0; i < warrants; i++) {
+    const heavy = rng() < 0.35;
+    bounties.push({
+      key: `${stationId}:${day}:${i}`,
+      name: pirateBossNameFor(rng),
+      hull: heavy ? 140 : 80,
+      reward: heavy ? 1400 + Math.floor(rng() * 900) : 600 + Math.floor(rng() * 500),
+      threat: heavy ? "heavy" : "light",
+    });
+  }
   return {
     fuelPrice, orePrice, weapons, modules, gunnerFee,
     rumor: rumors[Math.floor(rng() * rumors.length)],
-    day, recruitSlots, commodities, hulls,
+    day, recruitSlots, commodities, hulls, bounties,
   };
+
 
 }
 
@@ -4878,7 +4926,7 @@ export class Voidwake {
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" | "shipyard" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" | "shipyard" | "bounty-office" = "main";
   // 0.7.2 — Commodities page mode toggle. Cycled with LEFT/RIGHT arrows.
   commodityMode: "buy" | "sell" = "buy";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
@@ -7435,10 +7483,17 @@ export class Voidwake {
                   },
                 });
               }
-              if (p.mission && p.mission.kind === "destroy" && p.mission.targetId === t.id) {
+              // 0.8.4 — "bounty" warrants complete on the same kill path as
+              // "destroy" contracts; previously only "destroy" was checked, so
+              // Bounty Office marks could never be closed out.
+              if (p.mission && (p.mission.kind === "destroy" || p.mission.kind === "bounty") && p.mission.targetId === t.id) {
                 p.mission.done = true;
                 this.pushLog("Bounty completed — return to a station.");
+                if (p.mission.kind === "bounty") {
+                  dispatchHook("onBountyClaimed", { name: t.name, reward: p.mission.reward, targetId: t.id });
+                }
               }
+
             } else {
               // NPC-on-NPC kill — just log it as ambient color.
               if (Math.random() < 0.4) this.pushLog(`${t.name} was destroyed in a skirmish.`);
@@ -10262,7 +10317,10 @@ export class Voidwake {
   // --- Station menu (paged) ------------------------------------------------
   // Pages: main → market | weapons | modules | crew. Cursor resets between
   // pages. Prices come from the cached StationStock for this station.
-  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Shipyard", "Crew", "Undock"];
+  // 0.8.4 — "Bounty Office" sits between the yard and the crew desk. It is
+  // filtered out at pirate holds and mini-docks in buildStationLines().
+  stationItems = ["Market", "Commodities", "Weapon Bay", "Gunner Bay", "Module Shop", "Shipyard", "Bounty Office", "Crew", "Undock"];
+
 
   // 0.8.2 — Shipyard offers for the docked station: the rotating hull list
   // minus the hull you already fly, each with its net cost after trade-in and
@@ -10333,6 +10391,42 @@ export class Voidwake {
     this.sfx("levelup");
   }
 
+  // 0.8.4 — Take a warrant off a Bounty Office board. The mark is spawned
+  // 2.5-5k out from the station as a boss-tagged pirate so the existing kill
+  // handler pays the captain bonus and swings rep, and a bounty mission is
+  // written so the tracker/marker points at it. The warrant is spliced out of
+  // the station's board so it can't be double-claimed inside a market day.
+  acceptBounty(b: StationBounty, sid: number): void {
+    const p = this.player; if (!p) return;
+    const stock = this.getStock(sid);
+    const origin = this.entities.find((e) => e.id === sid)?.pos ?? p.pos;
+    const dist = 2500 + Math.random() * 2500;
+    const dir = V.norm({
+      x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() * 2 - 1,
+    });
+    const mark: Entity = {
+      id: nextId(), kind: "hostile", name: b.name,
+      pos: V.add(origin, V.scale(dir, dist)),
+      vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
+      faction: "pirate", hull: b.hull, shield: b.threat === "heavy" ? 80 : 40,
+      state: "wander", cooldown: 0, weaponId: b.threat === "heavy" ? "rail" : "pulse",
+      boss: true, pilotName: b.name,
+    };
+    this.entities.push(mark);
+    p.mission = {
+      id: nextId(), kind: "bounty", targetId: mark.id,
+      description: `Warrant: eliminate ${b.name} (${b.threat}) — ${b.reward}cr`,
+      reward: b.reward, done: false,
+    };
+    stock.bounties = stock.bounties.filter((x) => x.key !== b.key);
+    this.pushLog(`Warrant signed for ${b.name}. Last seen ${Math.round(dist)}u out — payout ${b.reward}cr on hand-in.`);
+    this.pushChatter("Computer", `Mark logged: ${b.name}. Transponder trace loaded into the tracker.`, "#9fe");
+    this.sfx("warning");
+    dispatchHook("onBountyAccepted", {
+      name: b.name, reward: b.reward, threat: b.threat,
+      targetId: mark.id, stationId: sid,
+    });
+  }
 
 
   buildStationLines(): string[] {
@@ -10357,6 +10451,13 @@ export class Voidwake {
         return rows;
       }
       const base = isMini ? ["Market", "Commodities", "Undock"] : this.stationItems.slice();
+      // 0.8.4 — no warrants office in a pirate hold: they don't post bounties
+      // on their own captains, and there's no clean record to buy back.
+      if (dockedEnt?.faction === "pirate") {
+        const bi = base.indexOf("Bounty Office");
+        if (bi >= 0) base.splice(bi, 1);
+      }
+
       // Deploy Station Core is main-menu action if the module is installed
       // AND we're at a Federation Gate (required deploy location).
       if (p.ship.modules.includes("station-core") && dockedEnt?.faction === "federation") {
@@ -10368,12 +10469,35 @@ export class Voidwake {
       const ore = p.cargo.ore ?? 0;
       const fuelNeed = Math.ceil(p.ship.fuelMax - p.ship.fuel);
       const fuelCost = fuelNeed * stock.fuelPrice;
+      // 0.8.4 — a partial top-off row so a broke pilot can buy just enough
+      // fuel to reach the next dock instead of being priced out entirely.
+      const partial = Math.min(fuelNeed, 25);
       return [
         `Sell all ore (${ore} × ${stock.orePrice}cr = ${ore * stock.orePrice}cr)`,
         `Buy fuel (${fuelNeed}u × ${stock.fuelPrice}cr = ${fuelCost}cr)`,
+        `Buy ${partial}u fuel (${partial * stock.fuelPrice}cr)`,
         "Back",
       ];
     }
+    // ---- Bounty Office (0.8.4) ---------------------------------------------
+    // Warrants rotate with the market day. Accepting one spawns the mark a
+    // few thousand units out and writes a bounty mission; the Office also
+    // sells a records-expungement if your file with this faction is dirty.
+    if (this.stationPage === "bounty-office") {
+      const faction = dockedEnt?.faction ?? "guild";
+      const rows: string[] = [`~ ${faction.toUpperCase()} warrants office — payouts settle on hand-in ~`];
+      if (!stock.bounties.length) rows.push("~ Board is clean this rotation — no warrants posted ~");
+      for (const b of stock.bounties) {
+        rows.push(`WARRANT ${b.name} — ${b.reward}cr — ${b.threat === "heavy" ? "HEAVY (shielded, hits hard)" : "light escort-class"}`);
+      }
+      const rep = p.reputation?.[faction] ?? 0;
+      if (rep < -5) {
+        rows.push(`Clear your record with ${faction} (${recordFine(rep)}cr) — rep ${rep} → -5`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+
     if (this.stationPage === "weapons") {
       return [
         ...stock.weapons.map((w) => {
@@ -10517,6 +10641,13 @@ export class Voidwake {
         rows.push(`${tag} ${c.name.padEnd(18)} @${String(price).padStart(4)}cr   stock ${String(c.stock).padStart(3)}  have ${have}${hint}`);
       }
       if (bans.size) rows.push(`! Customs: ${[...bans].join("/")} goods banned here — scanned on dock.`);
+      // 0.8.4 — one-key liquidation of everything this dock will legally buy,
+      // so a full hold doesn't mean eighteen menu presses.
+      if (this.commodityMode === "sell") {
+        const worth = shown.reduce((a, c) => a + (p.cargo[c.id] ?? 0) * c.sell, 0);
+        if (worth > 0) rows.push(`[SELL ALL] everything this dock buys — ${Math.round(worth * merchantSellMult(p))}cr`);
+      }
+
       rows.push("Back");
       return rows;
     }
@@ -10574,6 +10705,8 @@ export class Voidwake {
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
       else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; if (this.dockedStationId != null) this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard"); }
+      else if (c === "Bounty Office") { this.stationPage = "bounty-office"; this.menuCursor = 0; }
+
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
       else if (c === "Build / Upgrade") { this.stationPage = "build-station"; this.menuCursor = 0; }
       else if (c && c.startsWith("Withdraw treasury")) {
@@ -10614,8 +10747,18 @@ export class Voidwake {
         if (cost === 0) { this.pushLog("Tanks already full."); return; }
         if (p.credits >= cost) { p.credits -= cost; p.ship.fuel = p.ship.fuelMax; this.pushLog(`Refueled (${cost}cr).`); }
         else this.pushLog("Not enough credits.");
+      } else if (i === 2) {
+        // 0.8.4 — partial top-off (up to 25u, or whatever the tank still takes).
+        const units = Math.min(Math.ceil(p.ship.fuelMax - p.ship.fuel), 25);
+        if (units <= 0) { this.pushLog("Tanks already full."); return; }
+        const cost = Math.ceil(units * stock.fuelPrice * merchantBuyMult(p));
+        if (p.credits < cost) { this.pushLog("Not enough credits."); return; }
+        p.credits -= cost;
+        p.ship.fuel = Math.min(p.ship.fuelMax, p.ship.fuel + units);
+        this.pushLog(`Took on ${units}u of fuel (${cost}cr).`);
       }
       return;
+
     }
 
     if (this.stationPage === "weapons") {
@@ -10702,6 +10845,38 @@ export class Voidwake {
       return;
     }
 
+    // ---- Bounty Office page (0.8.4) ----------------------------------------
+    // Warrant rows spawn the mark and write the mission; the expungement row
+    // buys your standing with this faction back up to "Wary".
+    if (this.stationPage === "bounty-office") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~")) return;
+      if (row.startsWith("Clear your record")) {
+        const dockedEnt = this.entities.find((e) => e.id === sid);
+        const faction = dockedEnt?.faction ?? "guild";
+        const rep = p.reputation?.[faction] ?? 0;
+        if (rep >= -5) { this.pushLog("Your file's already clean enough here."); return; }
+        const fine = recordFine(rep);
+        if (p.credits < fine) { this.pushLog(`The clerk wants ${fine}cr to lose the paperwork.`); return; }
+        p.credits -= fine;
+        adjustRep(p, faction, -5 - rep);
+        this.pushLog(`Paid ${fine}cr in fines — ${faction} record expunged to Wary.`);
+        this.pushChatter("Computer", `${faction} judicial database updated. Outstanding charges cleared.`, "#9fe");
+        this.sfx("chime");
+        return;
+      }
+      if (!row.startsWith("WARRANT ")) return;
+      const b = stock.bounties.find((x) => row.startsWith(`WARRANT ${x.name} `));
+      if (!b) return;
+      if (p.mission && !p.mission.done) {
+        this.pushLog("Finish or hand in your current contract before taking a warrant.");
+        return;
+      }
+      this.acceptBounty(b, sid);
+      return;
+    }
+
+
     if (this.stationPage === "crew") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~")) return;
@@ -10776,8 +10951,27 @@ export class Voidwake {
       const dockedEnt = this.entities.find((e) => e.id === sid);
       const faction = dockedEnt?.faction ?? "guild";
       const shown = this.shownCommodities(sid, faction);
+      const row = lines[i] ?? "";
+      // 0.8.4 — bulk liquidation row (only present in SELL mode).
+      if (row.startsWith("[SELL ALL]")) {
+        let total = 0; let units = 0;
+        for (const c of shown) {
+          const have = p.cargo[c.id] ?? 0;
+          if (have <= 0) continue;
+          total += Math.round(have * c.sell * merchantSellMult(p));
+          units += have;
+          c.stock += have;
+          p.cargo[c.id] = 0;
+          dispatchHook("onCommodityTrade", { action: "sell", id: c.id, name: c.name, qty: have, price: c.sell, stationId: sid });
+        }
+        if (!units) { this.pushLog("Nothing in the hold this dock will buy."); return; }
+        p.credits += total;
+        this.pushLog(`Liquidated ${units} units for ${total}cr.`);
+        return;
+      }
       const idx = i - 2;
       const c = shown[idx];
+
       if (!c) return;                             // Back row
       const qty = 10;
       if (this.commodityMode === "buy") {
@@ -12993,7 +13187,7 @@ export class Voidwake {
       if (m.kind === "deliver" && m.cargoItem) {
         const have = p.cargo[m.cargoItem] ?? 0;
         prog = `${have}/${m.cargoQty} ${m.cargoItem}` + (m.done ? "  ✓ DOCK" : "");
-      } else if (m.kind === "destroy" && m.targetId != null) {
+      } else if ((m.kind === "destroy" || m.kind === "bounty") && m.targetId != null) {
         const tt = this.entities.find((e) => e.id === m.targetId);
         if (tt && (tt.hull ?? 0) > 0) {
           const d = V.len(V.sub(tt.pos, p.pos));
@@ -13016,7 +13210,8 @@ export class Voidwake {
       // point at the nearest station regardless of state.
       const needStationObj =
         m.kind === "deliver" ||
-        ((m.kind === "destroy" || m.kind === "scan") && m.done);
+        ((m.kind === "destroy" || m.kind === "bounty" || m.kind === "scan") && m.done);
+
       if (needStationObj) {
         let bestS: Entity | null = null; let bestD = Infinity;
         for (const e of this.entities) {
