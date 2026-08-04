@@ -10402,7 +10402,7 @@ export class Voidwake {
       pos: V.add(origin, V.scale(dir, dist)),
       vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
       faction: "pirate", hull: b.hull, shield: b.threat === "heavy" ? 80 : 40,
-      state: "wander", cooldown: 0, weaponId: b.threat === "heavy" ? "cannon" : "pulse",
+      state: "wander", cooldown: 0, weaponId: b.threat === "heavy" ? "rail" : "pulse",
       boss: true, pilotName: b.name,
     };
     this.entities.push(mark);
