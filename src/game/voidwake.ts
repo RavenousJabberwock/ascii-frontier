@@ -98,7 +98,11 @@ export type ScriptHookName =
   // 0.8.0 — comms & customs hooks
   | "onPlayerHail"
   | "onCustomsScan"
-  | "onShipHullChange";
+  | "onShipHullChange"
+  // 0.8.4 — bounty office hooks
+  | "onBountyAccepted"
+  | "onBountyClaimed";
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
