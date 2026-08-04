@@ -2085,6 +2085,11 @@ interface StationStock {
   commodities: { id: string; name: string; buy: number; sell: number; stock: number }[];
   // 0.8.2 — Shipyard berth: 0..3 hull ids listed today (empty at colonies).
   hulls: string[];
+  // 0.8.4 — Bounty Office board: 0..3 marks posted today at lawful docks.
+  // Accepting one splices it out of this array so the same warrant can't be
+  // taken twice in a market day. Pirate holds never post warrants.
+  bounties: StationBounty[];
+
 
 }
 
