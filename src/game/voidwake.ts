@@ -10384,6 +10384,42 @@ export class Voidwake {
     this.sfx("levelup");
   }
 
+  // 0.8.4 — Take a warrant off a Bounty Office board. The mark is spawned
+  // 2.5-5k out from the station as a boss-tagged pirate so the existing kill
+  // handler pays the captain bonus and swings rep, and a bounty mission is
+  // written so the tracker/marker points at it. The warrant is spliced out of
+  // the station's board so it can't be double-claimed inside a market day.
+  acceptBounty(b: StationBounty, sid: number): void {
+    const p = this.player; if (!p) return;
+    const stock = this.getStock(sid);
+    const origin = this.entities.find((e) => e.id === sid)?.pos ?? p.pos;
+    const dist = 2500 + Math.random() * 2500;
+    const dir = V.norm({
+      x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() * 2 - 1,
+    });
+    const mark: Entity = {
+      id: nextId(), kind: "hostile", name: b.name,
+      pos: V.add(origin, V.scale(dir, dist)),
+      vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
+      faction: "pirate", hull: b.hull, shield: b.threat === "heavy" ? 80 : 40,
+      state: "wander", cooldown: 0, weaponId: b.threat === "heavy" ? "cannon" : "pulse",
+      boss: true, pilotName: b.name,
+    };
+    this.entities.push(mark);
+    p.mission = {
+      id: nextId(), kind: "bounty", targetId: mark.id,
+      description: `Warrant: eliminate ${b.name} (${b.threat}) — ${b.reward}cr`,
+      reward: b.reward, done: false,
+    };
+    stock.bounties = stock.bounties.filter((x) => x.key !== b.key);
+    this.pushLog(`Warrant signed for ${b.name}. Last seen ${Math.round(dist)}u out — payout ${b.reward}cr on hand-in.`);
+    this.pushChatter("Computer", `Mark logged: ${b.name}. Transponder trace loaded into the tracker.`, "#9fe");
+    this.sfx("warning");
+    dispatchHook("onBountyAccepted", {
+      name: b.name, reward: b.reward, threat: b.threat,
+      targetId: mark.id, stationId: sid,
+    });
+  }
 
 
   buildStationLines(): string[] {
