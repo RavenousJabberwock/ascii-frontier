@@ -130,6 +130,10 @@ compact **[Buy] / [Sell]** view (LEFT/RIGHT switches mode).
   a station whose faction wants it. Industrial and relic markets swing widest.
 - Relics move reputation as well as credits; some factions dislike you
   trafficking them.
+- In SELL mode a **[SELL ALL]** row liquidates everything the dock legally
+  buys in one press. The Market page also has a **partial refuel** row (up to
+  25u) for when a full top-off is out of reach.
+
 
 ---
 
