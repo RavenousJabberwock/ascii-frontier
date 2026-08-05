@@ -1,3 +1,24 @@
+# 0.8.5 — Nav Log & Pilot's Record
+
+Ships as **0.8.5**.
+
+- **Nav Log.** `N` bookmarks the current target (or, with nothing targeted,
+  the ship's present position) and `V` opens the log: up to 8 waypoints, each
+  showing live distance plus the frozen coordinates, so a contact that has
+  since been destroyed still yields a usable bearing. `ENTER` re-targets a
+  bookmark whose entity is still on sensors, `X` clears the highlighted row.
+  Both binds are reassignable under Options ▸ Controls ▸ Keybinds and the
+  waypoint list rides along in the save (it lives on `PlayerState`).
+- **Pilot's Record.** New lifetime tallies on `PlayerState.record` — distance
+  flown (odometer captured around the powered/solar/drift integration so all
+  three count), docks, contracts completed, ore mined and lifetime contract
+  pay — rendered as a single line on the Character Sheet under the commander
+  block.
+- **Lua.** New `onBookmarkAdded` hook (name, kind, x, y, z), registered in the
+  Lua host alongside the existing bounty hooks.
+- **Copy pass.** Swept chatter and UI strings for spelling/grammar slips; the
+  only hits were intentional in-character contractions, so no lines changed.
+
 # 0.8.4 — Bounty Office & Market Polish
 
 Ships as **0.8.4**.
@@ -265,6 +286,9 @@ Ships as **0.7.4**.
 
 ## Deferred (stays on the backlog)
 
-- Player-to-NPC comms (hail a target, template replies keyed to reputation).
-- Player-station income scaling beyond flat treasury accrual.
-- Smuggling counterplay: hidden cargo bays and bribe options at customs.
+- Multiple simultaneous contracts surfaced as a real quest list (the data
+  model already has `missions[]`; the UI still shows one).
+- Escort/wing NPCs you can hire as a second hull.
+- Waypoint marker drawn in the world for Nav Log entries (today the log gives
+  distance and coordinates only).
+- Station-to-station trade routes the player can automate with owned stations.

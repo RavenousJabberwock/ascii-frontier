@@ -56,6 +56,7 @@ The galaxy has three zones:
 | `B` / `J` | Trade / contract board while docked        |
 | `C` / `R` | Character Sheet / Reputation panel         |
 | `H`       | Hail the current target                    |
+| `N` / `V` | Bookmark target / open the Nav Log         |
 | `ESC`     | Menu                                       |
 
 Gamepads and touch controls work too, and every bind is reassignable under
@@ -188,7 +189,8 @@ editing and no build step.
 
 - Scripts register hooks: `onCommodityTrade`, `onPassengerBoard`,
   `onPlayerStationTierUp`, `onPlayerHail`, `onCustomsScan`,
-  `onShipHullChange`, `onBountyAccepted`, `onBountyClaimed`, and many more.
+  `onShipHullChange`, `onBountyAccepted`, `onBountyClaimed`,
+  `onBookmarkAdded`, and many more.
 
 - They call into the `frontier.*` API for entities, world state, economy
   queries, chatter injection, and grants.

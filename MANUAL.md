@@ -58,6 +58,8 @@ Everything else is recoverable.
 | `C`         | Character Sheet (crew, ship, modules, pets)          |
 | `R`         | Reputation panel                                     |
 | `H`         | Hail the current target (comms channel)              |
+| `N`         | Bookmark the current target into the Nav Log         |
+| `V`         | Open the Nav Log (saved waypoints, up to 8)          |
 | `ESC`       | Main menu (New / Save / Load / Options / Quit)       |
 
 Gamepads (any standard mapping) and touch controls are supported and can be
@@ -204,6 +206,9 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   derelict, or dock with a free berth. Until discovered they squat a berth
   that reads "OUT OF ORDER" and cause odd shipboard chatter; once revealed
   they join a vacant role at a very low wage.
+
+The sheet also carries your **Pilot's Record** (0.8.5): distance flown,
+docks, contracts completed, ore mined and lifetime contract pay.
 
 Press `C` for the full sheet: portraits, attributes, ship silhouette, and a
 plain-language description of every fitted module.
