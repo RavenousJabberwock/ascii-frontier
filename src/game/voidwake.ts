@@ -100,6 +100,7 @@ export type ScriptHookName =
   | "onCustomsScan"
   | "onShipHullChange"
   // 0.8.4 — bounty office hooks
+  | "onBookmarkAdded"
   | "onBountyAccepted"
   | "onBountyClaimed";
 
@@ -124,6 +125,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPlayerHail:         [],
   onCustomsScan:        [],
   onShipHullChange:     [],
+  onBookmarkAdded:      [],
   onBountyAccepted:     [],
   onBountyClaimed:      [],
 
@@ -7864,6 +7866,7 @@ export class Voidwake {
     }
     // Passenger-owned station income: if this is one of the player's own
     // stations, pay out treasury and skip further wage/rep logic later.
+    if (p.record) p.record.docks += 1;
     if (p.ownedStations) {
       const mine = p.ownedStations.find((s) => s.entityId === t.id);
       if (mine && mine.treasury > 0) {
@@ -8872,6 +8875,88 @@ export class Voidwake {
     putText(g, 4, g.length - 2, "U or ESC to close", "#888");
   }
 
+  // ---------------- Nav Log (0.8.5) --------------------------------------
+  // Saved waypoints. `N` in flight bookmarks the current target (or, with no
+  // target, the ship's present position); `V` opens the log. Each row shows
+  // live distance plus the frozen coordinates, so a contact that has since
+  // been destroyed still gives you somewhere to fly. Enter re-targets a
+  // bookmark whose entity is still alive; X deletes the highlighted row.
+  addBookmark() {
+    const p = this.player; if (!p) return;
+    if (!p.bookmarks) p.bookmarks = [];
+    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : undefined;
+    const name = t ? t.name : `Waypoint ${p.bookmarks.length + 1}`;
+    const kind = t ? t.kind : "waypoint";
+    const pos = t ? { ...t.pos } : { ...p.pos };
+    if (p.bookmarks.some((b) => b.name === name && V.len(V.sub(b.pos, pos)) < 1)) {
+      this.pushLog(`${name} is already in the Nav Log.`);
+      return;
+    }
+    p.bookmarks.push({ entityId: t?.id, name, kind, pos });
+    while (p.bookmarks.length > NAV_BOOKMARK_MAX) p.bookmarks.shift();
+    this.pushLog(`Nav Log: bookmarked ${name} (${p.bookmarks.length}/${NAV_BOOKMARK_MAX}).`);
+    this.pushChatter("Computer", `Waypoint stored: ${name}.`, "#9fe");
+    dispatchHook("onBookmarkAdded", { name, kind, x: pos.x, y: pos.y, z: pos.z });
+  }
+
+  updateNavLog() {
+    const kb = this.options.keybinds;
+    const p = this.player;
+    const list = p?.bookmarks ?? [];
+    if (this.input.consume(kb.navLog)) {
+      this.screen = this._codexReturn;
+      this.menuCursor = 0;
+      return;
+    }
+    if (list.length === 0) return;
+    if (this.input.consume("arrowup")) this.menuCursor = (this.menuCursor + list.length - 1) % list.length;
+    if (this.input.consume("arrowdown")) this.menuCursor = (this.menuCursor + 1) % list.length;
+    if (this.input.consume("x")) {
+      const gone = list.splice(this.menuCursor, 1)[0];
+      this.menuCursor = Math.max(0, Math.min(this.menuCursor, list.length - 1));
+      if (gone) this.pushLog(`Nav Log: cleared ${gone.name}.`);
+      return;
+    }
+    if (this.input.consume("enter")) {
+      const b = list[this.menuCursor];
+      if (!b) return;
+      const ent = b.entityId != null ? this.entities.find((e) => e.id === b.entityId) : undefined;
+      if (ent) {
+        this.targetId = ent.id;
+        this.pushLog(`Target set: ${ent.name}.`);
+        this.screen = this._codexReturn;
+      } else {
+        this.pushLog(`${b.name} is no longer on sensors — fly the stored bearing.`);
+      }
+    }
+  }
+
+  renderNavLog(g: Cell[][]) {
+    const kb = this.options.keybinds;
+    putText(g, 4, 1, `[ NAV LOG ]   ${keyLabel(kb.navLog)} or ESC close`, "#7CFC00");
+    const p = this.player;
+    if (!p) return;
+    const list = p.bookmarks ?? [];
+    putText(g, 4, 3, `${keyLabel(kb.bookmark)} bookmarks the current target · ↑/↓ select · ENTER re-target · X delete`, "#888");
+    if (list.length === 0) {
+      putText(g, 4, 5, "No waypoints stored. Target something in flight and press "
+        + `${keyLabel(kb.bookmark)} to log it.`, "#9fe");
+      return;
+    }
+    let y = 5;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      const d = V.len(V.sub(b.pos, p.pos));
+      const ent = b.entityId != null ? this.entities.find((e) => e.id === b.entityId) : undefined;
+      const live = ent ? "" : "  (contact lost)";
+      const sel = i === this.menuCursor;
+      putText(g, 4, y++, `${sel ? ">" : " "} ${(i + 1) + "."} ${b.name.padEnd(22)} ${b.kind.padEnd(16)} ${d.toFixed(0).padStart(8)}u${live}`,
+        sel ? "#ffe066" : "#9fe");
+      putText(g, 8, y++, `x ${b.pos.x.toFixed(0)}  y ${b.pos.y.toFixed(0)}  z ${b.pos.z.toFixed(0)}`, "#678");
+    }
+    putText(g, 4, g.length - 2, `${list.length}/${NAV_BOOKMARK_MAX} waypoints stored.`, "#888");
+  }
+
   // ---------------- Character Sheet overlay ------------------------------
   // Opened with C in flight or from the pause menu. Shows the commander
   // portrait (built from species + eye color), full attributes, the ship
@@ -8976,6 +9061,14 @@ export class Voidwake {
     putText(g, ix, iy++, `Trait: ${sinfo.bonus}`, "#7CFC00");
     putText(g, ix, iy++, `Cost:  ${sinfo.drawback}`, "#f88");
     putText(g, ix, iy++, `Credits ${p.credits}cr    XP ${p.xp}    Rank ${p.rank}    Kills ${p.kills ?? 0}`, "#ffe066");
+
+    // 0.8.5 — Pilot's Record: lifetime tallies.
+    const rc = p.record;
+    if (rc) {
+      putText(g, ix, iy++,
+        `Record — flown ${(rc.distance / 1000).toFixed(1)}k u · docks ${rc.docks} · contracts ${rc.missions} · ore ${rc.mined} · contract pay ${rc.earned}cr`,
+        "#9fe");
+    }
 
     // Reputation strip.
     const rep = p.reputation ?? {};
