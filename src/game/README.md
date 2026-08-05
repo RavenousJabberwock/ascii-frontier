@@ -59,6 +59,8 @@ Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
 - `G` toggle hired gunner AUTO / STANDBY
 - `O` toggle hired **Pilot autopilot** to current target (full auto: fly, auto-dock stations, hold orbit). Mouse steering is suppressed while engaged and does **not** disengage it — press `O` again to take back manual control. A blinking banner near screen center reminds you it's on.
 - `U` open Quest Log popup
+- `N` bookmark the current target (or your present position) into the Nav Log
+- `V` open the **Nav Log** — up to 8 waypoints with live distance; ENTER re-targets a bookmark still on sensors, `X` deletes one
 - `K` pin / unpin quest tracker
 - `L` open Codex (symbols / colors / keys)
 - `\` cycle **Comms** tab (All / Crew / External); `PgUp/PgDn` scroll the panel, `Home` jumps to newest

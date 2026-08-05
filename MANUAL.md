@@ -58,6 +58,8 @@ Everything else is recoverable.
 | `C`         | Character Sheet (crew, ship, modules, pets)          |
 | `R`         | Reputation panel                                     |
 | `H`         | Hail the current target (comms channel)              |
+| `N`         | Bookmark the current target into the Nav Log         |
+| `V`         | Open the Nav Log (saved waypoints, up to 8)          |
 | `ESC`       | Main menu (New / Save / Load / Options / Quit)       |
 
 Gamepads (any standard mapping) and touch controls are supported and can be
