@@ -207,6 +207,9 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   that reads "OUT OF ORDER" and cause odd shipboard chatter; once revealed
   they join a vacant role at a very low wage.
 
+The sheet also carries your **Pilot's Record** (0.8.5): distance flown,
+docks, contracts completed, ore mined and lifetime contract pay.
+
 Press `C` for the full sheet: portraits, attributes, ship silhouette, and a
 plain-language description of every fitted module.
 
