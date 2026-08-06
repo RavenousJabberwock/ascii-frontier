@@ -148,6 +148,10 @@ Everything else is recoverable.
   hauls and can end in a walkout (never on Easy, never with cheats on).
   Crew sometimes arrive with a pet, and you may pick up a **stowaway** who
   squats a berth marked "OUT OF ORDER" until they reveal themselves.
+- **Wing escorts.** Lawful docks will sell you an escort contract (up to two).
+  Escorts fly their own armed fighter in formation, shoot hostiles that come
+  inside ~1200u, and bill a wage every dock. They take no berth. Lose one in
+  combat and the contract is gone with the hull.
 - **Character Sheet** (`C`) shows portraits, attributes, your ship
   silhouette, and a plain-language description of every fitted module.
 

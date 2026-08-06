@@ -202,6 +202,12 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   cheats enabled.
 - Crew have idle chatter, a banter matrix with each other, and a 5% chance of
   arriving with a **pet** (cosmetic, shows on the Character Sheet).
+- **Wing escorts** (0.8.6): lawful docks broker up to two escort contracts
+  from the Crew page — 1800cr up front, 90cr per dock. An escort is a real
+  ship, not a berth: it flies formation off your flank, engages hostiles
+  within 1200u, and its amber hull shows on scope. Escorts survive save/load
+  and wormhole jumps, but a shot-down escort is gone for good, and a short
+  payday voids the newest contract. `Stand down <name>` releases one.
 - **Stowaways**: 5% chance per playthrough to pick one up from a rescue,
   derelict, or dock with a free berth. Until discovered they squat a berth
   that reads "OUT OF ORDER" and cause odd shipboard chatter; once revealed
