@@ -8038,6 +8038,19 @@ export class Voidwake {
               : "Payday came up light, boss.";
           this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
           this.pushChatter("Crew", grump, "#fc6");
+          // 0.8.6 — escorts fly on contract, not loyalty: a short payday ends
+          // the newest contract immediately.
+          const wing = p.wing ?? [];
+          if (wing.length) {
+            const gone = wing.pop()!;
+            if (gone.entityId != null) {
+              this._wingBound?.delete(gone.entityId);
+              this.entities = this.entities.filter((e) => e.id !== gone.entityId);
+            }
+            this.pushChatter(gone.name, "No pay, no wing. Contract's void, Cmdr.", "#ffd166", "external");
+            this.pushLog(`${gone.name} broke off — escort contract lapsed.`);
+            dispatchHook("onWingLost", { name: gone.name, reason: "unpaid" });
+          }
         } else {
           this.pushLog(`Crew wages: -${paid}cr.`);
         }
