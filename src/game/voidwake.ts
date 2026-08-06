@@ -13291,6 +13291,29 @@ export class Voidwake {
     }
 
     // ---------------------------------------------------------------------
+    // 0.8.6 — Nav Log waypoint markers. Every bookmark that projects in front
+    // of the camera paints a small diamond plus its label, so a logged
+    // heading is visible in world space rather than only in the Nav Log
+    // screen. Cells already painted by an entity win — markers never occlude
+    // a hull or a planet.
+    // ---------------------------------------------------------------------
+    for (const bm of p.bookmarks ?? []) {
+      // Live entities move; fall back to the frozen position when the contact
+      // is gone (culled, destroyed, or never had an id).
+      const live = bm.entityId != null ? this.entities.find((e) => e.id === bm.entityId) : undefined;
+      const wp = projectPoint(live ? live.pos.x : bm.pos.x, live ? live.pos.y : bm.pos.y, live ? live.pos.z : bm.pos.z);
+      if (!wp) continue;
+      if (wp.sx <= vpLeft + 1 || wp.sx >= vpRight - 1 || wp.sy <= vpTop + 1 || wp.sy >= vpBottom - 1) continue;
+      const col = live ? "#9ff0c0" : "#6a9a80";
+      if (g[wp.sy][wp.sx].ch === " ") g[wp.sy][wp.sx] = { ch: "◇", color: col, glow: true };
+      const dist = V.len(V.sub(live ? live.pos : bm.pos, p.pos));
+      const label = `${bm.name} ${dist > 1000 ? `${(dist / 1000).toFixed(1)}k` : Math.round(dist)}u`;
+      const lx = Math.max(vpLeft + 1, wp.sx - Math.floor(label.length / 2));
+      const ly = wp.sy - 1;
+      if (ly > vpTop && g[ly][lx].ch === " ") putText(g, lx, ly, label, col, vpRight);
+    }
+
+    // ---------------------------------------------------------------------
     // Targeting overlay: brackets when the current target is on-screen, a
     // chevron edge-pointer + distance readout when it's off-screen. Color
     // tracks faction so a friendly bracket can't be confused with a hostile.
