@@ -798,6 +798,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "No room for more rock. Dock somewhere?",
   ],
   pilot_idle: [
+    "Wing's holding formation. Mostly. He drifts left when he daydreams.",
+    "I filed a flight plan. Nobody reads them. I file them anyway.",
+    "Cmdr, the autopilot and I have an understanding: I don't trust it.",
+    "Vector's clean enough to serve dinner on.",
+    "If space had lanes, I'd still be in the wrong one.",
     "Steady vector, Cmdr. {weather}.",
     "Nice ride, this {ship}. Handles better than my last posting.",
     "{smalltalk}.",
@@ -893,6 +898,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr, you owe me a bar tab and a therapist.",
   ],
   engineer_idle: [
+    "I fixed the rattle. I have no idea what the rattle was. It's fixed.",
+    "Manual says replace this part every 500 hours. Manual is an optimist.",
+    "Percussive maintenance remains an undefeated discipline, Cmdr.",
+    "Good news: the leak stopped. Other news: I'd like to know why.",
+    "This reactor has three settings: cold, warm, and philosophical.",
     "Hull's holding. Coupler harmonics look clean.",
     "{smalltalk}.",
     "Shield emitter running a hair warm — nothing critical.",
@@ -1464,6 +1474,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
   // is flying, hauling and can afford. Deliberately corny: this is a used
   // spacecraft lot with a coffee machine and a banner.
   dealer_generic: [
+    "This frame's got character. That's yard-speak for dents, but lovely dents.",
+    "Finance available! Terms: I keep asking, you keep flying.",
+    "Previous owner was a monk. Vow of silence. Never complained once.",
+    "Trade-in valuation done by eye, heart, and a suspicious calculator.",
+    "It's not rust, {cmdr}, it's a patina of lived experience.",
     "{speaker} Yard here — every hull certified pre-flown, {cmdr}!",
     "You're not buying a ship, you're buying a *lifestyle*. Also a ship.",
     "Kick the plating. Go on. That's real plating, that is.",
