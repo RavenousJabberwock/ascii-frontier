@@ -7392,6 +7392,8 @@ export class Voidwake {
     }
     // 0.5.6 — drain AI state-transition events into keyed chatter lines.
     const aiEvents = drainAiEvents();
+    // 0.8.6 — keep hired wing escorts alive and bound to live entities.
+    this.tickWing();
     if (aiEvents.length) {
       for (const ev of aiEvents) {
         if (ev.kind === "patrol_tow_start") {
@@ -8948,6 +8950,62 @@ export class Voidwake {
   // live distance plus the frozen coordinates, so a contact that has since
   // been destroyed still gives you somewhere to fly. Enter re-targets a
   // bookmark whose entity is still alive; X deletes the highlighted row.
+  // ---------------------------------------------------------------------
+  // 0.8.6 — Wing escorts.
+  // Each entry in `player.wing` owns one live entity. Every frame we verify
+  // that binding: a missing entity (save reload, wormhole jump, culled by a
+  // long-range sweep) is respawned in formation, and a destroyed one fires
+  // `onWingLost` and is struck from the roster with a comms line. Escorts
+  // never respawn for free after being shot down — the roster entry goes away
+  // with the hull, so the player has to re-hire.
+  // ---------------------------------------------------------------------
+  tickWing() {
+    const p = this.player; if (!p) return;
+    const list = p.wing;
+    if (!list || list.length === 0) return;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const w = list[i];
+      const ent = w.entityId != null ? this.entities.find((e) => e.id === w.entityId) : undefined;
+      if (ent && (ent.hull ?? 1) > 0) continue;
+      if (ent && (ent.hull ?? 1) <= 0) {
+        // Shot down. Remove the roster slot; the hull loss is permanent.
+        this.pushChatter(w.name, "Hull's gone — punching out. Sorry, Cmdr.", "#ffd166", "external");
+        this.pushLog(`Wing escort ${w.name} was destroyed.`);
+        dispatchHook("onWingLost", { name: w.name });
+        list.splice(i, 1);
+        continue;
+      }
+      if (w.entityId != null && !ent && this._wingBound?.has(w.entityId)) {
+        // Entity vanished without a zero-hull frame (culled/kill-filtered).
+        // Treat as lost so a wing can actually be destroyed.
+        this._wingBound.delete(w.entityId);
+        this.pushLog(`Wing escort ${w.name} is off the board.`);
+        dispatchHook("onWingLost", { name: w.name });
+        list.splice(i, 1);
+        continue;
+      }
+      // First bind (fresh hire, or a save reload): spawn in formation.
+      const side = i % 2 === 0 ? 1 : -1;
+      const e: Entity = {
+        id: nextId(), kind: "friendly", name: w.name,
+        pos: {
+          x: p.pos.x + side * WING_FORMATION_DIST,
+          y: p.pos.y + 20 * side,
+          z: p.pos.z - WING_FORMATION_DIST * 0.4,
+        },
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "wing",
+        hull: 130, shield: 80,
+        state: "escort", cooldown: 0, weaponId: "pulse",
+        pilotName: w.name,
+      };
+      this.entities.push(e);
+      w.entityId = e.id;
+      (this._wingBound ??= new Set<number>()).add(e.id);
+    }
+  }
+  _wingBound?: Set<number>;
+
   addBookmark() {
     const p = this.player; if (!p) return;
     if (!p.bookmarks) p.bookmarks = [];
