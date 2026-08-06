@@ -213,6 +213,10 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   that reads "OUT OF ORDER" and cause odd shipboard chatter; once revealed
   they join a vacant role at a very low wage.
 
+Bookmarked waypoints also paint in the flight view (0.8.6) as a `◇` marker
+with the name and live distance — bright while the original contact is still on
+sensors, dim when only the stored coordinates remain.
+
 The sheet also carries your **Pilot's Record** (0.8.5): distance flown,
 docks, contracts completed, ore mined and lifetime contract pay.
 
