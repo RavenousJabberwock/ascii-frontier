@@ -7986,6 +7986,11 @@ export class Voidwake {
       let bill = 0;
       if (p.gunner) bill += p.gunner.wage ?? 30;
       if (p.crew) for (const c of p.crew) bill += c.wage ?? 40;
+      // 0.8.6 — wing escorts bill alongside the crew. Escorts have no morale;
+      // if the player can't cover the whole bill the escort contracts lapse
+      // (cheapest way to shed the cost is to stand them down first).
+      const wingBill = (p.wing ?? []).reduce((a, w) => a + (w.wage ?? WING_WAGE), 0);
+      bill += wingBill;
       if (bill > 0) {
         const paid = Math.min(bill, p.credits);
         p.credits -= paid;
@@ -10871,6 +10876,19 @@ export class Voidwake {
           rows.push(`Hire Xeno ${info.title} — ${fee}cr${gate}`);
         }
       }
+      // 0.8.6 — Wing escorts. Independent hulls, not berths: they fly their
+      // own ship, so they never compete with crew for quarters. Lawful docks
+      // only — pirate dens do not broker escort contracts.
+      if (dockedEnt?.faction !== "pirate") {
+        rows.push("~ Wing escorts ~");
+        const wing = p.wing ?? [];
+        for (const w of wing) rows.push(`Stand down ${w.name} — ${w.wage}cr/dock`);
+        if (wing.length < WING_MAX) {
+          rows.push(`Hire wing escort — ${WING_FEE}cr — armed fighter flies formation, ${WING_WAGE}cr/dock`);
+        } else {
+          rows.push(`Wing full (${WING_MAX} escorts)`);
+        }
+      }
       rows.push("Back");
       return rows;
     }
@@ -11135,6 +11153,37 @@ export class Voidwake {
     if (this.stationPage === "crew") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~")) return;
+      // 0.8.6 — wing escort rows are handled before the crew-role matcher so
+      // "Hire wing escort" never falls through into role parsing.
+      if (row.startsWith("Wing full")) return;
+      if (row.startsWith("Stand down ")) {
+        const name = row.slice("Stand down ".length).split(" — ")[0];
+        const list = p.wing ?? [];
+        const idx = list.findIndex((w) => w.name === name);
+        if (idx < 0) return;
+        const w = list[idx];
+        if (w.entityId != null) {
+          this._wingBound?.delete(w.entityId);
+          this.entities = this.entities.filter((e) => e.id !== w.entityId);
+        }
+        list.splice(idx, 1);
+        this.pushChatter(w.name, "Understood. Breaking formation — call if it gets loud.", "#ffd166", "external");
+        this.pushLog(`${w.name} stood down.`);
+        return;
+      }
+      if (row.startsWith("Hire wing escort")) {
+        const list = (p.wing ??= []);
+        if (list.length >= WING_MAX) { this.pushLog("Wing is at full strength."); return; }
+        if (p.credits < WING_FEE) { this.pushLog("Not enough credits for an escort contract."); return; }
+        p.credits -= WING_FEE;
+        const name = `Wing ${pilotNameFor(Math.random, "friendly")}`;
+        list.push({ name, wage: WING_WAGE });
+        this.tickWing();
+        this.pushLog(`Signed ${name} to the wing (${WING_WAGE}cr/dock).`);
+        this.pushChatter(name, "Contract's signed. I'll take your left side — try not to shoot it.", "#ffd166", "external");
+        dispatchHook("onWingHired", { name, fee: WING_FEE, wage: WING_WAGE });
+        return;
+      }
       const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant", "navigator", "quartermaster", "recruiter", "tactical"];
       // "locked" rows: eaten silently so exclusivity messaging in the menu
       // doesn't try to hire a locked slot.
