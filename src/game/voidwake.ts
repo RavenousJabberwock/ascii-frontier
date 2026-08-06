@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.5";
+const VERSION = "0.8.6";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -102,7 +102,10 @@ export type ScriptHookName =
   // 0.8.4 — bounty office hooks
   | "onBookmarkAdded"
   | "onBountyAccepted"
-  | "onBountyClaimed";
+  | "onBountyClaimed"
+  // 0.8.6 — wing escort hooks
+  | "onWingHired"
+  | "onWingLost";
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,6 +131,8 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onBookmarkAdded:      [],
   onBountyAccepted:     [],
   onBountyClaimed:      [],
+  onWingHired:          [],
+  onWingLost:           [],
 
 };
 
@@ -2060,6 +2065,10 @@ interface PlayerState {
   bookmarks?: { entityId?: number; name: string; kind: string; pos: Vec3 }[];
   // 0.8.5 — Pilot's Record: lifetime tallies surfaced on the Character Sheet.
   record?: { distance: number; docks: number; missions: number; mined: number; earned: number };
+  // 0.8.6 — hired wing escorts. Each entry owns one live `friendly`/`wing`
+  // entity; `entityId` is re-bound by ensureWingEntities() whenever the ship
+  // is missing (save load, wormhole jump, destruction is handled separately).
+  wing?: { name: string; wage: number; entityId?: number }[];
 }
 const XENO_HIRE_THRESHOLD = 5;
 
@@ -2284,6 +2293,15 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
 
 // 0.8.5 — how many waypoints the Nav Log holds. Oldest is dropped on overflow.
 const NAV_BOOKMARK_MAX = 8;
+// 0.8.6 — Wing escorts. Hired at lawful stations from the Crew page. Each
+// escort is a real `friendly` entity with faction "wing": it flies formation
+// on the player, engages hostiles inside WING_ENGAGE_RANGE, and draws a flat
+// wage every dock alongside the crew bill.
+const WING_MAX = 2;
+const WING_FEE = 1800;
+const WING_WAGE = 90;
+const WING_ENGAGE_RANGE = 1200;
+const WING_FORMATION_DIST = 130;
 
 // User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
 // Order here is the order shown; the id must match a key in DEFAULT_KEYBINDS.
@@ -3057,6 +3075,49 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       e.state = "patrol";
       if (Math.random() < 0.02) e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 15);
     }
+  } else if (e.kind === "friendly" && e.faction === "wing") {
+    // ---- Wing escort AI (0.8.6) -----------------------------------------
+    // Priority 1: nearest hostile inside WING_ENGAGE_RANGE — close and fire.
+    // Priority 2: hold formation a short distance off the player's hull,
+    //             matching player velocity so it doesn't rubber-band.
+    const foe = ents.reduce<{ x: Entity | null; d: number }>((acc, x) => {
+      if (x.kind !== "hostile") return acc;
+      const d = V.len(V.sub(x.pos, e.pos));
+      return d < acc.d ? { x, d } : acc;
+    }, { x: null, d: WING_ENGAGE_RANGE });
+    if (foe.x) {
+      e.state = "escort-engage";
+      e.targetId = foe.x.id;
+      const dir = V.norm(V.sub(foe.x.pos, e.pos));
+      e.vel = V.scale(dir, 44);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      if (foe.d < 480 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 0.5;
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
+    // Formation station-keeping. The slot offset is derived from the entity id
+    // so two escorts sit on opposite wings instead of fighting for one cell.
+    e.state = "escort";
+    e.targetId = undefined;
+    const side = (e.id % 2 === 0) ? 1 : -1;
+    const slot = {
+      x: player.pos.x + side * WING_FORMATION_DIST,
+      y: player.pos.y + 20 * side,
+      z: player.pos.z - WING_FORMATION_DIST * 0.4,
+    };
+    const toSlot = V.sub(slot, e.pos);
+    const slotD = V.len(toSlot);
+    if (slotD > 8) {
+      // Speed scales with distance so a long catch-up burn is fast but the
+      // final approach settles instead of overshooting into the player.
+      const speed = Math.min(180, Math.max(12, slotD * 0.9));
+      e.vel = V.scale(V.norm(toSlot), speed);
+    } else {
+      e.vel = { x: 0, y: 0, z: 0 };
+    }
+    return;
   } else if (e.kind === "friendly" && e.faction === "patrol") {
     // ---- Space Patrol AI ------------------------------------------------
     // Priority 1: nearest hostile within 1500u — engage hard, fast, long range.
@@ -4747,6 +4808,12 @@ function tintFor(e: Entity): { fill: string; edge: string } {
     }
     case "derelict": {
       return { fill: "#c0d0d8", edge: "#5a6870" };
+    }
+    case "friendly": {
+      // 0.8.6 — hired wing escorts read amber so they never get mistaken for
+      // an unaffiliated federation ship in a dogfight.
+      if (e.faction === "wing") return { fill: "#ffd166", edge: "#c9962e" };
+      return { fill: colorFor("friendly"), edge: colorFor("friendly") };
     }
     case "asteroid": {
       if (isWreck(e)) {
@@ -12628,7 +12695,7 @@ export class Voidwake {
             g[sy2][sx] = { ch: glyph, color: tint.fill };
           }
         } else {
-          const spriteKey = (e.kind === "friendly" && e.faction === "patrol") ? "patrol" : e.kind;
+          const spriteKey = (e.kind === "friendly" && (e.faction === "patrol" || e.faction === "wing")) ? "patrol" : e.kind;
           const variants = SHIP_SPRITES[spriteKey] ?? SHIP_SPRITES[e.kind];
           const sprite = variants[Math.floor(hash01(e.id) * variants.length)];
           for (let dy = -1; dy <= 1; dy++) {
