@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.5";
+const VERSION = "0.8.6";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -102,7 +102,10 @@ export type ScriptHookName =
   // 0.8.4 — bounty office hooks
   | "onBookmarkAdded"
   | "onBountyAccepted"
-  | "onBountyClaimed";
+  | "onBountyClaimed"
+  // 0.8.6 — wing escort hooks
+  | "onWingHired"
+  | "onWingLost";
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,6 +131,8 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onBookmarkAdded:      [],
   onBountyAccepted:     [],
   onBountyClaimed:      [],
+  onWingHired:          [],
+  onWingLost:           [],
 
 };
 
@@ -793,6 +798,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "No room for more rock. Dock somewhere?",
   ],
   pilot_idle: [
+    "Wing's holding formation. Mostly. He drifts left when he daydreams.",
+    "I filed a flight plan. Nobody reads them. I file them anyway.",
+    "Cmdr, the autopilot and I have an understanding: I don't trust it.",
+    "Vector's clean enough to serve dinner on.",
+    "If space had lanes, I'd still be in the wrong one.",
     "Steady vector, Cmdr. {weather}.",
     "Nice ride, this {ship}. Handles better than my last posting.",
     "{smalltalk}.",
@@ -888,6 +898,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Cmdr, you owe me a bar tab and a therapist.",
   ],
   engineer_idle: [
+    "I fixed the rattle. I have no idea what the rattle was. It's fixed.",
+    "Manual says replace this part every 500 hours. Manual is an optimist.",
+    "Percussive maintenance remains an undefeated discipline, Cmdr.",
+    "Good news: the leak stopped. Other news: I'd like to know why.",
+    "This reactor has three settings: cold, warm, and philosophical.",
     "Hull's holding. Coupler harmonics look clean.",
     "{smalltalk}.",
     "Shield emitter running a hair warm — nothing critical.",
@@ -1459,6 +1474,11 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
   // is flying, hauling and can afford. Deliberately corny: this is a used
   // spacecraft lot with a coffee machine and a banner.
   dealer_generic: [
+    "This frame's got character. That's yard-speak for dents, but lovely dents.",
+    "Finance available! Terms: I keep asking, you keep flying.",
+    "Previous owner was a monk. Vow of silence. Never complained once.",
+    "Trade-in valuation done by eye, heart, and a suspicious calculator.",
+    "It's not rust, {cmdr}, it's a patina of lived experience.",
     "{speaker} Yard here — every hull certified pre-flown, {cmdr}!",
     "You're not buying a ship, you're buying a *lifestyle*. Also a ship.",
     "Kick the plating. Go on. That's real plating, that is.",
@@ -2060,6 +2080,10 @@ interface PlayerState {
   bookmarks?: { entityId?: number; name: string; kind: string; pos: Vec3 }[];
   // 0.8.5 — Pilot's Record: lifetime tallies surfaced on the Character Sheet.
   record?: { distance: number; docks: number; missions: number; mined: number; earned: number };
+  // 0.8.6 — hired wing escorts. Each entry owns one live `friendly`/`wing`
+  // entity; `entityId` is re-bound by ensureWingEntities() whenever the ship
+  // is missing (save load, wormhole jump, destruction is handled separately).
+  wing?: { name: string; wage: number; entityId?: number }[];
 }
 const XENO_HIRE_THRESHOLD = 5;
 
@@ -2284,6 +2308,15 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
 
 // 0.8.5 — how many waypoints the Nav Log holds. Oldest is dropped on overflow.
 const NAV_BOOKMARK_MAX = 8;
+// 0.8.6 — Wing escorts. Hired at lawful stations from the Crew page. Each
+// escort is a real `friendly` entity with faction "wing": it flies formation
+// on the player, engages hostiles inside WING_ENGAGE_RANGE, and draws a flat
+// wage every dock alongside the crew bill.
+const WING_MAX = 2;
+const WING_FEE = 1800;
+const WING_WAGE = 90;
+const WING_ENGAGE_RANGE = 1200;
+const WING_FORMATION_DIST = 130;
 
 // User-visible actions listed on the Options ▸ Controls ▸ Keybinds screen.
 // Order here is the order shown; the id must match a key in DEFAULT_KEYBINDS.
@@ -3057,6 +3090,49 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       e.state = "patrol";
       if (Math.random() < 0.02) e.vel = V.scale({ x: rng() - 0.5, y: rng() - 0.5, z: rng() - 0.5 }, 15);
     }
+  } else if (e.kind === "friendly" && e.faction === "wing") {
+    // ---- Wing escort AI (0.8.6) -----------------------------------------
+    // Priority 1: nearest hostile inside WING_ENGAGE_RANGE — close and fire.
+    // Priority 2: hold formation a short distance off the player's hull,
+    //             matching player velocity so it doesn't rubber-band.
+    const foe = ents.reduce<{ x: Entity | null; d: number }>((acc, x) => {
+      if (x.kind !== "hostile") return acc;
+      const d = V.len(V.sub(x.pos, e.pos));
+      return d < acc.d ? { x, d } : acc;
+    }, { x: null, d: WING_ENGAGE_RANGE });
+    if (foe.x) {
+      e.state = "escort-engage";
+      e.targetId = foe.x.id;
+      const dir = V.norm(V.sub(foe.x.pos, e.pos));
+      e.vel = V.scale(dir, 44);
+      e.cooldown = (e.cooldown ?? 0) - dt;
+      if (foe.d < 480 && (e.cooldown ?? 0) <= 0) {
+        e.cooldown = 0.5;
+        ents.push(makeBullet(e, dir));
+      }
+      return;
+    }
+    // Formation station-keeping. The slot offset is derived from the entity id
+    // so two escorts sit on opposite wings instead of fighting for one cell.
+    e.state = "escort";
+    e.targetId = undefined;
+    const side = (e.id % 2 === 0) ? 1 : -1;
+    const slot = {
+      x: player.pos.x + side * WING_FORMATION_DIST,
+      y: player.pos.y + 20 * side,
+      z: player.pos.z - WING_FORMATION_DIST * 0.4,
+    };
+    const toSlot = V.sub(slot, e.pos);
+    const slotD = V.len(toSlot);
+    if (slotD > 8) {
+      // Speed scales with distance so a long catch-up burn is fast but the
+      // final approach settles instead of overshooting into the player.
+      const speed = Math.min(180, Math.max(12, slotD * 0.9));
+      e.vel = V.scale(V.norm(toSlot), speed);
+    } else {
+      e.vel = { x: 0, y: 0, z: 0 };
+    }
+    return;
   } else if (e.kind === "friendly" && e.faction === "patrol") {
     // ---- Space Patrol AI ------------------------------------------------
     // Priority 1: nearest hostile within 1500u — engage hard, fast, long range.
@@ -4747,6 +4823,12 @@ function tintFor(e: Entity): { fill: string; edge: string } {
     }
     case "derelict": {
       return { fill: "#c0d0d8", edge: "#5a6870" };
+    }
+    case "friendly": {
+      // 0.8.6 — hired wing escorts read amber so they never get mistaken for
+      // an unaffiliated federation ship in a dogfight.
+      if (e.faction === "wing") return { fill: "#ffd166", edge: "#c9962e" };
+      return { fill: colorFor("friendly"), edge: colorFor("friendly") };
     }
     case "asteroid": {
       if (isWreck(e)) {
@@ -7325,6 +7407,8 @@ export class Voidwake {
     }
     // 0.5.6 — drain AI state-transition events into keyed chatter lines.
     const aiEvents = drainAiEvents();
+    // 0.8.6 — keep hired wing escorts alive and bound to live entities.
+    this.tickWing();
     if (aiEvents.length) {
       for (const ev of aiEvents) {
         if (ev.kind === "patrol_tow_start") {
@@ -7917,6 +8001,11 @@ export class Voidwake {
       let bill = 0;
       if (p.gunner) bill += p.gunner.wage ?? 30;
       if (p.crew) for (const c of p.crew) bill += c.wage ?? 40;
+      // 0.8.6 — wing escorts bill alongside the crew. Escorts have no morale;
+      // if the player can't cover the whole bill the escort contracts lapse
+      // (cheapest way to shed the cost is to stand them down first).
+      const wingBill = (p.wing ?? []).reduce((a, w) => a + (w.wage ?? WING_WAGE), 0);
+      bill += wingBill;
       if (bill > 0) {
         const paid = Math.min(bill, p.credits);
         p.credits -= paid;
@@ -7964,6 +8053,19 @@ export class Voidwake {
               : "Payday came up light, boss.";
           this.pushLog(`Crew wages: paid ${paid}cr — SHORT ${bill - paid}cr. Crew is grumbling.`);
           this.pushChatter("Crew", grump, "#fc6");
+          // 0.8.6 — escorts fly on contract, not loyalty: a short payday ends
+          // the newest contract immediately.
+          const wing = p.wing ?? [];
+          if (wing.length) {
+            const gone = wing.pop()!;
+            if (gone.entityId != null) {
+              this._wingBound?.delete(gone.entityId);
+              this.entities = this.entities.filter((e) => e.id !== gone.entityId);
+            }
+            this.pushChatter(gone.name, "No pay, no wing. Contract's void, Cmdr.", "#ffd166", "external");
+            this.pushLog(`${gone.name} broke off — escort contract lapsed.`);
+            dispatchHook("onWingLost", { name: gone.name, reason: "unpaid" });
+          }
         } else {
           this.pushLog(`Crew wages: -${paid}cr.`);
         }
@@ -8881,6 +8983,62 @@ export class Voidwake {
   // live distance plus the frozen coordinates, so a contact that has since
   // been destroyed still gives you somewhere to fly. Enter re-targets a
   // bookmark whose entity is still alive; X deletes the highlighted row.
+  // ---------------------------------------------------------------------
+  // 0.8.6 — Wing escorts.
+  // Each entry in `player.wing` owns one live entity. Every frame we verify
+  // that binding: a missing entity (save reload, wormhole jump, culled by a
+  // long-range sweep) is respawned in formation, and a destroyed one fires
+  // `onWingLost` and is struck from the roster with a comms line. Escorts
+  // never respawn for free after being shot down — the roster entry goes away
+  // with the hull, so the player has to re-hire.
+  // ---------------------------------------------------------------------
+  tickWing() {
+    const p = this.player; if (!p) return;
+    const list = p.wing;
+    if (!list || list.length === 0) return;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const w = list[i];
+      const ent = w.entityId != null ? this.entities.find((e) => e.id === w.entityId) : undefined;
+      if (ent && (ent.hull ?? 1) > 0) continue;
+      if (ent && (ent.hull ?? 1) <= 0) {
+        // Shot down. Remove the roster slot; the hull loss is permanent.
+        this.pushChatter(w.name, "Hull's gone — punching out. Sorry, Cmdr.", "#ffd166", "external");
+        this.pushLog(`Wing escort ${w.name} was destroyed.`);
+        dispatchHook("onWingLost", { name: w.name });
+        list.splice(i, 1);
+        continue;
+      }
+      if (w.entityId != null && !ent && this._wingBound?.has(w.entityId)) {
+        // Entity vanished without a zero-hull frame (culled/kill-filtered).
+        // Treat as lost so a wing can actually be destroyed.
+        this._wingBound.delete(w.entityId);
+        this.pushLog(`Wing escort ${w.name} is off the board.`);
+        dispatchHook("onWingLost", { name: w.name });
+        list.splice(i, 1);
+        continue;
+      }
+      // First bind (fresh hire, or a save reload): spawn in formation.
+      const side = i % 2 === 0 ? 1 : -1;
+      const e: Entity = {
+        id: nextId(), kind: "friendly", name: w.name,
+        pos: {
+          x: p.pos.x + side * WING_FORMATION_DIST,
+          y: p.pos.y + 20 * side,
+          z: p.pos.z - WING_FORMATION_DIST * 0.4,
+        },
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "wing",
+        hull: 130, shield: 80,
+        state: "escort", cooldown: 0, weaponId: "pulse",
+        pilotName: w.name,
+      };
+      this.entities.push(e);
+      w.entityId = e.id;
+      (this._wingBound ??= new Set<number>()).add(e.id);
+    }
+  }
+  _wingBound?: Set<number>;
+
   addBookmark() {
     const p = this.player; if (!p) return;
     if (!p.bookmarks) p.bookmarks = [];
@@ -10746,6 +10904,19 @@ export class Voidwake {
           rows.push(`Hire Xeno ${info.title} — ${fee}cr${gate}`);
         }
       }
+      // 0.8.6 — Wing escorts. Independent hulls, not berths: they fly their
+      // own ship, so they never compete with crew for quarters. Lawful docks
+      // only — pirate dens do not broker escort contracts.
+      if (dockedEnt?.faction !== "pirate") {
+        rows.push("~ Wing escorts ~");
+        const wing = p.wing ?? [];
+        for (const w of wing) rows.push(`Stand down ${w.name} — ${w.wage}cr/dock`);
+        if (wing.length < WING_MAX) {
+          rows.push(`Hire wing escort — ${WING_FEE}cr — armed fighter flies formation, ${WING_WAGE}cr/dock`);
+        } else {
+          rows.push(`Wing full (${WING_MAX} escorts)`);
+        }
+      }
       rows.push("Back");
       return rows;
     }
@@ -11010,6 +11181,37 @@ export class Voidwake {
     if (this.stationPage === "crew") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~")) return;
+      // 0.8.6 — wing escort rows are handled before the crew-role matcher so
+      // "Hire wing escort" never falls through into role parsing.
+      if (row.startsWith("Wing full")) return;
+      if (row.startsWith("Stand down ")) {
+        const name = row.slice("Stand down ".length).split(" — ")[0];
+        const list = p.wing ?? [];
+        const idx = list.findIndex((w) => w.name === name);
+        if (idx < 0) return;
+        const w = list[idx];
+        if (w.entityId != null) {
+          this._wingBound?.delete(w.entityId);
+          this.entities = this.entities.filter((e) => e.id !== w.entityId);
+        }
+        list.splice(idx, 1);
+        this.pushChatter(w.name, "Understood. Breaking formation — call if it gets loud.", "#ffd166", "external");
+        this.pushLog(`${w.name} stood down.`);
+        return;
+      }
+      if (row.startsWith("Hire wing escort")) {
+        const list = (p.wing ??= []);
+        if (list.length >= WING_MAX) { this.pushLog("Wing is at full strength."); return; }
+        if (p.credits < WING_FEE) { this.pushLog("Not enough credits for an escort contract."); return; }
+        p.credits -= WING_FEE;
+        const name = `Wing ${pilotNameFor(Math.random, "friendly")}`;
+        list.push({ name, wage: WING_WAGE });
+        this.tickWing();
+        this.pushLog(`Signed ${name} to the wing (${WING_WAGE}cr/dock).`);
+        this.pushChatter(name, "Contract's signed. I'll take your left side — try not to shoot it.", "#ffd166", "external");
+        dispatchHook("onWingHired", { name, fee: WING_FEE, wage: WING_WAGE });
+        return;
+      }
       const roles: CrewRole[] = ["gunner", "pilot", "engineer", "merchant", "navigator", "quartermaster", "recruiter", "tactical"];
       // "locked" rows: eaten silently so exclusivity messaging in the menu
       // doesn't try to hire a locked slot.
@@ -12628,7 +12830,7 @@ export class Voidwake {
             g[sy2][sx] = { ch: glyph, color: tint.fill };
           }
         } else {
-          const spriteKey = (e.kind === "friendly" && e.faction === "patrol") ? "patrol" : e.kind;
+          const spriteKey = (e.kind === "friendly" && (e.faction === "patrol" || e.faction === "wing")) ? "patrol" : e.kind;
           const variants = SHIP_SPRITES[spriteKey] ?? SHIP_SPRITES[e.kind];
           const sprite = variants[Math.floor(hash01(e.id) * variants.length)];
           for (let dy = -1; dy <= 1; dy++) {
@@ -13101,6 +13303,29 @@ export class Voidwake {
         const ly = sy2 + ry + 1;
         if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe", vpRight);
       }
+    }
+
+    // ---------------------------------------------------------------------
+    // 0.8.6 — Nav Log waypoint markers. Every bookmark that projects in front
+    // of the camera paints a small diamond plus its label, so a logged
+    // heading is visible in world space rather than only in the Nav Log
+    // screen. Cells already painted by an entity win — markers never occlude
+    // a hull or a planet.
+    // ---------------------------------------------------------------------
+    for (const bm of p.bookmarks ?? []) {
+      // Live entities move; fall back to the frozen position when the contact
+      // is gone (culled, destroyed, or never had an id).
+      const live = bm.entityId != null ? this.entities.find((e) => e.id === bm.entityId) : undefined;
+      const wp = projectPoint(live ? live.pos.x : bm.pos.x, live ? live.pos.y : bm.pos.y, live ? live.pos.z : bm.pos.z);
+      if (!wp) continue;
+      if (wp.sx <= vpLeft + 1 || wp.sx >= vpRight - 1 || wp.sy <= vpTop + 1 || wp.sy >= vpBottom - 1) continue;
+      const col = live ? "#9ff0c0" : "#6a9a80";
+      if (g[wp.sy][wp.sx].ch === " ") g[wp.sy][wp.sx] = { ch: "◇", color: col, glow: true };
+      const dist = V.len(V.sub(live ? live.pos : bm.pos, p.pos));
+      const label = `${bm.name} ${dist > 1000 ? `${(dist / 1000).toFixed(1)}k` : Math.round(dist)}u`;
+      const lx = Math.max(vpLeft + 1, wp.sx - Math.floor(label.length / 2));
+      const ly = wp.sy - 1;
+      if (ly > vpTop && g[ly][lx].ch === " ") putText(g, lx, ly, label, col, vpRight);
     }
 
     // ---------------------------------------------------------------------

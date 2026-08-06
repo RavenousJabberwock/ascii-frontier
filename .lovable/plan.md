@@ -1,3 +1,31 @@
+# 0.8.6 — Wing Escorts & Waypoint Markers
+
+Ships as **0.8.6**.
+
+- **Wing escorts.** Lawful docks now broker escort contracts from the Crew
+  page (`Hire wing escort`, 1800cr, 90cr/dock, max 2). Each escort is a real
+  `friendly` entity with faction `wing`: amber-tinted, patrol silhouette, its
+  own hull (130) and shield (80). It does not consume a berth — escorts fly
+  their own ship.
+- **Wing AI.** New branch in `tickAI`: engage the nearest hostile inside
+  1200u (fire at <480u on a 0.5s cadence), otherwise hold a formation slot
+  ~130u off the player's flank with distance-scaled closing speed so it
+  catches up fast and settles instead of rubber-banding. Slot side is derived
+  from entity id so two escorts split left/right.
+- **Wing lifecycle.** `tickWing()` re-binds each roster entry to a live
+  entity every frame, so escorts survive save/load and wormhole jumps. A
+  destroyed escort fires `onWingLost` and is struck from the roster
+  permanently — re-hiring costs full price. A short payday voids the newest
+  contract on the spot. `Stand down <name>` dismisses cleanly.
+- **Waypoint markers.** Nav Log bookmarks now paint in world space: a `◇`
+  glyph plus name and live distance, bright when the source contact is still
+  on sensors and dim when only the frozen coordinates remain. Markers never
+  overwrite a cell already occupied by a hull or a body.
+- **Lua.** New `onWingHired` (name, fee, wage) and `onWingLost`
+  (name, reason?) hooks, registered in the Lua host.
+- **Chatter.** ~15 new humorous lines across pilot idle, engineer idle and
+  the used-ship dealer pools.
+
 # 0.8.5 — Nav Log & Pilot's Record
 
 Ships as **0.8.5**.

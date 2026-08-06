@@ -42,6 +42,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onPlayerHail", "onCustomsScan", "onShipHullChange",
   // 0.8.4 — Bounty Office
   "onBountyAccepted", "onBountyClaimed", "onBookmarkAdded",
+  // 0.8.6 — wing escorts
+  "onWingHired", "onWingLost",
 
 ];
 
