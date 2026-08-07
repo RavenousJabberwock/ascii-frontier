@@ -107,6 +107,9 @@ Everything else is recoverable.
   local faction wants it. Buy rows name the best-paying market you've seen.
   Markets rotate every ~10 minutes; industrial goods and relics swing widest.
 - **Mining.** Target a rock, hold `M`. A Mining Upgrade raises yield.
+- **Contract log.** You can hold three contracts at once. `U` opens the log:
+  `ENTER` tracks one, `X` abandons it (Guild standing hit). Completed jobs all
+  pay out the next time you dock.
 - **Contracts.** `J` at a dock: destroy, scan, deliver, courier, refuel a
   stranded ship, plus crew-specific quest lines. Completed objectives
   redirect the marker to the nearest civilian station for payout.
@@ -148,6 +151,9 @@ Everything else is recoverable.
   hauls and can end in a walkout (never on Easy, never with cheats on).
   Crew sometimes arrive with a pet, and you may pick up a **stowaway** who
   squats a berth marked "OUT OF ORDER" until they reveal themselves.
+- **Station freight lanes.** Once a station you own hits Tier 3 you can buy
+  automated trade routes (8000cr each, two max) on its Build / Upgrade page.
+  They earn credits every minute whether you fly or not.
 - **Wing escorts.** Lawful docks will sell you an escort contract (up to two).
   Escorts fly their own armed fighter in formation, shoot hostiles that come
   inside ~1200u, and bill a wage every dock. They take no berth. Lose one in

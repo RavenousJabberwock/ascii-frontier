@@ -1,3 +1,33 @@
+# 0.8.7 — Contract Log & Station Trade Routes
+
+Ships as **0.8.7**.
+
+- **Contract Log.** `PlayerState.missions` is now the canonical list of active
+  contracts (max 3) with `mission` as the *tracked* one that the HUD arrow,
+  objective diamond and SYSTEM pane follow. `contractList()` migrates old
+  saves in place, `addContract()` refuses a fourth job, `dropContract()`
+  re-pins the next. Kill checks, passenger drop-offs, deadline failures and
+  dock payouts all iterate the log, so background jobs progress and every
+  finished contract settles on the same dock.
+- **Log UI.** `U` (was "Quest Log") lists all contracts with reward and a live
+  per-kind progress line; `ENTER` tracks a row, `X` abandons it for -1 Guild
+  standing (-3 for a stranded passenger) and fires `onMissionAbandoned`.
+- **Station trade routes.** Owned stations at Tier 3+ can broker up to two
+  automated freight lanes from the Build / Upgrade page (8000cr each). Each
+  lane auto-picks the best-paying charted market for a good the partner dock
+  can legally take and pays `stationRouteIncome()` per minute on top of tier
+  income; lane-running stations file `player_station_route` Comms reports.
+- **Lua.** New hooks `onMissionAccepted`, `onMissionAbandoned`,
+  `onTradeRouteEstablished`, plus read-only `frontier.contracts()` and
+  `frontier.holdings()` getters. Two new samples in `lua-samples.md`.
+- **Performance.** New `byId()` entity index: a Map rebuilt only when the
+  entity count changes replaces 39 linear `entities.find(e => e.id === …)`
+  scans across missions, targeting, docking, waypoint markers and rendering.
+- **Chatter.** New `crew_ctx_contracts` (full log), `crew_ctx_routes` (lane
+  income) and `player_station_route` pools, plus an `EXTRA_TEMPLATES` merge
+  block appending ~25 lines to pilot/engineer/quartermaster/navigator idle,
+  merchant, dealer, hauler, traffic and colony pools.
+
 # 0.8.6 — Wing Escorts & Waypoint Markers
 
 Ships as **0.8.6**.
@@ -314,9 +344,6 @@ Ships as **0.7.4**.
 
 ## Deferred (stays on the backlog)
 
-- Multiple simultaneous contracts surfaced as a real quest list (the data
-  model already has `missions[]`; the UI still shows one).
-- Escort/wing NPCs you can hire as a second hull.
-- Waypoint marker drawn in the world for Nav Log entries (today the log gives
-  distance and coordinates only).
-- Station-to-station trade routes the player can automate with owned stations.
+- Contract log with per-contract sorting/filtering (today it is a flat list of
+  three).
+- Player-set trade lanes (today the lane picks its own partner and commodity).

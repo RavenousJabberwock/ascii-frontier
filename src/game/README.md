@@ -58,7 +58,7 @@ Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
 - `[` / `]` cycle target by category (stations / rocks / hostiles / ...)
 - `G` toggle hired gunner AUTO / STANDBY
 - `O` toggle hired **Pilot autopilot** to current target (full auto: fly, auto-dock stations, hold orbit). Mouse steering is suppressed while engaged and does **not** disengage it — press `O` again to take back manual control. A blinking banner near screen center reminds you it's on.
-- `U` open Quest Log popup
+- `U` open the **Contract Log** — up to 3 active contracts, `ENTER` tracks one (HUD arrow + objective marker), `X` abandons it (costs Guild standing)
 - `N` bookmark the current target (or your present position) into the Nav Log
 - `V` open the **Nav Log** — up to 8 waypoints with live distance; ENTER re-targets a bookmark still on sensors, `X` deletes one
 - `K` pin / unpin quest tracker
@@ -511,6 +511,14 @@ covering every hook shipped so far.
 | `onSave`            | `{ slot, blob }`                           | after successful save (manual + auto) |
 | `onLoad`            | `{ slot, blob }`                           | after successful load                 |
 | `onPlanetLand`      | `{ entity }`                               | populated-planet landing (fires in addition to `onPlayerDock`) |
+| `onMissionAccepted` | `{ id, kind, description, reward, targetId }` | contract board accept (0.8.7)      |
+| `onMissionAbandoned`| `{ id, kind, description, reward }`        | `X` on a row in the Contract Log (0.8.7) |
+| `onTradeRouteEstablished` | `{ stationId, station, partnerId, partner, commodity, fee }` | owned-station freight lane opened (0.8.7) |
+
+0.8.7 also adds two read-only Lua getters: `frontier.contracts()` returns the
+active contract log (`id, kind, description, reward, done, tracked,
+deadlineIn`), and `frontier.holdings()` returns your owned stations
+(`id, name, tier, treasury, routes, incomePerMinute`).
 
 Payload shapes are stable — changes require a `VERSION` bump and a note
 in this section. Additional hooks must land as no-op dispatchers first

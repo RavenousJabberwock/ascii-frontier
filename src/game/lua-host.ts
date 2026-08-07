@@ -44,6 +44,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onBountyAccepted", "onBountyClaimed", "onBookmarkAdded",
   // 0.8.6 — wing escorts
   "onWingHired", "onWingLost",
+  // 0.8.7 — contract log & station trade routes
+  "onMissionAccepted", "onMissionAbandoned", "onTradeRouteEstablished",
 
 ];
 
@@ -73,6 +75,10 @@ export interface LuaHostBridge {
   // (commodityId, stationId?) pair. If stationId is omitted, the currently
   // docked station is used. Returns null if the pair is unknown.
   commodityPrice?: (commodityId: string, stationId?: number) => { buy: number; sell: number; stock: number } | null;
+  // 0.8.7 — read-only contract log and player holdings (owned stations plus
+  // their automated freight lanes and current income rate).
+  contracts?: () => Array<Record<string, unknown>>;
+  holdings?: () => Array<Record<string, unknown>>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -271,6 +277,20 @@ export class LuaHost {
     });
     lua.lua_setfield(L, -2, to_luastring("price"));
     lua.lua_setfield(L, -2, to_luastring("economy"));
+
+    // frontier.contracts() → list of active contracts (read-only)
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      pushJsAsLua(Ls, this.bridge.contracts?.() ?? [], 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("contracts"));
+
+    // frontier.holdings() → list of player-owned stations (read-only)
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      pushJsAsLua(Ls, this.bridge.holdings?.() ?? [], 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("holdings"));
 
     lua.lua_pushjsfunction(L, (Ls: L) => {
 

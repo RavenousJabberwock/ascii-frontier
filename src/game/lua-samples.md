@@ -245,3 +245,46 @@ and every time the Lua host reloads — a script-only mod set does not
 strip these lines.
 
 
+
+
+---
+
+## 12. Contract triage (0.8.7)
+
+`frontier.contracts()` returns the whole log (max 3). This bark warns you when
+a passenger deadline is inside two minutes.
+
+```lua
+frontier.on("onTick", function(_)
+  for _, c in ipairs(frontier.contracts()) do
+    if c.deadlineIn and c.deadlineIn < 120 and not c._warned then
+      frontier.chat("Computer",
+        "Deadline in " .. string.format("%.0f", c.deadlineIn) .. "s: " .. c.description,
+        "#ffcc55")
+    end
+  end
+end)
+```
+
+## 13. Holdings ledger (0.8.7)
+
+`frontier.holdings()` reports every station you own, its tier, treasury, lane
+count and current income rate.
+
+```lua
+frontier.on("onMissionAccepted", function(m)
+  frontier.log("signed: " .. tostring(m.description))
+  for _, h in ipairs(frontier.holdings()) do
+    frontier.log(string.format("%s T%d — %dcr banked, %d lanes, %dcr/min",
+      h.name, h.tier, h.treasury, h.routes, h.incomePerMinute))
+  end
+end)
+
+frontier.on("onMissionAbandoned", function(m)
+  frontier.chat("Computer", "Contract voided: " .. tostring(m.description), "#ff8a8a")
+end)
+
+frontier.on("onTradeRouteEstablished", function(r)
+  frontier.log("lane open: " .. r.station .. " <-> " .. r.partner .. " (" .. r.commodity .. ")")
+end)
+```
