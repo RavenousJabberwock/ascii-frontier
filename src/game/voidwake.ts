@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.6";
+const VERSION = "0.8.7";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -105,7 +105,11 @@ export type ScriptHookName =
   | "onBountyClaimed"
   // 0.8.6 — wing escort hooks
   | "onWingHired"
-  | "onWingLost";
+  | "onWingLost"
+  // 0.8.7 — contract log & station trade routes
+  | "onMissionAccepted"
+  | "onMissionAbandoned"
+  | "onTradeRouteEstablished";
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,6 +137,9 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onBountyClaimed:      [],
   onWingHired:          [],
   onWingLost:           [],
+  onMissionAccepted:    [],
+  onMissionAbandoned:   [],
+  onTradeRouteEstablished: [],
 
 };
 
@@ -251,6 +258,8 @@ type ChatterKind =
   | "dealer_cargofull" | "dealer_crewfull" | "dealer_starter"
   | "dealer_veteran" | "dealer_lowfuel" | "dealer_contraband"
   | "dealer_locked" | "dealer_insurance"
+  // 0.8.7 — contract log & trade-route context
+  | "crew_ctx_contracts" | "crew_ctx_routes" | "player_station_route"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1247,6 +1256,36 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "{station}: A pirate scout sniffed the perimeter. Waved off.",
   ],
 
+  // 0.8.7 — owned-station trade route reports and contract-load barks.
+  player_station_route: [
+    "{station}: Route convoy away on schedule. Margins holding.",
+    "{station}: Our hauler came back heavy. Books look pretty.",
+    "{station}: Route traffic up. The dockmaster wants a raise.",
+    "{station}: Freight lane clean this rotation — no tolls, no pirates.",
+    "{station}: Route manifest signed and filed. Boring is profitable.",
+    "{station}: One lane runs itself now. You could almost retire.",
+    "{station}: Convoy shaved an hour off the run. Don't ask how.",
+    "{station}: Lane insurance renewed. Cheaper than a funeral.",
+  ],
+  crew_ctx_contracts: [
+    "Three contracts on the board, Captain. That's ambition or arithmetic failure.",
+    "Log's full. Pick a lane before the deadlines pick us.",
+    "I like a stuffed contract log. Means the pantry stays stocked.",
+    "We're juggling. I'd rather juggle than starve, but let's not drop one.",
+    "Every job pinned is a promise. We're out of hands for promises.",
+    "If we take another job I'm charging overtime and inventing a union.",
+    "Contract log's at capacity. Someone's getting paid — hopefully us.",
+    "Three jobs, one hull. Classic frontier math.",
+  ],
+  crew_ctx_routes: [
+    "Our lane's running, Captain. Money while we sleep is my favorite money.",
+    "The station's convoys are turning a profit without us in the seat.",
+    "Freight lane's humming. Feels strange, earning quietly.",
+    "Route ledger's up. I checked twice because I didn't believe it.",
+    "Somewhere out there our haulers are working. Good for them.",
+    "Passive income. My grandmother would finally be impressed.",
+  ],
+
   // 0.8.0 — Context-sensitive crew barks. tickCrewIdle() inspects ship
   // state and picks one of these buckets before falling back to the
   // per-role idle tables, so the crew comments on what's happening now.
@@ -2071,7 +2110,10 @@ interface PlayerState {
   // module. Tier 0 = shell, T5 = fully upgraded. Treasury accrues per
   // dock and is withdrawn when the player docks at their own station.
   // 0.7.9 — `motif` indexes STATION_MOTIFS (cosmetic silhouette/accent).
-  ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number>; motif?: number }[];
+  // 0.8.7 — `routes` holds up to STATION_ROUTE_MAX automated freight lanes
+  // (partner station + commodity). Each lane adds passive treasury income
+  // proportional to the good's base price; see stationRouteIncome().
+  ownedStations?: { entityId: number; name: string; tier: number; treasury: number; delivered: Record<string, number>; motif?: number; routes?: { partnerId: number; partnerName: string; commodity: string }[] }[];
   // 0.7.4 — stowaway aboard. One per playthrough, max.
   stowaway?: Stowaway;
   // 0.8.5 — Nav Log bookmarks (max NAV_BOOKMARK_MAX). Each remembers the
@@ -2086,6 +2128,111 @@ interface PlayerState {
   wing?: { name: string; wage: number; entityId?: number }[];
 }
 const XENO_HIRE_THRESHOLD = 5;
+
+// ---------------------------------------------------------------------------
+// 0.8.7 — Contract log. `PlayerState.missions` is now the canonical list of
+// active contracts (max CONTRACT_MAX) and `PlayerState.mission` is the pinned
+// one that the HUD tracker, objective diamond and SYSTEM panel follow. Older
+// saves carry only `mission`; contractList() migrates them in place, so every
+// read path can treat the array as authoritative.
+// ---------------------------------------------------------------------------
+const CONTRACT_MAX = 3;
+
+function contractList(p: PlayerState): Mission[] {
+  if (!p.missions) p.missions = p.mission ? [p.mission] : [];
+  else if (p.mission && !p.missions.some((m) => m.id === p.mission!.id)) {
+    p.missions.unshift(p.mission);
+  }
+  if (!p.mission && p.missions.length) p.mission = p.missions[0];
+  if (p.mission && !p.missions.length) p.mission = undefined;
+  return p.missions;
+}
+
+/** Add a contract. Returns false (and adds nothing) when the log is full. */
+function addContract(p: PlayerState, m: Mission): boolean {
+  const list = contractList(p);
+  if (list.length >= CONTRACT_MAX) return false;
+  list.push(m);
+  if (!p.mission) p.mission = m;
+  return true;
+}
+
+/** Remove a contract and re-pin the next one, if any. */
+function dropContract(p: PlayerState, m: Mission): void {
+  const list = contractList(p);
+  const i = list.findIndex((x) => x.id === m.id);
+  if (i >= 0) list.splice(i, 1);
+  if (p.mission?.id === m.id) p.mission = list[0];
+}
+
+/** Make `m` the tracked contract (HUD arrow, objective marker, SYSTEM pane). */
+function pinContract(p: PlayerState, m: Mission): void {
+  if (contractList(p).some((x) => x.id === m.id)) p.mission = m;
+}
+
+// 0.8.7 — Automated freight lanes on player-owned stations. A lane is only
+// available from Tier 3 (NPC trade) up, caps at STATION_ROUTE_MAX per station,
+// and pays a slice of the traded good's base price every minute, scaled by
+// tier and by a hired Quartermaster's grade.
+const STATION_ROUTE_MAX = 2;
+const STATION_ROUTE_MIN_TIER = 3;
+
+// 0.8.7 — Extra chatter appended after the main table so long pools stay
+// readable. Merged into TEMPLATES at module load.
+const EXTRA_TEMPLATES: Partial<Record<ChatterKind, string[]>> = {
+  pilot_idle: [
+    "I named this vector. Her name is Deborah and she is reliable.",
+    "Autopilot asked for a raise. I told it about my own pay.",
+    "Flying's easy. It's the stopping that's negotiable.",
+    "If we hit something out here it'll be statistically rude.",
+  ],
+  engineer_idle: [
+    "The coolant loop hums in B-flat when it's happy. It's in C today.",
+    "I fixed it with a shim and an apology. Both are holding.",
+    "Every ship has one bolt that hates you. I've found ours.",
+    "Percussive maintenance is a documented procedure. Somewhere.",
+  ],
+  quartermaster_idle: [
+    "I reorganized the hold by profit per cubic meter. Don't touch it.",
+    "Inventory is just a story you tell about your cargo. Ours is fiction.",
+    "Two crates say 'fragile' and one says 'legally fragile'.",
+  ],
+  navigator_idle: [
+    "Charted three routes. Two are shortcuts, one is a dare.",
+    "This region's charts were drawn by an optimist.",
+    "I trust the stars. It's the paperwork about them that lies.",
+  ],
+  merchant_deal: [
+    "Bought low, sold smug. Standard practice.",
+    "That dockmaster blinked first. I logged it as a discount.",
+  ],
+  dealer_generic: [
+    "This frame? One owner. Very brave owner. Very short ownership.",
+    "Kick the hull. Go on. That's the sound of equity, friend.",
+    "Financing available: I lend you optimism, you bring credits.",
+  ],
+  dealer_flush: [
+    "A pilot with that balance shouldn't be seen in last season's hull.",
+    "Credits like yours make a salesman believe in destiny.",
+  ],
+  npc_ctx_hauler: [
+    "Freight lane's tight this rotation. Everybody wants everything yesterday.",
+    "Hauling rocks so somebody else can call themselves an industrialist.",
+  ],
+  npc_ctx_traffic: [
+    "Traffic control's stacked six deep. Take a number, Captain.",
+    "Every berth full and half of them arguing about it.",
+  ],
+  npc_ctx_colony_quiet: [
+    "Quiet down here. We like it that way, mostly.",
+    "Nothing to report but weather and gossip. Both are bad.",
+  ],
+};
+for (const [k, lines] of Object.entries(EXTRA_TEMPLATES)) {
+  const key = k as ChatterKind;
+  if (TEMPLATES[key]) TEMPLATES[key].push(...(lines ?? []));
+  else TEMPLATES[key] = [...(lines ?? [])];
+}
 
 type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
 interface Mission {
@@ -2298,7 +2445,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   cycleTypePrev: "{",    // cycle to previous in-range target of the current target's type
   cycleTypeNext: "}",    // cycle to next in-range target of the current target's type
   autopilot: "o",        // toggle hired Pilot's autopilot to current target
-  questLog: "u",         // open the toggle-able Quest Log popup
+  questLog: "u",         // open the toggle-able Contract Log popup
   pinRep: "r",           // toggle the compact reputation panel
   characterSheet: "c",   // open the full Character Sheet overlay
   hail: "h",             // 0.8.0 — open a comms channel to the current target
@@ -2346,7 +2493,7 @@ const KEYBIND_ACTIONS: { id: string; label: string }[] = [
   { id: "autopilot",    label: "Autopilot Toggle" },
   { id: "pinQuest",     label: "Pin Quest Tracker" },
   { id: "pinRep",       label: "Pin Rep Panel" },
-  { id: "questLog",     label: "Quest Log" },
+  { id: "questLog",     label: "Contract Log" },
   { id: "navLog",       label: "Nav Log" },
   { id: "bookmark",     label: "Bookmark Target" },
   { id: "characterSheet", label: "Character Sheet" },
@@ -3481,6 +3628,20 @@ function stationIncomePerMinute(p: PlayerState, s: OwnedStation): number {
   if (!row || row.incomePerDock <= 0) return 0;
   const qm = 1 + roleLevel(p, "quartermaster") * 0.03;
   return Math.round(row.incomePerDock * 0.5 * (1 + stationSurplusBonus(s)) * qm);
+}
+
+// 0.8.7 — Passive income from the station's automated freight lanes.
+function stationRouteIncome(p: PlayerState, s: OwnedStation): number {
+  if (!s.routes?.length) return 0;
+  const qm = 1 + roleLevel(p, "quartermaster") * 0.04;
+  let total = 0;
+  for (const r of s.routes) {
+    const meta = COMMODITIES.find((c) => c.id === r.commodity);
+    if (!meta) continue;
+    // A lane clears roughly one small batch a minute at a thin margin.
+    total += Math.max(4, Math.round(meta.base * 0.35 * (1 + (s.tier - STATION_ROUTE_MIN_TIER) * 0.25)));
+  }
+  return Math.round(total * qm);
 }
 
 function stationTreasuryCap(s: OwnedStation): number {
@@ -5486,7 +5647,7 @@ export class Voidwake {
     const cargoPct  = Math.round(100 * (cargoTotal(p) / Math.max(1, p.ship.cargoMax)));
     const shipName  = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.name ?? p.ship.hullId;
     const sector    = `${Math.floor(p.pos.x / 500)}:${Math.floor(p.pos.z / 500)}`;
-    const target    = opts?.target ?? this.entities.find((e) => e.id === this.targetId) ?? null;
+    const target    = opts?.target ?? this.byId(this.targetId) ?? null;
     // Linear scan with squared-distance — no array/closure/sort overhead.
     let nearestHostile: Entity | undefined;
     {
@@ -5581,7 +5742,7 @@ export class Voidwake {
     let best = 0, bestName = "";
     for (const [sid, st] of this.stationStocks) {
       if (sid === stationId) continue;
-      const ent = this.entities.find((e) => e.id === sid);
+      const ent = this.byId(sid);
       if (!ent) continue;
       if (isContraband(commodityId, ent.faction ?? "guild")) continue;
       const row = st.commodities.find((c) => c.id === commodityId);
@@ -5769,7 +5930,7 @@ export class Voidwake {
 
   openHail() {
     const p = this.player; if (!p) return;
-    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    const t = this.targetId != null ? this.byId(this.targetId) : null;
     if (!t) { this.pushLog("No target to hail — press T first."); return; }
     if (t.kind === "thargoid" || t.kind === "ufo") { this.pushLog("The alien craft answers only in static."); return; }
     const hailable = t.kind === "hostile" || t.kind === "friendly" || t.kind === "neutral" || t.kind === "station";
@@ -5800,7 +5961,7 @@ export class Voidwake {
   updateHail() {
     const p = this.player, h = this._hail;
     if (!p || !h) { this.screen = "playing"; return; }
-    const t = this.entities.find((e) => e.id === h.id);
+    const t = this.byId(h.id);
     if (!t) { this.pushLog("Channel lost."); this._hail = undefined; this.screen = "playing"; return; }
     this.menuNav(h.options.length);
     if (!this.input.consume("enter")) return;
@@ -5871,7 +6032,7 @@ export class Voidwake {
   renderHail(g: Cell[][]) {
     const h = this._hail, p = this.player;
     if (!h || !p) return;
-    const t = this.entities.find((e) => e.id === h.id);
+    const t = this.byId(h.id);
     putText(g, 4, 1, `[ COMMS CHANNEL — ${(t?.name ?? "signal lost").toUpperCase()} ]   ESC close`, "#9fe");
     if (t) {
       const disp = this.hailDisposition(t);
@@ -5909,7 +6070,8 @@ export class Voidwake {
     const minutes = this._stationIncomeAt / 60;
     this._stationIncomeAt = 0;
     for (const s of p.ownedStations) {
-      const rate = stationIncomePerMinute(p, s);
+      // 0.8.7 — freight lanes pay on top of the tier's base throughput.
+      const rate = stationIncomePerMinute(p, s) + stationRouteIncome(p, s);
       if (rate <= 0) continue;
       s.treasury = Math.min(stationTreasuryCap(s), s.treasury + Math.round(rate * minutes));
     }
@@ -5923,7 +6085,8 @@ export class Voidwake {
           ? `Vaults are full at ${s.treasury}cr, Captain. Nothing more accrues until you collect.`
           // Templates carry a "{station}: " prefix for legacy log use;
           // the Comms speaker column already names the station.
-          : pickLine("player_station_report", this.chatterCtx(undefined, { a: s.name }))
+          : pickLine(s.routes?.length ? "player_station_route" : "player_station_report",
+                     this.chatterCtx(undefined, { a: s.name }))
               .replace(/^:\s*/, ""),
         "#7CFC00", "external");
     }
@@ -5941,7 +6104,7 @@ export class Voidwake {
     let lo = Infinity, hi = -Infinity;
     for (const sid of ids) {
       const st = this.stationStocks.get(sid)!;
-      const ent = this.entities.find((e) => e.id === sid);
+      const ent = this.byId(sid);
       if (ent && isContraband(meta.id, ent.faction ?? "guild")) continue;
       const row = st.commodities.find((c) => c.id === meta.id);
       if (!row) continue;
@@ -7138,7 +7301,7 @@ export class Voidwake {
         ttlAt: performance.now() / 1000 + 2,
       });
       this.sfx("laser");
-      const _tgt = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) ?? null : null;
+      const _tgt = this.targetId != null ? this.byId(this.targetId) ?? null : null;
       dispatchHook("onPlayerFire", { weaponId: w.id, from: p, target: _tgt });
     }
 
@@ -7162,7 +7325,7 @@ export class Voidwake {
       else if (this.targetId == null) this.pushLog("Autopilot needs a target — press T first.");
       else {
         pilot.autopilot = !pilot.autopilot;
-        const t = this.entities.find((e) => e.id === this.targetId);
+        const t = this.byId(this.targetId);
         this.pushChatter(`Pilot ${pilot.name.split(" ")[0]}`,
           pickLine(pilot.autopilot ? "pilot_autopilot_on" : "pilot_autopilot_off",
             this.chatterCtx(undefined, { target: t })), CREW_ROLE_INFO.pilot.color);
@@ -7607,11 +7770,15 @@ export class Voidwake {
               // 0.8.4 — "bounty" warrants complete on the same kill path as
               // "destroy" contracts; previously only "destroy" was checked, so
               // Bounty Office marks could never be closed out.
-              if (p.mission && (p.mission.kind === "destroy" || p.mission.kind === "bounty") && p.mission.targetId === t.id) {
-                p.mission.done = true;
+              // 0.8.7 — every pinned or background contract in the log is
+              // checked, not just the tracked one.
+              for (const cm of contractList(p)) {
+                if (cm.done) continue;
+                if ((cm.kind !== "destroy" && cm.kind !== "bounty") || cm.targetId !== t.id) continue;
+                cm.done = true;
                 this.pushLog("Bounty completed — return to a station.");
-                if (p.mission.kind === "bounty") {
-                  dispatchHook("onBountyClaimed", { name: t.name, reward: p.mission.reward, targetId: t.id });
+                if (cm.kind === "bounty") {
+                  dispatchHook("onBountyClaimed", { name: t.name, reward: cm.reward, targetId: t.id });
                 }
               }
 
@@ -7718,7 +7885,7 @@ export class Voidwake {
   // through to a plain nearest-of-any cycle so the keys never feel dead.
   cycleTargetSameType(step: 1 | -1) {
     const p = this.player; if (!p) return;
-    const cur = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    const cur = this.targetId != null ? this.byId(this.targetId) : null;
     if (!cur) { this.cycleTarget(); return; }
     const cat = this._targetCategories.find((c) => c.match(cur));
     if (!cat) { this.cycleTarget(); return; }
@@ -7789,7 +7956,7 @@ export class Voidwake {
 
   mineTarget() {
     const p = this.player; if (!p) return;
-    const t = this.entities.find((e) => e.id === this.targetId);
+    const t = this.byId(this.targetId);
     if (!t || t.kind !== "asteroid") { this.pushLog("Target is not minable."); return; }
     const d = V.len(V.sub(t.pos, p.pos));
     if (d > 200) { this.pushLog("Too far to mine."); return; }
@@ -7846,7 +8013,7 @@ export class Voidwake {
     // pressed the button one frame too early.
     if (performance.now() / 1000 < this._dockCooldownUntil) return;
     const p = this.player; if (!p) return;
-    const t = this.entities.find((e) => e.id === this.targetId);
+    const t = this.byId(this.targetId);
     if (!t) { this.pushLog("Target a station or friendly ship with T."); return; }
     // Ship-to-ship trade: pull alongside a friendly / neutral within 50u and
     // "dock" to open a stripped-down market (fuel + ore). No repair, no wages.
@@ -7936,15 +8103,16 @@ export class Voidwake {
 
 
     // Passenger drop-off — completes on arrival at the destination station.
-    if (p.mission && p.mission.kind === "passenger" && p.mission.targetId === t.id) {
-      p.mission.done = true;
-      this.pushChatter(p.mission.guestName ?? "Passenger",
-        p.mission.vip ? "Impeccable. My office will remember this." : "Thank you, Captain. Safe passage means a lot.",
+    for (const pm of contractList(p)) {
+      if (pm.done || pm.kind !== "passenger" || pm.targetId !== t.id) continue;
+      pm.done = true;
+      this.pushChatter(pm.guestName ?? "Passenger",
+        pm.vip ? "Impeccable. My office will remember this." : "Thank you, Captain. Safe passage means a lot.",
         "#ffd28a");
       adjustRep(p, "guild", 2);
-      if (p.mission.vip) adjustRep(p, "federation", 3);
+      if (pm.vip) adjustRep(p, "federation", 3);
       dispatchHook("onPassengerDeliver", {
-        name: p.mission.guestName, vip: !!p.mission.vip,
+        name: pm.guestName, vip: !!pm.vip,
         stationId: t.id, station: t.name,
       });
     }
@@ -7974,17 +8142,21 @@ export class Voidwake {
     // Hand in mission. New in 0.7.3: instead of auto-assigning the next
     // contract, we clear the mission slot and (when Quest Offers is on)
     // open a 3-choice offer board so the player can pick or decline.
-    if (p.mission && p.mission.done) {
-      p.credits += p.mission.reward;
+    // 0.8.7 — every completed contract in the log pays out on this dock.
+    for (const cm of [...contractList(p)]) {
+      if (!cm.done) continue;
+      p.credits += cm.reward;
       awardXP(p, 80);
-      if (p.record) { p.record.missions += 1; p.record.earned += p.mission.reward; }
-      this.pushLog(`Mission paid: +${p.mission.reward}cr`);
-      p.mission = undefined;
+      if (p.record) { p.record.missions += 1; p.record.earned += cm.reward; }
+      this.pushLog(`Contract paid: ${cm.description} (+${cm.reward}cr)`);
+      p.passengers = (p.passengers ?? []).filter((x) => x.missionId !== cm.id);
+      dropContract(p, cm);
     }
     // Contract board on dock — offer 3 fresh missions if the player has no
     // active contract and hasn't disabled Quest Offers. Player can Esc to
     // decline all and enjoy pure sandbox flight.
-    if (!p.mission && this.options.questOffers !== false && t.kind === "station" && t.faction !== "pirate") {
+    if (contractList(p).length < CONTRACT_MAX && this.options.questOffers !== false
+        && t.kind === "station" && t.faction !== "pirate") {
       const cands = [this.generateMission(), this.generateMission(), this.generateMission()];
       this.openMissionOffer(`${t.name} contract board — pick a job, or ESC to skip.`, "station", cands);
     }
@@ -8173,32 +8345,40 @@ export class Voidwake {
     };
   }
 
-  // Timers for escort progress (per-mission).
+  // Timers for escort progress (per-mission id, 0.8.7 — the log can hold
+  // more than one escort contract at a time).
   private _escortStayAt = 0;
+  private _escortStay = new Map<number, number>();
 
   tickMissions() {
-    const p = this.player; if (!p || !p.mission) return;
-    const m = p.mission;
+    const p = this.player; if (!p) return;
+    // 0.8.7 — every active contract advances, whether or not it is pinned.
+    for (const m of [...contractList(p)]) this.tickMission(p, m);
+  }
+
+  private tickMission(p: PlayerState, m: Mission) {
     if (m.done) return;
     if (m.kind === "scan" && m.targetId) {
-      const t = this.entities.find((e) => e.id === m.targetId);
+      const t = this.byId(m.targetId);
       if (t && V.len(V.sub(t.pos, p.pos)) < 200) { m.done = true; this.pushLog("Anomaly scanned."); }
     }
     if (m.kind === "deliver" || m.kind === "haul") {
       if ((p.cargo[m.cargoItem!] ?? 0) >= (m.cargoQty ?? 0)) m.done = true;
     }
     if (m.kind === "escort" && m.targetId) {
-      const t = this.entities.find((e) => e.id === m.targetId);
+      const t = this.byId(m.targetId);
       const now = performance.now() / 1000;
       if (t && (t.hull ?? 1) > 0 && V.len(V.sub(t.pos, p.pos)) < 500) {
-        if (this._escortStayAt === 0) this._escortStayAt = now;
-        else if (now - this._escortStayAt >= 60) { m.done = true; this.pushLog("Escort complete."); }
+        const since = this._escortStay.get(m.id) ?? 0;
+        if (since === 0) this._escortStay.set(m.id, now);
+        else if (now - since >= 60) { m.done = true; this.pushLog("Escort complete."); }
       } else {
-        this._escortStayAt = 0;
+        this._escortStay.set(m.id, 0);
       }
+      this._escortStayAt = this._escortStay.get(m.id) ?? 0;
     }
     if (m.kind === "rescue" && m.targetId) {
-      const t = this.entities.find((e) => e.id === m.targetId);
+      const t = this.byId(m.targetId);
       if (t && V.len(V.sub(t.pos, p.pos)) < 50) { m.done = true; this.pushLog("Rescue signal acknowledged."); }
     }
     if (m.kind === "passenger") {
@@ -8209,7 +8389,8 @@ export class Voidwake {
         this.pushChatter("Computer", `Passenger contract with ${m.guestName ?? "guest"} lapsed. Reputation logged.`, "#ff8a8a");
         adjustRep(p, "guild", -3);
         if (m.vip) adjustRep(p, "federation", -2);
-        p.mission = undefined;
+        p.passengers = (p.passengers ?? []).filter((x) => x.missionId !== m.id);
+        dropContract(p, m);
         return;
       }
       // Completion is set in tryDock (we need to know WHERE the player
@@ -8358,7 +8539,7 @@ export class Voidwake {
   driveAutopilot(dt: number, p: PlayerState) {
     const pilot = getCrew(p, "pilot");
     if (!pilot || !pilot.autopilot) return;
-    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    const t = this.targetId != null ? this.byId(this.targetId) : null;
     if (!t) {
       pilot.autopilot = false;
       this.pushLog("Autopilot: no target — disengaged.");
@@ -8671,6 +8852,13 @@ export class Voidwake {
       && p.mission.deadlineAt - performance.now() / 1000 < 120) {
       out.push({ kind: "crew_ctx_deadline", roles: ["navigator", "pilot", "quartermaster"] });
     }
+    // 0.8.7 — contract load and freight-lane income.
+    if (contractList(p).length >= CONTRACT_MAX) {
+      out.push({ kind: "crew_ctx_contracts", roles: ["navigator", "quartermaster", "recruiter"] });
+    }
+    if (p.ownedStations?.some((s) => (s.routes?.length ?? 0) > 0)) {
+      out.push({ kind: "crew_ctx_routes", roles: ["merchant", "quartermaster", "navigator"] });
+    }
     if (!out.length && !hostile) out.push({ kind: "crew_ctx_quiet", roles: ["navigator", "pilot", "engineer"] });
     return out;
   }
@@ -8748,7 +8936,7 @@ export class Voidwake {
     const buckets = this.dealerBuckets(sid);
     if (!buckets.length) return;
     const kind = buckets[Math.floor(Math.random() * buckets.length)];
-    const ent = this.entities.find((e) => e.id === sid);
+    const ent = this.byId(sid);
     this.pushChatter(`${name} Yard`, pickLine(kind, this.chatterCtx(ent, { a: name })),
                      "#ffc36b", "external");
   }
@@ -8876,9 +9064,18 @@ export class Voidwake {
         return;
       }
       const picked = this._offerCandidates[this._offerCursor];
+      if (p && picked && !addContract(p, picked)) {
+        this.pushLog(`Contract log full (${CONTRACT_MAX}). Finish or abandon a job first.`);
+        this._offerCandidates = [];
+        this.screen = this._offerReturn;
+        return;
+      }
       if (p && picked) {
-        p.mission = picked;
         this.pushLog(`Accepted: ${picked.description}`);
+        dispatchHook("onMissionAccepted", {
+          id: picked.id, kind: picked.kind, description: picked.description,
+          reward: picked.reward, targetId: picked.targetId,
+        });
         if (picked.kind === "passenger") {
           dispatchHook("onPassengerBoard", {
             name: picked.guestName, vip: !!picked.vip,
@@ -8911,66 +9108,112 @@ export class Voidwake {
   }
 
 
-  // Quest log screen — full-screen popup showing active mission + description
-  // + progress + faction reputation. ESC or U closes it.
+  // Contract log screen (0.8.7) — lists every active contract (max
+  // CONTRACT_MAX), marks the pinned one that the HUD tracker follows, and
+  // lets the player re-pin (ENTER) or abandon (X) a job. Reputation and crew
+  // summaries stay below the list. ESC / U closes.
   updateQuestLog() {
     const kb = this.options.keybinds;
+    const p = this.player;
     if (this.input.consume(kb.questLog)) {
       this.screen = this._codexReturn;
+      this.menuCursor = 0;
+      return;
+    }
+    if (!p) return;
+    const list = contractList(p);
+    if (!list.length) { this.menuCursor = 0; return; }
+    if (this.input.consume("arrowup")) this.menuCursor = (this.menuCursor - 1 + list.length) % list.length;
+    if (this.input.consume("arrowdown")) this.menuCursor = (this.menuCursor + 1) % list.length;
+    const sel = list[Math.min(this.menuCursor, list.length - 1)];
+    if (this.input.consume("enter") && sel) {
+      pinContract(p, sel);
+      this.pushLog(`Tracking: ${sel.description}`);
+    }
+    if (this.input.consume("x") && sel) {
+      // Abandoning is not free: the Guild remembers, and a passenger left on
+      // the pad costs standing on top of that.
+      dropContract(p, sel);
+      p.passengers = (p.passengers ?? []).filter((x) => x.missionId !== sel.id);
+      adjustRep(p, "guild", sel.kind === "passenger" ? -3 : -1);
+      this.pushLog(`✗ Abandoned: ${sel.description}`);
+      this.pushChatter("Computer", "Contract voided. Standing adjusted.", "#ff8a8a");
+      dispatchHook("onMissionAbandoned", {
+        id: sel.id, kind: sel.kind, description: sel.description, reward: sel.reward,
+      });
       this.menuCursor = 0;
     }
   }
 
+  /** One-line progress summary for a contract, used by the log and the HUD. */
+  private contractProgress(p: PlayerState, m: Mission): string {
+    if (m.done) return "READY — dock at any station";
+    if ((m.kind === "deliver" || m.kind === "haul") && m.cargoItem) {
+      return `${p.cargo[m.cargoItem] ?? 0}/${m.cargoQty} ${m.cargoItem} in hold`;
+    }
+    if (m.kind === "escort" && m.targetId != null) {
+      const t = this.byId(m.targetId);
+      if (t) {
+        const d = V.len(V.sub(t.pos, p.pos));
+        const since = this._escortStay.get(m.id) ?? 0;
+        const held = since ? Math.floor(performance.now() / 1000 - since) : 0;
+        return d < 500 ? `${held}/60 s in range of ${t.name}` : `out of range (d=${d.toFixed(0)}u)`;
+      }
+    }
+    if (m.kind === "passenger" && m.deadlineAt) {
+      const left = Math.max(0, m.deadlineAt - performance.now() / 1000);
+      return `${m.guestName ?? "guest"} → ${m.destName ?? "destination"} · ${Math.floor(left / 60)}m ${Math.floor(left % 60)}s left`;
+    }
+    if (m.targetId != null) {
+      const t = this.byId(m.targetId);
+      if (t) return `${t.name} at ${V.len(V.sub(t.pos, p.pos)).toFixed(0)}u`;
+      return "contact lost from sensors";
+    }
+    return "in progress";
+  }
+
   renderQuestLog(g: Cell[][]) {
-    const cols = g[0].length;
-    putText(g, 4, 1, "[ QUEST LOG ]   U or ESC close", "#7CFC00");
+    putText(g, 4, 1, "[ CONTRACT LOG ]   ↑/↓ select   ENTER track   X abandon   U/ESC close", "#7CFC00");
     const p = this.player;
     if (!p) return;
-    const m = p.mission;
-    if (!m) {
-      putText(g, 4, 4, "No active missions. Dock at a station to pick up work.", "#9fe");
-      void cols;
-      return;
+    const list = contractList(p);
+    putText(g, 4, 3, `Active contracts: ${list.length}/${CONTRACT_MAX}`, "#9fe");
+    let row = 5;
+    if (!list.length) {
+      putText(g, 4, row, "No active contracts. Dock at a station to pick up work.", "#9fe");
+      row += 2;
     }
-    putText(g, 4, 4, `Kind:   ${m.kind.toUpperCase()}`, "#fff");
-    putText(g, 4, 5, `Task:   ${m.description}`, "#cf6");
-    putText(g, 4, 6, `Reward: ${m.reward}cr`, "#ffe066");
-    let prog = "in progress";
-    if (m.done) prog = "READY — dock at any station";
-    else if ((m.kind === "deliver" || m.kind === "haul") && m.cargoItem) {
-      const have = p.cargo[m.cargoItem] ?? 0;
-      prog = `${have}/${m.cargoQty} ${m.cargoItem} in hold`;
-    } else if (m.kind === "escort" && m.targetId != null) {
-      const t = this.entities.find((e) => e.id === m.targetId);
-      if (t) {
-        const d = V.len(V.sub(t.pos, p.pos));
-        const held = this._escortStayAt ? Math.floor(performance.now() / 1000 - this._escortStayAt) : 0;
-        prog = d < 500 ? `${held}/60 s in range of ${t.name}` : `out of range (d=${d.toFixed(0)}u)`;
-      }
-    } else if (m.targetId != null) {
-      const t = this.entities.find((e) => e.id === m.targetId);
-      if (t) {
-        const d = V.len(V.sub(t.pos, p.pos));
-        prog = `${t.name} at ${d.toFixed(0)}u`;
-      }
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
+      const sel = i === Math.min(this.menuCursor, list.length - 1);
+      const pinned = p.mission?.id === m.id;
+      putText(g, 4, row,
+        `${sel ? "▶" : " "} ${pinned ? "[TRACKED]" : "         "} [${m.kind.toUpperCase()}] ${m.description}`,
+        sel ? "#ffe066" : (m.done ? "#7CFC00" : "#cf6"));
+      putText(g, 8, row + 1,
+        `${m.reward}cr · ${this.contractProgress(p, m)}`,
+        m.done ? "#7CFC00" : "#9fe");
+      row += 3;
     }
-    putText(g, 4, 7, `Status: ${prog}`, m.done ? "#7CFC00" : "#9fe");
 
     // Reputation summary.
     const rep = p.reputation ?? {};
-    putText(g, 4, 10, "Reputation:", "#7CFC00");
-    putText(g, 6, 11, `Federation:  ${repLabel(rep.federation ?? 0).padEnd(10)} (${rep.federation ?? 0})`, "#aef");
-    putText(g, 6, 12, `Guild:       ${repLabel(rep.guild ?? 0).padEnd(10)} (${rep.guild ?? 0})`, "#aef");
-    putText(g, 6, 13, `Pirate:      ${repLabel(rep.pirate ?? 0).padEnd(10)} (${rep.pirate ?? 0})`, "#aef");
+    row += 1;
+    putText(g, 4, row, "Reputation:", "#7CFC00");
+    putText(g, 6, row + 1, `Federation:  ${repLabel(rep.federation ?? 0).padEnd(10)} (${rep.federation ?? 0})`, "#aef");
+    putText(g, 6, row + 2, `Guild:       ${repLabel(rep.guild ?? 0).padEnd(10)} (${rep.guild ?? 0})`, "#aef");
+    putText(g, 6, row + 3, `Pirate:      ${repLabel(rep.pirate ?? 0).padEnd(10)} (${rep.pirate ?? 0})`, "#aef");
 
     // Crew roster summary.
-    putText(g, 4, 15, "Crew:", "#7CFC00");
-    let cy = 16;
+    let cy = row + 5;
+    putText(g, 4, cy++, "Crew:", "#7CFC00");
     if (p.gunner) putText(g, 6, cy++, `Gunner    · ${p.gunner.name}  (${p.gunner.species}, ${p.gunner.gender})  [${p.gunner.enabled ? "AUTO" : "STANDBY"}]`, "#fc6");
     if (p.crew) for (const c of p.crew) {
       const info = CREW_ROLE_INFO[c.role];
       const stateTag = c.role === "pilot" ? (c.autopilot ? "AUTOPILOT" : "READY") : "ACTIVE";
-      putText(g, 6, cy++, `${info.title.padEnd(9)} · ${c.name}  (${c.species}, ${c.gender})  [${stateTag}]`, info.color);
+      if (cy < g.length - 3) {
+        putText(g, 6, cy++, `${info.title.padEnd(9)} · ${c.name}  (${c.species}, ${c.gender})  [${stateTag}]`, info.color);
+      }
     }
     if (crewCount(p) === 0) putText(g, 6, cy, "(no hires yet — recruit at stations)", "#888");
 
@@ -8998,7 +9241,7 @@ export class Voidwake {
     if (!list || list.length === 0) return;
     for (let i = list.length - 1; i >= 0; i--) {
       const w = list[i];
-      const ent = w.entityId != null ? this.entities.find((e) => e.id === w.entityId) : undefined;
+      const ent = w.entityId != null ? this.byId(w.entityId) : undefined;
       if (ent && (ent.hull ?? 1) > 0) continue;
       if (ent && (ent.hull ?? 1) <= 0) {
         // Shot down. Remove the roster slot; the hull loss is permanent.
@@ -9042,7 +9285,7 @@ export class Voidwake {
   addBookmark() {
     const p = this.player; if (!p) return;
     if (!p.bookmarks) p.bookmarks = [];
-    const t = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : undefined;
+    const t = this.targetId != null ? this.byId(this.targetId) : undefined;
     const name = t ? t.name : `Waypoint ${p.bookmarks.length + 1}`;
     const kind = t ? t.kind : "waypoint";
     const pos = t ? { ...t.pos } : { ...p.pos };
@@ -9078,7 +9321,7 @@ export class Voidwake {
     if (this.input.consume("enter")) {
       const b = list[this.menuCursor];
       if (!b) return;
-      const ent = b.entityId != null ? this.entities.find((e) => e.id === b.entityId) : undefined;
+      const ent = b.entityId != null ? this.byId(b.entityId) : undefined;
       if (ent) {
         this.targetId = ent.id;
         this.pushLog(`Target set: ${ent.name}.`);
@@ -9105,7 +9348,7 @@ export class Voidwake {
     for (let i = 0; i < list.length; i++) {
       const b = list[i];
       const d = V.len(V.sub(b.pos, p.pos));
-      const ent = b.entityId != null ? this.entities.find((e) => e.id === b.entityId) : undefined;
+      const ent = b.entityId != null ? this.byId(b.entityId) : undefined;
       const live = ent ? "" : "  (contact lost)";
       const sel = i === this.menuCursor;
       putText(g, 4, y++, `${sel ? ">" : " "} ${(i + 1) + "."} ${b.name.padEnd(22)} ${b.kind.padEnd(16)} ${d.toFixed(0).padStart(8)}u${live}`,
@@ -10038,6 +10281,23 @@ export class Voidwake {
           const row = stock.commodities.find((c) => c.id === id);
           return row ? { buy: row.buy, sell: row.sell, stock: row.stock } : null;
         },
+        // 0.8.7 — read-only contract log + station holdings/lane surface.
+        contracts: () => {
+          const p = this.player; if (!p) return [];
+          return contractList(p).map((m) => ({
+            id: m.id, kind: m.kind, description: m.description, reward: m.reward,
+            done: m.done, targetId: m.targetId, tracked: p.mission?.id === m.id,
+            deadlineIn: m.deadlineAt ? Math.max(0, m.deadlineAt - performance.now() / 1000) : undefined,
+          }));
+        },
+        holdings: () => {
+          const p = this.player; if (!p) return [];
+          return (p.ownedStations ?? []).map((s0) => ({
+            id: s0.entityId, name: s0.name, tier: s0.tier, treasury: s0.treasury,
+            routes: (s0.routes ?? []).length,
+            incomePerMinute: stationIncomePerMinute(p, s0) + stationRouteIncome(p, s0),
+          }));
+        },
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -10687,7 +10947,7 @@ export class Voidwake {
   acceptBounty(b: StationBounty, sid: number): void {
     const p = this.player; if (!p) return;
     const stock = this.getStock(sid);
-    const origin = this.entities.find((e) => e.id === sid)?.pos ?? p.pos;
+    const origin = this.byId(sid)?.pos ?? p.pos;
     const dist = 2500 + Math.random() * 2500;
     const dir = V.norm({
       x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() * 2 - 1,
@@ -10701,11 +10961,16 @@ export class Voidwake {
       boss: true, pilotName: b.name,
     };
     this.entities.push(mark);
-    p.mission = {
+    const warrant: Mission = {
       id: nextId(), kind: "bounty", targetId: mark.id,
       description: `Warrant: eliminate ${b.name} (${b.threat}) — ${b.reward}cr`,
       reward: b.reward, done: false,
     };
+    if (!addContract(p, warrant)) {
+      this.pushLog(`Contract log full (${CONTRACT_MAX}). Abandon a job before signing a warrant.`);
+      this.entities = this.entities.filter((e) => e.id !== mark.id);
+      return;
+    }
     stock.bounties = stock.bounties.filter((x) => x.key !== b.key);
     this.pushLog(`Warrant signed for ${b.name}. Last seen ${Math.round(dist)}u out — payout ${b.reward}cr on hand-in.`);
     this.pushChatter("Computer", `Mark logged: ${b.name}. Transponder trace loaded into the tracker.`, "#9fe");
@@ -10722,7 +10987,7 @@ export class Voidwake {
     const sid = this.dockedStationId;
     if (sid == null) return ["Undock"];
     const stock = this.getStock(sid);
-    const dockedEnt = this.entities.find((e) => e.id === sid);
+    const dockedEnt = this.byId(sid);
     const isMini = dockedEnt && (dockedEnt.kind !== "station" || dockedEnt.state === "orbital");
     const isOwned = dockedEnt?.faction === "player";
     if (this.stationPage === "main") {
@@ -10971,6 +11236,22 @@ export class Voidwake {
       } else {
         rows.push("Maximum tier reached.");
       }
+      // 0.8.7 — automated freight lanes. Available from Tier 3 up; each lane
+      // pays passive treasury every minute (see stationRouteIncome).
+      const routes = mine.routes ?? [];
+      rows.push(`-- Trade routes ${routes.length}/${STATION_ROUTE_MAX}  (+${stationRouteIncome(p, mine)}cr/min) --`);
+      for (const r of routes) {
+        const meta = COMMODITIES.find((c) => c.id === r.commodity);
+        rows.push(`  lane: ${meta?.name ?? r.commodity} ↔ ${r.partnerName}`);
+      }
+      if (mine.tier < STATION_ROUTE_MIN_TIER) {
+        rows.push(`Establish trade route → (needs Tier ${STATION_ROUTE_MIN_TIER})`);
+      } else if (routes.length >= STATION_ROUTE_MAX) {
+        rows.push("Clear all trade routes");
+      } else {
+        rows.push("Establish trade route → (auto-picks the best spread)");
+        if (routes.length) rows.push("Clear all trade routes");
+      }
       // 0.7.9 — cosmetic customization for the player's own holdings.
       const motif = STATION_MOTIFS[(mine.motif ?? 0) % STATION_MOTIFS.length];
       rows.push(`Silhouette: ◀ ${motif.name} ▶   (ENTER cycles)`);
@@ -11005,7 +11286,7 @@ export class Voidwake {
       else if (c === "Weapon Bay")  { this.stationPage = "weapons"; this.menuCursor = 0; }
       else if (c === "Gunner Bay")  { this.stationPage = "gunner-bay"; this.menuCursor = 0; }
       else if (c === "Module Shop") { this.stationPage = "modules"; this.menuCursor = 0; }
-      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; if (this.dockedStationId != null) this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard"); }
+      else if (c === "Shipyard")    { this.stationPage = "shipyard"; this.menuCursor = 0; if (this.dockedStationId != null) this.dealerPitch(this.dockedStationId, this.byId(this.dockedStationId)?.name ?? "Yard"); }
       else if (c === "Bounty Office") { this.stationPage = "bounty-office"; this.menuCursor = 0; }
 
       else if (c === "Crew")    { this.stationPage = "crew";    this.menuCursor = 0; }
@@ -11135,7 +11416,7 @@ export class Voidwake {
         p.ship.insured = true;
         this.pushLog(`Hull policy written for ${cost}cr. Covers one rescue.`);
         if (this.dockedStationId != null) {
-          this.dealerPitch(this.dockedStationId, this.entities.find((e) => e.id === this.dockedStationId)?.name ?? "Yard");
+          this.dealerPitch(this.dockedStationId, this.byId(this.dockedStationId)?.name ?? "Yard");
         }
         this.sfx("chime");
         return;
@@ -11153,7 +11434,7 @@ export class Voidwake {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~")) return;
       if (row.startsWith("Clear your record")) {
-        const dockedEnt = this.entities.find((e) => e.id === sid);
+        const dockedEnt = this.byId(sid);
         const faction = dockedEnt?.faction ?? "guild";
         const rep = p.reputation?.[faction] ?? 0;
         if (rep >= -5) { this.pushLog("Your file's already clean enough here."); return; }
@@ -11280,7 +11561,7 @@ export class Voidwake {
         this.commodityMode = this.commodityMode === "buy" ? "sell" : "buy";
         return;
       }
-      const dockedEnt = this.entities.find((e) => e.id === sid);
+      const dockedEnt = this.byId(sid);
       const faction = dockedEnt?.faction ?? "guild";
       const shown = this.shownCommodities(sid, faction);
       const row = lines[i] ?? "";
@@ -11335,6 +11616,16 @@ export class Voidwake {
       const mine = p.ownedStations?.find((s) => s.entityId === sid);
       if (!mine) return;
       const row = lines[i] ?? "";
+      // 0.8.7 — freight lanes.
+      if (row.startsWith("Clear all trade routes")) {
+        mine.routes = [];
+        this.pushLog(`${mine.name}: all freight lanes closed.`);
+        return;
+      }
+      if (row.startsWith("Establish trade route")) {
+        this.establishTradeRoute(mine);
+        return;
+      }
       // 0.7.9 — cosmetic rows work at any tier, including max.
       if (row.startsWith("Silhouette:")) {
         mine.motif = ((mine.motif ?? 0) + 1) % STATION_MOTIFS.length;
@@ -11345,7 +11636,7 @@ export class Voidwake {
         const idx = STATION_NAME_POOL.indexOf(mine.name.replace(/-.*$/, ""));
         const base = STATION_NAME_POOL[(idx + 1 + STATION_NAME_POOL.length) % STATION_NAME_POOL.length];
         mine.name = `${base}-${mine.entityId.toString(36).toUpperCase()}`;
-        const ent0 = this.entities.find((e) => e.id === mine.entityId);
+        const ent0 = this.byId(mine.entityId);
         if (ent0) ent0.name = `${mine.name} T${mine.tier}`;
         this.pushLog(`Station renamed to ${mine.name}.`);
         return;
@@ -11374,7 +11665,7 @@ export class Voidwake {
         this.pushLog(`${mine.name} advanced to Tier ${mine.tier}: ${next.unlocks}`);
         this.pushChatter(mine.name, `Tier ${mine.tier} online. Systems nominal.`, "#7CFC00");
         // Reflect tier on the entity so its render/label can pick it up.
-        const ent = this.entities.find((e) => e.id === mine.entityId);
+        const ent = this.byId(mine.entityId);
         if (ent) ent.name = `${mine.name} T${mine.tier}`;
         dispatchHook("onPlayerStationTierUp", { stationId: mine.entityId, name: mine.name, tier: mine.tier, unlocks: next.unlocks });
         return;
@@ -11383,12 +11674,59 @@ export class Voidwake {
     }
   }
 
+  // 0.8.7 — Open an automated freight lane from one of the player's stations.
+  // The partner dock and commodity are chosen automatically: whichever known
+  // market pays the most for a good this station can plausibly move, skipping
+  // anything the partner's faction bans. Income accrues in tickStationIncome.
+  establishTradeRoute(mine: OwnedStation) {
+    const p = this.player; if (!p) return;
+    if (mine.tier < STATION_ROUTE_MIN_TIER) {
+      this.pushLog(`${mine.name} needs Tier ${STATION_ROUTE_MIN_TIER} before it can broker freight.`);
+      return;
+    }
+    mine.routes = mine.routes ?? [];
+    if (mine.routes.length >= STATION_ROUTE_MAX) {
+      this.pushLog(`${mine.name} already runs ${STATION_ROUTE_MAX} lanes.`);
+      return;
+    }
+    let best: { partnerId: number; partnerName: string; commodity: string; pay: number } | null = null;
+    for (const sid of this.stationStocks.keys()) {
+      if (sid === mine.entityId) continue;
+      const ent = this.byId(sid);
+      if (!ent || ent.kind !== "station") continue;
+      const stock = this.stationStocks.get(sid)!;
+      for (const c of stock.commodities) {
+        if (isContraband(c.id, ent.faction ?? "guild")) continue;
+        if (mine.routes.some((r) => r.commodity === c.id && r.partnerId === sid)) continue;
+        if (!best || c.buy > best.pay) {
+          best = { partnerId: sid, partnerName: ent.name, commodity: c.id, pay: c.buy };
+        }
+      }
+    }
+    if (!best) {
+      this.pushLog("No charted market will sign a lane yet — visit a few more docks.");
+      return;
+    }
+    const fee = 8000;
+    if (p.credits < fee) { this.pushLog(`Lane brokerage costs ${fee}cr.`); return; }
+    p.credits -= fee;
+    mine.routes.push({ partnerId: best.partnerId, partnerName: best.partnerName, commodity: best.commodity });
+    const meta = COMMODITIES.find((c) => c.id === best!.commodity);
+    this.pushLog(`Freight lane opened: ${mine.name} ↔ ${best.partnerName} (${meta?.name ?? best.commodity}), ${fee}cr brokerage.`);
+    this.pushChatter(mine.name, `Lane to ${best.partnerName} registered. Convoys away within the hour.`, "#7CFC00", "external");
+    dispatchHook("onTradeRouteEstablished", {
+      stationId: mine.entityId, station: mine.name,
+      partnerId: best.partnerId, partner: best.partnerName,
+      commodity: best.commodity, fee,
+    });
+  }
+
   // 0.7.1 — Deploy a fresh player-owned station 1500u "outbound" from the
   // current dock. Consumes one Station Core module and undocks.
   deployStationCore() {
     const p = this.player; if (!p) return;
     const sid = this.dockedStationId; if (sid == null) return;
-    const parent = this.entities.find((e) => e.id === sid);
+    const parent = this.byId(sid);
     if (!parent) return;
     // Remove one station-core install.
     const midx = p.ship.modules.indexOf("station-core");
@@ -11415,6 +11753,25 @@ export class Voidwake {
     this.screen = "playing"; this.dockedStationId = null;
   }
 
+
+  // 0.8.7 — Entity id index. `this.entities.find(e => e.id === id)` was being
+  // called dozens of times per frame (missions, targets, docks, waypoint
+  // markers, owned stations) — each one a linear scan over a few thousand
+  // entities. byId() keeps a Map that is rebuilt only when the entity count
+  // changes, turning those scans into O(1) lookups. A miss falls through to
+  // undefined, exactly like find() did.
+  private _entIndex = new Map<number, Entity>();
+  private _entIndexLen = -1;
+  byId(id?: number | null): Entity | undefined {
+    if (id == null) return undefined;
+    if (this._entIndexLen !== this.entities.length) {
+      this._entIndex.clear();
+      for (const e of this.entities) this._entIndex.set(e.id, e);
+      this._entIndexLen = this.entities.length;
+    }
+    const hit = this._entIndex.get(id);
+    return hit && hit.id === id ? hit : undefined;
+  }
 
   // --- Common menu nav -----------------------------------------------------
   menuNav(n: number) {
@@ -12229,7 +12586,7 @@ export class Voidwake {
   renderStation(g: Cell[][]) {
     const p = this.player!;
     const sid = this.dockedStationId;
-    const stationName = sid != null ? this.entities.find((e) => e.id === sid)?.name ?? "Station" : "Station";
+    const stationName = sid != null ? this.byId(sid)?.name ?? "Station" : "Station";
     const stock = sid != null ? this.getStock(sid) : null;
     putText(g, 4, 2, `DOCKED — ${stationName.toUpperCase()}`, "#7CFC00");
     putText(g, 4, 3, `credits: ${p.credits}   ore: ${p.cargo.ore ?? 0}   cargo: ${cargoTotal(p)}/${p.ship.cargoMax}   fuel: ${p.ship.fuel.toFixed(0)}/${p.ship.fuelMax}`, "#9fe");
@@ -12424,7 +12781,7 @@ export class Voidwake {
         { text: "" },
         { text: "UI", color: "#7CFC00" },
         { text: `  ${kb.legend.toUpperCase()}  Codex (every glyph & color explained)` },
-        { text: `  ${kb.questLog.toUpperCase()}  Quest Log   ·   ${kb.pinQuest.toUpperCase()}  pin/unpin mission tracker` },
+        { text: `  ${kb.questLog.toUpperCase()}  Contract Log (up to 3 jobs — ENTER track, X abandon)   ·   ${kb.pinQuest.toUpperCase()}  pin tracker` },
         { text: `  ${kb.autopilot.toUpperCase()}  autopilot toggle   ·   ${kb.pause.toUpperCase()}  pause   ·   ESC  main menu` },
         { text: "" },
         { text: "Every key can be rebound under Options ▸ Controls ▸ Configure Keybinds…", color: "#9fe" },
@@ -12613,7 +12970,7 @@ export class Voidwake {
         [kb.toggleGunner.toUpperCase(), "toggle hired gunner AUTO / STANDBY"],
         [kb.legend.toUpperCase(), "open this Codex"],
         [kb.pinQuest.toUpperCase(), "pin / unpin quest tracker"],
-        [kb.questLog.toUpperCase(), "open Quest Log popup"],
+        [kb.questLog.toUpperCase(), "open Contract Log (ENTER track · X abandon)"],
         [kb.autopilot.toUpperCase(), "toggle Pilot autopilot (mouse steer does NOT disengage)"],
         [kb.pause.toUpperCase(), "pause"],
         ["ESC",    "main menu / close overlay"],
@@ -13315,7 +13672,7 @@ export class Voidwake {
     for (const bm of p.bookmarks ?? []) {
       // Live entities move; fall back to the frozen position when the contact
       // is gone (culled, destroyed, or never had an id).
-      const live = bm.entityId != null ? this.entities.find((e) => e.id === bm.entityId) : undefined;
+      const live = bm.entityId != null ? this.byId(bm.entityId) : undefined;
       const wp = projectPoint(live ? live.pos.x : bm.pos.x, live ? live.pos.y : bm.pos.y, live ? live.pos.z : bm.pos.z);
       if (!wp) continue;
       if (wp.sx <= vpLeft + 1 || wp.sx >= vpRight - 1 || wp.sy <= vpTop + 1 || wp.sy >= vpBottom - 1) continue;
@@ -13333,7 +13690,7 @@ export class Voidwake {
     // chevron edge-pointer + distance readout when it's off-screen. Color
     // tracks faction so a friendly bracket can't be confused with a hostile.
     // ---------------------------------------------------------------------
-    const tgt = this.targetId != null ? this.entities.find((e) => e.id === this.targetId) : null;
+    const tgt = this.targetId != null ? this.byId(this.targetId) : null;
     if (tgt) {
       // Reset bracket easing when the player swaps targets.
       if (this._bracketTargetId !== tgt.id) {
@@ -13544,13 +13901,13 @@ export class Voidwake {
         const have = p.cargo[m.cargoItem] ?? 0;
         prog = `${have}/${m.cargoQty} ${m.cargoItem}` + (m.done ? "  ✓ DOCK" : "");
       } else if ((m.kind === "destroy" || m.kind === "bounty") && m.targetId != null) {
-        const tt = this.entities.find((e) => e.id === m.targetId);
+        const tt = this.byId(m.targetId);
         if (tt && (tt.hull ?? 0) > 0) {
           const d = V.len(V.sub(tt.pos, p.pos));
           prog = `${tt.name}  ${d.toFixed(0)}u`;
         } else prog = "✓ destroyed — DOCK";
       } else if (m.kind === "scan" && m.targetId != null) {
-        const tt = this.entities.find((e) => e.id === m.targetId);
+        const tt = this.byId(m.targetId);
         if (tt) {
           const d = V.len(V.sub(tt.pos, p.pos));
           prog = m.done ? "✓ scanned — DOCK" : `${tt.name}  ${d.toFixed(0)}u`;
@@ -13722,7 +14079,7 @@ export class Voidwake {
     let cy2 = vpTop + 13;
     for (const [k, v] of Object.entries(p.cargo)) putText(g, panelX + 1, cy2++, `· ${k}: ${v}`, "#aea");
 
-    const t = this.entities.find((e) => e.id === this.targetId);
+    const t = this.byId(this.targetId);
     putText(g, panelX, cy2 + 1, "[ TARGET ]", "#7CFC00");
     if (t) {
       const d = V.len(V.sub(t.pos, p.pos));
@@ -13806,14 +14163,17 @@ export class Voidwake {
     putText(g, 28, rTop + 1, `Seed ${this.seed}`, "#9fe", sysRight);
     putText(g, 28, rTop + 2, `Pos ${p.pos.x.toFixed(0)},${p.pos.y.toFixed(0)},${p.pos.z.toFixed(0)}`, "#9fe", sysRight);
     putText(g, 28, rTop + 3, `Heading yaw ${(p.heading.yaw).toFixed(2)} pitch ${(p.heading.pitch).toFixed(2)}`, "#9fe", sysRight);
-    putText(g, 28, rTop + 4, `Mission: ${p.mission ? p.mission.description : "(none)"}`, "#fb6", sysRight);
+    const logN = contractList(p).length;
+    putText(g, 28, rTop + 4,
+      `Mission${logN > 1 ? ` (1/${logN})` : ""}: ${p.mission ? p.mission.description : "(none)"}`,
+      "#fb6", sysRight);
     if (p.mission?.done) {
       putText(g, 28, rTop + 5, "→ Return to a station to claim reward", "#cf6", sysRight);
     } else if (p.mission) {
       // Mission guidance: bearing + distance to objective.
       const m = p.mission;
       let mt: Entity | undefined;
-      if (m.targetId) mt = this.entities.find((e) => e.id === m.targetId);
+      if (m.targetId) mt = this.byId(m.targetId);
       else if (m.kind === "deliver") {
         // nearest station for delivery
         const stations = this.entities.filter((e) => e.kind === "station");

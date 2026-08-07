@@ -213,6 +213,18 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   that reads "OUT OF ORDER" and cause odd shipboard chatter; once revealed
   they join a vacant role at a very low wage.
 
+- **Contract Log** (0.8.7): `U` opens the log. You can carry up to **three**
+  contracts at once; `ENTER` marks one as tracked (the HUD arrow, objective
+  diamond and SYSTEM pane follow it), `X` abandons the highlighted job at a
+  cost of Guild standing (more for a stranded passenger). Every contract in
+  the log progresses and pays out independently — dock once and all finished
+  jobs settle together.
+- **Station trade routes** (0.8.7): from Tier 3 a station you own can broker
+  automated freight lanes on the Build / Upgrade page. 8000cr per lane, two
+  lanes maximum; each lane picks the best-paying charted market for a good it
+  can legally move and pays passive treasury every minute on top of tier
+  income. Your station files lane reports over Comms.
+
 Bookmarked waypoints also paint in the flight view (0.8.6) as a `◇` marker
 with the name and live distance — bright while the original contact is still on
 sensors, dim when only the stored coordinates remain.
