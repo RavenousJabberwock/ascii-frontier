@@ -113,6 +113,7 @@ clearly labeled sections:
 ```
 
 See [`src/game/README.md`](src/game/README.md) for extension recipes,
+[`CHANGELOG.md`](CHANGELOG.md) for the release history,
 [`GUIDE.md`](GUIDE.md) for the short new-pilot guide (including estimated
 system requirements), and [`MANUAL.md`](MANUAL.md) for the full player-facing
 gameplay reference.
