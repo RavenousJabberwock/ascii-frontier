@@ -57,6 +57,7 @@ The galaxy has three zones:
 | `C` / `R` | Character Sheet / Reputation panel         |
 | `H`       | Hail the current target                    |
 | `N` / `V` | Bookmark target / open the Nav Log         |
+| `U`       | Contract Log (`S` sorts, `F` filters)      |
 | `ESC`     | Menu                                       |
 
 Gamepads and touch controls work too, and every bind is reassignable under
