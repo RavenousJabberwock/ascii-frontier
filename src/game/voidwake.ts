@@ -2278,6 +2278,23 @@ interface Mission {
   vip?: boolean;
 }
 
+// 0.8.8 — Contract Log view controls. The log is a flat list of at most
+// CONTRACT_MAX jobs, so these are ergonomics rather than data structures:
+// `S` cycles the sort order and `F` cycles a kind filter.
+const CONTRACT_SORT_LABEL: Record<"added" | "reward" | "deadline" | "kind", string> = {
+  added: "accepted order", reward: "reward ↓", deadline: "deadline ↑", kind: "kind",
+};
+const CONTRACT_FILTERS: Array<{ label: string; match: (m: Mission) => boolean }> = [
+  { label: "all",       match: () => true },
+  { label: "ready",     match: (m) => m.done },
+  { label: "combat",    match: (m) => m.kind === "destroy" || m.kind === "bounty" },
+  { label: "freight",   match: (m) => m.kind === "deliver" || m.kind === "haul" },
+  { label: "people",    match: (m) => m.kind === "passenger" || m.kind === "rescue" || m.kind === "escort" },
+  { label: "timed",     match: (m) => m.deadlineAt != null },
+];
+
+
+
 // Per-station market state. Generated deterministically from the station id
 // so prices and stock are stable between visits within a single session, but
 // vary station-to-station (a refinery sells cheap fuel, a frontier outpost
