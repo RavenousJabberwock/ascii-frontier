@@ -514,6 +514,16 @@ covering every hook shipped so far.
 | `onMissionAccepted` | `{ id, kind, description, reward, targetId }` | contract board accept (0.8.7)      |
 | `onMissionAbandoned`| `{ id, kind, description, reward }`        | `X` on a row in the Contract Log (0.8.7) |
 | `onTradeRouteEstablished` | `{ stationId, station, partnerId, partner, commodity, fee }` | owned-station freight lane opened (0.8.7) |
+| `onMissionCompleted`| `{ id, kind, description, reward, stationId, station }` | contract paid out on dock (0.8.8) |
+| `onCrewHired`       | `{ role, name, species, fee, wage, pet?, stationId }` | crew bay hire (0.8.8) |
+| `onCrewLeft`        | `{ role, name, reason }`                   | morale walkout (0.8.8) |
+| `onRankUp`          | `{ rank, xp, kills }`                      | pilot rank advance (0.8.8) |
+| `onModuleInstalled` | `{ id, name, price, stationId }`           | module fitted at a dock (0.8.8) |
+| `onStationFounded`  | `{ stationId, name, x, y, z, parentId }`   | Station Core deployed (0.8.8) |
+| `onWormholeJump`    | `{ fromId, from, toId, to, x, y, z }`      | wormhole transit (0.8.8) |
+| `onPlayerDestroyed` | `{ reason, killer, insured, cargoLost, rescuedBy }` | hull loss + rescue (0.8.8) |
+| `onStowawayRevealed`| `{ name, species, role, wage }`            | stowaway discovered (0.8.8) |
+| `onTradeRouteClosed`| `{ stationId, station, closed }`           | all lanes cleared (0.8.8) |
 
 0.8.7 also adds two read-only Lua getters: `frontier.contracts()` returns the
 active contract log (`id, kind, description, reward, done, tracked,

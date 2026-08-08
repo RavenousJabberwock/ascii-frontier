@@ -1,3 +1,27 @@
+# 0.8.8 — Log Ergonomics, Manual Lanes & Hook Audit
+
+Ships as **0.8.8**.
+
+- **Contract Log sort & filter.** `S` cycles `contractSort`
+  (added → reward → deadline → kind), `F` cycles `CONTRACT_FILTERS`
+  (all / ready / combat / freight / people / timed). `contractView()` is the
+  single ordered+filtered list the log renders and acts on, so pinning and
+  abandoning always hit the row the player sees.
+- **Player-set freight lanes.** `lanePartnerOptions()` / `laneGoodsOptions()`
+  drive two new Build-page rows; `establishTradeRoute()` honours the pinned
+  partner and/or commodity and falls back to the best-spread search when
+  either is Auto. Contraband and duplicate lanes are still refused.
+- **Hook audit.** Ten lifecycle events that previously only wrote a log line
+  now dispatch: `onMissionCompleted`, `onCrewHired`, `onCrewLeft`, `onRankUp`,
+  `onModuleInstalled`, `onStationFounded`, `onWormholeJump`,
+  `onPlayerDestroyed`, `onStowawayRevealed`, `onTradeRouteClosed`. All are
+  registered in `lua-host.ts` `HOOK_NAMES`.
+- **Docs.** New `CHANGELOG.md` covering 0.4.0 → 0.8.8; hook table, MANUAL and
+  GUIDE refreshed.
+- **Chatter.** `EXTRA_TEMPLATES_088` appends ~30 lines across contract-load,
+  mission, station-report, quartermaster, navigator, pilot, engineer, dealer,
+  hauler and station pools.
+
 # 0.8.7 — Contract Log & Station Trade Routes
 
 Ships as **0.8.7**.

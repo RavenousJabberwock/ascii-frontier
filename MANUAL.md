@@ -224,6 +224,14 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   lanes maximum; each lane picks the best-paying charted market for a good it
   can legally move and pays passive treasury every minute on top of tier
   income. Your station files lane reports over Comms.
+- **Contract Log sort & filter** (0.8.8): inside the log, `S` cycles the sort
+  order (accepted order → reward → deadline → kind) and `F` cycles a filter
+  (all → ready → combat → freight → people → timed). Both are view-only; your
+  contracts are never reordered or dropped.
+- **Player-set freight lanes** (0.8.8): the Build / Upgrade page now has
+  `Lane partner` and `Lane goods` rows. `ENTER` cycles each; leave either on
+  **Auto** to keep the old best-spread search. Only goods the partner dock can
+  legally take are offered.
 
 Bookmarked waypoints also paint in the flight view (0.8.6) as a `◇` marker
 with the name and live distance — bright while the original contact is still on
