@@ -6654,6 +6654,10 @@ export class Voidwake {
     // freight compensation. One claim per policy: it burns on use.
     const insured = !!p.ship.insured;
     const lost = cargoTotal(p);
+    dispatchHook("onPlayerDestroyed", {
+      reason: this.deathReason, killer: this.deathKiller,
+      insured, cargoLost: lost, rescuedBy: best.name,
+    });
     let fee = 0;
     let payout = 0;
     if (insured) {
@@ -7233,6 +7237,10 @@ export class Voidwake {
             this._wormholeCooldown = 3.0;
             (this as unknown as { _wormholeFx: number })._wormholeFx = 2.8;
             this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
+            dispatchHook("onWormholeJump", {
+              fromId: e.id, from: e.name, toId: sib.id, to: sib.name,
+              x: p.pos.x, y: p.pos.y, z: p.pos.z,
+            });
             this.pushChatter("Computer", "Reality just... folded. We're somewhere else.", "#9effd2");
             this.sfx("dock");
           }
@@ -7435,6 +7443,7 @@ export class Voidwake {
         anyP._pendingRankUp = undefined;
         this.sfx("levelup");
         this.pushChatter("Computer", `Rank advanced: ${nr}.`, "#ffd28a");
+        dispatchHook("onRankUp", { rank: nr, xp: p.xp ?? 0, kills: p.kills ?? 0 });
       }
     }
     this.tickCrewIdle(dt);
@@ -8173,6 +8182,10 @@ export class Voidwake {
       awardXP(p, 80);
       if (p.record) { p.record.missions += 1; p.record.earned += cm.reward; }
       this.pushLog(`Contract paid: ${cm.description} (+${cm.reward}cr)`);
+      dispatchHook("onMissionCompleted", {
+        id: cm.id, kind: cm.kind, description: cm.description, reward: cm.reward,
+        stationId: t.id, station: t.name,
+      });
       p.passengers = (p.passengers ?? []).filter((x) => x.missionId !== cm.id);
       dropContract(p, cm);
     }
@@ -8231,6 +8244,7 @@ export class Voidwake {
             const first = w.name.split(" ")[0];
             const roleTag = (CREW_ROLE_INFO[w.role]?.title ?? w.role);
             this.pushLog(`✗ ${roleTag} ${first} walked off — morale collapsed.`);
+            dispatchHook("onCrewLeft", { role: w.role, name: w.name, reason: "morale" });
             const roleFarewell = `${w.role}_farewell_bad` as ChatterKind;
             const line = (TEMPLATES[roleFarewell] && TEMPLATES[roleFarewell].length)
               ? pickLine(roleFarewell, this.chatterCtx())
@@ -8738,6 +8752,9 @@ export class Voidwake {
     };
     if (!p.crew) p.crew = [];
     p.crew.push(member);
+    dispatchHook("onStowawayRevealed", {
+      name: member.name, species: member.species, role, wage: member.wage,
+    });
     this.pushLog(`⚠ Stowaway discovered — ${s.name} steps out of the crawlspace.`);
     this.pushChatter(s.name, reveallineFor(s.source), "#ffb0d0", "crew");
     this.pushChatter("Computer",
@@ -11421,6 +11438,7 @@ export class Voidwake {
       if (offer.id === "luxury-cabin") this.pushLog("Luxury Cabin installed — +2 passenger berths.");
       if (offer.id === "station-core") this.pushLog("Station Core secured — head to open space, dock menu ▸ 'Deploy Station Core'.");
       this.pushLog(`Installed ${offer.name}.`);
+      dispatchHook("onModuleInstalled", { id: offer.id, name: offer.name, price, stationId: sid });
       return;
     }
 
@@ -11561,6 +11579,10 @@ export class Voidwake {
         p.gunner = generateGunner(Math.random);
         if (xeno) p.gunner.species = "Xeno";
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
+        dispatchHook("onCrewHired", {
+          role: "gunner", name: p.gunner.name, species: p.gunner.species,
+          fee, wage: stock.gunnerFee, stationId: sid,
+        });
         this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
           pickLine("gunner_greet", this.chatterCtx()), "#fc6");
       } else {
@@ -11569,6 +11591,10 @@ export class Voidwake {
         p.crew = p.crew ?? [];
         p.crew.push(c);
         this.pushLog(`Hired ${info.title} ${c.name} (${c.species}).`);
+        dispatchHook("onCrewHired", {
+          role: c.role, name: c.name, species: c.species,
+          fee, wage: c.wage, pet: c.pet?.name, stationId: sid,
+        });
         const greetKind: ChatterKind = (r + "_greet") as ChatterKind;
         this.pushChatter(`${info.title} ${c.name.split(" ")[0]}`,
           pickLine(greetKind, this.chatterCtx()), info.color);
@@ -11642,8 +11668,10 @@ export class Voidwake {
       const row = lines[i] ?? "";
       // 0.8.7 — freight lanes.
       if (row.startsWith("Clear all trade routes")) {
+        const closed = (mine.routes ?? []).length;
         mine.routes = [];
         this.pushLog(`${mine.name}: all freight lanes closed.`);
+        dispatchHook("onTradeRouteClosed", { stationId: mine.entityId, station: mine.name, closed });
         return;
       }
       if (row.startsWith("Establish trade route")) {
@@ -11771,6 +11799,7 @@ export class Voidwake {
     p.ownedStations = p.ownedStations ?? [];
     p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {}, motif: 0 });
     this.pushLog(`Station Core deployed as ${name}. Fly to it and dock to build.`);
+    dispatchHook("onStationFounded", { stationId: id, name, x: pos.x, y: pos.y, z: pos.z, parentId: parent.id });
     this.pushChatter("Computer", `${name} beacon online. Awaiting construction crews.`, "#7fd0ff");
     // Auto-undock so the player can fly to it.
     this._dockCooldownUntil = performance.now() / 1000 + 0.6;
