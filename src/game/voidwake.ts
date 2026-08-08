@@ -153,6 +153,17 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onMissionAccepted:    [],
   onMissionAbandoned:   [],
   onTradeRouteEstablished: [],
+  onMissionCompleted:   [],
+  onCrewHired:          [],
+  onCrewLeft:           [],
+  onRankUp:             [],
+  onModuleInstalled:    [],
+  onStationFounded:     [],
+  onWormholeJump:       [],
+  onPlayerDestroyed:    [],
+  onStowawayRevealed:   [],
+  onTradeRouteClosed:   [],
+
 
 };
 
