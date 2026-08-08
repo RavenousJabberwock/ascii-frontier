@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.7";
+const VERSION = "0.8.8";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -109,7 +109,20 @@ export type ScriptHookName =
   // 0.8.7 — contract log & station trade routes
   | "onMissionAccepted"
   | "onMissionAbandoned"
-  | "onTradeRouteEstablished";
+  | "onTradeRouteEstablished"
+  // 0.8.8 — hook audit: events that fired only as log lines before now
+  // dispatch too, so a mod can react to the whole player lifecycle.
+  | "onMissionCompleted"
+  | "onCrewHired"
+  | "onCrewLeft"
+  | "onRankUp"
+  | "onModuleInstalled"
+  | "onStationFounded"
+  | "onWormholeJump"
+  | "onPlayerDestroyed"
+  | "onStowawayRevealed"
+  | "onTradeRouteClosed";
+
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,6 +153,17 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onMissionAccepted:    [],
   onMissionAbandoned:   [],
   onTradeRouteEstablished: [],
+  onMissionCompleted:   [],
+  onCrewHired:          [],
+  onCrewLeft:           [],
+  onRankUp:             [],
+  onModuleInstalled:    [],
+  onStationFounded:     [],
+  onWormholeJump:       [],
+  onPlayerDestroyed:    [],
+  onStowawayRevealed:   [],
+  onTradeRouteClosed:   [],
+
 
 };
 
@@ -2228,11 +2252,65 @@ const EXTRA_TEMPLATES: Partial<Record<ChatterKind, string[]>> = {
     "Nothing to report but weather and gossip. Both are bad.",
   ],
 };
-for (const [k, lines] of Object.entries(EXTRA_TEMPLATES)) {
-  const key = k as ChatterKind;
-  if (TEMPLATES[key]) TEMPLATES[key].push(...(lines ?? []));
-  else TEMPLATES[key] = [...(lines ?? [])];
+// 0.8.8 — second extra pool. Same merge rules; kept separate so each
+// milestone's additions stay auditable.
+const EXTRA_TEMPLATES_088: Partial<Record<ChatterKind, string[]>> = {
+  crew_ctx_contracts: [
+    "Three jobs pinned and one of them lies about its deadline.",
+    "Contract log's full, Captain. So is my patience with the filing system.",
+    "I sorted the log by reward. Morale improved immediately.",
+    "Every contract says 'routine'. None of them mean it.",
+  ],
+  crew_ctx_mission: [
+    "Objective's still out there being an objective at us.",
+    "Deadline math says we're fine. Deadline math has lied before.",
+    "I'd like the record to show I read the fine print this time.",
+  ],
+  player_station_report: [
+    "Freight lane's running clean, Captain. Convoy's already home.",
+    "Our dock made money while you were being shot at. Efficient.",
+    "Lane manifest balanced to the credit. I checked twice, then bragged.",
+    "Treasury's up. The accountant did a small, undignified dance.",
+  ],
+  quartermaster_idle: [
+    "I picked the lane goods myself. If it loses money, blame the market.",
+    "A well-chosen freight lane is just patience with a spreadsheet.",
+    "Our warehouse has a favorite commodity now. It's territorial.",
+  ],
+  navigator_idle: [
+    "Bookmarked a lane endpoint. Future us will send thanks.",
+    "Plotted the convoy route. It's boring, which is the highest praise.",
+  ],
+  pilot_idle: [
+    "Convoy waved at us. I waved back. Diplomacy achieved.",
+    "Somebody's freight lane crosses ours. I yielded. Once.",
+  ],
+  engineer_idle: [
+    "Station-side pumps run smoother than ours. I'm not jealous, I'm noting it.",
+    "Gave our lane hauler a spare gasket. Consider it foreign aid.",
+  ],
+  dealer_generic: [
+    "You own a station? Then you own a parking problem. I sell solutions.",
+    "Trade lanes are lovely, but lanes don't hug you at night. Hulls do.",
+  ],
+  npc_ctx_hauler: [
+    "Somebody opened a new lane out here. Wages went up. Miracle.",
+    "Half my manifest belongs to a private dock now. Times change.",
+  ],
+  station: [
+    "Lane traffic's steady. Keep your vector clean and we'll all get paid.",
+    "Brokerage window's open if you're in the freight business, Captain.",
+  ],
+};
+for (const pool of [EXTRA_TEMPLATES, EXTRA_TEMPLATES_088]) {
+  for (const [k, lines] of Object.entries(pool)) {
+    const key = k as ChatterKind;
+    if (TEMPLATES[key]) TEMPLATES[key].push(...(lines ?? []));
+    else TEMPLATES[key] = [...(lines ?? [])];
+  }
 }
+
+
 
 type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
 interface Mission {
@@ -2253,6 +2331,23 @@ interface Mission {
   deadlineAt?: number;
   vip?: boolean;
 }
+
+// 0.8.8 — Contract Log view controls. The log is a flat list of at most
+// CONTRACT_MAX jobs, so these are ergonomics rather than data structures:
+// `S` cycles the sort order and `F` cycles a kind filter.
+const CONTRACT_SORT_LABEL: Record<"added" | "reward" | "deadline" | "kind", string> = {
+  added: "accepted order", reward: "reward ↓", deadline: "deadline ↑", kind: "kind",
+};
+const CONTRACT_FILTERS: Array<{ label: string; match: (m: Mission) => boolean }> = [
+  { label: "all",       match: () => true },
+  { label: "ready",     match: (m) => m.done },
+  { label: "combat",    match: (m) => m.kind === "destroy" || m.kind === "bounty" },
+  { label: "freight",   match: (m) => m.kind === "deliver" || m.kind === "haul" },
+  { label: "people",    match: (m) => m.kind === "passenger" || m.kind === "rescue" || m.kind === "escort" },
+  { label: "timed",     match: (m) => m.deadlineAt != null },
+];
+
+
 
 // Per-station market state. Generated deterministically from the station id
 // so prices and stock are stable between visits within a single session, but
@@ -5172,6 +5267,14 @@ export class Voidwake {
   // Per-station market state, lazily generated on first dock and cached
   // for the rest of the session. Keyed by station entity id.
   stationStocks = new Map<number, StationStock>();
+  // 0.8.8 — Contract Log view state. Pure presentation: the canonical list
+  // still lives on PlayerState, these just order/limit what the log shows.
+  contractSort: "added" | "reward" | "deadline" | "kind" = "added";
+  contractFilter = 0;               // index into CONTRACT_FILTERS
+  // 0.8.8 — player-set freight lanes. Cursor indices into the partner /
+  // commodity option lists rendered on a station's Build page. 0 = Auto.
+  _lanePartnerIdx = 0;
+  _laneGoodsIdx = 0;
   // Comms / chatter feed. See pushChatter / renderChatter. Cap ~250 so the
   // top-left Comms panel can scroll back through recent traffic.
   chatter: ChatterLine[] = [];
@@ -6630,6 +6733,10 @@ export class Voidwake {
     // freight compensation. One claim per policy: it burns on use.
     const insured = !!p.ship.insured;
     const lost = cargoTotal(p);
+    dispatchHook("onPlayerDestroyed", {
+      reason: this.deathReason, killer: this.deathKiller,
+      insured, cargoLost: lost, rescuedBy: best.name,
+    });
     let fee = 0;
     let payout = 0;
     if (insured) {
@@ -7209,6 +7316,10 @@ export class Voidwake {
             this._wormholeCooldown = 3.0;
             (this as unknown as { _wormholeFx: number })._wormholeFx = 2.8;
             this.pushLog(`↯ Slipped through ${e.name} — emerged at ${sib.name}.`);
+            dispatchHook("onWormholeJump", {
+              fromId: e.id, from: e.name, toId: sib.id, to: sib.name,
+              x: p.pos.x, y: p.pos.y, z: p.pos.z,
+            });
             this.pushChatter("Computer", "Reality just... folded. We're somewhere else.", "#9effd2");
             this.sfx("dock");
           }
@@ -7411,6 +7522,7 @@ export class Voidwake {
         anyP._pendingRankUp = undefined;
         this.sfx("levelup");
         this.pushChatter("Computer", `Rank advanced: ${nr}.`, "#ffd28a");
+        dispatchHook("onRankUp", { rank: nr, xp: p.xp ?? 0, kills: p.kills ?? 0 });
       }
     }
     this.tickCrewIdle(dt);
@@ -8149,6 +8261,10 @@ export class Voidwake {
       awardXP(p, 80);
       if (p.record) { p.record.missions += 1; p.record.earned += cm.reward; }
       this.pushLog(`Contract paid: ${cm.description} (+${cm.reward}cr)`);
+      dispatchHook("onMissionCompleted", {
+        id: cm.id, kind: cm.kind, description: cm.description, reward: cm.reward,
+        stationId: t.id, station: t.name,
+      });
       p.passengers = (p.passengers ?? []).filter((x) => x.missionId !== cm.id);
       dropContract(p, cm);
     }
@@ -8207,6 +8323,7 @@ export class Voidwake {
             const first = w.name.split(" ")[0];
             const roleTag = (CREW_ROLE_INFO[w.role]?.title ?? w.role);
             this.pushLog(`✗ ${roleTag} ${first} walked off — morale collapsed.`);
+            dispatchHook("onCrewLeft", { role: w.role, name: w.name, reason: "morale" });
             const roleFarewell = `${w.role}_farewell_bad` as ChatterKind;
             const line = (TEMPLATES[roleFarewell] && TEMPLATES[roleFarewell].length)
               ? pickLine(roleFarewell, this.chatterCtx())
@@ -8714,6 +8831,9 @@ export class Voidwake {
     };
     if (!p.crew) p.crew = [];
     p.crew.push(member);
+    dispatchHook("onStowawayRevealed", {
+      name: member.name, species: member.species, role, wage: member.wage,
+    });
     this.pushLog(`⚠ Stowaway discovered — ${s.name} steps out of the crawlspace.`);
     this.pushChatter(s.name, reveallineFor(s.source), "#ffb0d0", "crew");
     this.pushChatter("Computer",
@@ -9112,6 +9232,23 @@ export class Voidwake {
   // CONTRACT_MAX), marks the pinned one that the HUD tracker follows, and
   // lets the player re-pin (ENTER) or abandon (X) a job. Reputation and crew
   // summaries stay below the list. ESC / U closes.
+  /**
+   * 0.8.8 — the ordered/filtered view of the contract log. `contractSort`
+   * and `contractFilter` are view-only, so abandoning or pinning always
+   * resolves through this list rather than the raw storage order.
+   */
+  private contractView(p: PlayerState): Mission[] {
+    const f = CONTRACT_FILTERS[this.contractFilter % CONTRACT_FILTERS.length];
+    let list = contractList(p).filter((m) => f.match(m));
+    const rank = (m: Mission) => ({ destroy: 0, bounty: 1, deliver: 2, haul: 3, passenger: 4, scan: 5, escort: 6 } as Record<string, number>)[m.kind] ?? 9;
+    if (this.contractSort === "reward") list = [...list].sort((a, b) => b.reward - a.reward);
+    else if (this.contractSort === "deadline") {
+      const at = (m: Mission) => m.deadlineAt ?? Number.POSITIVE_INFINITY;
+      list = [...list].sort((a, b) => at(a) - at(b));
+    } else if (this.contractSort === "kind") list = [...list].sort((a, b) => rank(a) - rank(b) || b.reward - a.reward);
+    return list;
+  }
+
   updateQuestLog() {
     const kb = this.options.keybinds;
     const p = this.player;
@@ -9121,7 +9258,17 @@ export class Voidwake {
       return;
     }
     if (!p) return;
-    const list = contractList(p);
+    // S cycles the sort order, F cycles the kind filter. Both wrap.
+    if (this.input.consume("s")) {
+      const order: Array<typeof this.contractSort> = ["added", "reward", "deadline", "kind"];
+      this.contractSort = order[(order.indexOf(this.contractSort) + 1) % order.length];
+      this.menuCursor = 0;
+    }
+    if (this.input.consume("f")) {
+      this.contractFilter = (this.contractFilter + 1) % CONTRACT_FILTERS.length;
+      this.menuCursor = 0;
+    }
+    const list = this.contractView(p);
     if (!list.length) { this.menuCursor = 0; return; }
     if (this.input.consume("arrowup")) this.menuCursor = (this.menuCursor - 1 + list.length) % list.length;
     if (this.input.consume("arrowdown")) this.menuCursor = (this.menuCursor + 1) % list.length;
@@ -9173,14 +9320,21 @@ export class Voidwake {
   }
 
   renderQuestLog(g: Cell[][]) {
-    putText(g, 4, 1, "[ CONTRACT LOG ]   ↑/↓ select   ENTER track   X abandon   U/ESC close", "#7CFC00");
+    putText(g, 4, 1, "[ CONTRACT LOG ]   ↑/↓ select   ENTER track   X abandon   S sort   F filter   U/ESC close", "#7CFC00");
     const p = this.player;
     if (!p) return;
-    const list = contractList(p);
-    putText(g, 4, 3, `Active contracts: ${list.length}/${CONTRACT_MAX}`, "#9fe");
+    const all = contractList(p);
+    const list = this.contractView(p);
+    const filt = CONTRACT_FILTERS[this.contractFilter % CONTRACT_FILTERS.length];
+    putText(g, 4, 3,
+      `Active contracts: ${all.length}/${CONTRACT_MAX}   ·   sort: ${CONTRACT_SORT_LABEL[this.contractSort]}   ·   filter: ${filt.label}`,
+      "#9fe");
     let row = 5;
     if (!list.length) {
-      putText(g, 4, row, "No active contracts. Dock at a station to pick up work.", "#9fe");
+      putText(g, 4, row,
+        all.length ? `No contracts match the ${filt.label} filter — F cycles.`
+                   : "No active contracts. Dock at a station to pick up work.",
+        "#9fe");
       row += 2;
     }
     for (let i = 0; i < list.length; i++) {
@@ -11249,7 +11403,14 @@ export class Voidwake {
       } else if (routes.length >= STATION_ROUTE_MAX) {
         rows.push("Clear all trade routes");
       } else {
-        rows.push("Establish trade route → (auto-picks the best spread)");
+        // 0.8.8 — player-set lanes: pick either end, or leave both on Auto.
+        const pOpts = this.lanePartnerOptions(mine);
+        const gOpts = this.laneGoodsOptions(mine);
+        const pSel = pOpts[this._lanePartnerIdx % pOpts.length];
+        const gSel = gOpts[this._laneGoodsIdx % gOpts.length];
+        rows.push(`Lane partner: ◀ ${pSel?.name ?? "Auto"} ▶   (ENTER cycles)`);
+        rows.push(`Lane goods:   ◀ ${gSel?.name ?? "Auto"} ▶   (ENTER cycles)`);
+        rows.push("Establish trade route → (8000cr brokerage)");
         if (routes.length) rows.push("Clear all trade routes");
       }
       // 0.7.9 — cosmetic customization for the player's own holdings.
@@ -11397,6 +11558,7 @@ export class Voidwake {
       if (offer.id === "luxury-cabin") this.pushLog("Luxury Cabin installed — +2 passenger berths.");
       if (offer.id === "station-core") this.pushLog("Station Core secured — head to open space, dock menu ▸ 'Deploy Station Core'.");
       this.pushLog(`Installed ${offer.name}.`);
+      dispatchHook("onModuleInstalled", { id: offer.id, name: offer.name, price, stationId: sid });
       return;
     }
 
@@ -11537,6 +11699,10 @@ export class Voidwake {
         p.gunner = generateGunner(Math.random);
         if (xeno) p.gunner.species = "Xeno";
         this.pushLog(`Hired ${p.gunner.name} (${p.gunner.species}).`);
+        dispatchHook("onCrewHired", {
+          role: "gunner", name: p.gunner.name, species: p.gunner.species,
+          fee, wage: stock.gunnerFee, stationId: sid,
+        });
         this.pushChatter(`Gunner ${p.gunner.name.split(" ")[0]}`,
           pickLine("gunner_greet", this.chatterCtx()), "#fc6");
       } else {
@@ -11545,6 +11711,10 @@ export class Voidwake {
         p.crew = p.crew ?? [];
         p.crew.push(c);
         this.pushLog(`Hired ${info.title} ${c.name} (${c.species}).`);
+        dispatchHook("onCrewHired", {
+          role: c.role, name: c.name, species: c.species,
+          fee, wage: c.wage, pet: c.pet?.name, stationId: sid,
+        });
         const greetKind: ChatterKind = (r + "_greet") as ChatterKind;
         this.pushChatter(`${info.title} ${c.name.split(" ")[0]}`,
           pickLine(greetKind, this.chatterCtx()), info.color);
@@ -11618,8 +11788,21 @@ export class Voidwake {
       const row = lines[i] ?? "";
       // 0.8.7 — freight lanes.
       if (row.startsWith("Clear all trade routes")) {
+        const closed = (mine.routes ?? []).length;
         mine.routes = [];
         this.pushLog(`${mine.name}: all freight lanes closed.`);
+        dispatchHook("onTradeRouteClosed", { stationId: mine.entityId, station: mine.name, closed });
+        return;
+      }
+      if (row.startsWith("Lane partner:")) {
+        const n = this.lanePartnerOptions(mine).length;
+        this._lanePartnerIdx = (this._lanePartnerIdx + 1) % Math.max(1, n);
+        this._laneGoodsIdx = 0;   // goods list depends on the partner
+        return;
+      }
+      if (row.startsWith("Lane goods:")) {
+        const n = this.laneGoodsOptions(mine).length;
+        this._laneGoodsIdx = (this._laneGoodsIdx + 1) % Math.max(1, n);
         return;
       }
       if (row.startsWith("Establish trade route")) {
@@ -11678,6 +11861,45 @@ export class Voidwake {
   // The partner dock and commodity are chosen automatically: whichever known
   // market pays the most for a good this station can plausibly move, skipping
   // anything the partner's faction bans. Income accrues in tickStationIncome.
+  /**
+   * 0.8.8 — candidate lane partners: every charted market except this
+   * holding itself. Index 0 is always "Auto", which defers the choice to
+   * the best-spread search in establishTradeRoute().
+   */
+  lanePartnerOptions(mine: OwnedStation): Array<{ id: number | null; name: string }> {
+    const out: Array<{ id: number | null; name: string }> = [{ id: null, name: "Auto (best spread)" }];
+    for (const sid of this.stationStocks.keys()) {
+      if (sid === mine.entityId) continue;
+      const ent = this.byId(sid);
+      if (!ent || ent.kind !== "station") continue;
+      out.push({ id: sid, name: ent.name });
+    }
+    return out;
+  }
+
+  /**
+   * 0.8.8 — candidate goods for the selected partner. With a partner chosen
+   * we only offer what that dock can legally take and already stocks; with
+   * Auto we offer the full commodity table. Index 0 is always "Auto".
+   */
+  laneGoodsOptions(mine: OwnedStation): Array<{ id: string | null; name: string }> {
+    const partner = this.lanePartnerOptions(mine)[this._lanePartnerIdx % Math.max(1, this.lanePartnerOptions(mine).length)];
+    const out: Array<{ id: string | null; name: string }> = [{ id: null, name: "Auto (best payer)" }];
+    if (partner?.id != null) {
+      const ent = this.byId(partner.id);
+      const stock = this.stationStocks.get(partner.id);
+      if (ent && stock) {
+        for (const c of stock.commodities) {
+          if (isContraband(c.id, ent.faction ?? "guild")) continue;
+          out.push({ id: c.id, name: `${c.name} (${c.buy}cr)` });
+        }
+        return out;
+      }
+    }
+    for (const c of COMMODITIES) out.push({ id: c.id, name: c.name });
+    return out;
+  }
+
   establishTradeRoute(mine: OwnedStation) {
     const p = this.player; if (!p) return;
     if (mine.tier < STATION_ROUTE_MIN_TIER) {
@@ -11689,13 +11911,22 @@ export class Voidwake {
       this.pushLog(`${mine.name} already runs ${STATION_ROUTE_MAX} lanes.`);
       return;
     }
+    // 0.8.8 — the player can pin either end of the lane on the Build page.
+    // A null selection falls back to the old best-spread auto-search, so the
+    // one-press flow still works.
+    const pOpts = this.lanePartnerOptions(mine);
+    const gOpts = this.laneGoodsOptions(mine);
+    const wantPartner = pOpts[this._lanePartnerIdx % pOpts.length]?.id ?? null;
+    const wantGoods = gOpts[this._laneGoodsIdx % gOpts.length]?.id ?? null;
     let best: { partnerId: number; partnerName: string; commodity: string; pay: number } | null = null;
     for (const sid of this.stationStocks.keys()) {
       if (sid === mine.entityId) continue;
+      if (wantPartner != null && sid !== wantPartner) continue;
       const ent = this.byId(sid);
       if (!ent || ent.kind !== "station") continue;
       const stock = this.stationStocks.get(sid)!;
       for (const c of stock.commodities) {
+        if (wantGoods != null && c.id !== wantGoods) continue;
         if (isContraband(c.id, ent.faction ?? "guild")) continue;
         if (mine.routes.some((r) => r.commodity === c.id && r.partnerId === sid)) continue;
         if (!best || c.buy > best.pay) {
@@ -11704,7 +11935,9 @@ export class Voidwake {
       }
     }
     if (!best) {
-      this.pushLog("No charted market will sign a lane yet — visit a few more docks.");
+      this.pushLog(wantPartner != null || wantGoods != null
+        ? "That dock won't sign for those goods — try another pairing or set both ends to Auto."
+        : "No charted market will sign a lane yet — visit a few more docks.");
       return;
     }
     const fee = 8000;
@@ -11747,6 +11980,7 @@ export class Voidwake {
     p.ownedStations = p.ownedStations ?? [];
     p.ownedStations.push({ entityId: id, name, tier: 0, treasury: 0, delivered: {}, motif: 0 });
     this.pushLog(`Station Core deployed as ${name}. Fly to it and dock to build.`);
+    dispatchHook("onStationFounded", { stationId: id, name, x: pos.x, y: pos.y, z: pos.z, parentId: parent.id });
     this.pushChatter("Computer", `${name} beacon online. Awaiting construction crews.`, "#7fd0ff");
     // Auto-undock so the player can fly to it.
     this._dockCooldownUntil = performance.now() / 1000 + 0.6;
