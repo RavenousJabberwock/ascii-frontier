@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.7";
+const VERSION = "0.8.8";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -5196,6 +5196,14 @@ export class Voidwake {
   // Per-station market state, lazily generated on first dock and cached
   // for the rest of the session. Keyed by station entity id.
   stationStocks = new Map<number, StationStock>();
+  // 0.8.8 — Contract Log view state. Pure presentation: the canonical list
+  // still lives on PlayerState, these just order/limit what the log shows.
+  contractSort: "added" | "reward" | "deadline" | "kind" = "added";
+  contractFilter = 0;               // index into CONTRACT_FILTERS
+  // 0.8.8 — player-set freight lanes. Cursor indices into the partner /
+  // commodity option lists rendered on a station's Build page. 0 = Auto.
+  _lanePartnerIdx = 0;
+  _laneGoodsIdx = 0;
   // Comms / chatter feed. See pushChatter / renderChatter. Cap ~250 so the
   // top-left Comms panel can scroll back through recent traffic.
   chatter: ChatterLine[] = [];
@@ -9153,6 +9161,23 @@ export class Voidwake {
   // CONTRACT_MAX), marks the pinned one that the HUD tracker follows, and
   // lets the player re-pin (ENTER) or abandon (X) a job. Reputation and crew
   // summaries stay below the list. ESC / U closes.
+  /**
+   * 0.8.8 — the ordered/filtered view of the contract log. `contractSort`
+   * and `contractFilter` are view-only, so abandoning or pinning always
+   * resolves through this list rather than the raw storage order.
+   */
+  private contractView(p: PlayerState): Mission[] {
+    const f = CONTRACT_FILTERS[this.contractFilter % CONTRACT_FILTERS.length];
+    let list = contractList(p).filter((m) => f.match(m));
+    const rank = (m: Mission) => ({ destroy: 0, bounty: 1, deliver: 2, haul: 3, passenger: 4, scan: 5, escort: 6 } as Record<string, number>)[m.kind] ?? 9;
+    if (this.contractSort === "reward") list = [...list].sort((a, b) => b.reward - a.reward);
+    else if (this.contractSort === "deadline") {
+      const at = (m: Mission) => m.deadlineAt ?? Number.POSITIVE_INFINITY;
+      list = [...list].sort((a, b) => at(a) - at(b));
+    } else if (this.contractSort === "kind") list = [...list].sort((a, b) => rank(a) - rank(b) || b.reward - a.reward);
+    return list;
+  }
+
   updateQuestLog() {
     const kb = this.options.keybinds;
     const p = this.player;
@@ -9162,7 +9187,17 @@ export class Voidwake {
       return;
     }
     if (!p) return;
-    const list = contractList(p);
+    // S cycles the sort order, F cycles the kind filter. Both wrap.
+    if (this.input.consume("s")) {
+      const order: Array<typeof this.contractSort> = ["added", "reward", "deadline", "kind"];
+      this.contractSort = order[(order.indexOf(this.contractSort) + 1) % order.length];
+      this.menuCursor = 0;
+    }
+    if (this.input.consume("f")) {
+      this.contractFilter = (this.contractFilter + 1) % CONTRACT_FILTERS.length;
+      this.menuCursor = 0;
+    }
+    const list = this.contractView(p);
     if (!list.length) { this.menuCursor = 0; return; }
     if (this.input.consume("arrowup")) this.menuCursor = (this.menuCursor - 1 + list.length) % list.length;
     if (this.input.consume("arrowdown")) this.menuCursor = (this.menuCursor + 1) % list.length;
@@ -9214,14 +9249,21 @@ export class Voidwake {
   }
 
   renderQuestLog(g: Cell[][]) {
-    putText(g, 4, 1, "[ CONTRACT LOG ]   ↑/↓ select   ENTER track   X abandon   U/ESC close", "#7CFC00");
+    putText(g, 4, 1, "[ CONTRACT LOG ]   ↑/↓ select   ENTER track   X abandon   S sort   F filter   U/ESC close", "#7CFC00");
     const p = this.player;
     if (!p) return;
-    const list = contractList(p);
-    putText(g, 4, 3, `Active contracts: ${list.length}/${CONTRACT_MAX}`, "#9fe");
+    const all = contractList(p);
+    const list = this.contractView(p);
+    const filt = CONTRACT_FILTERS[this.contractFilter % CONTRACT_FILTERS.length];
+    putText(g, 4, 3,
+      `Active contracts: ${all.length}/${CONTRACT_MAX}   ·   sort: ${CONTRACT_SORT_LABEL[this.contractSort]}   ·   filter: ${filt.label}`,
+      "#9fe");
     let row = 5;
     if (!list.length) {
-      putText(g, 4, row, "No active contracts. Dock at a station to pick up work.", "#9fe");
+      putText(g, 4, row,
+        all.length ? `No contracts match the ${filt.label} filter — F cycles.`
+                   : "No active contracts. Dock at a station to pick up work.",
+        "#9fe");
       row += 2;
     }
     for (let i = 0; i < list.length; i++) {
