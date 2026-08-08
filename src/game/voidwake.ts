@@ -11349,7 +11349,14 @@ export class Voidwake {
       } else if (routes.length >= STATION_ROUTE_MAX) {
         rows.push("Clear all trade routes");
       } else {
-        rows.push("Establish trade route → (auto-picks the best spread)");
+        // 0.8.8 — player-set lanes: pick either end, or leave both on Auto.
+        const pOpts = this.lanePartnerOptions(mine);
+        const gOpts = this.laneGoodsOptions(mine);
+        const pSel = pOpts[this._lanePartnerIdx % pOpts.length];
+        const gSel = gOpts[this._laneGoodsIdx % gOpts.length];
+        rows.push(`Lane partner: ◀ ${pSel?.name ?? "Auto"} ▶   (ENTER cycles)`);
+        rows.push(`Lane goods:   ◀ ${gSel?.name ?? "Auto"} ▶   (ENTER cycles)`);
+        rows.push("Establish trade route → (8000cr brokerage)");
         if (routes.length) rows.push("Clear all trade routes");
       }
       // 0.7.9 — cosmetic customization for the player's own holdings.
@@ -11733,6 +11740,17 @@ export class Voidwake {
         dispatchHook("onTradeRouteClosed", { stationId: mine.entityId, station: mine.name, closed });
         return;
       }
+      if (row.startsWith("Lane partner:")) {
+        const n = this.lanePartnerOptions(mine).length;
+        this._lanePartnerIdx = (this._lanePartnerIdx + 1) % Math.max(1, n);
+        this._laneGoodsIdx = 0;   // goods list depends on the partner
+        return;
+      }
+      if (row.startsWith("Lane goods:")) {
+        const n = this.laneGoodsOptions(mine).length;
+        this._laneGoodsIdx = (this._laneGoodsIdx + 1) % Math.max(1, n);
+        return;
+      }
       if (row.startsWith("Establish trade route")) {
         this.establishTradeRoute(mine);
         return;
@@ -11789,6 +11807,45 @@ export class Voidwake {
   // The partner dock and commodity are chosen automatically: whichever known
   // market pays the most for a good this station can plausibly move, skipping
   // anything the partner's faction bans. Income accrues in tickStationIncome.
+  /**
+   * 0.8.8 — candidate lane partners: every charted market except this
+   * holding itself. Index 0 is always "Auto", which defers the choice to
+   * the best-spread search in establishTradeRoute().
+   */
+  lanePartnerOptions(mine: OwnedStation): Array<{ id: number | null; name: string }> {
+    const out: Array<{ id: number | null; name: string }> = [{ id: null, name: "Auto (best spread)" }];
+    for (const sid of this.stationStocks.keys()) {
+      if (sid === mine.entityId) continue;
+      const ent = this.byId(sid);
+      if (!ent || ent.kind !== "station") continue;
+      out.push({ id: sid, name: ent.name });
+    }
+    return out;
+  }
+
+  /**
+   * 0.8.8 — candidate goods for the selected partner. With a partner chosen
+   * we only offer what that dock can legally take and already stocks; with
+   * Auto we offer the full commodity table. Index 0 is always "Auto".
+   */
+  laneGoodsOptions(mine: OwnedStation): Array<{ id: string | null; name: string }> {
+    const partner = this.lanePartnerOptions(mine)[this._lanePartnerIdx % Math.max(1, this.lanePartnerOptions(mine).length)];
+    const out: Array<{ id: string | null; name: string }> = [{ id: null, name: "Auto (best payer)" }];
+    if (partner?.id != null) {
+      const ent = this.byId(partner.id);
+      const stock = this.stationStocks.get(partner.id);
+      if (ent && stock) {
+        for (const c of stock.commodities) {
+          if (isContraband(c.id, ent.faction ?? "guild")) continue;
+          out.push({ id: c.id, name: `${c.name} (${c.buy}cr)` });
+        }
+        return out;
+      }
+    }
+    for (const c of COMMODITIES) out.push({ id: c.id, name: c.name });
+    return out;
+  }
+
   establishTradeRoute(mine: OwnedStation) {
     const p = this.player; if (!p) return;
     if (mine.tier < STATION_ROUTE_MIN_TIER) {
@@ -11800,13 +11857,22 @@ export class Voidwake {
       this.pushLog(`${mine.name} already runs ${STATION_ROUTE_MAX} lanes.`);
       return;
     }
+    // 0.8.8 — the player can pin either end of the lane on the Build page.
+    // A null selection falls back to the old best-spread auto-search, so the
+    // one-press flow still works.
+    const pOpts = this.lanePartnerOptions(mine);
+    const gOpts = this.laneGoodsOptions(mine);
+    const wantPartner = pOpts[this._lanePartnerIdx % pOpts.length]?.id ?? null;
+    const wantGoods = gOpts[this._laneGoodsIdx % gOpts.length]?.id ?? null;
     let best: { partnerId: number; partnerName: string; commodity: string; pay: number } | null = null;
     for (const sid of this.stationStocks.keys()) {
       if (sid === mine.entityId) continue;
+      if (wantPartner != null && sid !== wantPartner) continue;
       const ent = this.byId(sid);
       if (!ent || ent.kind !== "station") continue;
       const stock = this.stationStocks.get(sid)!;
       for (const c of stock.commodities) {
+        if (wantGoods != null && c.id !== wantGoods) continue;
         if (isContraband(c.id, ent.faction ?? "guild")) continue;
         if (mine.routes.some((r) => r.commodity === c.id && r.partnerId === sid)) continue;
         if (!best || c.buy > best.pay) {
@@ -11815,7 +11881,9 @@ export class Voidwake {
       }
     }
     if (!best) {
-      this.pushLog("No charted market will sign a lane yet — visit a few more docks.");
+      this.pushLog(wantPartner != null || wantGoods != null
+        ? "That dock won't sign for those goods — try another pairing or set both ends to Auto."
+        : "No charted market will sign a lane yet — visit a few more docks.");
       return;
     }
     const fee = 8000;
