@@ -2302,11 +2302,14 @@ const EXTRA_TEMPLATES_088: Partial<Record<ChatterKind, string[]>> = {
     "Brokerage window's open if you're in the freight business, Captain.",
   ],
 };
-for (const [k, lines] of Object.entries({ ...EXTRA_TEMPLATES, ...mergeArrays(EXTRA_TEMPLATES_088, EXTRA_TEMPLATES) } as Partial<Record<ChatterKind, string[]>>)) {
-  const key = k as ChatterKind;
-  if (TEMPLATES[key]) TEMPLATES[key].push(...(lines ?? []));
-  else TEMPLATES[key] = [...(lines ?? [])];
+for (const pool of [EXTRA_TEMPLATES, EXTRA_TEMPLATES_088]) {
+  for (const [k, lines] of Object.entries(pool)) {
+    const key = k as ChatterKind;
+    if (TEMPLATES[key]) TEMPLATES[key].push(...(lines ?? []));
+    else TEMPLATES[key] = [...(lines ?? [])];
+  }
 }
+
 
 
 type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
