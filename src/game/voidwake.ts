@@ -109,7 +109,20 @@ export type ScriptHookName =
   // 0.8.7 — contract log & station trade routes
   | "onMissionAccepted"
   | "onMissionAbandoned"
-  | "onTradeRouteEstablished";
+  | "onTradeRouteEstablished"
+  // 0.8.8 — hook audit: events that fired only as log lines before now
+  // dispatch too, so a mod can react to the whole player lifecycle.
+  | "onMissionCompleted"
+  | "onCrewHired"
+  | "onCrewLeft"
+  | "onRankUp"
+  | "onModuleInstalled"
+  | "onStationFounded"
+  | "onWormholeJump"
+  | "onPlayerDestroyed"
+  | "onStowawayRevealed"
+  | "onTradeRouteClosed";
+
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
