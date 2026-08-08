@@ -2252,11 +2252,62 @@ const EXTRA_TEMPLATES: Partial<Record<ChatterKind, string[]>> = {
     "Nothing to report but weather and gossip. Both are bad.",
   ],
 };
-for (const [k, lines] of Object.entries(EXTRA_TEMPLATES)) {
+// 0.8.8 — second extra pool. Same merge rules; kept separate so each
+// milestone's additions stay auditable.
+const EXTRA_TEMPLATES_088: Partial<Record<ChatterKind, string[]>> = {
+  crew_ctx_contracts: [
+    "Three jobs pinned and one of them lies about its deadline.",
+    "Contract log's full, Captain. So is my patience with the filing system.",
+    "I sorted the log by reward. Morale improved immediately.",
+    "Every contract says 'routine'. None of them mean it.",
+  ],
+  crew_ctx_mission: [
+    "Objective's still out there being an objective at us.",
+    "Deadline math says we're fine. Deadline math has lied before.",
+    "I'd like the record to show I read the fine print this time.",
+  ],
+  player_station_report: [
+    "Freight lane's running clean, Captain. Convoy's already home.",
+    "Our dock made money while you were being shot at. Efficient.",
+    "Lane manifest balanced to the credit. I checked twice, then bragged.",
+    "Treasury's up. The accountant did a small, undignified dance.",
+  ],
+  quartermaster_idle: [
+    "I picked the lane goods myself. If it loses money, blame the market.",
+    "A well-chosen freight lane is just patience with a spreadsheet.",
+    "Our warehouse has a favorite commodity now. It's territorial.",
+  ],
+  navigator_idle: [
+    "Bookmarked a lane endpoint. Future us will send thanks.",
+    "Plotted the convoy route. It's boring, which is the highest praise.",
+  ],
+  pilot_idle: [
+    "Convoy waved at us. I waved back. Diplomacy achieved.",
+    "Somebody's freight lane crosses ours. I yielded. Once.",
+  ],
+  engineer_idle: [
+    "Station-side pumps run smoother than ours. I'm not jealous, I'm noting it.",
+    "Gave our lane hauler a spare gasket. Consider it foreign aid.",
+  ],
+  dealer_generic: [
+    "You own a station? Then you own a parking problem. I sell solutions.",
+    "Trade lanes are lovely, but lanes don't hug you at night. Hulls do.",
+  ],
+  npc_ctx_hauler: [
+    "Somebody opened a new lane out here. Wages went up. Miracle.",
+    "Half my manifest belongs to a private dock now. Times change.",
+  ],
+  station: [
+    "Lane traffic's steady. Keep your vector clean and we'll all get paid.",
+    "Brokerage window's open if you're in the freight business, Captain.",
+  ],
+};
+for (const [k, lines] of Object.entries({ ...EXTRA_TEMPLATES, ...mergeArrays(EXTRA_TEMPLATES_088, EXTRA_TEMPLATES) } as Partial<Record<ChatterKind, string[]>>)) {
   const key = k as ChatterKind;
   if (TEMPLATES[key]) TEMPLATES[key].push(...(lines ?? []));
   else TEMPLATES[key] = [...(lines ?? [])];
 }
+
 
 type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
 interface Mission {
