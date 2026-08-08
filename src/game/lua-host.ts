@@ -46,8 +46,12 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onWingHired", "onWingLost",
   // 0.8.7 — contract log & station trade routes
   "onMissionAccepted", "onMissionAbandoned", "onTradeRouteEstablished",
-
+  // 0.8.8 — lifecycle hook audit
+  "onMissionCompleted", "onCrewHired", "onCrewLeft", "onRankUp",
+  "onModuleInstalled", "onStationFounded", "onWormholeJump",
+  "onPlayerDestroyed", "onStowawayRevealed", "onTradeRouteClosed",
 ];
+
 
 export interface LuaHostBridge {
   pushLog: (msg: string) => void;
