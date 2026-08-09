@@ -13526,20 +13526,39 @@ export class Voidwake {
             g[sy2][sx] = { ch: glyph, color: tint.fill };
           }
         } else {
-          const spriteKey = (e.kind === "friendly" && (e.faction === "patrol" || e.faction === "wing")) ? "patrol" : e.kind;
-          const variants = SHIP_SPRITES[spriteKey] ?? SHIP_SPRITES[e.kind];
-          const sprite = variants[Math.floor(hash01(e.id) * variants.length)];
+          // 0.8.9 — hull-class silhouettes. Each ship resolves to one of 15
+          // classes; big hulls get a 5x3 stamp once they're close enough for
+          // the extra cells to read, and every ship carries a blinking nav
+          // light so traffic reads as живой hardware rather than static ink.
+          const cls = shipClassOf(e);
+          const wide = cls.wide && rCells >= 2.2 ? cls.wide : null;
+          const halfW = wide ? 2 : 1;
+          const sprite = wide ?? cls.art;
           for (let dy = -1; dy <= 1; dy++) {
             const row = sprite[dy + 1];
-            for (let dx = -1; dx <= 1; dx++) {
-              const ch = row[dx + 1];
+            for (let dx = -halfW; dx <= halfW; dx++) {
+              const ch = row[dx + halfW];
               if (ch === " ") continue;
               const gx = sx + dx, gy = sy2 + dy;
               if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
               g[gy][gx] = { ch, color: tint.fill };
             }
           }
+          // Nav light: blinks on a per-ship phase so a lane of traffic
+          // twinkles out of sync. Only drawn when the hull is legible.
+          if (cls.light && rCells >= 1.6) {
+            const t = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+            const phase = hash01(e.id * 4441) * Math.PI * 2;
+            if (Math.sin(t * 3.1 + phase) > 0.35) {
+              const lx = sx + (wide ? cls.light[0] : Math.sign(cls.light[0]));
+              const ly = sy2 + cls.light[1];
+              if (lx > vpLeft && lx < vpRight && ly > vpTop && ly < vpBottom) {
+                g[ly][lx] = { ch: "·", color: tint.edge ?? tint.fill, glow: true };
+              }
+            }
+          }
         }
+
 
         // Label far-enough ships so the player can identify what they see.
         if (rCells >= 1.5 && e.name) {
