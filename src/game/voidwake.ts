@@ -6716,7 +6716,34 @@ export class Voidwake {
       case "character": this.updateCharacterSheet(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
+    // 0.8.9 — centralised script watchers. Screen transitions and player
+    // damage happen at dozens of callsites (menus, collisions, weapons,
+    // flares, customs), so rather than instrument each one we diff the
+    // observable state once per frame and dispatch from here. Cheap, and it
+    // can never miss a path a future feature adds.
+    if (this.screen !== screenBefore) {
+      dispatchHook("onScreenChange", { from: screenBefore, to: this.screen });
+    }
+    const pw = this.player;
+    if (pw) {
+      const hull = pw.ship.hull, shield = pw.ship.shield ?? 0;
+      const ph = this._lastHullSeen, ps = this._lastShieldSeen;
+      if (ph != null && ps != null && (hull < ph - 0.001 || shield < ps - 0.001)) {
+        dispatchHook("onPlayerDamaged", {
+          hullLost: Math.max(0, ph - hull), shieldLost: Math.max(0, ps - shield),
+          hull, shield, hullMax: pw.ship.hullMax,
+        });
+      }
+      this._lastHullSeen = hull;
+      this._lastShieldSeen = shield;
+    } else {
+      this._lastHullSeen = null;
+      this._lastShieldSeen = null;
+    }
   }
+  private _lastHullSeen: number | null = null;
+  private _lastShieldSeen: number | null = null;
+
 
   // --- Crash screen (caught exception) ------------------------------------
   crashedItems = ["Load Last Save", "Return to Main Menu", "Reload Page"];
