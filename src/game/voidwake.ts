@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.8";
+const VERSION = "0.8.9";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -121,7 +121,18 @@ export type ScriptHookName =
   | "onWormholeJump"
   | "onPlayerDestroyed"
   | "onStowawayRevealed"
-  | "onTradeRouteClosed";
+  | "onTradeRouteClosed"
+  // 0.8.9 — visual-variety milestone hook pass. Spawn tagging, player damage,
+  // screen transitions, mining/salvage yields, market rotation, reputation and
+  // crew progression all dispatch so a mod can observe the full session.
+  | "onEntitySpawned"
+  | "onPlayerDamaged"
+  | "onScreenChange"
+  | "onOreMined"
+  | "onSalvageCollected"
+  | "onMarketCycle"
+  | "onReputationChange"
+  | "onCrewLevelUp";
 
 
 
@@ -163,6 +174,14 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPlayerDestroyed:    [],
   onStowawayRevealed:   [],
   onTradeRouteClosed:   [],
+  onEntitySpawned:      [],
+  onPlayerDamaged:      [],
+  onScreenChange:       [],
+  onOreMined:           [],
+  onSalvageCollected:   [],
+  onMarketCycle:        [],
+  onReputationChange:   [],
+  onCrewLevelUp:        [],
 
 
 };
@@ -3614,7 +3633,9 @@ function cargoTotal(p: PlayerState) {
 // Federation/Guild standing slightly; killing a friendly/neutral tanks it.
 function adjustRep(p: PlayerState, faction: string, delta: number) {
   if (!p.reputation) p.reputation = { federation: 0, guild: 0, pirate: 0 };
-  p.reputation[faction] = (p.reputation[faction] ?? 0) + delta;
+  const before = p.reputation[faction] ?? 0;
+  p.reputation[faction] = before + delta;
+  dispatchHook("onReputationChange", { faction, delta, before, after: p.reputation[faction] });
 }
 // 0.8.4 — Price of an expungement at a Bounty Office: 120cr per point of
 // standing bought back, floored at 300cr so it's never trivially cheap.
@@ -4086,8 +4107,18 @@ function crewLevel(c: { xp?: number }): number {
 }
 function grantCrewXP(p: PlayerState, amount: number) {
   if (amount <= 0) return;
-  if (p.gunner) p.gunner.xp = (p.gunner.xp ?? 0) + amount;
-  if (p.crew) for (const c of p.crew) c.xp = (c.xp ?? 0) + amount;
+  // 0.8.9 — level crossings dispatch onCrewLevelUp so mods can hand out
+  // perks / chatter when a crewmate graduates a tier.
+  const bump = (c: { name?: string; role?: string; xp?: number }) => {
+    const before = crewLevel(c);
+    c.xp = (c.xp ?? 0) + amount;
+    const after = crewLevel(c);
+    if (after > before) {
+      dispatchHook("onCrewLevelUp", { name: c.name ?? "Crew", role: c.role ?? "gunner", level: after, xp: c.xp });
+    }
+  };
+  if (p.gunner) bump(p.gunner as unknown as { name?: string; role?: string; xp?: number });
+  if (p.crew) for (const c of p.crew) bump(c as unknown as { name?: string; role?: string; xp?: number });
 }
 // 0.6.3 — returns the on-crew member's level for a given role, or 0 when
 // unstaffed. Callers use this to derive small per-level gameplay perks so
@@ -5091,9 +5122,12 @@ function tintFor(e: Entity): { fill: string; edge: string } {
         const i = Math.floor(h * DEBRIS_FILLS.length);
         return { fill: DEBRIS_FILLS[i], edge: "#2a2a30" };
       }
-      const i = Math.floor(h * ASTEROID_FILLS.length);
-      return { fill: ASTEROID_FILLS[i], edge: "#5a4838" };
+      // 0.8.9 — mineral class drives the rock palette (metallic, icy,
+      // carbonaceous, crystalline) instead of one warm-beige ramp.
+      const rc = rockClassOf(e);
+      return { fill: rc.fills[Math.floor(h * rc.fills.length)], edge: rc.edge };
     }
+
     case "nebula": {
       const p = nebulaPalette(e);
       return { fill: p[0], edge: p[1] };
@@ -5111,7 +5145,7 @@ function surfaceChar(e: Entity, gx: number, gy: number, onEdge: boolean, edgeCh:
   const palette =
     e.kind === "planet"  ? PLANET_TEX :
     e.kind === "station" ? STATION_TEX :
-    e.kind === "asteroid"? (isWreck(e) ? DEBRIS_TEX : ASTEROID_TEX) :
+    e.kind === "asteroid"? (isWreck(e) ? DEBRIS_TEX : rockClassOf(e).tex) :
     null;
   if (!palette) return fillCh;
   const h = hash01(e.id * 131 + gx * 1009 + gy * 7919);
@@ -5126,35 +5160,107 @@ function surfaceChar(e: Entity, gx: number, gy: number, onEdge: boolean, edgeCh:
   return palette[Math.floor(h * palette.length)];
 }
 
-// 3x3 ship silhouettes per faction. Multiple variants per faction so different
-// hostiles / freighters look like distinct hulls rather than identical dots.
-const SHIP_SPRITES: Record<string, string[][]> = {
-  hostile: [
-    [" ^ ", "<X>", " v "],
-    ["/^\\", "<#>", "\\v/"],
-    [".^.", "[=}", " v "],
-    [" A ", "{x}", " V "],
-  ],
-  friendly: [
-    [" ^ ", "[=>", " v "],
-    ["/^\\", "<O>", "\\v/"],
-    [" . ", "(=]", " ' "],
-  ],
-  // SPD Patrol cruisers — deliberately blockier / more armored-looking than a
-  // civilian friendly so the player can eyeball law enforcement at a glance.
-  patrol: [
-    ["[^]", "|#|", "[v]"],
-    ["/T\\", "[@]", "\\T/"],
-    [".T.", "{#}", "'T'"],
-    ["|^|", "[X]", "|v|"],
-  ],
-  neutral: [
-    [" . ", "(o)", " ' "],
-    [" ~ ", "[=]", " ~ "],
-    [" ^ ", "<o>", " v "],
-    ["___", "[D]", "   "],
-  ],
+// =============================================================================
+// 0.8.9 — Hull classes, station archetypes & rock mineralogy
+// -----------------------------------------------------------------------------
+// The 0.8.x sprite tables gave each faction 3-4 silhouettes, which still meant
+// a busy shipping lane read as four repeated stamps. Hull *classes* sit on top
+// of that: every ship resolves to one of 15 classes with its own 3x3 stamp and,
+// for the big hulls, a 5x3 "wide" stamp used once the ship is close enough for
+// the extra cells to be legible. Class is deterministic (name keywords, boss
+// flag, then hash of the entity id) so a given ship never shape-shifts, and it
+// is exposed to scripts through `frontier.entities.list()` as `shipClass`.
+type ShipClassDef = {
+  id: string;
+  label: string;
+  art: string[];             // 3 rows x 3 cols
+  wide?: string[];           // 3 rows x 5 cols, used at rCells >= 2.2
+  light?: [number, number];  // nav-light cell offset (dx, dy) from center
 };
+const SHIP_CLASSES: Record<string, ShipClassDef> = {
+  // --- hostile -------------------------------------------------------------
+  dart:        { id: "dart",        label: "Dart",         art: [" ^ ", "<x>", " ' "], light: [1, 0] },
+  corsair:     { id: "corsair",     label: "Corsair",      art: ["/^\\", "<#>", "\\v/"], wide: ["_/^\\_", "<[#]>", " \\v/ "], light: [-2, 0] },
+  marauder:    { id: "marauder",    label: "Marauder",     art: [".^.", "[=}", "'v'"], wide: [".-^-.", "[[=}}", "'-v-'"], light: [2, -1] },
+  reaver:      { id: "reaver",      label: "Reaver",       art: [" A ", "{x}", " V "], light: [0, -1] },
+  dreadnought: { id: "dreadnought", label: "Dreadnought",  art: ["[A]", "{#}", "[V]"], wide: ["[=A=]", "{{#}}", "[=V=]"], light: [-2, 1] },
+  // --- friendly / wing -----------------------------------------------------
+  courier:     { id: "courier",     label: "Courier",      art: [" ^ ", "[=>", " ' "], light: [-1, 0] },
+  frigate:     { id: "frigate",     label: "Frigate",      art: ["/^\\", "<O>", "\\v/"], wide: ["-/^\\-", "<(O)>", "-\\v/-"], light: [2, 0] },
+  escort:      { id: "escort",      label: "Escort",       art: [" . ", "(=]", " ' "], light: [1, -1] },
+  // --- patrol (SPD) --------------------------------------------------------
+  cutter:      { id: "cutter",      label: "Cutter",       art: ["[^]", "|#|", "[v]"], light: [0, -1] },
+  cruiser:     { id: "cruiser",     label: "Cruiser",      art: ["/T\\", "[@]", "\\T/"], wide: ["/=T=\\", "[[@]]", "\\=T=/"], light: [-2, 0] },
+  interdictor: { id: "interdictor", label: "Interdictor",  art: ["|^|", "[X]", "|v|"], wide: ["|=^=|", "[[X]]", "|=v=|"], light: [2, 1] },
+  // --- neutral / civilian --------------------------------------------------
+  hauler:      { id: "hauler",      label: "Hauler",       art: [" ~ ", "[=]", " ~ "], wide: [" ~~~ ", "[==-]", " ~~~ "], light: [-2, -1] },
+  freighter:   { id: "freighter",   label: "Freighter",    art: ["___", "[D]", "   "], wide: ["_____", "[DDD]", "  '  "], light: [2, -1] },
+  prospector:  { id: "prospector",  label: "Prospector",   art: [" o ", "(o)", " ' "], light: [1, 1] },
+  liner:       { id: "liner",       label: "Liner",        art: ["...", "[o]", "'''"], wide: [".....", "[ooo]", "'''''"], light: [-2, 0] },
+};
+const SHIP_CLASS_POOLS: Record<string, string[]> = {
+  hostile:  ["dart", "corsair", "marauder", "reaver"],
+  friendly: ["courier", "frigate", "escort"],
+  patrol:   ["cutter", "cruiser", "interdictor"],
+  neutral:  ["hauler", "freighter", "prospector", "liner"],
+};
+/** Deterministic hull class for a ship entity. */
+function shipClassOf(e: Entity): ShipClassDef {
+  const n = (e.name ?? "").toLowerCase();
+  if (e.boss) return SHIP_CLASSES.dreadnought;
+  if (/hauler|freight|mule|barge|convoy/.test(n)) return SHIP_CLASSES.freighter;
+  if (/trader|merchant|tender/.test(n))           return SHIP_CLASSES.hauler;
+  if (/liner|transport|pilgrim/.test(n))          return SHIP_CLASSES.liner;
+  if (/miner|prospect|pickaxe|rig/.test(n))       return SHIP_CLASSES.prospector;
+  if (/courier|runner|post/.test(n))              return SHIP_CLASSES.courier;
+  const pool =
+    (e.kind === "friendly" && (e.faction === "patrol" || e.faction === "wing"))
+      ? SHIP_CLASS_POOLS.patrol
+      : SHIP_CLASS_POOLS[e.kind] ?? SHIP_CLASS_POOLS.neutral;
+  const id = pool[Math.floor(hash01(e.id * 7717) * pool.length)];
+  return SHIP_CLASSES[id] ?? SHIP_CLASSES.dart;
+}
+
+// Station archetypes. NPC stations previously drew as a hash-textured sphere
+// plus a 3x3 faction stamp, so a Guild post and a mining platform were the
+// same bubble in two colors. Each station now also resolves to a 5x5 structural
+// archetype — torus rings, spindles, drydock cradles, foundry stacks — drawn
+// over the sphere once the station is big enough on screen (rx >= 4).
+type StationArchetype = { id: string; label: string; art: string[] };
+const STATION_ARCHETYPES: StationArchetype[] = [
+  { id: "torus",   label: "Torus Ring",     art: [" .-. ", "/ o \\", "| # |", "\\ o /", " '-' "] },
+  { id: "spindle", label: "Spindle",        art: ["  |  ", " /#\\ ", "<=#=>", " \\#/ ", "  |  "] },
+  { id: "cluster", label: "Pod Cluster",    art: ["o   o", " \\ / ", " (#) ", " / \\ ", "o   o"] },
+  { id: "drydock", label: "Drydock",        art: ["[---]", "|   |", "|=#=|", "|   |", "[---]"] },
+  { id: "foundry", label: "Foundry Stack",  art: ["^ ^ ^", "|=|=|", " [#] ", "|=|=|", "_____"] },
+  { id: "array",   label: "Sensor Array",   art: ["\\ | /", " \\|/ ", "--#--", " /|\\ ", "/ | \\"] },
+  { id: "hive",    label: "Hive Warren",    art: [" o o ", "o###o", " #@# ", "o###o", " o o "] },
+];
+function stationArchetypeOf(e: Entity): StationArchetype {
+  return STATION_ARCHETYPES[Math.floor(hash01(e.id * 3313) * STATION_ARCHETYPES.length)];
+}
+
+// Rock mineralogy. Real asteroid belts are not uniformly beige: metallic
+// M-types, icy volatiles, sooty carbonaceous rubble, and rare crystalline
+// bodies all look different through a viewport. Mineral class is deterministic
+// per rock, drives the fill palette and glyph set, and is surfaced to the
+// target panel and to scripts as `rockClass`.
+type RockClass = { id: string; label: string; fills: string[]; edge: string; tex: string[] };
+const ROCK_CLASSES: RockClass[] = [
+  { id: "carbon",  label: "C-type carbonaceous", fills: ["#6a5e52", "#544a40", "#7a6c5c"], edge: "#3a322a", tex: [".", ":", "%", "·"] },
+  { id: "silicate",label: "S-type silicate",     fills: ASTEROID_FILLS, edge: "#5a4838", tex: ASTEROID_TEX },
+  { id: "metallic",label: "M-type metallic",     fills: ["#b9c2cc", "#8f9aa6", "#d2dae2"], edge: "#5d6874", tex: ["#", "=", "8", "%"] },
+  { id: "icy",     label: "Volatile ice body",   fills: ["#bfe8ff", "#9fd4f0", "#e4f6ff"], edge: "#5e8ea8", tex: ["*", "·", "o", ":"] },
+  { id: "crystal", label: "Crystalline vein",    fills: ["#d9a6ff", "#b478e0", "#f0d0ff"], edge: "#6a3a8a", tex: ["◆", "*", "%", "·"] },
+];
+function rockClassOf(e: Entity): RockClass {
+  // Crystalline bodies stay rare (~8%); the rest split evenly-ish.
+  const h = hash01(e.id * 9973);
+  if (h > 0.92) return ROCK_CLASSES[4];
+  return ROCK_CLASSES[Math.floor((h / 0.92) * 4) % 4];
+}
+
+
 
 // =============================================================================
 // 11. Main engine class
@@ -5796,6 +5902,7 @@ export class Voidwake {
       const ent = this.entities.find((x) => x.id === stationId);
       const faction = ent?.faction ?? "guild";
       s = generateStationStock(stationId, faction, today);
+      dispatchHook("onMarketCycle", { stationId, faction, day: today, station: ent?.name ?? "?" });
       // 0.5.6 — Colony jitter. Populated planets pay noticeably more for
       // ore (colonies always need refinery feedstock), charge a small
       // premium on fuel (no atmosphere refinery), and use a colony-specific
@@ -6609,7 +6716,34 @@ export class Voidwake {
       case "character": this.updateCharacterSheet(); break;
     }
     this.noteImplicitTitleReturn(screenBefore, noticeAtBefore);
+    // 0.8.9 — centralised script watchers. Screen transitions and player
+    // damage happen at dozens of callsites (menus, collisions, weapons,
+    // flares, customs), so rather than instrument each one we diff the
+    // observable state once per frame and dispatch from here. Cheap, and it
+    // can never miss a path a future feature adds.
+    if (this.screen !== screenBefore) {
+      dispatchHook("onScreenChange", { from: screenBefore, to: this.screen });
+    }
+    const pw = this.player;
+    if (pw) {
+      const hull = pw.ship.hull, shield = pw.ship.shield ?? 0;
+      const ph = this._lastHullSeen, ps = this._lastShieldSeen;
+      if (ph != null && ps != null && (hull < ph - 0.001 || shield < ps - 0.001)) {
+        dispatchHook("onPlayerDamaged", {
+          hullLost: Math.max(0, ph - hull), shieldLost: Math.max(0, ps - shield),
+          hull, shield, hullMax: pw.ship.hullMax,
+        });
+      }
+      this._lastHullSeen = hull;
+      this._lastShieldSeen = shield;
+    } else {
+      this._lastHullSeen = null;
+      this._lastShieldSeen = null;
+    }
   }
+  private _lastHullSeen: number | null = null;
+  private _lastShieldSeen: number | null = null;
+
 
   // --- Crash screen (caught exception) ------------------------------------
   crashedItems = ["Load Last Save", "Return to Main Menu", "Reload Page"];
@@ -8085,6 +8219,11 @@ export class Voidwake {
     if (p.record) p.record.mined += take;
     awardXP(p, 2);
     this.pushLog(`Mined ${take} ore.`);
+    dispatchHook("onOreMined", {
+      amount: take, remaining: t.ore ?? 0, asteroidId: t.id,
+      rockClass: (t.name === "debris" || t.name === "wreckage") ? "wreckage" : rockClassOf(t).id,
+      totalOre: p.cargo.ore ?? 0,
+    });
     // 0.7.5 — Salvaging ship debris (kind="asteroid" repurposed on death)
     // occasionally yields scrap credits or a stray commodity crate on top
     // of the ore payout. Real asteroids stay ore-only.
@@ -8096,10 +8235,12 @@ export class Voidwake {
       if (pick && cargoTotal(p) < p.ship.cargoMax) {
         p.cargo[pick.id] = (p.cargo[pick.id] ?? 0) + 1;
         this.pushLog(`✦ Salvaged 1 ${pick.name} from the wreck.`);
+        dispatchHook("onSalvageCollected", { kind: "commodity", commodityId: pick.id, name: pick.name, amount: 1, wreckId: t.id });
       } else {
         const scrap = 8 + Math.floor(Math.random() * 20);
         p.credits += scrap;
         this.pushLog(`✦ Scrap sold in-transit — +${scrap}cr`);
+        dispatchHook("onSalvageCollected", { kind: "scrap", credits: scrap, wreckId: t.id });
       }
     }
     // Rare: ~1-in-50 chance the fragment is an "encoded relic" — pays a
@@ -9810,6 +9951,14 @@ export class Voidwake {
         vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
         faction, hull, shield: 30, state: "wander", cooldown: 0, weaponId: "pulse",
       });
+      // 0.8.9 — hand the fresh entity to scripts so mods can tag / re-skin
+      // runtime spawns (patrols, raiders, haulers) as they enter the world.
+      const spawned = this.entities[this.entities.length - 1];
+      dispatchHook("onEntitySpawned", {
+        id: spawned.id, kind: spawned.kind, name: spawned.name, faction: spawned.faction,
+        hull: spawned.hull, shipClass: shipClassOf(spawned).id,
+        x: spawned.pos.x, y: spawned.pos.y, z: spawned.pos.z,
+      });
     };
 
     if (this._nextCivSpawnAt <= 0) {
@@ -10409,8 +10558,13 @@ export class Voidwake {
               if (dx * dx + dy * dy + dz * dz > r2) continue;
             }
             out.push({
-              idx: i, kind: e.kind, name: e.name, faction: e.faction,
+              idx: i, id: e.id, kind: e.kind, name: e.name, faction: e.faction,
               x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
+              // 0.8.9 — expose the new visual taxonomies so content mods can
+              // key chatter / behaviour off hull class and rock mineralogy.
+              shipClass: (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") ? shipClassOf(e).id : undefined,
+              rockClass: e.kind === "asteroid" && !isWreck(e) ? rockClassOf(e).id : undefined,
+              stationClass: e.kind === "station" ? stationArchetypeOf(e).id : undefined,
             });
           }
           return out;
@@ -10419,9 +10573,12 @@ export class Voidwake {
           const e = this.entities[idx];
           if (!e) return null;
           return {
-            idx, kind: e.kind, name: e.name, faction: e.faction,
+            idx, id: e.id, kind: e.kind, name: e.name, faction: e.faction,
             x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
             hull: e.hull, shield: e.shield,
+            shipClass: (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") ? shipClassOf(e).id : undefined,
+            rockClass: e.kind === "asteroid" && !isWreck(e) ? rockClassOf(e).id : undefined,
+            stationClass: e.kind === "station" ? stationArchetypeOf(e).id : undefined,
           };
         },
         chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
@@ -13421,20 +13578,39 @@ export class Voidwake {
             g[sy2][sx] = { ch: glyph, color: tint.fill };
           }
         } else {
-          const spriteKey = (e.kind === "friendly" && (e.faction === "patrol" || e.faction === "wing")) ? "patrol" : e.kind;
-          const variants = SHIP_SPRITES[spriteKey] ?? SHIP_SPRITES[e.kind];
-          const sprite = variants[Math.floor(hash01(e.id) * variants.length)];
+          // 0.8.9 — hull-class silhouettes. Each ship resolves to one of 15
+          // classes; big hulls get a 5x3 stamp once they're close enough for
+          // the extra cells to read, and every ship carries a blinking nav
+          // light so traffic reads as live hardware rather than static ink.
+          const cls = shipClassOf(e);
+          const wide = cls.wide && rCells >= 2.2 ? cls.wide : null;
+          const halfW = wide ? 2 : 1;
+          const sprite = wide ?? cls.art;
           for (let dy = -1; dy <= 1; dy++) {
             const row = sprite[dy + 1];
-            for (let dx = -1; dx <= 1; dx++) {
-              const ch = row[dx + 1];
+            for (let dx = -halfW; dx <= halfW; dx++) {
+              const ch = row[dx + halfW];
               if (ch === " ") continue;
               const gx = sx + dx, gy = sy2 + dy;
               if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
               g[gy][gx] = { ch, color: tint.fill };
             }
           }
+          // Nav light: blinks on a per-ship phase so a lane of traffic
+          // twinkles out of sync. Only drawn when the hull is legible.
+          if (cls.light && rCells >= 1.6) {
+            const t = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+            const phase = hash01(e.id * 4441) * Math.PI * 2;
+            if (Math.sin(t * 3.1 + phase) > 0.35) {
+              const lx = sx + (wide ? cls.light[0] : Math.sign(cls.light[0]));
+              const ly = sy2 + cls.light[1];
+              if (lx > vpLeft && lx < vpRight && ly > vpTop && ly < vpBottom) {
+                g[ly][lx] = { ch: "·", color: tint.edge ?? tint.fill, glow: true };
+              }
+            }
+          }
         }
+
 
         // Label far-enough ships so the player can identify what they see.
         if (rCells >= 1.5 && e.name) {
@@ -13807,6 +13983,37 @@ export class Voidwake {
           }
         }
       }
+
+      // 0.8.9 — Station structural archetype. Once a station is big enough on
+      // screen (rx >= 4) overprint a 5x5 structure stamp — torus ring, spindle,
+      // pod cluster, drydock cradle, foundry stack, sensor array, hive warren —
+      // around the faction silhouette. The inner 3x3 is skipped so the faction
+      // stamp drawn above stays readable; only the outer ring is painted, which
+      // is what gives each station its distinct outline. Plus a blinking
+      // docking beacon so stations read as powered infrastructure.
+      if (e.kind === "station" && rx >= 4) {
+        const arch = stationArchetypeOf(e);
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) continue; // keep faction stamp
+            const ch = arch.art[dy + 2][dx + 2];
+            if (ch === " ") continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            g[gy][gx] = { ch, color: tint.edge ?? tint.fill };
+          }
+        }
+        const t = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+        const bphase = hash01(e.id * 5171) * Math.PI * 2;
+        if (Math.sin(t * 2.2 + bphase) > 0) {
+          const by = sy2 - Math.max(3, ry);
+          if (sx > vpLeft && sx < vpRight && by > vpTop && by < vpBottom) {
+            g[by][sx] = { ch: "*", color: e.faction === "pirate" ? "#ff6a5a" : "#8ef0ff", glow: true };
+          }
+        }
+      }
+
+
 
 
 
@@ -14318,7 +14525,15 @@ export class Voidwake {
     if (t) {
       const d = V.len(V.sub(t.pos, p.pos));
       putText(g, panelX, cy2 + 2, `${t.name}`, "#fff");
-      putText(g, panelX, cy2 + 3, `${t.kind}  d=${d.toFixed(0)}u`, "#9fe");
+      // 0.8.9 — classify the contact: hull class for ships, structural
+      // archetype for stations, mineral class for rocks. Sits next to the
+      // kind/distance line so the silhouette on screen has a name.
+      const klass =
+        (t.kind === "hostile" || t.kind === "friendly" || t.kind === "neutral") ? shipClassOf(t).label :
+        t.kind === "station" ? stationArchetypeOf(t).label :
+        (t.kind === "asteroid" && !isWreck(t)) ? rockClassOf(t).label : null;
+      putText(g, panelX, cy2 + 3, `${klass ? klass.slice(0, 16) : t.kind}  d=${d.toFixed(0)}u`, "#9fe");
+
       if (t.pilotName) putText(g, panelX, cy2 + 4, `pilot: ${t.pilotName}`, "#ffd680");
       if (t.hull !== undefined) putText(g, panelX, cy2 + (t.pilotName ? 5 : 4), `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
     } else {

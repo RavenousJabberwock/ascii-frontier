@@ -233,6 +233,18 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   **Auto** to keep the old best-spread search. Only goods the partner dock can
   legally take are offered.
 
+**Reading contacts** (0.8.9): every ship now belongs to one of fifteen hull
+classes (Dart, Corsair, Marauder, Reaver, Dreadnought, Courier, Frigate,
+Escort, Cutter, Cruiser, Interdictor, Hauler, Freighter, Prospector, Liner)
+with its own silhouette — the big hulls widen to a five-cell stamp when you get
+close, and each ship blinks a nav light on its own rhythm. Stations add a 5x5
+structural archetype (torus ring, spindle, pod cluster, drydock, foundry stack,
+sensor array, hive warren) around the faction stamp and blink a docking beacon.
+Asteroids are classed by mineralogy — C-type, S-type, M-type metallic,
+volatile ice and rare crystalline veins each look different. The TARGET panel
+names whichever class you have locked, so the silhouette on screen always has
+a name.
+
 Bookmarked waypoints also paint in the flight view (0.8.6) as a `◇` marker
 with the name and live distance — bright while the original contact is still on
 sensors, dim when only the stored coordinates remain.

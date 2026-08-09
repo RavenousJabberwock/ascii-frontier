@@ -524,6 +524,18 @@ covering every hook shipped so far.
 | `onPlayerDestroyed` | `{ reason, killer, insured, cargoLost, rescuedBy }` | hull loss + rescue (0.8.8) |
 | `onStowawayRevealed`| `{ name, species, role, wage }`            | stowaway discovered (0.8.8) |
 | `onTradeRouteClosed`| `{ stationId, station, closed }`           | all lanes cleared (0.8.8) |
+| `onEntitySpawned`   | `{ id, kind, name, faction, hull, shipClass, x, y, z }` | runtime NPC spawn (0.8.9) |
+| `onPlayerDamaged`   | `{ hullLost, shieldLost, hull, shield, hullMax }` | per-frame damage watcher (0.8.9) |
+| `onScreenChange`    | `{ from, to }`                             | any screen transition (0.8.9) |
+| `onOreMined`        | `{ amount, remaining, asteroidId, rockClass, totalOre }` | `mineTarget()` (0.8.9) |
+| `onSalvageCollected`| `{ kind, commodityId?, name?, amount?, credits?, wreckId }` | wreck salvage roll (0.8.9) |
+| `onMarketCycle`     | `{ stationId, station, faction, day }`     | station stock regeneration (0.8.9) |
+| `onReputationChange`| `{ faction, delta, before, after }`        | `adjustRep()` (0.8.9) |
+| `onCrewLevelUp`     | `{ name, role, level, xp }`                | crew XP tier crossing (0.8.9) |
+
+0.8.9 adds three visual taxonomies to `frontier.entities.list()` /
+`.get()`: `shipClass` (one of 15 hull classes), `stationClass` (structural
+archetype) and `rockClass` (asteroid mineralogy), plus the raw entity `id`.
 
 0.8.7 also adds two read-only Lua getters: `frontier.contracts()` returns the
 active contract log (`id, kind, description, reward, done, tracked,

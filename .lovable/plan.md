@@ -1,3 +1,27 @@
+# 0.8.9 — Hull Classes, Station Archetypes & Rock Mineralogy
+
+Ships as **0.8.9**.
+
+- **Hull classes.** `SHIP_CLASSES` / `SHIP_CLASS_POOLS` / `shipClassOf()`
+  replace the old per-faction `SHIP_SPRITES` table. Class resolves from name
+  keywords, the `boss` flag, then a hash of the entity id, so silhouettes are
+  stable per ship. Classes with a `wide` 5x3 stamp switch to it at
+  `rCells >= 2.2`; every class carries a blinking nav-light offset.
+- **Station archetypes.** `STATION_ARCHETYPES` / `stationArchetypeOf()` paint a
+  5x5 structure ring around the existing 3x3 faction stamp at `rx >= 4` (the
+  inner 3x3 is skipped so the faction silhouette survives), plus a blinking
+  docking beacon above the hull.
+- **Rock mineralogy.** `ROCK_CLASSES` / `rockClassOf()` drive asteroid tint and
+  glyph palette (carbonaceous, silicate, metallic, icy, ~8% crystalline).
+- **Target panel.** Contact line names the hull class / station archetype /
+  mineral class instead of the bare entity kind.
+- **Hooks.** Eight new: `onEntitySpawned`, `onPlayerDamaged`, `onScreenChange`,
+  `onOreMined`, `onSalvageCollected`, `onMarketCycle`, `onReputationChange`,
+  `onCrewLevelUp`. Damage and screen transitions use a single per-frame
+  watcher at the end of `update()` so no future callsite can miss them.
+  `frontier.entities` now returns `id`, `shipClass`, `stationClass`,
+  `rockClass`.
+
 # 0.8.8 — Log Ergonomics, Manual Lanes & Hook Audit
 
 Ships as **0.8.8**.

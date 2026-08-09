@@ -4,6 +4,23 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.8.9 — Hull Classes, Station Archetypes & Rock Mineralogy
+- 15 hull classes (Dart, Corsair, Marauder, Reaver, Dreadnought, Courier,
+  Frigate, Escort, Cutter, Cruiser, Interdictor, Hauler, Freighter,
+  Prospector, Liner) with 5x3 wide silhouettes for big hulls up close and
+  per-ship blinking nav lights.
+- Seven station structural archetypes (torus ring, spindle, pod cluster,
+  drydock, foundry stack, sensor array, hive warren) overprinted around the
+  faction stamp, plus blinking docking beacons.
+- Asteroid mineralogy: C-type, S-type, M-type metallic, volatile ice and rare
+  crystalline bodies, each with its own palette and glyph set.
+- Target panel names the contact's hull class / station archetype / mineral
+  class instead of the bare entity kind.
+- Eight new scripting hooks: `onEntitySpawned`, `onPlayerDamaged`,
+  `onScreenChange`, `onOreMined`, `onSalvageCollected`, `onMarketCycle`,
+  `onReputationChange`, `onCrewLevelUp`; `shipClass` / `stationClass` /
+  `rockClass` exposed on entity queries.
+
 ## 0.8.8 — Log Ergonomics, Manual Lanes & Hook Audit
 - Contract Log: `S` cycles sort (accepted order / reward / deadline / kind),
   `F` cycles filter (all / ready / combat / freight / people / timed).
