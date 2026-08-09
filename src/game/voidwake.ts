@@ -5114,7 +5114,7 @@ function surfaceChar(e: Entity, gx: number, gy: number, onEdge: boolean, edgeCh:
   const palette =
     e.kind === "planet"  ? PLANET_TEX :
     e.kind === "station" ? STATION_TEX :
-    e.kind === "asteroid"? (isWreck(e) ? DEBRIS_TEX : ASTEROID_TEX) :
+    e.kind === "asteroid"? (isWreck(e) ? DEBRIS_TEX : rockClassOf(e).tex) :
     null;
   if (!palette) return fillCh;
   const h = hash01(e.id * 131 + gx * 1009 + gy * 7919);
