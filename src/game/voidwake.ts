@@ -13902,6 +13902,37 @@ export class Voidwake {
         }
       }
 
+      // 0.8.9 — Station structural archetype. Once a station is big enough on
+      // screen (rx >= 4) overprint a 5x5 structure stamp — torus ring, spindle,
+      // pod cluster, drydock cradle, foundry stack, sensor array, hive warren —
+      // around the faction silhouette. The inner 3x3 is skipped so the faction
+      // stamp drawn above stays readable; only the outer ring is painted, which
+      // is what gives each station its distinct outline. Plus a blinking
+      // docking beacon so stations read as powered infrastructure.
+      if (e.kind === "station" && rx >= 4) {
+        const arch = stationArchetypeOf(e);
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) continue; // keep faction stamp
+            const ch = arch.art[dy + 2][dx + 2];
+            if (ch === " ") continue;
+            const gx = sx + dx, gy = sy2 + dy;
+            if (gx <= vpLeft || gx >= vpRight || gy <= vpTop || gy >= vpBottom) continue;
+            g[gy][gx] = { ch, color: tint.edge ?? tint.fill };
+          }
+        }
+        const t = (typeof performance !== "undefined" ? performance.now() : 0) / 1000;
+        const bphase = hash01(e.id * 5171) * Math.PI * 2;
+        if (Math.sin(t * 2.2 + bphase) > 0) {
+          const by = sy2 - Math.max(3, ry);
+          if (sx > vpLeft && sx < vpRight && by > vpTop && by < vpBottom) {
+            g[by][sx] = { ch: "*", color: e.faction === "pirate" ? "#ff6a5a" : "#8ef0ff", glow: true };
+          }
+        }
+      }
+
+
+
 
 
       // 0.6.1 — Planetary rings. Roughly 1-in-5 planets (weighted toward
