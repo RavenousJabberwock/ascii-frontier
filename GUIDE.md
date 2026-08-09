@@ -85,6 +85,16 @@ Everything else is recoverable.
 
 ---
 
+### Reading the sky (0.8.9)
+
+Ships come in fifteen hull classes, each with a distinct ASCII silhouette;
+freighters, cruisers and dreadnoughts widen out as you close in, and every hull
+blinks its own nav light. Stations wear a structural archetype — ring, spindle,
+pod cluster, drydock, foundry, sensor array or hive — and blink a docking
+beacon. Asteroids are colour-coded by mineral class: sooty carbonaceous, warm
+silicate, bright metallic, pale ice, and rare violet crystalline. Lock a
+contact and the TARGET panel tells you exactly what you are looking at.
+
 ## 4. Encounters you'll actually meet
 
 | You'll see | What it means |
