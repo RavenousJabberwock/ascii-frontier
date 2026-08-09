@@ -50,6 +50,9 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onMissionCompleted", "onCrewHired", "onCrewLeft", "onRankUp",
   "onModuleInstalled", "onStationFounded", "onWormholeJump",
   "onPlayerDestroyed", "onStowawayRevealed", "onTradeRouteClosed",
+  // 0.8.9 — visual variety milestone hook pass
+  "onEntitySpawned", "onPlayerDamaged", "onScreenChange", "onOreMined",
+  "onSalvageCollected", "onMarketCycle", "onReputationChange", "onCrewLevelUp",
 ];
 
 
