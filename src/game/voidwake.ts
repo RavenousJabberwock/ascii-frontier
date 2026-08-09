@@ -8221,7 +8221,7 @@ export class Voidwake {
     this.pushLog(`Mined ${take} ore.`);
     dispatchHook("onOreMined", {
       amount: take, remaining: t.ore ?? 0, asteroidId: t.id,
-      rockClass: isWreck(t) ? "wreckage" : rockClassOf(t).id,
+      rockClass: (t.name === "debris" || t.name === "wreckage") ? "wreckage" : rockClassOf(t).id,
       totalOre: p.cargo.ore ?? 0,
     });
     // 0.7.5 — Salvaging ship debris (kind="asteroid" repurposed on death)
