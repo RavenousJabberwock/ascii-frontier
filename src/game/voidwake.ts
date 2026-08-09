@@ -5247,7 +5247,7 @@ function stationArchetypeOf(e: Entity): StationArchetype {
 type RockClass = { id: string; label: string; fills: string[]; edge: string; tex: string[] };
 const ROCK_CLASSES: RockClass[] = [
   { id: "carbon",  label: "C-type carbonaceous", fills: ["#6a5e52", "#544a40", "#7a6c5c"], edge: "#3a322a", tex: [".", ":", "%", "·"] },
-  { id: "silicate",label: "S-type silicate",     fills: ["#a6886a", "#b89a78", "#8a7656"], edge: "#5a4838", tex: ["%", "*", "#", ":"] },
+  { id: "silicate",label: "S-type silicate",     fills: ASTEROID_FILLS, edge: "#5a4838", tex: ASTEROID_TEX },
   { id: "metallic",label: "M-type metallic",     fills: ["#b9c2cc", "#8f9aa6", "#d2dae2"], edge: "#5d6874", tex: ["#", "=", "8", "%"] },
   { id: "icy",     label: "Volatile ice body",   fills: ["#bfe8ff", "#9fd4f0", "#e4f6ff"], edge: "#5e8ea8", tex: ["*", "·", "o", ":"] },
   { id: "crystal", label: "Crystalline vein",    fills: ["#d9a6ff", "#b478e0", "#f0d0ff"], edge: "#6a3a8a", tex: ["◆", "*", "%", "·"] },
