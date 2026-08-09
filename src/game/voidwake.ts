@@ -14525,7 +14525,15 @@ export class Voidwake {
     if (t) {
       const d = V.len(V.sub(t.pos, p.pos));
       putText(g, panelX, cy2 + 2, `${t.name}`, "#fff");
-      putText(g, panelX, cy2 + 3, `${t.kind}  d=${d.toFixed(0)}u`, "#9fe");
+      // 0.8.9 — classify the contact: hull class for ships, structural
+      // archetype for stations, mineral class for rocks. Sits next to the
+      // kind/distance line so the silhouette on screen has a name.
+      const klass =
+        (t.kind === "hostile" || t.kind === "friendly" || t.kind === "neutral") ? shipClassOf(t).label :
+        t.kind === "station" ? stationArchetypeOf(t).label :
+        (t.kind === "asteroid" && !isWreck(t)) ? rockClassOf(t).label : null;
+      putText(g, panelX, cy2 + 3, `${klass ? klass.slice(0, 16) : t.kind}  d=${d.toFixed(0)}u`, "#9fe");
+
       if (t.pilotName) putText(g, panelX, cy2 + 4, `pilot: ${t.pilotName}`, "#ffd680");
       if (t.hull !== undefined) putText(g, panelX, cy2 + (t.pilotName ? 5 : 4), `hull ${t.hull}  sh ${t.shield ?? 0}`, "#f88");
     } else {
