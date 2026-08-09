@@ -5157,6 +5157,108 @@ const SHIP_SPRITES: Record<string, string[][]> = {
 };
 
 // =============================================================================
+// 0.8.9 — Hull classes, station archetypes & rock mineralogy
+// -----------------------------------------------------------------------------
+// The 0.8.x sprite tables gave each faction 3-4 silhouettes, which still meant
+// a busy shipping lane read as four repeated stamps. Hull *classes* sit on top
+// of that: every ship resolves to one of 15 classes with its own 3x3 stamp and,
+// for the big hulls, a 5x3 "wide" stamp used once the ship is close enough for
+// the extra cells to be legible. Class is deterministic (name keywords, boss
+// flag, then hash of the entity id) so a given ship never shape-shifts, and it
+// is exposed to scripts through `frontier.entities.list()` as `shipClass`.
+type ShipClassDef = {
+  id: string;
+  label: string;
+  art: string[];             // 3 rows x 3 cols
+  wide?: string[];           // 3 rows x 5 cols, used at rCells >= 2.2
+  light?: [number, number];  // nav-light cell offset (dx, dy) from center
+};
+const SHIP_CLASSES: Record<string, ShipClassDef> = {
+  // --- hostile -------------------------------------------------------------
+  dart:        { id: "dart",        label: "Dart",         art: [" ^ ", "<x>", " ' "], light: [1, 0] },
+  corsair:     { id: "corsair",     label: "Corsair",      art: ["/^\\", "<#>", "\\v/"], wide: ["_/^\\_", "<[#]>", " \\v/ "], light: [-2, 0] },
+  marauder:    { id: "marauder",    label: "Marauder",     art: [".^.", "[=}", "'v'"], wide: [".-^-.", "[[=}}", "'-v-'"], light: [2, -1] },
+  reaver:      { id: "reaver",      label: "Reaver",       art: [" A ", "{x}", " V "], light: [0, -1] },
+  dreadnought: { id: "dreadnought", label: "Dreadnought",  art: ["[A]", "{#}", "[V]"], wide: ["[=A=]", "{{#}}", "[=V=]"], light: [-2, 1] },
+  // --- friendly / wing -----------------------------------------------------
+  courier:     { id: "courier",     label: "Courier",      art: [" ^ ", "[=>", " ' "], light: [-1, 0] },
+  frigate:     { id: "frigate",     label: "Frigate",      art: ["/^\\", "<O>", "\\v/"], wide: ["-/^\\-", "<(O)>", "-\\v/-"], light: [2, 0] },
+  escort:      { id: "escort",      label: "Escort",       art: [" . ", "(=]", " ' "], light: [1, -1] },
+  // --- patrol (SPD) --------------------------------------------------------
+  cutter:      { id: "cutter",      label: "Cutter",       art: ["[^]", "|#|", "[v]"], light: [0, -1] },
+  cruiser:     { id: "cruiser",     label: "Cruiser",      art: ["/T\\", "[@]", "\\T/"], wide: ["/=T=\\", "[[@]]", "\\=T=/"], light: [-2, 0] },
+  interdictor: { id: "interdictor", label: "Interdictor",  art: ["|^|", "[X]", "|v|"], wide: ["|=^=|", "[[X]]", "|=v=|"], light: [2, 1] },
+  // --- neutral / civilian --------------------------------------------------
+  hauler:      { id: "hauler",      label: "Hauler",       art: [" ~ ", "[=]", " ~ "], wide: [" ~~~ ", "[==-]", " ~~~ "], light: [-2, -1] },
+  freighter:   { id: "freighter",   label: "Freighter",    art: ["___", "[D]", "   "], wide: ["_____", "[DDD]", "  '  "], light: [2, -1] },
+  prospector:  { id: "prospector",  label: "Prospector",   art: [" o ", "(o)", " ' "], light: [1, 1] },
+  liner:       { id: "liner",       label: "Liner",        art: ["...", "[o]", "'''"], wide: [".....", "[ooo]", "'''''"], light: [-2, 0] },
+};
+const SHIP_CLASS_POOLS: Record<string, string[]> = {
+  hostile:  ["dart", "corsair", "marauder", "reaver"],
+  friendly: ["courier", "frigate", "escort"],
+  patrol:   ["cutter", "cruiser", "interdictor"],
+  neutral:  ["hauler", "freighter", "prospector", "liner"],
+};
+/** Deterministic hull class for a ship entity. */
+function shipClassOf(e: Entity): ShipClassDef {
+  const n = (e.name ?? "").toLowerCase();
+  if (e.boss) return SHIP_CLASSES.dreadnought;
+  if (/hauler|freight|mule|barge|convoy/.test(n)) return SHIP_CLASSES.freighter;
+  if (/trader|merchant|tender/.test(n))           return SHIP_CLASSES.hauler;
+  if (/liner|transport|pilgrim/.test(n))          return SHIP_CLASSES.liner;
+  if (/miner|prospect|pickaxe|rig/.test(n))       return SHIP_CLASSES.prospector;
+  if (/courier|runner|post/.test(n))              return SHIP_CLASSES.courier;
+  const pool =
+    (e.kind === "friendly" && (e.faction === "patrol" || e.faction === "wing"))
+      ? SHIP_CLASS_POOLS.patrol
+      : SHIP_CLASS_POOLS[e.kind] ?? SHIP_CLASS_POOLS.neutral;
+  const id = pool[Math.floor(hash01(e.id * 7717) * pool.length)];
+  return SHIP_CLASSES[id] ?? SHIP_CLASSES.dart;
+}
+
+// Station archetypes. NPC stations previously drew as a hash-textured sphere
+// plus a 3x3 faction stamp, so a Guild post and a mining platform were the
+// same bubble in two colors. Each station now also resolves to a 5x5 structural
+// archetype — torus rings, spindles, drydock cradles, foundry stacks — drawn
+// over the sphere once the station is big enough on screen (rx >= 4).
+type StationArchetype = { id: string; label: string; art: string[] };
+const STATION_ARCHETYPES: StationArchetype[] = [
+  { id: "torus",   label: "Torus Ring",     art: [" .-. ", "/ o \\", "| # |", "\\ o /", " '-' "] },
+  { id: "spindle", label: "Spindle",        art: ["  |  ", " /#\\ ", "<=#=>", " \\#/ ", "  |  "] },
+  { id: "cluster", label: "Pod Cluster",    art: ["o   o", " \\ / ", " (#) ", " / \\ ", "o   o"] },
+  { id: "drydock", label: "Drydock",        art: ["[---]", "|   |", "|=#=|", "|   |", "[---]"] },
+  { id: "foundry", label: "Foundry Stack",  art: ["^ ^ ^", "|=|=|", " [#] ", "|=|=|", "_____"] },
+  { id: "array",   label: "Sensor Array",   art: ["\\ | /", " \\|/ ", "--#--", " /|\\ ", "/ | \\"] },
+  { id: "hive",    label: "Hive Warren",    art: [" o o ", "o###o", " #@# ", "o###o", " o o "] },
+];
+function stationArchetypeOf(e: Entity): StationArchetype {
+  return STATION_ARCHETYPES[Math.floor(hash01(e.id * 3313) * STATION_ARCHETYPES.length)];
+}
+
+// Rock mineralogy. Real asteroid belts are not uniformly beige: metallic
+// M-types, icy volatiles, sooty carbonaceous rubble, and rare crystalline
+// bodies all look different through a viewport. Mineral class is deterministic
+// per rock, drives the fill palette and glyph set, and is surfaced to the
+// target panel and to scripts as `rockClass`.
+type RockClass = { id: string; label: string; fills: string[]; edge: string; tex: string[] };
+const ROCK_CLASSES: RockClass[] = [
+  { id: "carbon",  label: "C-type carbonaceous", fills: ["#6a5e52", "#544a40", "#7a6c5c"], edge: "#3a322a", tex: [".", ":", "%", "·"] },
+  { id: "silicate",label: "S-type silicate",     fills: ["#a6886a", "#b89a78", "#8a7656"], edge: "#5a4838", tex: ["%", "*", "#", ":"] },
+  { id: "metallic",label: "M-type metallic",     fills: ["#b9c2cc", "#8f9aa6", "#d2dae2"], edge: "#5d6874", tex: ["#", "=", "8", "%"] },
+  { id: "icy",     label: "Volatile ice body",   fills: ["#bfe8ff", "#9fd4f0", "#e4f6ff"], edge: "#5e8ea8", tex: ["*", "·", "o", ":"] },
+  { id: "crystal", label: "Crystalline vein",    fills: ["#d9a6ff", "#b478e0", "#f0d0ff"], edge: "#6a3a8a", tex: ["◆", "*", "%", "·"] },
+];
+function rockClassOf(e: Entity): RockClass {
+  // Crystalline bodies stay rare (~8%); the rest split evenly-ish.
+  const h = hash01(e.id * 9973);
+  if (h > 0.92) return ROCK_CLASSES[4];
+  return ROCK_CLASSES[Math.floor((h / 0.92) * 4) % 4];
+}
+
+
+
+// =============================================================================
 // 11. Main engine class
 // =============================================================================
 export class Voidwake {
