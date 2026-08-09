@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.8";
+const VERSION = "0.8.9";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -121,7 +121,18 @@ export type ScriptHookName =
   | "onWormholeJump"
   | "onPlayerDestroyed"
   | "onStowawayRevealed"
-  | "onTradeRouteClosed";
+  | "onTradeRouteClosed"
+  // 0.8.9 — visual-variety milestone hook pass. Spawn tagging, player damage,
+  // screen transitions, mining/salvage yields, market rotation, reputation and
+  // crew progression all dispatch so a mod can observe the full session.
+  | "onEntitySpawned"
+  | "onPlayerDamaged"
+  | "onScreenChange"
+  | "onOreMined"
+  | "onSalvageCollected"
+  | "onMarketCycle"
+  | "onReputationChange"
+  | "onCrewLevelUp";
 
 
 
@@ -163,6 +174,14 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onPlayerDestroyed:    [],
   onStowawayRevealed:   [],
   onTradeRouteClosed:   [],
+  onEntitySpawned:      [],
+  onPlayerDamaged:      [],
+  onScreenChange:       [],
+  onOreMined:           [],
+  onSalvageCollected:   [],
+  onMarketCycle:        [],
+  onReputationChange:   [],
+  onCrewLevelUp:        [],
 
 
 };
@@ -3614,7 +3633,9 @@ function cargoTotal(p: PlayerState) {
 // Federation/Guild standing slightly; killing a friendly/neutral tanks it.
 function adjustRep(p: PlayerState, faction: string, delta: number) {
   if (!p.reputation) p.reputation = { federation: 0, guild: 0, pirate: 0 };
-  p.reputation[faction] = (p.reputation[faction] ?? 0) + delta;
+  const before = p.reputation[faction] ?? 0;
+  p.reputation[faction] = before + delta;
+  dispatchHook("onReputationChange", { faction, delta, before, after: p.reputation[faction] });
 }
 // 0.8.4 — Price of an expungement at a Bounty Office: 120cr per point of
 // standing bought back, floored at 300cr so it's never trivially cheap.
@@ -4086,8 +4107,18 @@ function crewLevel(c: { xp?: number }): number {
 }
 function grantCrewXP(p: PlayerState, amount: number) {
   if (amount <= 0) return;
-  if (p.gunner) p.gunner.xp = (p.gunner.xp ?? 0) + amount;
-  if (p.crew) for (const c of p.crew) c.xp = (c.xp ?? 0) + amount;
+  // 0.8.9 — level crossings dispatch onCrewLevelUp so mods can hand out
+  // perks / chatter when a crewmate graduates a tier.
+  const bump = (c: { name?: string; role?: string; xp?: number }) => {
+    const before = crewLevel(c);
+    c.xp = (c.xp ?? 0) + amount;
+    const after = crewLevel(c);
+    if (after > before) {
+      dispatchHook("onCrewLevelUp", { name: c.name ?? "Crew", role: c.role ?? "gunner", level: after, xp: c.xp });
+    }
+  };
+  if (p.gunner) bump(p.gunner as unknown as { name?: string; role?: string; xp?: number });
+  if (p.crew) for (const c of p.crew) bump(c as unknown as { name?: string; role?: string; xp?: number });
 }
 // 0.6.3 — returns the on-crew member's level for a given role, or 0 when
 // unstaffed. Callers use this to derive small per-level gameplay perks so
@@ -5871,6 +5902,7 @@ export class Voidwake {
       const ent = this.entities.find((x) => x.id === stationId);
       const faction = ent?.faction ?? "guild";
       s = generateStationStock(stationId, faction, today);
+      dispatchHook("onMarketCycle", { stationId, faction, day: today, station: ent?.name ?? "?" });
       // 0.5.6 — Colony jitter. Populated planets pay noticeably more for
       // ore (colonies always need refinery feedstock), charge a small
       // premium on fuel (no atmosphere refinery), and use a colony-specific
@@ -8160,6 +8192,11 @@ export class Voidwake {
     if (p.record) p.record.mined += take;
     awardXP(p, 2);
     this.pushLog(`Mined ${take} ore.`);
+    dispatchHook("onOreMined", {
+      amount: take, remaining: t.ore ?? 0, asteroidId: t.id,
+      rockClass: isWreck(t) ? "wreckage" : rockClassOf(t).id,
+      totalOre: p.cargo.ore ?? 0,
+    });
     // 0.7.5 — Salvaging ship debris (kind="asteroid" repurposed on death)
     // occasionally yields scrap credits or a stray commodity crate on top
     // of the ore payout. Real asteroids stay ore-only.
@@ -8171,10 +8208,12 @@ export class Voidwake {
       if (pick && cargoTotal(p) < p.ship.cargoMax) {
         p.cargo[pick.id] = (p.cargo[pick.id] ?? 0) + 1;
         this.pushLog(`✦ Salvaged 1 ${pick.name} from the wreck.`);
+        dispatchHook("onSalvageCollected", { kind: "commodity", commodityId: pick.id, name: pick.name, amount: 1, wreckId: t.id });
       } else {
         const scrap = 8 + Math.floor(Math.random() * 20);
         p.credits += scrap;
         this.pushLog(`✦ Scrap sold in-transit — +${scrap}cr`);
+        dispatchHook("onSalvageCollected", { kind: "scrap", credits: scrap, wreckId: t.id });
       }
     }
     // Rare: ~1-in-50 chance the fragment is an "encoded relic" — pays a
@@ -9884,6 +9923,14 @@ export class Voidwake {
         pos: { x: origin.x + jitter(), y: origin.y + jitter(), z: origin.z + jitter() },
         vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
         faction, hull, shield: 30, state: "wander", cooldown: 0, weaponId: "pulse",
+      });
+      // 0.8.9 — hand the fresh entity to scripts so mods can tag / re-skin
+      // runtime spawns (patrols, raiders, haulers) as they enter the world.
+      const spawned = this.entities[this.entities.length - 1];
+      dispatchHook("onEntitySpawned", {
+        id: spawned.id, kind: spawned.kind, name: spawned.name, faction: spawned.faction,
+        hull: spawned.hull, shipClass: shipClassOf(spawned).id,
+        x: spawned.pos.x, y: spawned.pos.y, z: spawned.pos.z,
       });
     };
 
