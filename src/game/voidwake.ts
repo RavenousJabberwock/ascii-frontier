@@ -5129,36 +5129,6 @@ function surfaceChar(e: Entity, gx: number, gy: number, onEdge: boolean, edgeCh:
   return palette[Math.floor(h * palette.length)];
 }
 
-// 3x3 ship silhouettes per faction. Multiple variants per faction so different
-// hostiles / freighters look like distinct hulls rather than identical dots.
-const SHIP_SPRITES: Record<string, string[][]> = {
-  hostile: [
-    [" ^ ", "<X>", " v "],
-    ["/^\\", "<#>", "\\v/"],
-    [".^.", "[=}", " v "],
-    [" A ", "{x}", " V "],
-  ],
-  friendly: [
-    [" ^ ", "[=>", " v "],
-    ["/^\\", "<O>", "\\v/"],
-    [" . ", "(=]", " ' "],
-  ],
-  // SPD Patrol cruisers — deliberately blockier / more armored-looking than a
-  // civilian friendly so the player can eyeball law enforcement at a glance.
-  patrol: [
-    ["[^]", "|#|", "[v]"],
-    ["/T\\", "[@]", "\\T/"],
-    [".T.", "{#}", "'T'"],
-    ["|^|", "[X]", "|v|"],
-  ],
-  neutral: [
-    [" . ", "(o)", " ' "],
-    [" ~ ", "[=]", " ~ "],
-    [" ^ ", "<o>", " v "],
-    ["___", "[D]", "   "],
-  ],
-};
-
 // =============================================================================
 // 0.8.9 — Hull classes, station archetypes & rock mineralogy
 // -----------------------------------------------------------------------------
@@ -13529,7 +13499,7 @@ export class Voidwake {
           // 0.8.9 — hull-class silhouettes. Each ship resolves to one of 15
           // classes; big hulls get a 5x3 stamp once they're close enough for
           // the extra cells to read, and every ship carries a blinking nav
-          // light so traffic reads as живой hardware rather than static ink.
+          // light so traffic reads as live hardware rather than static ink.
           const cls = shipClassOf(e);
           const wide = cls.wide && rCells >= 2.2 ? cls.wide : null;
           const halfW = wide ? 2 : 1;
