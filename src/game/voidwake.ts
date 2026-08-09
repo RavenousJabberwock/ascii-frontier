@@ -5091,9 +5091,12 @@ function tintFor(e: Entity): { fill: string; edge: string } {
         const i = Math.floor(h * DEBRIS_FILLS.length);
         return { fill: DEBRIS_FILLS[i], edge: "#2a2a30" };
       }
-      const i = Math.floor(h * ASTEROID_FILLS.length);
-      return { fill: ASTEROID_FILLS[i], edge: "#5a4838" };
+      // 0.8.9 — mineral class drives the rock palette (metallic, icy,
+      // carbonaceous, crystalline) instead of one warm-beige ramp.
+      const rc = rockClassOf(e);
+      return { fill: rc.fills[Math.floor(h * rc.fills.length)], edge: rc.edge };
     }
+
     case "nebula": {
       const p = nebulaPalette(e);
       return { fill: p[0], edge: p[1] };
