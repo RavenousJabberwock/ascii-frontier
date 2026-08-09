@@ -10558,8 +10558,13 @@ export class Voidwake {
               if (dx * dx + dy * dy + dz * dz > r2) continue;
             }
             out.push({
-              idx: i, kind: e.kind, name: e.name, faction: e.faction,
+              idx: i, id: e.id, kind: e.kind, name: e.name, faction: e.faction,
               x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
+              // 0.8.9 — expose the new visual taxonomies so content mods can
+              // key chatter / behaviour off hull class and rock mineralogy.
+              shipClass: (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") ? shipClassOf(e).id : undefined,
+              rockClass: e.kind === "asteroid" && !isWreck(e) ? rockClassOf(e).id : undefined,
+              stationClass: e.kind === "station" ? stationArchetypeOf(e).id : undefined,
             });
           }
           return out;
@@ -10568,9 +10573,12 @@ export class Voidwake {
           const e = this.entities[idx];
           if (!e) return null;
           return {
-            idx, kind: e.kind, name: e.name, faction: e.faction,
+            idx, id: e.id, kind: e.kind, name: e.name, faction: e.faction,
             x: e.pos?.x, y: e.pos?.y, z: e.pos?.z,
             hull: e.hull, shield: e.shield,
+            shipClass: (e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral") ? shipClassOf(e).id : undefined,
+            rockClass: e.kind === "asteroid" && !isWreck(e) ? rockClassOf(e).id : undefined,
+            stationClass: e.kind === "station" ? stationArchetypeOf(e).id : undefined,
           };
         },
         chatterAdd: (kind, line) => this.registerChatterLine(kind, line),
