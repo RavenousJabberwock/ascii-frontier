@@ -60,6 +60,7 @@ Then visit `http://localhost:8000/dist-offline/ascii-frontier-offline.html`.
 - `O` toggle hired **Pilot autopilot** to current target (full auto: fly, auto-dock stations, hold orbit). Mouse steering is suppressed while engaged and does **not** disengage it — press `O` again to take back manual control. A blinking banner near screen center reminds you it's on.
 - `U` open the **Contract Log** — up to 3 active contracts, `ENTER` tracks one (HUD arrow + objective marker), `X` abandons it (costs Guild standing)
 - `N` bookmark the current target (or your present position) into the Nav Log
+- `Y` open the **Frontier Bulletin** — live frontier events with distance, time left and trade advice; ENTER targets the affected dock, `N` bookmarks it (0.9.0)
 - `V` open the **Nav Log** — up to 8 waypoints with live distance; ENTER re-targets a bookmark still on sensors, `X` deletes one
 - `K` pin / unpin quest tracker
 - `L` open Codex (symbols / colors / keys)
@@ -532,6 +533,7 @@ covering every hook shipped so far.
 | `onMarketCycle`     | `{ stationId, station, faction, day }`     | station stock regeneration (0.8.9) |
 | `onReputationChange`| `{ faction, delta, before, after }`        | `adjustRep()` (0.8.9) |
 | `onCrewLevelUp`     | `{ name, role, level, xp }`                | crew XP tier crossing (0.8.9) |
+| `onFrontierEvent`   | `{ phase, id, kind, title, scope, station, stationId, faction, minutes?, x?, y?, z? }` | frontier event start / end (0.9.0) |
 
 0.8.9 adds three visual taxonomies to `frontier.entities.list()` /
 `.get()`: `shipClass` (one of 15 hull classes), `stationClass` (structural

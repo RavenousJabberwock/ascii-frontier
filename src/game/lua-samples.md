@@ -288,3 +288,27 @@ frontier.on("onTradeRouteEstablished", function(r)
   frontier.log("lane open: " .. r.station .. " <-> " .. r.partner .. " (" .. r.commodity .. ")")
 end)
 ```
+
+## Frontier event watcher (0.9.0)
+
+Announce every advisory as it lands, and hand the pilot a nudge when a boom is
+close enough to be worth the burn.
+
+```lua
+frontier.on("onFrontierEvent", function(ev)
+  if ev.phase == "start" then
+    frontier.chat("Broker", ev.title .. " at " .. ev.station .. " — " .. (ev.minutes or 0) .. " min window.", "#ffd28a")
+  else
+    frontier.log("Advisory closed: " .. ev.title .. " (" .. ev.station .. ")")
+  end
+end)
+
+frontier.on("onPlayerDock", function()
+  for _, e in ipairs(frontier.events()) do
+    if e.distance < 20000 then
+      frontier.chat("Broker", e.title .. " still live at " .. e.station
+        .. " (" .. math.floor(e.secondsLeft / 60) .. " min): " .. e.advice, "#9fe")
+    end
+  end
+end)
+```

@@ -60,6 +60,7 @@ Everything else is recoverable.
 | `H`         | Hail the current target (comms channel)              |
 | `N`         | Bookmark the current target into the Nav Log         |
 | `V`         | Open the Nav Log (saved waypoints, up to 8)          |
+| `Y`         | Open the Frontier Bulletin (live frontier events)    |
 | `ESC`       | Main menu (New / Save / Load / Options / Quit)       |
 
 Gamepads (any standard mapping) and touch controls are supported and can be
@@ -232,6 +233,17 @@ passive bonus that scales with its **level** (L0–L9, earned through use).
   `Lane partner` and `Lane goods` rows. `ENTER` cycles each; leave either on
   **Auto** to keep the old best-spread search. Only goods the partner dock can
   legally take are offered.
+
+**Frontier events** (0.9.0): every few minutes the wire posts an advisory — a
+refinery boom, a food shortage, a pirate blockade, a fuel crisis, a relic rush,
+a cargo glut. Each one is anchored on a real dock (or on a whole faction's
+docks) and runs 5–18 minutes, and while it runs it genuinely changes that
+market: a boom pays a premium for ore and elements, a quarantine will pay
+almost anything for medicine, a glut collapses every price on the board.
+Press `Y` for the Frontier Bulletin: advisories nearest first with the distance,
+the time remaining, what changed and what a trader should do about it. `ENTER`
+targets the dock, `N` files it in the Nav Log. Blockades and war musters pull
+raiders in, so a profitable advisory is not always a safe one.
 
 **Reading contacts** (0.8.9): every ship now belongs to one of fifteen hull
 classes (Dart, Corsair, Marauder, Reaver, Dreadnought, Courier, Frigate,

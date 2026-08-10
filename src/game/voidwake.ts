@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.8.9";
+const VERSION = "0.9.0";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -132,7 +132,9 @@ export type ScriptHookName =
   | "onSalvageCollected"
   | "onMarketCycle"
   | "onReputationChange"
-  | "onCrewLevelUp";
+  | "onCrewLevelUp"
+  // 0.9.0 — frontier events. Fires on start and on end (`phase`).
+  | "onFrontierEvent";
 
 
 
@@ -182,6 +184,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onMarketCycle:        [],
   onReputationChange:   [],
   onCrewLevelUp:        [],
+  onFrontierEvent:      [],
 
 
 };
@@ -303,6 +306,10 @@ type ChatterKind =
   | "dealer_locked" | "dealer_insurance"
   // 0.8.7 — contract log & trade-route context
   | "crew_ctx_contracts" | "crew_ctx_routes" | "player_station_route"
+  // 0.9.0 — frontier events: the newsreel bulletin plus crew and NPC
+  // reactions when a live event is inside sensor range.
+  | "frontier_event" | "frontier_event_end"
+  | "crew_ctx_event" | "npc_ctx_event"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1222,6 +1229,40 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
   tactical_farewell_bad: [
     "You wasted every shot I called. I'm out.",
     "Rather train recruits than watch another good hull chew on plasma for no reason.",
+  ],
+  // 0.9.0 — Frontier Bulletin. {a} is the affected dock, {sector} the region.
+  frontier_event: [
+    "Frontier Bulletin: {a} declares a situation. Traders, adjust your manifests.",
+    "Bulletin — {a}: conditions changed this cycle. Prices will follow.",
+    "Wideband from {a}: this is not a drill, and it is not our fault.",
+    "All lanes, note it: {a} is having a week. Fly accordingly.",
+    "Guild wire: {a} posts an advisory. Read it before you undock.",
+    "{a} traffic control: expect irregular pricing and irregular tempers.",
+    "Newsreel: {a} makes the wire again. Somebody is getting rich off this.",
+    "Advisory out of {a}. Opportunity, if you have the hold for it.",
+  ],
+  frontier_event_end: [
+    "Frontier Bulletin: {a} stands down. Prices settling back to boring.",
+    "All clear from {a}. Somebody file the paperwork.",
+    "{a} lifts its advisory. The window closed; hope you flew it.",
+    "Wire from {a}: situation resolved, margins normalising.",
+    "Bulletin — {a} back to routine operations. Routine is underrated.",
+  ],
+  crew_ctx_event: [
+    "Cmdr, that bulletin is still live nearby. Could be creds in it.",
+    "Local advisory says prices are strange this cycle. Strange is where we live.",
+    "If that event holds another few minutes we could run the spread twice.",
+    "Half the lane is running toward that bulletin. The other half away.",
+    "I'd rather trade a crisis than a quiet dock, honestly.",
+    "Careful. Events like that draw hulls with worse manners than ours.",
+    "That advisory is close enough to smell. Say the word and I'll plot it.",
+  ],
+  npc_ctx_event: [
+    "You hear the bulletin? Whole lane's repricing. Madness.",
+    "Everybody with a hold is burning for that advisory. Including us.",
+    "Prices went sideways since the wire dropped. Don't quote me.",
+    "{speaker} inbound on the bulletin. Try not to undercut us too hard.",
+    "Advisory traffic is thick. Fly polite, {cmdr}.",
   ],
   banter: [
     "{a}: {b}, you ever going to fix that coupler?  ||  {b}: I fixed yours, {a}. Try locking the door.",
@@ -2393,6 +2434,9 @@ interface StationStock {
   rumor: string;              // flavor line for the station screen
   // 0.7.1 — rotating daily inventory
   day: number;                // marketDay() when this stock was generated
+  // 0.9.0 — ids of the frontier events whose price shift is already baked
+  // into the rows above, so a shift is applied once and reversed once.
+  evApplied?: number[];
   recruitSlots: number;       // 0..4 crew hires available today
   commodities: { id: string; name: string; buy: number; sell: number; stock: number }[];
   // 0.8.2 — Shipyard berth: 0..3 hull ids listed today (empty at colonies).
@@ -2510,6 +2554,9 @@ interface SaveBlob {
   // against a mod that has since been disabled is flagged rather than silently
   // desynced. Optional so older saves keep loading.
   mods?: string[];
+  // 0.9.0 — live frontier events. Optional: older saves resume with none and
+  // the next event timer seeds fresh ones.
+  events?: FrontierEvent[];
 }
 
 interface FlightRecorder {
@@ -2565,6 +2612,7 @@ const DEFAULT_KEYBINDS: Record<string, string> = {
   hail: "h",             // 0.8.0 — open a comms channel to the current target
   bookmark: "n",         // 0.8.5 — bookmark the current target into the Nav Log
   navLog: "v",           // 0.8.5 — open the Nav Log (saved waypoints)
+  bulletin: "y",         // 0.9.0 — open the Frontier Bulletin (live events)
 };
 
 // 0.8.5 — how many waypoints the Nav Log holds. Oldest is dropped on overflow.
@@ -2609,6 +2657,7 @@ const KEYBIND_ACTIONS: { id: string; label: string }[] = [
   { id: "pinRep",       label: "Pin Rep Panel" },
   { id: "questLog",     label: "Contract Log" },
   { id: "navLog",       label: "Nav Log" },
+  { id: "bulletin",     label: "Frontier Bulletin" },
   { id: "bookmark",     label: "Bookmark Target" },
   { id: "characterSheet", label: "Character Sheet" },
   { id: "legend",       label: "Codex / Legend" },
@@ -3805,6 +3854,125 @@ function marketDay(): number {
   return Math.floor(Date.now() / 1000 / 600);
 }
 
+// =============================================================================
+// 0.9.0 — Frontier Events
+// -----------------------------------------------------------------------------
+// A frontier event is a timed, located situation anchored on one dock (or on a
+// whole faction's docks) that visibly moves the economy while it runs: it
+// multiplies the affected commodity rows, may shift fuel and ore prices, and
+// can pull raiders into the neighbourhood. Every event announces itself on the
+// Comms wire, appears in the Frontier Bulletin overlay (default `Y`), reacts
+// through crew/NPC chatter, and dispatches `onFrontierEvent` for mods.
+//
+// Price shifts are applied to the cached StationStock rows (the same live
+// object tickTradeSim mutates) and reversed on expiry, with `evApplied` on the
+// stock recording which events are baked in. A market-day rotation throws the
+// rows away; `syncStockEvents()` re-applies the live events to the fresh stock,
+// so an event survives a rotation without stacking.
+interface FrontierEventKind {
+  id: string;
+  title: string;
+  blurb: string;              // one-line description shown in the bulletin
+  scope: "station" | "faction";
+  minutes: [number, number];  // duration roll
+  color: string;
+  // Price multiplier applied at the affected docks. `buy` is what the dock
+  // charges you, `sell` is what it pays you.
+  priceMul?: { class?: CommodityClass; commodityId?: string; buy: number; sell: number };
+  fuelMul?: number;
+  oreMul?: number;
+  raiders?: number;           // hostiles pulled in at the anchor on start
+  advice: string;             // what a trader should actually do about it
+  factions?: string[];        // anchor restriction; omitted = any dock
+}
+
+const FRONTIER_EVENT_MAX = 3;
+
+const FRONTIER_EVENTS: FrontierEventKind[] = [
+  {
+    id: "ore_boom", title: "Refinery Boom", scope: "station", minutes: [6, 14],
+    color: "#ffd28a", oreMul: 1.6,
+    priceMul: { class: "element", buy: 1.15, sell: 1.45 },
+    blurb: "Smelters running triple shifts — the dock pays a premium for ore and elements.",
+    advice: "Mine or haul elements here while it lasts.",
+  },
+  {
+    id: "famine", title: "Food Shortage", scope: "station", minutes: [6, 14],
+    color: "#9effd2", priceMul: { class: "food", buy: 1.7, sell: 1.8 },
+    blurb: "Hydroponics failure. Grain, medicine and spice fetch desperate prices.",
+    advice: "Sell food here; buy your provisions somewhere else.",
+  },
+  {
+    id: "tech_embargo", title: "Tech Embargo", scope: "faction", minutes: [8, 16],
+    color: "#c8a0ff", priceMul: { class: "tech", buy: 1.55, sell: 1.35 },
+    blurb: "Faction-wide export ban on fabricated tech. Every listed chip costs more.",
+    advice: "Carry tech in from outside the faction — the spread is yours.",
+  },
+  {
+    id: "relic_rush", title: "Relic Rush", scope: "faction", minutes: [8, 16],
+    color: "#c4f", priceMul: { class: "relic", buy: 1.2, sell: 1.6 },
+    blurb: "A dig site went public. Collectors across the faction are bidding on relics.",
+    advice: "Sell precursor fragments and datacores into this faction now.",
+  },
+  {
+    id: "blockade", title: "Pirate Blockade", scope: "station", minutes: [5, 11],
+    color: "#ff8a8a", raiders: 3, fuelMul: 1.35,
+    priceMul: { buy: 1.25, sell: 1.15 },
+    blurb: "Raiders sitting on the approach lanes. Supply is thin and fuel is dear.",
+    advice: "Break the blockade for bounties, or route around it.",
+  },
+  {
+    id: "fuel_crisis", title: "Fuel Crisis", scope: "station", minutes: [5, 12],
+    color: "#fc6", fuelMul: 1.9,
+    blurb: "Tanker convoy missed its window. Pumps are rationed and priced accordingly.",
+    advice: "Top off elsewhere, or sell your surplus range for a favour.",
+  },
+  {
+    id: "quarantine", title: "Medical Quarantine", scope: "station", minutes: [6, 13],
+    color: "#7fd0ff", priceMul: { commodityId: "medicine", buy: 2.2, sell: 2.4 },
+    blurb: "Sealed habitat rings. Medicine is worth more than antimatter here.",
+    advice: "Run medicine in. They will remember who did.",
+  },
+  {
+    id: "war_muster", title: "War Muster", scope: "faction", minutes: [8, 18],
+    color: "#ff9a6a", raiders: 1,
+    priceMul: { class: "element", buy: 1.3, sell: 1.35 },
+    blurb: "Fleet requisitions are eating the metal market across the faction.",
+    advice: "Titanium and uranium sell high; expect patrols to be twitchy.",
+    factions: ["federation", "guild", "patrol"],
+  },
+  {
+    id: "glut", title: "Cargo Glut", scope: "station", minutes: [5, 12],
+    color: "#9fe", priceMul: { buy: 0.72, sell: 0.78 },
+    blurb: "Three convoys docked at once. Warehouses are full and prices have collapsed.",
+    advice: "Buy cheap here, sell literally anywhere else.",
+  },
+  {
+    id: "salvage_call", title: "Salvage Call", scope: "station", minutes: [6, 13],
+    color: "#c0d0d8", oreMul: 1.25,
+    priceMul: { class: "tech", buy: 0.85, sell: 1.25 },
+    blurb: "A hulk broke up nearby. The dock is buying reclaimed tech and scrap ore.",
+    advice: "Sweep the wreck fields and sell the tech into this dock.",
+  },
+];
+
+function frontierEventKind(id: string): FrontierEventKind | undefined {
+  return FRONTIER_EVENTS.find((k) => k.id === id);
+}
+
+// A live event instance. Stored on the engine and persisted in the save.
+interface FrontierEvent {
+  id: number;
+  kind: string;
+  stationId: number;
+  station: string;
+  faction: string;
+  pos: Vec3;
+  startedAt: number;   // epoch seconds
+  endsAt: number;      // epoch seconds
+  warned?: boolean;    // player has been told they are inside the event radius
+}
+
 // Faction-based commodity price bias. Positive means the station tends
 // to have the good CHEAP (buy here); negative means EXPENSIVE (sell
 // here). Same faction+class deltas across the whole map so routes are
@@ -4627,7 +4795,8 @@ type Screen =
   | "mission-offer"
   | "customs"
   | "hail"
-  | "character";
+  | "character"
+  | "events";
 
 
 // =============================================================================
@@ -5277,6 +5446,9 @@ export class Voidwake {
   rng: () => number = mulberry32(1);
   entities: Entity[] = [];
   player: PlayerState | null = null;
+  // 0.9.0 — live frontier events (see FRONTIER_EVENTS). Persisted in saves.
+  frontierEvents: FrontierEvent[] = [];
+  private _eventAt = 90;
   options: Options = defaultOptions();
 
   // Menu transient state
@@ -5923,7 +6095,176 @@ export class Voidwake {
       }
       this.stationStocks.set(stationId, s);
     }
+    // 0.9.0 — bake in any live frontier event shift this dock is under. Safe
+    // to call every read: `evApplied` makes it idempotent.
+    this.syncStockEvents(stationId, s);
     return s;
+  }
+
+  // ---------------- 0.9.0 — Frontier Events -------------------------------
+  /** Live events that move prices at `stationId` (direct anchor or faction). */
+  eventsAffecting(stationId: number): FrontierEvent[] {
+    const ent = this.byId(stationId);
+    const fac = ent?.faction ?? "guild";
+    return this.frontierEvents.filter((ev) => {
+      const k = frontierEventKind(ev.kind);
+      if (!k) return false;
+      return k.scope === "station" ? ev.stationId === stationId : ev.faction === fac;
+    });
+  }
+
+  /** Apply (`dir` 1) or reverse (`dir` -1) one event's price shift on a stock. */
+  private applyEventPrices(st: StationStock, ev: FrontierEvent, dir: 1 | -1) {
+    const k = frontierEventKind(ev.kind);
+    if (!k) return;
+    const f = (m: number) => (dir === 1 ? m : 1 / m);
+    if (k.priceMul) {
+      for (const row of st.commodities) {
+        const meta = COMMODITIES.find((m) => m.id === row.id);
+        if (!meta) continue;
+        if (k.priceMul.class && meta.class !== k.priceMul.class) continue;
+        if (k.priceMul.commodityId && meta.id !== k.priceMul.commodityId) continue;
+        row.buy = Math.max(1, Math.round(row.buy * f(k.priceMul.buy)));
+        row.sell = Math.max(1, Math.round(row.sell * f(k.priceMul.sell)));
+      }
+    }
+    if (k.fuelMul) st.fuelPrice = Math.max(1, Math.round(st.fuelPrice * f(k.fuelMul)));
+    if (k.oreMul)  st.orePrice  = Math.max(1, Math.round(st.orePrice  * f(k.oreMul)));
+    const list = st.evApplied ?? (st.evApplied = []);
+    const i = list.indexOf(ev.id);
+    if (dir === 1) { if (i < 0) list.push(ev.id); }
+    else if (i >= 0) list.splice(i, 1);
+  }
+
+  /** Ensure every live event affecting this dock is baked into its rows once. */
+  private syncStockEvents(stationId: number, st: StationStock) {
+    if (!this.frontierEvents.length) return;
+    for (const ev of this.eventsAffecting(stationId)) {
+      if (!(st.evApplied ?? []).includes(ev.id)) this.applyEventPrices(st, ev, 1);
+    }
+  }
+
+  /** Roll new events, expire finished ones, and nag the player when close. */
+  tickFrontierEvents(dt: number) {
+    const p = this.player;
+    if (!p) return;
+    const now = Date.now() / 1000;
+    for (const ev of [...this.frontierEvents]) {
+      if (now >= ev.endsAt) this.endFrontierEvent(ev);
+    }
+    // Proximity notice: tell the pilot once when they arrive inside the zone.
+    for (const ev of this.frontierEvents) {
+      if (ev.warned) continue;
+      if (V.len(V.sub(ev.pos, p.pos)) > 6000) continue;
+      ev.warned = true;
+      const k = frontierEventKind(ev.kind);
+      this.pushChatter("Bulletin", `${k?.title ?? ev.kind} in effect at ${ev.station}. ${k?.advice ?? ""}`,
+        k?.color ?? "#ffe066", "external");
+      this.sfx("warning");
+    }
+    this._eventAt -= dt;
+    if (this._eventAt > 0) return;
+    this._eventAt = 150 + Math.random() * 210;
+    if (this.frontierEvents.length >= FRONTIER_EVENT_MAX) return;
+    this.startFrontierEvent();
+  }
+
+  /** Spin up one random event on a dock the player could plausibly reach. */
+  startFrontierEvent(kindId?: string) {
+    const p = this.player;
+    if (!p) return;
+    const docks = this.entities.filter((e) =>
+      e.kind === "station" || (e.kind === "planet" && e.populated));
+    if (!docks.length) return;
+    // Prefer docks within reach so the event is actionable, but never require it.
+    const near = docks.filter((e) => V.len(V.sub(e.pos, p.pos)) < WORLD_RADIUS * 0.9);
+    const pool = near.length ? near : docks;
+    const anchor = pool[Math.floor(Math.random() * pool.length)];
+    const fac = anchor.faction ?? "guild";
+    const kinds = FRONTIER_EVENTS.filter((k) =>
+      (kindId ? k.id === kindId : true) && (!k.factions || k.factions.includes(fac)));
+    const k = kinds[Math.floor(Math.random() * kinds.length)];
+    if (!k) return;
+    // One instance per kind per anchor, and never two faction-wide events of
+    // the same kind on the same faction.
+    if (this.frontierEvents.some((ev) => ev.kind === k.id
+      && (k.scope === "station" ? ev.stationId === anchor.id : ev.faction === fac))) return;
+    const now = Date.now() / 1000;
+    const mins = k.minutes[0] + Math.random() * (k.minutes[1] - k.minutes[0]);
+    const ev: FrontierEvent = {
+      id: nextId(), kind: k.id, stationId: anchor.id, station: anchor.name,
+      faction: fac, pos: { ...anchor.pos }, startedAt: now, endsAt: now + mins * 60,
+    };
+    this.frontierEvents.push(ev);
+    // Bake the shift into every dock already carrying a generated market.
+    for (const [sid, st] of this.stationStocks) this.syncStockEvents(sid, st);
+    // Raiders drawn in by the situation.
+    for (let i = 0; i < (k.raiders ?? 0); i++) {
+      this.spawnEventRaider(anchor.pos, ev);
+    }
+    this.pushLog(`⚑ ${k.title} — ${anchor.name}. ${k.advice}`);
+    this.pushChatter("Bulletin",
+      pickLine("frontier_event", this.chatterCtx(anchor, { a: anchor.name })),
+      k.color, "external");
+    dispatchHook("onFrontierEvent", {
+      phase: "start", id: ev.id, kind: ev.kind, title: k.title, scope: k.scope,
+      station: ev.station, stationId: ev.stationId, faction: ev.faction,
+      minutes: Math.round(mins), x: ev.pos.x, y: ev.pos.y, z: ev.pos.z,
+    });
+  }
+
+  /** Reverse an event's market shift, announce it, and strike it from the list. */
+  endFrontierEvent(ev: FrontierEvent) {
+    const i = this.frontierEvents.indexOf(ev);
+    if (i < 0) return;
+    this.frontierEvents.splice(i, 1);
+    for (const st of this.stationStocks.values()) {
+      if ((st.evApplied ?? []).includes(ev.id)) this.applyEventPrices(st, ev, -1);
+    }
+    const k = frontierEventKind(ev.kind);
+    this.pushLog(`⚑ ${k?.title ?? ev.kind} at ${ev.station} has ended.`);
+    this.pushChatter("Bulletin",
+      pickLine("frontier_event_end", this.chatterCtx(undefined, { a: ev.station })),
+      k?.color ?? "#9fe", "external");
+    dispatchHook("onFrontierEvent", {
+      phase: "end", id: ev.id, kind: ev.kind, title: k?.title ?? ev.kind,
+      station: ev.station, stationId: ev.stationId, faction: ev.faction,
+    });
+  }
+
+  /** Blockade / muster raider. Same construction as the respawn spawner. */
+  private spawnEventRaider(origin: Vec3, ev: FrontierEvent) {
+    const jitter = (): number => (Math.random() - 0.5) * 600;
+    this.entities.push({
+      id: nextId(), kind: "hostile", name: nameFrom(this.rng, "Raider"),
+      pos: { x: origin.x + jitter(), y: origin.y + jitter(), z: origin.z + jitter() },
+      vel: { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 },
+      faction: "pirate", hull: 55, shield: 35, state: "wander", cooldown: 0, weaponId: "pulse",
+    });
+    const spawned = this.entities[this.entities.length - 1];
+    dispatchHook("onEntitySpawned", {
+      id: spawned.id, kind: spawned.kind, name: spawned.name, faction: spawned.faction,
+      hull: spawned.hull, shipClass: shipClassOf(spawned).id, cause: `event:${ev.kind}`,
+      x: spawned.pos.x, y: spawned.pos.y, z: spawned.pos.z,
+    });
+  }
+
+  /** Read-only bulletin rows: live events sorted nearest-first. */
+  bulletinRows(): { ev: FrontierEvent; k: FrontierEventKind; dist: number; left: number }[] {
+    const p = this.player;
+    const now = Date.now() / 1000;
+    const rows: { ev: FrontierEvent; k: FrontierEventKind; dist: number; left: number }[] = [];
+    for (const ev of this.frontierEvents) {
+      const k = frontierEventKind(ev.kind);
+      if (!k) continue;
+      rows.push({
+        ev, k,
+        dist: p ? V.len(V.sub(ev.pos, p.pos)) : 0,
+        left: Math.max(0, ev.endsAt - now),
+      });
+    }
+    rows.sort((a, b) => a.dist - b.dist);
+    return rows;
   }
 
   // 0.7.9 — Commodity rows a given dock will openly list: economic identity
@@ -6668,7 +7009,7 @@ export class Voidwake {
       } else if (this.screen === "howto") {
         this.screen = this._howtoReturn;
         this.menuCursor = 0;
-      } else if (this.screen === "nav-log") {
+      } else if (this.screen === "nav-log" || this.screen === "events") {
         this.screen = this._codexReturn;
       } else if (this.screen === "quest-log") {
         this.screen = this._codexReturn;
@@ -6710,6 +7051,7 @@ export class Voidwake {
       case "howto": this.updateHowto(); break;
       case "quest-log": this.updateQuestLog(); break;
       case "nav-log": this.updateNavLog(); break;
+      case "events": this.updateBulletin(); break;
       case "mission-offer": this.updateMissionOffer(); break;
       case "customs": this.updateCustoms(); break;
       case "hail": this.updateHail(); break;
@@ -7601,6 +7943,13 @@ export class Voidwake {
       this.menuCursor = 0;
       return;
     }
+    // 0.9.0 — open the Frontier Bulletin (live events + advisories).
+    if (this.input.consume(k.bulletin)) {
+      this._codexReturn = "playing";
+      this.screen = "events";
+      this.menuCursor = 0;
+      return;
+    }
     // 0.8.0 — hail the current target (ships, stations, colonies).
     if (this.input.consume(k.hail)) {
       this.openHail();
@@ -7645,6 +7994,7 @@ export class Voidwake {
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickTradeSim(dt);
+    this.tickFrontierEvents(dt);
     this.tickStationIncome(dt);
     // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
     // player when the label ticks over. Consume here so any call site
@@ -7678,6 +8028,7 @@ export class Voidwake {
           options: this.options, savedAt: Date.now(),
           chatter: this.chatter.slice(0, 250),
           mods: this.enabledModIds(),
+          events: this.frontierEvents,
         };
         let res = saveGame("autosave", blob);
         if (!res.ok && res.reason === "quota") {
@@ -9120,6 +9471,10 @@ export class Voidwake {
     if (p.ownedStations?.some((s) => (s.routes?.length ?? 0) > 0)) {
       out.push({ kind: "crew_ctx_routes", roles: ["merchant", "quartermaster", "navigator"] });
     }
+    // 0.9.0 — a live frontier event inside sensor reach is worth commenting on.
+    if (this.frontierEvents.some((ev) => V.len(V.sub(ev.pos, p.pos)) < 20000)) {
+      out.push({ kind: "crew_ctx_event", roles: ["merchant", "quartermaster", "navigator"] });
+    }
     if (!out.length && !hostile) out.push({ kind: "crew_ctx_quiet", roles: ["navigator", "pilot", "engineer"] });
     return out;
   }
@@ -9161,6 +9516,10 @@ export class Voidwake {
       out.push("npc_ctx_rescue_nearby");
     }
     if (e.kind === "planet" && e.populated && d < 1200) out.push("npc_ctx_colony_quiet");
+    // 0.9.0 — traders near a live advisory talk about the advisory.
+    if (this.frontierEvents.some((ev) => V.len(V.sub(ev.pos, e.pos)) < 20000)) {
+      out.push("npc_ctx_event");
+    }
     return out;
   }
 
@@ -9651,6 +10010,64 @@ export class Voidwake {
       putText(g, 8, y++, `x ${b.pos.x.toFixed(0)}  y ${b.pos.y.toFixed(0)}  z ${b.pos.z.toFixed(0)}`, "#678");
     }
     putText(g, 4, g.length - 2, `${list.length}/${NAV_BOOKMARK_MAX} waypoints stored.`, "#888");
+  }
+
+  // ---------------- 0.9.0 — Frontier Bulletin overlay ---------------------
+  // Live events, nearest first: what changed, where, how long is left, and
+  // what a trader should do about it. ENTER targets the affected dock (when it
+  // is still on sensors) and N bookmarks it into the Nav Log.
+  updateBulletin() {
+    const kb = this.options.keybinds;
+    const rows = this.bulletinRows();
+    if (this.input.consume(kb.bulletin)) {
+      this.screen = this._codexReturn;
+      this.menuCursor = 0;
+      return;
+    }
+    if (!rows.length) return;
+    if (this.input.consume("arrowup")) this.menuCursor = (this.menuCursor + rows.length - 1) % rows.length;
+    if (this.input.consume("arrowdown")) this.menuCursor = (this.menuCursor + 1) % rows.length;
+    const row = rows[Math.min(this.menuCursor, rows.length - 1)];
+    if (this.input.consume("enter") && row) {
+      const ent = this.byId(row.ev.stationId);
+      if (ent) {
+        this.targetId = ent.id;
+        this.pushLog(`Target set: ${ent.name}.`);
+        this.screen = this._codexReturn;
+      } else {
+        this.pushLog(`${row.ev.station} is not on sensors — fly the stored bearing.`);
+      }
+    }
+    if (this.input.consume(kb.bookmark) && row) {
+      const ent = this.byId(row.ev.stationId);
+      if (ent) { this.targetId = ent.id; this.addBookmark(); }
+    }
+  }
+
+  renderBulletin(g: Cell[][]) {
+    const kb = this.options.keybinds;
+    putText(g, 4, 1, `[ FRONTIER BULLETIN ]   ${keyLabel(kb.bulletin)} or ESC close`, "#7CFC00");
+    putText(g, 4, 3, `↑/↓ select · ENTER target the dock · ${keyLabel(kb.bookmark)} bookmark it`, "#888");
+    const rows = this.bulletinRows();
+    if (!rows.length) {
+      putText(g, 4, 5, "The wire is quiet. No advisories in effect — check back in a few minutes.", "#9fe");
+      return;
+    }
+    let y = 5;
+    for (let i = 0; i < rows.length; i++) {
+      const { ev, k, dist, left } = rows[i];
+      const sel = i === this.menuCursor;
+      const mins = Math.floor(left / 60), secs = Math.floor(left % 60);
+      const where = k.scope === "faction" ? `${ev.faction} space (from ${ev.station})` : ev.station;
+      putText(g, 4, y++, `${sel ? ">" : " "} ${k.title.padEnd(20)} ${where.padEnd(30)} `
+        + `${dist.toFixed(0).padStart(9)}u   ${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")} left`,
+        sel ? "#ffe066" : k.color);
+      putText(g, 8, y++, k.blurb, "#9fe");
+      putText(g, 8, y++, `→ ${k.advice}`, "#678");
+      y++;
+    }
+    putText(g, 4, g.length - 2,
+      `${rows.length}/${FRONTIER_EVENT_MAX} advisories live. Events move prices while they run.`, "#888");
   }
 
   // ---------------- Character Sheet overlay ------------------------------
@@ -10601,6 +11018,14 @@ export class Voidwake {
             deadlineIn: m.deadlineAt ? Math.max(0, m.deadlineAt - performance.now() / 1000) : undefined,
           }));
         },
+        // 0.9.0 — read-only frontier event wire.
+        events: () => this.bulletinRows().map(({ ev, k, dist, left }) => ({
+          id: ev.id, kind: ev.kind, title: k.title, scope: k.scope,
+          station: ev.station, stationId: ev.stationId, faction: ev.faction,
+          blurb: k.blurb, advice: k.advice,
+          secondsLeft: Math.round(left), distance: Math.round(dist),
+          x: ev.pos.x, y: ev.pos.y, z: ev.pos.z,
+        })),
         holdings: () => {
           const p = this.player; if (!p) return [];
           return (p.ownedStations ?? []).map((s0) => ({
@@ -11053,6 +11478,7 @@ export class Voidwake {
         options: this.options, savedAt: Date.now(),
         chatter: this.chatter.slice(0, 250),
         mods: this.enabledModIds(),
+        events: this.frontierEvents,
       };
       const res = saveGame(c, blob);
       if (!res.ok) {
@@ -11089,6 +11515,10 @@ export class Voidwake {
     this.options = blob.options;
     this.chatter = Array.isArray(blob.chatter) ? blob.chatter.slice(0, 250) : [];
     this.chatterScroll = 0;
+    // 0.9.0 — restore live advisories. Expired ones are culled on the next
+    // tick and their price shifts were never baked into a fresh market.
+    this.frontierEvents = Array.isArray(blob.events) ? blob.events : [];
+    this.stationStocks.clear();
     this.screen = "playing";
     this.pushLog(logMsg);
     // 0.7.0 — warn if the save was built against a different enabled mod
@@ -11116,6 +11546,7 @@ export class Voidwake {
         options: this.options, savedAt: Date.now(),
         chatter: this.chatter.slice(0, 250),
         mods: this.enabledModIds(),
+        events: this.frontierEvents,
       };
       const json = JSON.stringify(blob, null, 2);
       const file = new Blob([json], { type: "application/json" });
@@ -12239,6 +12670,7 @@ export class Voidwake {
       case "howto": this.renderHowto(grid); break;
       case "quest-log": this.renderQuestLog(grid); break;
       case "nav-log": this.renderNavLog(grid); break;
+      case "events": this.renderBulletin(grid); break;
       case "mission-offer": this.renderMissionOffer(grid); break;
       case "customs": this.renderCustoms(grid); break;
       case "hail": this.renderHail(grid); break;

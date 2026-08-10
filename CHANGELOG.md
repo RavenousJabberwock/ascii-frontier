@@ -4,6 +4,23 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.0 — Frontier Events
+- **Frontier events**: timed, located situations (Refinery Boom, Food Shortage,
+  Tech Embargo, Relic Rush, Pirate Blockade, Fuel Crisis, Medical Quarantine,
+  War Muster, Cargo Glut, Salvage Call) that really move prices at the docks
+  they hit — station-scoped or faction-wide — for 5–18 minutes each, up to
+  three live at once.
+- Blockades and musters pull raiders to the anchor; crises push fuel and ore
+  prices; gluts collapse them. Shifts are baked into the live market rows and
+  reversed cleanly on expiry, and they survive a market-day rotation.
+- **Frontier Bulletin** overlay (`Y`, rebindable): live advisories nearest
+  first with distance, time remaining, what changed and what to do about it.
+  `ENTER` targets the affected dock, `N` bookmarks it.
+- Comms wire announces every event start, end and arrival inside the zone; new
+  crew (`crew_ctx_event`) and NPC (`npc_ctx_event`) situational chatter pools.
+- Scripting: new `onFrontierEvent` hook (`phase` = `start` | `end`) and
+  read-only `frontier.events()`. Live events ride along in saves.
+
 ## 0.8.9 — Hull Classes, Station Archetypes & Rock Mineralogy
 - 15 hull classes (Dart, Corsair, Marauder, Reaver, Dreadnought, Courier,
   Frigate, Escort, Cutter, Cruiser, Interdictor, Hauler, Freighter,

@@ -1,3 +1,29 @@
+# 0.9.0 — Frontier Events
+
+Ships as **0.9.0**.
+
+- **Frontier events.** `FRONTIER_EVENTS` defines ten kinds (ore boom, famine,
+  tech embargo, relic rush, blockade, fuel crisis, quarantine, war muster,
+  glut, salvage call) with a scope (`station` / `faction`), a duration roll,
+  price multipliers by commodity class or id, fuel/ore multipliers and an
+  optional raider count. `tickFrontierEvents()` rolls a new one every
+  ~2.5–6 minutes up to `FRONTIER_EVENT_MAX` (3), expires finished ones, and
+  posts a one-time proximity notice when the player comes inside 6000u.
+- **Market coupling.** Shifts are applied to the live `StationStock` rows (the
+  same objects `tickTradeSim` mutates) and reversed on expiry.
+  `StationStock.evApplied` records which event ids are baked in, so
+  `syncStockEvents()` — called on every `getStock()` — is idempotent and
+  re-applies live events after a market-day rotation without stacking.
+- **Frontier Bulletin.** New `events` screen on keybind `bulletin` (`Y`,
+  rebindable): `bulletinRows()` sorts live events nearest-first with distance
+  and time left; ENTER targets the anchor dock, the bookmark key files it.
+- **Chatter.** New `frontier_event`, `frontier_event_end`, `crew_ctx_event`
+  and `npc_ctx_event` pools; crew and NPC context buckets add the event bucket
+  when an advisory is within 20000u of the speaker.
+- **Scripting.** `onFrontierEvent` (`phase` start/end) and read-only
+  `frontier.events()`. Events persist in `SaveBlob.events`; loading clears the
+  market cache so restored advisories re-apply cleanly.
+
 # 0.8.9 — Hull Classes, Station Archetypes & Rock Mineralogy
 
 Ships as **0.8.9**.
