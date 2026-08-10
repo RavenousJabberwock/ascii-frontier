@@ -57,6 +57,7 @@ The galaxy has three zones:
 | `C` / `R` | Character Sheet / Reputation panel         |
 | `H`       | Hail the current target                    |
 | `N` / `V` | Bookmark target / open the Nav Log         |
+| `Y`       | Frontier Bulletin (live frontier events)   |
 | `U`       | Contract Log (`S` sorts, `F` filters)      |
 | `ESC`     | Menu                                       |
 
@@ -84,6 +85,15 @@ Three things kill new pilots, in order:
 Everything else is recoverable.
 
 ---
+
+### Frontier events (0.9.0)
+
+The economy is not static. Every few minutes an advisory hits the wire and
+parks itself on a dock — or on an entire faction — for five to eighteen
+minutes, and while it is live the prices at that market really move. Press `Y`
+to read the Frontier Bulletin, pick the advisory whose spread you can actually
+service, and fly it before the window closes. Blockades and war musters come
+with raiders attached; that is the price of the margin.
 
 ### Reading the sky (0.8.9)
 

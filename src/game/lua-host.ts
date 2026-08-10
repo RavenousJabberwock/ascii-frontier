@@ -53,6 +53,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   // 0.8.9 — visual variety milestone hook pass
   "onEntitySpawned", "onPlayerDamaged", "onScreenChange", "onOreMined",
   "onSalvageCollected", "onMarketCycle", "onReputationChange", "onCrewLevelUp",
+  // 0.9.0 — frontier events (phase "start" | "end")
+  "onFrontierEvent",
 ];
 
 
@@ -86,6 +88,8 @@ export interface LuaHostBridge {
   // their automated freight lanes and current income rate).
   contracts?: () => Array<Record<string, unknown>>;
   holdings?: () => Array<Record<string, unknown>>;
+  // 0.9.0 — live frontier events (advisories currently moving the economy).
+  events?: () => Array<Record<string, unknown>>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -298,6 +302,13 @@ export class LuaHost {
       return 1;
     });
     lua.lua_setfield(L, -2, to_luastring("holdings"));
+
+    // frontier.events() → list of live frontier events (read-only)
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      pushJsAsLua(Ls, this.bridge.events?.() ?? [], 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("events"));
 
     lua.lua_pushjsfunction(L, (Ls: L) => {
 
