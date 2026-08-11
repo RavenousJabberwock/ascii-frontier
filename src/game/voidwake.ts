@@ -9452,7 +9452,7 @@ export class Voidwake {
     const carryingBanned = COMMODITIES.some((m) =>
       (m.legality === "grey" || m.legality === "restricted") && (p.cargo[m.id] ?? 0) > 0);
     if (carryingBanned) out.push({ kind: "crew_ctx_contraband", roles: ["quartermaster", "merchant", "tactical"] });
-    const star = this.entities.find((e) => e.kind === "star" && V.len(V.sub(e.pos, p.pos)) < 4000);
+    const star = this.nearestOfKind("star", 4000);
     if (star) out.push({ kind: "crew_ctx_nearstar", roles: ["engineer", "navigator"] });
     if (p.mission && !p.mission.done) out.push({ kind: "crew_ctx_mission", roles: ["navigator", "recruiter", "tactical"] });
     if (p.crew?.some((c) => (c.morale ?? 100) < 45)) {
@@ -12612,15 +12612,38 @@ export class Voidwake {
   // undefined, exactly like find() did.
   private _entIndex = new Map<number, Entity>();
   private _entIndexLen = -1;
+  private _entIndexRef: Entity[] | null = null;
   byId(id?: number | null): Entity | undefined {
     if (id == null) return undefined;
-    if (this._entIndexLen !== this.entities.length) {
+    // 0.9.1 correctness — the cache used to invalidate on length alone, so a
+    // frame that removed one entity and spawned another (a kill plus its loot,
+    // for example) left a stale map that could hand back a destroyed ship.
+    // Removals always replace the array via filter(), so watching the array
+    // identity as well closes that window.
+    if (this._entIndexLen !== this.entities.length || this._entIndexRef !== this.entities) {
       this._entIndex.clear();
       for (const e of this.entities) this._entIndex.set(e.id, e);
       this._entIndexLen = this.entities.length;
+      this._entIndexRef = this.entities;
     }
     const hit = this._entIndex.get(id);
     return hit && hit.id === id ? hit : undefined;
+  }
+
+  // 0.9.1 — nearest entity of a kind inside `radius`, squared-distance only.
+  // Replaces `entities.find(e => e.kind === k && V.len(V.sub(...)) < r)`, which
+  // allocated two Vec3s per candidate.
+  nearestOfKind(kind: string, radius: number): Entity | undefined {
+    const p = this.player; if (!p) return undefined;
+    const r2 = radius * radius;
+    let best: Entity | undefined, bestD = Infinity;
+    for (const e of this.entities) {
+      if (e.kind !== kind) continue;
+      const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 <= r2 && d2 < bestD) { bestD = d2; best = e; }
+    }
+    return best;
   }
 
   // --- Common menu nav -----------------------------------------------------
