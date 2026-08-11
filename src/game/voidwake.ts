@@ -8070,7 +8070,18 @@ export class Voidwake {
       const currentSpeed = p.ship.fuel > 0
         ? effectiveTopSpeed(p) * p.throttle * (keys.has(k.boost) ? effectiveBoostMul(p) : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
         : V.len(p.driftVel ?? { x: 0, y: 0, z: 0 });
+      // 0.9.1 perf — broad-phase reject. Every interaction below (ram, station
+      // bump, corona scoop, black-hole shear) happens inside ~800u, so bail on
+      // a squared-distance test before allocating any Vec3 math. This is the
+      // hottest loop in the frame: it used to run three V.sub/V.len allocations
+      // per entity per frame across the entire chart.
+      const COLL_NEAR2 = 1200 * 1200;
       for (const e of this.entities) {
+        {
+          const dx0 = e.pos.x - p.pos.x, dy0 = e.pos.y - p.pos.y, dz0 = e.pos.z - p.pos.z;
+          if (dx0 * dx0 + dy0 * dy0 + dz0 * dz0 > COLL_NEAR2) continue;
+        }
+
         // Also collide vs NPC ships (any faction). Ramming a ship costs both
         // parties hull; player retaliation applies to same-faction bystanders.
         const isNpcShip = e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral";
