@@ -6073,7 +6073,7 @@ export class Voidwake {
     let s = this.stationStocks.get(stationId);
     const today = marketDay();
     if (!s || s.day !== today) {
-      const ent = this.entities.find((x) => x.id === stationId);
+      const ent = this.byId(stationId);
       const faction = ent?.faction ?? "guild";
       s = generateStationStock(stationId, faction, today);
       dispatchHook("onMarketCycle", { stationId, faction, day: today, station: ent?.name ?? "?" });
@@ -7786,7 +7786,7 @@ export class Voidwake {
         // bounce-back via _wormholeCooldown.
         const d = V.len(V.sub(e.pos, p.pos));
         if (d < 60 && (this._wormholeCooldown ?? 0) <= 0) {
-          const sib = this.entities.find((x) => x.id === e.targetId && x.kind === "wormhole");
+          const sib0 = this.byId(e.targetId); const sib = sib0 && sib0.kind === "wormhole" ? sib0 : undefined;
           if (sib) {
             p.pos = V.add(sib.pos, { x: 80, y: 0, z: 80 });
             p.driftVel = { x: 0, y: 0, z: 0 };
@@ -8191,7 +8191,7 @@ export class Voidwake {
     if (aiEvents.length) {
       for (const ev of aiEvents) {
         if (ev.kind === "patrol_tow_start") {
-          const tow = this.entities.find((x) => x.id === ev.targetId);
+          const tow = this.byId(ev.targetId);
           if (tow) {
             const ctx = this.chatterCtx(tow, { target: tow });
             this.pushChatter(ev.e.name, pickLine("patrol_tow", ctx), "#7fd0ff");
@@ -8212,7 +8212,7 @@ export class Voidwake {
           let dmg = 6 * this.dmgScale();
           // 0.5.7 — NPC crit symmetry. Hostile fire crits back at 6% base
           // (10% if the shooter is a "boss" bounty). 2× damage + comms line.
-          const shooter = this.entities.find((x) => x.id === e.ownerId);
+          const shooter = this.byId(e.ownerId);
           const critBase = shooter?.boss ? 0.10 : 0.06;
           const npcCrit = Math.random() < critBase;
           if (npcCrit) dmg *= 2;
@@ -8561,7 +8561,7 @@ export class Voidwake {
       }
       if (bestId >= 0) {
         this.targetId = bestId;
-        this.pushLog(`Target: ${cat.label} — ${this.entities.find(e => e.id === bestId)?.name ?? "?"}`);
+        this.pushLog(`Target: ${cat.label} — ${this.byId(bestId)?.name ?? "?"}`);
         return;
       }
     }
