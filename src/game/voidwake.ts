@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.0";
+const VERSION = "0.9.1";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1796,6 +1796,35 @@ const TITLE_TIPS = [
   "Options ▸ Audio ▸ Radio picks in-game music, including your own stream URL.",
   "Cargo full? Dock and sell before you mine another rock.",
   "Save often. Permadeath is opt-in for a reason.",
+  // 0.9.1 — second batch of tips. Covers the systems added since 0.8.0.
+  "Press Y for the Frontier Bulletin — live advisories move dock prices.",
+  "A blockade advisory means raiders. A glut means cheap cargo. Read both.",
+  "Press U for the contract log: three jobs at once, S sorts, F filters.",
+  "Press C for your character sheet — crew, pets, modules and lifetime record.",
+  "Press N to bookmark a contact, V to open the Nav Log. Waypoints draw in-world.",
+  "Press H to hail a contact inside 4000u. Reputation changes what they say.",
+  "Buy low, sell high: every dock prices the same commodity differently.",
+  "Contraband pays double and costs triple if customs finds it. Shielded Hold helps.",
+  "Bounty Offices post fresh warrants every market day. Lawful docks only.",
+  "A Station Core turns a quiet orbit into passive income. Feed it raw materials.",
+  "Tier 3 stations can run automated freight lanes while you fly elsewhere.",
+  "Hire a wing escort at a lawful dock — two guns beat one.",
+  "Shoot a big rock and it chips: smaller rocks, same total ore. No free lunch.",
+  "Wrecks drop tech and element crates. Salvage sells well at industrial docks.",
+  "Insurance costs 15% of hull value and waives the rescue fee. Worth it.",
+  "Crew gain levels. A level 5 Engineer repairs noticeably faster than a rookie.",
+  "Low morale means walkouts. Pay on time, or fly Easy mode.",
+  "Out of fuel? A Solar Sail Engine still gives you 20% throttle. Forever.",
+  "Options ▸ Visuals kills scanlines and glitches if they bother your eyes.",
+  "Options ▸ Comms resizes the chat pane and toggles word wrap.",
+  "Options ▸ Scripting runs Lua. Options ▸ Mods loads other people's Lua.",
+  "Drag a .lua file onto the window to install it as a mod.",
+  "{ and } cycle targets of the same category as your current one.",
+  "Press F near a colony planet to land and trade — not every dock is a station.",
+  "Stranded ships pay for a fuel donation. Space Patrol tows the rest.",
+  "Nebulae fog your sensors. Fly slow or fly blind.",
+  "Ø wormholes come in pairs and skip thousands of units in a blink.",
+  "Deep space past the rim is nearly empty — but what is out there is old.",
 ];
 
 // Species catalog. Each entry has a passive (applied when the *player's*
