@@ -8176,8 +8176,14 @@ export class Voidwake {
 
     for (const e of this.entities) {
       if (e.kind !== "bullet") tickAI(e, dt, p, this.entities, this.rng);
-      e.pos = V.add(e.pos, V.scale(e.vel, dt));
+      // 0.9.1 perf — integrate in place. `V.add(e.pos, V.scale(e.vel, dt))`
+      // allocated two Vec3 objects per entity per frame (thousands of short
+      // lived objects a second → GC sawtooth near dense sectors).
+      e.pos.x += e.vel.x * dt;
+      e.pos.y += e.vel.y * dt;
+      e.pos.z += e.vel.z * dt;
     }
+
     // 0.5.6 — drain AI state-transition events into keyed chatter lines.
     const aiEvents = drainAiEvents();
     // 0.8.6 — keep hired wing escorts alive and bound to live entities.
