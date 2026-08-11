@@ -5436,6 +5436,15 @@ function rockClassOf(e: Entity): RockClass {
 // =============================================================================
 // 11. Main engine class
 // =============================================================================
+// 0.9.1 perf — sprite scale table, hoisted out of renderPlaying(). Values are
+// world-space radii in units per entity kind; the renderer divides by depth to
+// get an on-screen cell radius.
+const WORLD_RADIUS_BY_KIND: Record<string, number> = {
+  star: 40, planet: 30, station: 18, asteroid: 8,
+  ship: 4, bullet: 0.5, comet: 2, nebula: 420, beacon: 3,
+  ufo: 5, thargoid: 9, wormhole: 22, dyson: 4, derelict: 6,
+};
+
 export class Voidwake {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -13923,13 +13932,9 @@ export class Voidwake {
     // Project entities onto viewport using player heading as the camera
     const cy = Math.cos(p.heading.yaw), sy = Math.sin(p.heading.yaw);
     const cp = Math.cos(p.heading.pitch), sp = Math.sin(p.heading.pitch);
-    // World radius per entity kind — used to scale on-screen sprites with
-    // distance so big objects (stars, stations, planets) read as solid.
-    const worldRadius: Record<string, number> = {
-      star: 40, planet: 30, station: 18, asteroid: 8,
-      ship: 4, bullet: 0.5, comet: 2, nebula: 420, beacon: 3,
-      ufo: 5, thargoid: 9, wormhole: 22, dyson: 4, derelict: 6,
-    };
+    // World radius per entity kind lives in the module-level WORLD_RADIUS_BY_KIND
+    // table (0.9.1 — it used to be re-allocated on every rendered frame).
+    const worldRadius = WORLD_RADIUS_BY_KIND;
     // Sort far→near so close objects overdraw distant ones.
     // Distance falloff: past 5000u, force single-glyph "dot"; past 10000u, cull.
     const FAR_DOT = 5000;
@@ -13953,6 +13958,13 @@ export class Voidwake {
       if (e.kind === "nebula") wr *= 0.8 + hash01(e.id * 251) * 0.9; // varied cloud sizes
       // Far entities collapse to a single colored period regardless of true size.
       const rCells = far ? 0 : (wr / z2) * vw * 0.7;
+      // 0.9.1 perf — viewport reject. An entity whose sprite cannot touch the
+      // world pane (plus a margin for its label/halo) is dropped before it can
+      // cost us a sort slot and a full draw pass. Kept generous so trails,
+      // rings and coronas that overhang the hull still make it in.
+      const margin = rCells + 6;
+      if (sx < vpLeft - margin || sx > vpRight + margin ||
+          sy2 < vpTop - margin || sy2 > vpBottom + margin) continue;
       projected.push({ e, sx, sy: sy2, z: z2, r: rCells, far });
     }
     projected.sort((a, b) => b.z - a.z);
