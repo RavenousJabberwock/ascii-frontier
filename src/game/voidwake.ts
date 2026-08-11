@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.0";
+const VERSION = "0.9.1";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -1796,6 +1796,35 @@ const TITLE_TIPS = [
   "Options ▸ Audio ▸ Radio picks in-game music, including your own stream URL.",
   "Cargo full? Dock and sell before you mine another rock.",
   "Save often. Permadeath is opt-in for a reason.",
+  // 0.9.1 — second batch of tips. Covers the systems added since 0.8.0.
+  "Press Y for the Frontier Bulletin — live advisories move dock prices.",
+  "A blockade advisory means raiders. A glut means cheap cargo. Read both.",
+  "Press U for the contract log: three jobs at once, S sorts, F filters.",
+  "Press C for your character sheet — crew, pets, modules and lifetime record.",
+  "Press N to bookmark a contact, V to open the Nav Log. Waypoints draw in-world.",
+  "Press H to hail a contact inside 4000u. Reputation changes what they say.",
+  "Buy low, sell high: every dock prices the same commodity differently.",
+  "Contraband pays double and costs triple if customs finds it. Shielded Hold helps.",
+  "Bounty Offices post fresh warrants every market day. Lawful docks only.",
+  "A Station Core turns a quiet orbit into passive income. Feed it raw materials.",
+  "Tier 3 stations can run automated freight lanes while you fly elsewhere.",
+  "Hire a wing escort at a lawful dock — two guns beat one.",
+  "Shoot a big rock and it chips: smaller rocks, same total ore. No free lunch.",
+  "Wrecks drop tech and element crates. Salvage sells well at industrial docks.",
+  "Insurance costs 15% of hull value and waives the rescue fee. Worth it.",
+  "Crew gain levels. A level 5 Engineer repairs noticeably faster than a rookie.",
+  "Low morale means walkouts. Pay on time, or fly Easy mode.",
+  "Out of fuel? A Solar Sail Engine still gives you 20% throttle. Forever.",
+  "Options ▸ Visuals kills scanlines and glitches if they bother your eyes.",
+  "Options ▸ Comms resizes the chat pane and toggles word wrap.",
+  "Options ▸ Scripting runs Lua. Options ▸ Mods loads other people's Lua.",
+  "Drag a .lua file onto the window to install it as a mod.",
+  "{ and } cycle targets of the same category as your current one.",
+  "Press F near a colony planet to land and trade — not every dock is a station.",
+  "Stranded ships pay for a fuel donation. Space Patrol tows the rest.",
+  "Nebulae fog your sensors. Fly slow or fly blind.",
+  "Ø wormholes come in pairs and skip thousands of units in a blink.",
+  "Deep space past the rim is nearly empty — but what is out there is old.",
 ];
 
 // Species catalog. Each entry has a passive (applied when the *player's*
@@ -3300,11 +3329,13 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
   // for entities the player will never see.
   {
     const _dx = e.pos.x - player.pos.x, _dy = e.pos.y - player.pos.y, _dz = e.pos.z - player.pos.z;
-    if (_dx * _dx + _dy * _dy + _dz * _dz > 3500 * 3500) {
-      e.pos.x += e.vel.x * dt; e.pos.y += e.vel.y * dt; e.pos.z += e.vel.z * dt;
-      return;
-    }
+    // 0.9.1 fix: the early return used to integrate `pos` itself, but the
+    // caller integrates every entity right after tickAI() — so distant ships
+    // were moving at double speed (and drifting out of their sectors over a
+    // long session). Bail out without touching position; the caller moves it.
+    if (_dx * _dx + _dy * _dy + _dz * _dz > 3500 * 3500) return;
   }
+
   // Stranded lawful ships coast in place waiting for a Patrol tow.
   if (e.stranded && e.towById == null && (e.kind === "friendly" || e.kind === "neutral")) {
     e.vel = { x: 0, y: 0, z: 0 };
@@ -5434,6 +5465,15 @@ function rockClassOf(e: Entity): RockClass {
 // =============================================================================
 // 11. Main engine class
 // =============================================================================
+// 0.9.1 perf — sprite scale table, hoisted out of renderPlaying(). Values are
+// world-space radii in units per entity kind; the renderer divides by depth to
+// get an on-screen cell radius.
+const WORLD_RADIUS_BY_KIND: Record<string, number> = {
+  star: 40, planet: 30, station: 18, asteroid: 8,
+  ship: 4, bullet: 0.5, comet: 2, nebula: 420, beacon: 3,
+  ufo: 5, thargoid: 9, wormhole: 22, dyson: 4, derelict: 6,
+};
+
 export class Voidwake {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -6071,7 +6111,7 @@ export class Voidwake {
     let s = this.stationStocks.get(stationId);
     const today = marketDay();
     if (!s || s.day !== today) {
-      const ent = this.entities.find((x) => x.id === stationId);
+      const ent = this.byId(stationId);
       const faction = ent?.faction ?? "guild";
       s = generateStationStock(stationId, faction, today);
       dispatchHook("onMarketCycle", { stationId, faction, day: today, station: ent?.name ?? "?" });
@@ -7784,7 +7824,7 @@ export class Voidwake {
         // bounce-back via _wormholeCooldown.
         const d = V.len(V.sub(e.pos, p.pos));
         if (d < 60 && (this._wormholeCooldown ?? 0) <= 0) {
-          const sib = this.entities.find((x) => x.id === e.targetId && x.kind === "wormhole");
+          const sib0 = this.byId(e.targetId); const sib = sib0 && sib0.kind === "wormhole" ? sib0 : undefined;
           if (sib) {
             p.pos = V.add(sib.pos, { x: 80, y: 0, z: 80 });
             p.driftVel = { x: 0, y: 0, z: 0 };
@@ -8068,7 +8108,18 @@ export class Voidwake {
       const currentSpeed = p.ship.fuel > 0
         ? effectiveTopSpeed(p) * p.throttle * (keys.has(k.boost) ? effectiveBoostMul(p) : 1.0) * (keys.has(k.supercruise) ? 3.0 : 1.0)
         : V.len(p.driftVel ?? { x: 0, y: 0, z: 0 });
+      // 0.9.1 perf — broad-phase reject. Every interaction below (ram, station
+      // bump, corona scoop, black-hole shear) happens inside ~800u, so bail on
+      // a squared-distance test before allocating any Vec3 math. This is the
+      // hottest loop in the frame: it used to run three V.sub/V.len allocations
+      // per entity per frame across the entire chart.
+      const COLL_NEAR2 = 1200 * 1200;
       for (const e of this.entities) {
+        {
+          const dx0 = e.pos.x - p.pos.x, dy0 = e.pos.y - p.pos.y, dz0 = e.pos.z - p.pos.z;
+          if (dx0 * dx0 + dy0 * dy0 + dz0 * dz0 > COLL_NEAR2) continue;
+        }
+
         // Also collide vs NPC ships (any faction). Ramming a ship costs both
         // parties hull; player retaliation applies to same-faction bystanders.
         const isNpcShip = e.kind === "hostile" || e.kind === "friendly" || e.kind === "neutral";
@@ -8163,8 +8214,14 @@ export class Voidwake {
 
     for (const e of this.entities) {
       if (e.kind !== "bullet") tickAI(e, dt, p, this.entities, this.rng);
-      e.pos = V.add(e.pos, V.scale(e.vel, dt));
+      // 0.9.1 perf — integrate in place. `V.add(e.pos, V.scale(e.vel, dt))`
+      // allocated two Vec3 objects per entity per frame (thousands of short
+      // lived objects a second → GC sawtooth near dense sectors).
+      e.pos.x += e.vel.x * dt;
+      e.pos.y += e.vel.y * dt;
+      e.pos.z += e.vel.z * dt;
     }
+
     // 0.5.6 — drain AI state-transition events into keyed chatter lines.
     const aiEvents = drainAiEvents();
     // 0.8.6 — keep hired wing escorts alive and bound to live entities.
@@ -8172,7 +8229,7 @@ export class Voidwake {
     if (aiEvents.length) {
       for (const ev of aiEvents) {
         if (ev.kind === "patrol_tow_start") {
-          const tow = this.entities.find((x) => x.id === ev.targetId);
+          const tow = this.byId(ev.targetId);
           if (tow) {
             const ctx = this.chatterCtx(tow, { target: tow });
             this.pushChatter(ev.e.name, pickLine("patrol_tow", ctx), "#7fd0ff");
@@ -8193,7 +8250,7 @@ export class Voidwake {
           let dmg = 6 * this.dmgScale();
           // 0.5.7 — NPC crit symmetry. Hostile fire crits back at 6% base
           // (10% if the shooter is a "boss" bounty). 2× damage + comms line.
-          const shooter = this.entities.find((x) => x.id === e.ownerId);
+          const shooter = this.byId(e.ownerId);
           const critBase = shooter?.boss ? 0.10 : 0.06;
           const npcCrit = Math.random() < critBase;
           if (npcCrit) dmg *= 2;
@@ -8542,7 +8599,7 @@ export class Voidwake {
       }
       if (bestId >= 0) {
         this.targetId = bestId;
-        this.pushLog(`Target: ${cat.label} — ${this.entities.find(e => e.id === bestId)?.name ?? "?"}`);
+        this.pushLog(`Target: ${cat.label} — ${this.byId(bestId)?.name ?? "?"}`);
         return;
       }
     }
@@ -9424,7 +9481,7 @@ export class Voidwake {
     const carryingBanned = COMMODITIES.some((m) =>
       (m.legality === "grey" || m.legality === "restricted") && (p.cargo[m.id] ?? 0) > 0);
     if (carryingBanned) out.push({ kind: "crew_ctx_contraband", roles: ["quartermaster", "merchant", "tactical"] });
-    const star = this.entities.find((e) => e.kind === "star" && V.len(V.sub(e.pos, p.pos)) < 4000);
+    const star = this.nearestOfKind("star", 4000);
     if (star) out.push({ kind: "crew_ctx_nearstar", roles: ["engineer", "navigator"] });
     if (p.mission && !p.mission.done) out.push({ kind: "crew_ctx_mission", roles: ["navigator", "recruiter", "tactical"] });
     if (p.crew?.some((c) => (c.morale ?? 100) < 45)) {
@@ -11034,6 +11091,38 @@ export class Voidwake {
             incomePerMinute: stationIncomePerMinute(p, s0) + stationRouteIncome(p, s0),
           }));
         },
+        // 0.9.1 — mod ergonomics. A read of the tracked contact and the active
+        // screen, a narrow target setter, and Nav Log writes, so a mod can
+        // build a navigation assistant without touching engine internals.
+        getTarget: () => {
+          const t = this.targetId != null ? this.byId(this.targetId) : undefined;
+          if (!t) return null;
+          const p = this.player;
+          const dist = p ? V.len(V.sub(t.pos, p.pos)) : 0;
+          return {
+            id: t.id, kind: t.kind, name: t.name, faction: t.faction,
+            hull: t.hull, shield: t.shield, distance: Math.round(dist),
+            x: t.pos.x, y: t.pos.y, z: t.pos.z,
+          };
+        },
+        setTarget: (id) => {
+          const e = this.byId(id);
+          if (!e) return false;
+          this.targetId = e.id;
+          this.pushLog(`[script] target → ${e.name}`);
+          return true;
+        },
+        currentScreen: () => String(this.screen),
+        addBookmark: (name, x, y, z) => {
+          const p = this.player; if (!p) return false;
+          if (!p.bookmarks) p.bookmarks = [];
+          const pos = { x, y, z };
+          if (p.bookmarks.some((b) => b.name === name && V.len(V.sub(b.pos, pos)) < 1)) return false;
+          p.bookmarks.push({ name, kind: "waypoint", pos });
+          while (p.bookmarks.length > NAV_BOOKMARK_MAX) p.bookmarks.shift();
+          dispatchHook("onBookmarkAdded", { name, kind: "waypoint", x, y, z });
+          return true;
+        },
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -12584,15 +12673,38 @@ export class Voidwake {
   // undefined, exactly like find() did.
   private _entIndex = new Map<number, Entity>();
   private _entIndexLen = -1;
+  private _entIndexRef: Entity[] | null = null;
   byId(id?: number | null): Entity | undefined {
     if (id == null) return undefined;
-    if (this._entIndexLen !== this.entities.length) {
+    // 0.9.1 correctness — the cache used to invalidate on length alone, so a
+    // frame that removed one entity and spawned another (a kill plus its loot,
+    // for example) left a stale map that could hand back a destroyed ship.
+    // Removals always replace the array via filter(), so watching the array
+    // identity as well closes that window.
+    if (this._entIndexLen !== this.entities.length || this._entIndexRef !== this.entities) {
       this._entIndex.clear();
       for (const e of this.entities) this._entIndex.set(e.id, e);
       this._entIndexLen = this.entities.length;
+      this._entIndexRef = this.entities;
     }
     const hit = this._entIndex.get(id);
     return hit && hit.id === id ? hit : undefined;
+  }
+
+  // 0.9.1 — nearest entity of a kind inside `radius`, squared-distance only.
+  // Replaces `entities.find(e => e.kind === k && V.len(V.sub(...)) < r)`, which
+  // allocated two Vec3s per candidate.
+  nearestOfKind(kind: string, radius: number): Entity | undefined {
+    const p = this.player; if (!p) return undefined;
+    const r2 = radius * radius;
+    let best: Entity | undefined, bestD = Infinity;
+    for (const e of this.entities) {
+      if (e.kind !== kind) continue;
+      const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y, dz = e.pos.z - p.pos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 <= r2 && d2 < bestD) { bestD = d2; best = e; }
+    }
+    return best;
   }
 
   // --- Common menu nav -----------------------------------------------------
@@ -13904,13 +14016,9 @@ export class Voidwake {
     // Project entities onto viewport using player heading as the camera
     const cy = Math.cos(p.heading.yaw), sy = Math.sin(p.heading.yaw);
     const cp = Math.cos(p.heading.pitch), sp = Math.sin(p.heading.pitch);
-    // World radius per entity kind — used to scale on-screen sprites with
-    // distance so big objects (stars, stations, planets) read as solid.
-    const worldRadius: Record<string, number> = {
-      star: 40, planet: 30, station: 18, asteroid: 8,
-      ship: 4, bullet: 0.5, comet: 2, nebula: 420, beacon: 3,
-      ufo: 5, thargoid: 9, wormhole: 22, dyson: 4, derelict: 6,
-    };
+    // World radius per entity kind lives in the module-level WORLD_RADIUS_BY_KIND
+    // table (0.9.1 — it used to be re-allocated on every rendered frame).
+    const worldRadius = WORLD_RADIUS_BY_KIND;
     // Sort far→near so close objects overdraw distant ones.
     // Distance falloff: past 5000u, force single-glyph "dot"; past 10000u, cull.
     const FAR_DOT = 5000;
@@ -13934,6 +14042,13 @@ export class Voidwake {
       if (e.kind === "nebula") wr *= 0.8 + hash01(e.id * 251) * 0.9; // varied cloud sizes
       // Far entities collapse to a single colored period regardless of true size.
       const rCells = far ? 0 : (wr / z2) * vw * 0.7;
+      // 0.9.1 perf — viewport reject. An entity whose sprite cannot touch the
+      // world pane (plus a margin for its label/halo) is dropped before it can
+      // cost us a sort slot and a full draw pass. Kept generous so trails,
+      // rings and coronas that overhang the hull still make it in.
+      const margin = rCells + 6;
+      if (sx < vpLeft - margin || sx > vpRight + margin ||
+          sy2 < vpTop - margin || sy2 > vpBottom + margin) continue;
       projected.push({ e, sx, sy: sy2, z: z2, r: rCells, far });
     }
     projected.sort((a, b) => b.z - a.z);

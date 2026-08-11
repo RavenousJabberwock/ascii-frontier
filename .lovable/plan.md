@@ -1,3 +1,43 @@
+# 0.9.1 — Performance Pass & Navigation Scripting
+
+Ships as **0.9.1**.
+
+- **Renderer hot path.** `WORLD_RADIUS_BY_KIND` is hoisted to module scope
+  (the table was re-allocated per rendered frame). `renderPlaying()`'s
+  projection loop now rejects any entity whose `sx/sy ± (rCells + 6)` box
+  misses the world pane, so off-screen contacts never reach the depth sort or
+  the draw pass.
+- **In-place integration.** The entity move loop mutates `e.pos` instead of
+  `e.pos = V.add(e.pos, V.scale(e.vel, dt))`. Verified every entity owns a
+  private `pos` object (bullets and swarm spawns already copy), so mutation is
+  safe. This was two allocations per entity per frame — the source of the GC
+  sawtooth near dense space.
+- **Collision broad phase.** One squared-distance reject (1200u) at the top of
+  the player-collision loop guards ram, dock-bump, corona-scoop and
+  black-hole-shear checks, all of which trigger well inside 800u.
+- **Fixed: distant traffic at double speed.** `tickAI`'s >3500u early return
+  integrated `pos` before returning, and the caller integrated it again.
+- **Fixed: stale `byId()` cache.** Invalidation watched entity count only, so a
+  frame that removed one entity and spawned another could return a destroyed
+  ship. It now also compares array identity (removals always go through
+  `filter()`, producing a fresh array).
+- **`nearestOfKind(kind, radius)`.** Allocation-free nearest lookup; replaces
+  the per-frame `entities.find(... V.len(V.sub(...)) < r)` star scan. Remaining
+  `entities.find(e => e.id === ...)` scans folded into `byId()`.
+- **Scripting.** `frontier.target()`, `frontier.setTarget(id)`,
+  `frontier.screen()`, `frontier.bookmark(name, x, y, z)` and
+  `frontier.hooks()`. Bookmarks respect `NAV_BOOKMARK_MAX` and dispatch
+  `onBookmarkAdded`; `setTarget` validates the id and logs the switch.
+- **Title tips.** 12 → ~40 entries covering bulletin, contract log, bounties,
+  holdings, wings, salvage, insurance, crew levels, chipping, solar sail,
+  visual options and mod install.
+
+## Deferred
+
+- Spatial hash / uniform grid for the NPC-vs-NPC target scans (the remaining
+  O(n) work per active ship). Needs a rebuild-per-frame budget study first.
+- Offscreen glyph atlas for repeated sprite stamps.
+
 # 0.9.0 — Frontier Events
 
 Ships as **0.9.0**.
