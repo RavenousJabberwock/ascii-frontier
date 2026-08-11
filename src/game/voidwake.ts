@@ -3300,11 +3300,13 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
   // for entities the player will never see.
   {
     const _dx = e.pos.x - player.pos.x, _dy = e.pos.y - player.pos.y, _dz = e.pos.z - player.pos.z;
-    if (_dx * _dx + _dy * _dy + _dz * _dz > 3500 * 3500) {
-      e.pos.x += e.vel.x * dt; e.pos.y += e.vel.y * dt; e.pos.z += e.vel.z * dt;
-      return;
-    }
+    // 0.9.1 fix: the early return used to integrate `pos` itself, but the
+    // caller integrates every entity right after tickAI() — so distant ships
+    // were moving at double speed (and drifting out of their sectors over a
+    // long session). Bail out without touching position; the caller moves it.
+    if (_dx * _dx + _dy * _dy + _dz * _dz > 3500 * 3500) return;
   }
+
   // Stranded lawful ships coast in place waiting for a Patrol tow.
   if (e.stranded && e.towById == null && (e.kind === "friendly" || e.kind === "neutral")) {
     e.vel = { x: 0, y: 0, z: 0 };
