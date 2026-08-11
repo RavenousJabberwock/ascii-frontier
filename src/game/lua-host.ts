@@ -317,6 +317,47 @@ export class LuaHost {
     });
     lua.lua_setfield(L, -2, to_luastring("events"));
 
+    // frontier.target() → tracked contact snapshot | nil
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      pushJsAsLua(Ls, this.bridge.getTarget?.() ?? null, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("target"));
+
+    // frontier.setTarget(id) → boolean
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const id = Math.floor(Number(lua.lua_tonumber(Ls, 1)));
+      lua.lua_pushboolean(Ls, this.bridge.setTarget?.(id) ? 1 : 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("setTarget"));
+
+    // frontier.screen() → active screen id ("playing", "station", ...)
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      lua.lua_pushstring(Ls, to_luastring(this.bridge.currentScreen?.() ?? "unknown"));
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("screen"));
+
+    // frontier.bookmark(name, x, y, z) → boolean (false if duplicate/no player)
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const name = String(lua.lua_tojsstring(Ls, 1) ?? "Waypoint");
+      const x = Number(lua.lua_tonumber(Ls, 2)) || 0;
+      const y = Number(lua.lua_tonumber(Ls, 3)) || 0;
+      const z = Number(lua.lua_tonumber(Ls, 4)) || 0;
+      lua.lua_pushboolean(Ls, this.bridge.addBookmark?.(name, x, y, z) ? 1 : 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("bookmark"));
+
+    // frontier.hooks() → every hook name this build dispatches. Lets a mod
+    // feature-detect instead of hard-coding the 0.9.x hook table.
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      pushJsAsLua(Ls, HOOK_NAMES as unknown as string[], 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("hooks"));
+
     lua.lua_pushjsfunction(L, (Ls: L) => {
 
       const snap = this.bridge.getPlayerSnapshot?.() ?? null;
