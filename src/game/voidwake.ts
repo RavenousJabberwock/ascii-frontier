@@ -11091,6 +11091,38 @@ export class Voidwake {
             incomePerMinute: stationIncomePerMinute(p, s0) + stationRouteIncome(p, s0),
           }));
         },
+        // 0.9.1 — mod ergonomics. A read of the tracked contact and the active
+        // screen, a narrow target setter, and Nav Log writes, so a mod can
+        // build a navigation assistant without touching engine internals.
+        getTarget: () => {
+          const t = this.targetId != null ? this.byId(this.targetId) : undefined;
+          if (!t) return null;
+          const p = this.player;
+          const dist = p ? V.len(V.sub(t.pos, p.pos)) : 0;
+          return {
+            id: t.id, kind: t.kind, name: t.name, faction: t.faction,
+            hull: t.hull, shield: t.shield, distance: Math.round(dist),
+            x: t.pos.x, y: t.pos.y, z: t.pos.z,
+          };
+        },
+        setTarget: (id) => {
+          const e = this.byId(id);
+          if (!e) return false;
+          this.targetId = e.id;
+          this.pushLog(`[script] target → ${e.name}`);
+          return true;
+        },
+        currentScreen: () => String(this.screen),
+        addBookmark: (name, x, y, z) => {
+          const p = this.player; if (!p) return false;
+          if (!p.bookmarks) p.bookmarks = [];
+          const pos = { x, y, z };
+          if (p.bookmarks.some((b) => b.name === name && V.len(V.sub(b.pos, pos)) < 1)) return false;
+          p.bookmarks.push({ name, kind: "waypoint", pos });
+          while (p.bookmarks.length > NAV_BOOKMARK_MAX) p.bookmarks.shift();
+          dispatchHook("onBookmarkAdded", { name, kind: "waypoint", x, y, z });
+          return true;
+        },
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
