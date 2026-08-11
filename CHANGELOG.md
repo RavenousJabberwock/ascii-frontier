@@ -4,6 +4,34 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.1 — Performance Pass & Navigation Scripting
+- **Renderer**: the per-kind sprite-radius table is no longer rebuilt every
+  frame, and entities whose sprite cannot touch the world pane are rejected
+  before they cost a sort slot or a draw pass. Dense sectors (rings, asteroid
+  belts, station clusters) hold frame time much better.
+- **Physics**: entity integration is done in place instead of allocating two
+  Vec3 objects per entity per frame, which removes the GC sawtooth that showed
+  up as stutter near busy space.
+- **Bug — distant ships flew at double speed**: `tickAI`'s far-distance early
+  return integrated position itself, then the caller integrated it again. Over
+  a long session that let far traffic drift out of its home sectors.
+- **Bug — stale entity index**: `byId()` invalidated its cache on entity count
+  alone, so a frame that removed one entity and spawned another (a kill plus
+  its loot) could hand back a destroyed ship. It now also watches array
+  identity.
+- **Collision broad phase**: ramming, dock bumps, corona scooping and
+  black-hole shear now share one squared-distance reject, cutting the frame's
+  hottest loop down to nearby contacts.
+- Remaining linear `id` scans in the hot path replaced with the `byId()` index,
+  and near-star lookups replaced with an allocation-free `nearestOfKind()`.
+- **Scripting**: `frontier.target()`, `frontier.setTarget(id)`,
+  `frontier.screen()`, `frontier.bookmark(name, x, y, z)` and
+  `frontier.hooks()` — enough for a mod to build a navigation assistant and to
+  feature-detect hooks instead of hard-coding the table.
+- **Title tips**: expanded from 12 to ~40, now covering every system added
+  since 0.8.0 (bulletin, contract log, bounties, holdings, wings, salvage,
+  insurance, crew levels, mods).
+
 ## 0.9.0 — Frontier Events
 - **Frontier events**: timed, located situations (Refinery Boom, Food Shortage,
   Tech Embargo, Relic Rush, Pirate Blockade, Fuel Crisis, Medical Quarantine,

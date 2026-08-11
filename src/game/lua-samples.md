@@ -312,3 +312,42 @@ frontier.on("onPlayerDock", function()
   end
 end)
 ```
+
+## Navigation assistant (0.9.1)
+
+Uses the 0.9.1 navigation surface: read the tracked contact, file waypoints, and
+only act while the pilot is actually flying.
+
+```lua
+-- Feature-detect first: older builds have no frontier.hooks().
+local available = {}
+if frontier.hooks then
+  for _, name in ipairs(frontier.hooks()) do available[name] = true end
+end
+
+-- Drop a breadcrumb every time you pass something interesting.
+frontier.on("onEntitySpawned", function(e)
+  if e.kind == "wormhole" then
+    frontier.bookmark("Gate " .. e.id, e.x, e.y, e.z)
+  end
+end)
+
+-- Range callouts, but only in flight (never over a menu).
+local lastBand = nil
+frontier.on("onTick", function()
+  if frontier.screen() ~= "playing" then return end
+  local t = frontier.target()
+  if not t then lastBand = nil; return end
+  local band = math.floor(t.distance / 1000)
+  if band ~= lastBand then
+    lastBand = band
+    frontier.chat("Computer", t.name .. " at " .. t.distance .. "u", "#7fd0ff")
+  end
+end)
+
+-- Snap to the nearest hostile when one turns up inside 3000u.
+frontier.on("onPlayerDamaged", function()
+  local near = frontier.entities.list({ kind = "hostile", radius = 3000, max = 1 })
+  if near[1] then frontier.setTarget(near[1].id) end
+end)
+```

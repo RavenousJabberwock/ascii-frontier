@@ -535,6 +535,14 @@ covering every hook shipped so far.
 | `onCrewLevelUp`     | `{ name, role, level, xp }`                | crew XP tier crossing (0.8.9) |
 | `onFrontierEvent`   | `{ phase, id, kind, title, scope, station, stationId, faction, minutes?, x?, y?, z? }` | frontier event start / end (0.9.0) |
 
+0.9.1 adds a navigation surface: `frontier.target()` returns the tracked
+contact (`id, kind, name, faction, hull, shield, distance, x, y, z`) or `nil`,
+`frontier.setTarget(id)` retargets by entity id (returns `false` for an unknown
+id), `frontier.screen()` returns the active screen id, `frontier.bookmark(name,
+x, y, z)` files a Nav Log waypoint (returns `false` on a duplicate), and
+`frontier.hooks()` lists every hook name this build dispatches so a mod can
+feature-detect rather than hard-code the table.
+
 0.8.9 adds three visual taxonomies to `frontier.entities.list()` /
 `.get()`: `shipClass` (one of 15 hull classes), `stationClass` (structural
 archetype) and `rockClass` (asteroid mineralogy), plus the raw entity `id`.
