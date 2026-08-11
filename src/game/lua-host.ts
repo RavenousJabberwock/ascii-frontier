@@ -90,7 +90,14 @@ export interface LuaHostBridge {
   holdings?: () => Array<Record<string, unknown>>;
   // 0.9.0 — live frontier events (advisories currently moving the economy).
   events?: () => Array<Record<string, unknown>>;
+  // 0.9.1 — navigation surface: read the tracked contact and current screen,
+  // retarget by entity id, and file Nav Log waypoints.
+  getTarget?: () => Record<string, unknown> | null;
+  setTarget?: (id: number) => boolean;
+  currentScreen?: () => string;
+  addBookmark?: (name: string, x: number, y: number, z: number) => boolean;
 }
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type L = any;
