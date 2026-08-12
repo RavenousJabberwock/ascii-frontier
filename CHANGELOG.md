@@ -4,6 +4,18 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.2 — Spatial Grid, Glyph Atlas & Scripting Completion
+- **AI broad phase**: a uniform 1024u spatial grid replaces the full-array scans
+  that every active ship, pirate station turret and wing escort ran each frame
+  to find a target. Busy sectors no longer scale quadratically with traffic.
+- **Renderer**: glow cells are stamped from a baked offscreen glyph atlas
+  instead of re-rasterising `shadowBlur` per cell.
+- **FPS overlay**: now also shows entity count and AI-indexed body count.
+- **Scripting**: `frontier.crew()`, `frontier.cargo()`, `frontier.record()`,
+  `frontier.bookmarks()`, `frontier.reputation()`, `frontier.perf()` and
+  `frontier.unbookmark(name)`.
+- **Hooks**: `onBookmarkRemoved`, `onCargoChanged`, `onCrewPaid`.
+
 ## 0.9.1 — Performance Pass & Navigation Scripting
 - **Renderer**: the per-kind sprite-radius table is no longer rebuilt every
   frame, and entities whose sprite cannot touch the world pane are rejected

@@ -351,3 +351,43 @@ frontier.on("onPlayerDamaged", function()
   if near[1] then frontier.setTarget(near[1].id) end
 end)
 ```
+
+## Payroll and cargo auditor (0.9.2)
+
+Uses the 0.9.2 hooks and read surfaces: watch the wage bill, warn before a
+shortfall wrecks morale, and keep a running note of manifest changes.
+
+```lua
+frontier.on("onCrewPaid", function(p)
+  if p.short then
+    frontier.chat("Purser", "Payroll short by " .. (p.bill - p.paid)
+      .. " cr at " .. p.station .. ". Morale will bite.", "#ff9a9a")
+  else
+    frontier.log(("Payroll settled: %d cr for %d crew (%d cr wing)")
+      :format(p.paid, p.crew, p.wingBill or 0))
+  end
+end)
+
+frontier.on("onCargoChanged", function(c)
+  for _, row in ipairs(c.changed) do
+    local sign = row.delta > 0 and "+" or ""
+    frontier.log("Hold: " .. sign .. row.delta .. " " .. row.id
+      .. " (now " .. row.qty .. ", hold " .. c.total .. ")")
+  end
+end)
+
+frontier.on("onBookmarkRemoved", function(b)
+  frontier.log("Nav Log cleared: " .. b.name)
+end)
+
+-- Read surfaces: roster, holdings and engine load in one status line.
+frontier.on("onPlayerDock", function()
+  local best, lvl = nil, -1
+  for _, c in ipairs(frontier.crew()) do
+    if (c.level or 0) > lvl then best, lvl = c.name, c.level or 0 end
+  end
+  local perf = frontier.perf()
+  frontier.log(("Top crew: %s (L%d) · fps %s · entities %s")
+    :format(best or "none", lvl, tostring(perf.fps), tostring(perf.entities)))
+end)
+```

@@ -534,6 +534,16 @@ covering every hook shipped so far.
 | `onReputationChange`| `{ faction, delta, before, after }`        | `adjustRep()` (0.8.9) |
 | `onCrewLevelUp`     | `{ name, role, level, xp }`                | crew XP tier crossing (0.8.9) |
 | `onFrontierEvent`   | `{ phase, id, kind, title, scope, station, stationId, faction, minutes?, x?, y?, z? }` | frontier event start / end (0.9.0) |
+| `onBookmarkRemoved` | `{ name, kind, x, y, z }`                  | Nav Log entry deleted (0.9.2) |
+| `onCargoChanged`    | `{ changed: [{ id, qty, delta }], total }` | per-frame cargo manifest diff (0.9.2) |
+| `onCrewPaid`        | `{ bill, paid, short, wingBill, crew, credits, stationId, station }` | dock payroll settled (0.9.2) |
+
+0.9.2 completes the read surface: `frontier.crew()` (name, role, level, xp,
+morale, wage, pet), `frontier.cargo()` (commodity rows plus quantities),
+`frontier.record()` (lifetime pilot's record), `frontier.bookmarks()`,
+`frontier.reputation()` (faction → value), `frontier.perf()` (fps, entity and
+AI-index counts) and `frontier.unbookmark(name)` (returns `false` if no such
+waypoint).
 
 0.9.1 adds a navigation surface: `frontier.target()` returns the tracked
 contact (`id, kind, name, faction, hull, shield, distance, x, y, z`) or `nil`,

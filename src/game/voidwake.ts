@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.1";
+const VERSION = "0.9.2";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -134,7 +134,12 @@ export type ScriptHookName =
   | "onReputationChange"
   | "onCrewLevelUp"
   // 0.9.0 — frontier events. Fires on start and on end (`phase`).
-  | "onFrontierEvent";
+  | "onFrontierEvent"
+  // 0.9.2 — Nav Log deletions (keyboard or `frontier.unbookmark`), cargo
+  // manifest deltas, and payroll settlement.
+  | "onBookmarkRemoved"
+  | "onCargoChanged"
+  | "onCrewPaid";
 
 
 
@@ -185,6 +190,9 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onReputationChange:   [],
   onCrewLevelUp:        [],
   onFrontierEvent:      [],
+  onBookmarkRemoved:    [],
+  onCargoChanged:       [],
+  onCrewPaid:           [],
 
 
 };
@@ -3319,6 +3327,93 @@ export function drainAiEvents(): AiEvent[] {
   return out;
 }
 
+// =============================================================================
+// 0.9.2 — uniform spatial grid for the NPC-vs-NPC scans.
+// -----------------------------------------------------------------------------
+// Every active ship used to walk the whole entity array (thousands of bodies
+// after the 0.5.14/0.5.15 universe expansion) to find its nearest enemy, and
+// pirate turrets did the same. That is O(n) per ship per frame — the single
+// largest remaining hot path. `AI_GRID` buckets only the ship-like kinds into
+// 1024u cells once per frame; a scan then visits the 27 cells around the
+// querying ship instead of the entire world.
+//
+// Design notes:
+//  - Bucket arrays are reused between rebuilds (length = 0, never re-alloc), so
+//    the grid itself allocates nothing in the steady state.
+//  - Entities integrate *after* the AI pass, so a bucketed position can be at
+//    most one frame stale; queries pad the cell radius by one cell, which is
+//    two orders of magnitude more slack than a frame of travel needs.
+//  - Bullets, rocks and bodies are deliberately not indexed: no scan wants
+//    them, and indexing them would dominate the rebuild cost.
+// =============================================================================
+const AI_GRID_CELL = 1024;
+const AI_GRID_KINDS = new Set<Entity["kind"]>(["hostile", "neutral", "friendly"]);
+
+class SpatialGrid {
+  private buckets = new Map<number, Entity[]>();
+  private live = new Set<number>();
+
+  private static key(ix: number, iy: number, iz: number): number {
+    // Cheap integer hash. Collisions merely widen a bucket; queries still
+    // distance-check every candidate, so a collision is never incorrect.
+    return (ix * 73856093) ^ (iy * 19349663) ^ (iz * 83492791);
+  }
+
+  rebuild(ents: Entity[]): void {
+    for (const arr of this.buckets.values()) arr.length = 0;
+    this.live.clear();
+    for (const e of ents) {
+      if (!AI_GRID_KINDS.has(e.kind)) continue;
+      if ((e.hull ?? 1) <= 0) continue;
+      const k = SpatialGrid.key(
+        Math.floor(e.pos.x / AI_GRID_CELL),
+        Math.floor(e.pos.y / AI_GRID_CELL),
+        Math.floor(e.pos.z / AI_GRID_CELL),
+      );
+      let arr = this.buckets.get(k);
+      if (!arr) { arr = []; this.buckets.set(k, arr); }
+      arr.push(e);
+      this.live.add(k);
+    }
+    // Keep the map from growing without bound across a long session as the
+    // player travels: drop buckets that went empty this frame.
+    if (this.buckets.size > this.live.size * 4 + 64) {
+      for (const k of [...this.buckets.keys()]) if (!this.live.has(k)) this.buckets.delete(k);
+    }
+  }
+
+  /** Fills `out` with indexed entities whose bucket overlaps `radius` of `pos`. */
+  query(pos: Vec3, radius: number, out: Entity[]): Entity[] {
+    out.length = 0;
+    const span = Math.ceil(radius / AI_GRID_CELL) + 1;
+    const cx = Math.floor(pos.x / AI_GRID_CELL);
+    const cy = Math.floor(pos.y / AI_GRID_CELL);
+    const cz = Math.floor(pos.z / AI_GRID_CELL);
+    for (let ix = cx - span; ix <= cx + span; ix++)
+      for (let iy = cy - span; iy <= cy + span; iy++)
+        for (let iz = cz - span; iz <= cz + span; iz++) {
+          const arr = this.buckets.get(SpatialGrid.key(ix, iy, iz));
+          if (!arr || arr.length === 0) continue;
+          for (const e of arr) out.push(e);
+        }
+    return out;
+  }
+
+  stats(): { buckets: number; indexed: number } {
+    let indexed = 0;
+    for (const a of this.buckets.values()) indexed += a.length;
+    return { buckets: this.live.size, indexed };
+  }
+}
+
+const AI_GRID = new SpatialGrid();
+/** Rebuild the AI broad-phase index. Call once per frame before the AI pass. */
+export function rebuildAiGrid(ents: Entity[]): void { AI_GRID.rebuild(ents); }
+export function aiGridStats(): { buckets: number; indexed: number } { return AI_GRID.stats(); }
+// Scratch buffer shared by every scan below — the AI pass is single-threaded
+// and each scan consumes the result before the next query runs.
+const _gridScratch: Entity[] = [];
+
 function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng: () => number) {
   if (e.kind === "planet" || e.kind === "star" || e.kind === "asteroid" || e.kind === "bullet" || e.kind === "loot" || e.kind === "comet" || e.kind === "nebula" || e.kind === "beacon" || e.kind === "ufo" || e.kind === "thargoid" || e.kind === "wormhole" || e.kind === "dyson" || e.kind === "derelict") return;
   // Distance gate: with the 2× universe expansion (0.5.14) there are far
@@ -3368,15 +3463,17 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
     if (e.faction !== "pirate") return;
     e.cooldown = (e.cooldown ?? 0) - dt;
     // Pick nearest non-pirate ship OR player within 700u.
+    // 0.9.2 — candidates come from the spatial grid, not the whole world.
     let bestT: { pos: Vec3; id: number } | null = null;
-    let bestD = 700;
-    const playerD = V.len(V.sub(player.pos, e.pos));
-    if (playerD < bestD) { bestT = { pos: player.pos, id: -1 }; bestD = playerD; }
-    for (const t of ents) {
-      if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
+    let bestD2 = 700 * 700;
+    const pdx = player.pos.x - e.pos.x, pdy = player.pos.y - e.pos.y, pdz = player.pos.z - e.pos.z;
+    const playerD2 = pdx * pdx + pdy * pdy + pdz * pdz;
+    if (playerD2 < bestD2) { bestT = { pos: player.pos, id: -1 }; bestD2 = playerD2; }
+    for (const t of AI_GRID.query(e.pos, 700, _gridScratch)) {
       if (t.faction === "pirate") continue;
-      const d = V.len(V.sub(t.pos, e.pos));
-      if (d < bestD) { bestD = d; bestT = { pos: t.pos, id: t.id }; }
+      const dx = t.pos.x - e.pos.x, dy = t.pos.y - e.pos.y, dz = t.pos.z - e.pos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; bestT = { pos: t.pos, id: t.id }; }
     }
     if (bestT && (e.cooldown ?? 0) <= 0) {
       e.cooldown = 0.6;
@@ -3390,21 +3487,20 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
 
   // Helper: nearest enemy NPC ship within `range`. Pirates hunt non-pirate
   // ships; defenders (friendly/neutral) hunt pirates.
+  // 0.9.2 — grid-backed: visits the buckets overlapping `range` instead of
+  // every entity in the universe. Kind and hull filtering happens at index
+  // time, so the inner loop is a faction test plus a squared distance.
   const findEnemyShip = (range: number): Entity | null => {
     let best: Entity | null = null;
-    let bestD = range;
-    for (const t of ents) {
+    let bestD2 = range * range;
+    const hunterIsPirate = e.faction === "pirate";
+    for (const t of AI_GRID.query(e.pos, range, _gridScratch)) {
       if (t.id === e.id) continue;
-      if (t.kind !== "hostile" && t.kind !== "neutral" && t.kind !== "friendly") continue;
-      if ((t.hull ?? 1) <= 0) continue;
       // Pirates fight everyone non-pirate; defenders only engage pirates.
-      if (e.faction === "pirate") {
-        if (t.faction === "pirate") continue;
-      } else {
-        if (t.faction !== "pirate") continue;
-      }
-      const d = V.len(V.sub(t.pos, e.pos));
-      if (d < bestD) { bestD = d; best = t; }
+      if (hunterIsPirate ? t.faction === "pirate" : t.faction !== "pirate") continue;
+      const dx = t.pos.x - e.pos.x, dy = t.pos.y - e.pos.y, dz = t.pos.z - e.pos.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; best = t; }
     }
     return best;
   };
@@ -3436,11 +3532,18 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
     // Priority 1: nearest hostile inside WING_ENGAGE_RANGE — close and fire.
     // Priority 2: hold formation a short distance off the player's hull,
     //             matching player velocity so it doesn't rubber-band.
-    const foe = ents.reduce<{ x: Entity | null; d: number }>((acc, x) => {
-      if (x.kind !== "hostile") return acc;
-      const d = V.len(V.sub(x.pos, e.pos));
-      return d < acc.d ? { x, d } : acc;
-    }, { x: null, d: WING_ENGAGE_RANGE });
+    // 0.9.2 — grid-backed nearest-hostile lookup (was a full-array reduce
+    // that also allocated an accumulator object per candidate).
+    const foe: { x: Entity | null; d: number } = { x: null, d: WING_ENGAGE_RANGE };
+    {
+      let bestD2 = WING_ENGAGE_RANGE * WING_ENGAGE_RANGE;
+      for (const x of AI_GRID.query(e.pos, WING_ENGAGE_RANGE, _gridScratch)) {
+        if (x.kind !== "hostile") continue;
+        const dx = x.pos.x - e.pos.x, dy = x.pos.y - e.pos.y, dz = x.pos.z - e.pos.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bestD2) { bestD2 = d2; foe.x = x; foe.d = Math.sqrt(d2); }
+      }
+    }
     if (foe.x) {
       e.state = "escort-engage";
       e.targetId = foe.x.id;
@@ -4902,6 +5005,10 @@ function removeDiagnostic(key: string) {
 // =============================================================================
 const CELL_W = 9;   // px per glyph column
 const CELL_H = 16;  // px per glyph row
+// 0.9.2 — glow glyph atlas geometry. GLOW_PAD must exceed the 9px shadow blur
+// so the bloom is not clipped by the tile edge.
+const GLOW_PAD = 10;
+const GLOW_ATLAS_MAX = 512;
 
 interface Cell { ch: string; color: string; glow?: boolean }
 
@@ -7118,13 +7225,37 @@ export class Voidwake {
       }
       this._lastHullSeen = hull;
       this._lastShieldSeen = shield;
+      // 0.9.2 — cargo manifest watcher. Cargo moves at ~20 callsites (market
+      // buy/sell, mining, salvage, customs seizure, passenger berths, station
+      // supply, script grants). One diff per frame catches every one of them
+      // and reports only the ids that actually changed.
+      const seen = this._lastCargoSeen;
+      if (seen) {
+        let changed: Array<{ id: string; qty: number; delta: number }> | null = null;
+        const ids = new Set<string>([...Object.keys(pw.cargo), ...seen.keys()]);
+        for (const id of ids) {
+          const now = pw.cargo[id] ?? 0;
+          const before = seen.get(id) ?? 0;
+          if (now !== before) (changed ??= []).push({ id, qty: now, delta: now - before });
+        }
+        if (changed) {
+          let total = 0;
+          for (const k of Object.keys(pw.cargo)) total += pw.cargo[k] ?? 0;
+          dispatchHook("onCargoChanged", { changed, total });
+        }
+      }
+      const snap = this._lastCargoSeen ?? (this._lastCargoSeen = new Map<string, number>());
+      snap.clear();
+      for (const k of Object.keys(pw.cargo)) snap.set(k, pw.cargo[k] ?? 0);
     } else {
       this._lastHullSeen = null;
       this._lastShieldSeen = null;
+      this._lastCargoSeen = null;
     }
   }
   private _lastHullSeen: number | null = null;
   private _lastShieldSeen: number | null = null;
+  private _lastCargoSeen: Map<string, number> | null = null;
 
 
   // --- Crash screen (caught exception) ------------------------------------
@@ -8212,6 +8343,9 @@ export class Voidwake {
 
     // Move entities (reuse `now` from earlier this frame)
 
+    // 0.9.2 — rebuild the AI broad-phase index once, then let every ship scan
+    // its own neighbourhood instead of the whole entity array.
+    rebuildAiGrid(this.entities);
     for (const e of this.entities) {
       if (e.kind !== "bullet") tickAI(e, dt, p, this.entities, this.rng);
       // 0.9.1 perf — integrate in place. `V.add(e.pos, V.scale(e.vel, dt))`
@@ -8847,6 +8981,12 @@ export class Voidwake {
         const paid = Math.min(bill, p.credits);
         p.credits -= paid;
         const short = paid < bill;
+        // 0.9.2 — payroll hook so economy mods can audit the wage bill.
+        dispatchHook("onCrewPaid", {
+          bill, paid, short, wingBill,
+          crew: (p.crew ?? []).length, credits: p.credits,
+          stationId: t.id, station: t.name,
+        });
         // 0.5.7 — morale perk attenuation: Recruiter halves the base decay,
         // Quartermaster/Merchant stretch supplies to soften it further, and a
         // floor of 3 keeps at least a nudge so wages still matter.
@@ -10026,7 +10166,12 @@ export class Voidwake {
     if (this.input.consume("x")) {
       const gone = list.splice(this.menuCursor, 1)[0];
       this.menuCursor = Math.max(0, Math.min(this.menuCursor, list.length - 1));
-      if (gone) this.pushLog(`Nav Log: cleared ${gone.name}.`);
+      if (gone) {
+        this.pushLog(`Nav Log: cleared ${gone.name}.`);
+        dispatchHook("onBookmarkRemoved", {
+          name: gone.name, kind: gone.kind, x: gone.pos.x, y: gone.pos.y, z: gone.pos.z,
+        });
+      }
       return;
     }
     if (this.input.consume("enter")) {
@@ -11123,14 +11268,73 @@ export class Voidwake {
           dispatchHook("onBookmarkAdded", { name, kind: "waypoint", x, y, z });
           return true;
         },
+        // 0.9.2 — the last obvious read gaps modders asked about: crew roster,
+        // hold manifest, lifetime record, Nav Log, faction standing and a
+        // frame-budget probe. All copies of primitives; no live refs escape.
+        crew: () => {
+          const p = this.player; if (!p) return [];
+          return (p.crew ?? []).map((c) => ({
+            role: c.role, name: c.name, species: c.species, gender: c.gender,
+            enabled: c.enabled, wage: c.wage ?? 0, morale: c.morale ?? 100,
+            xp: c.xp ?? 0, level: Math.min(9, Math.floor((c.xp ?? 0) / 50)),
+            pet: c.pet?.name,
+          }));
+        },
+        cargo: () => {
+          const p = this.player; if (!p) return [];
+          return Object.keys(p.cargo)
+            .filter((k) => (p.cargo[k] ?? 0) > 0)
+            .map((k) => ({ id: k, qty: p.cargo[k] ?? 0 }));
+        },
+        record: () => {
+          const p = this.player; if (!p) return null;
+          const r = p.record ?? { distance: 0, docks: 0, missions: 0, mined: 0, earned: 0 };
+          return {
+            distance: Math.round(r.distance), docks: r.docks, missions: r.missions,
+            mined: r.mined, earned: r.earned, kills: p.kills ?? 0, rank: p.rank,
+          };
+        },
+        bookmarks: () => {
+          const p = this.player; if (!p) return [];
+          return (p.bookmarks ?? []).map((b) => ({
+            name: b.name, kind: b.kind, entityId: b.entityId,
+            x: b.pos.x, y: b.pos.y, z: b.pos.z,
+          }));
+        },
+        removeBookmark: (name) => {
+          const p = this.player; if (!p?.bookmarks) return false;
+          const i = p.bookmarks.findIndex((b) => b.name === name);
+          if (i < 0) return false;
+          const [gone] = p.bookmarks.splice(i, 1);
+          dispatchHook("onBookmarkRemoved", {
+            name: gone.name, kind: gone.kind, x: gone.pos.x, y: gone.pos.y, z: gone.pos.z,
+          });
+          return true;
+        },
+        reputation: () => {
+          const p = this.player; if (!p) return {};
+          const out: Record<string, number> = {};
+          for (const k of Object.keys(p.reputation ?? {})) out[k] = p.reputation?.[k] ?? 0;
+          return out;
+        },
+        perf: () => {
+          const g = aiGridStats();
+          return {
+            fps: this.fps, entities: this.entities.length,
+            aiBuckets: g.buckets, aiIndexed: g.indexed,
+            glowTiles: this._glowAtlas.size, screen: String(this.screen),
+          };
+        },
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
             name: p.char.name, credits: p.credits, kills: p.kills ?? 0, xp: p.xp ?? 0,
+            rank: p.rank,
             hull: p.ship.hull, hullMax: p.ship.hullMax,
             shield: p.ship.shield, shieldMax: p.ship.shieldMax,
             fuel: p.ship.fuel, fuelMax: p.ship.fuelMax,
             ore: p.cargo.ore ?? 0,
+            x: p.pos.x, y: p.pos.y, z: p.pos.z,
             throttle: p.throttle, seed: this.seed,
           };
         },
@@ -12803,29 +13007,40 @@ export class Voidwake {
 
     // Paint grid. Cells with `glow` get a CSS-style canvas shadow that bleeds
     // their color outward — used for stars and other "luminous" glyphs.
+    //
+    // 0.9.2 — glow cells no longer pay for a live `shadowBlur` fill. A blurred
+    // shadow is one of the most expensive 2D operations there is, and a dense
+    // starfield asks for hundreds per frame with only a handful of distinct
+    // (glyph, colour) pairs. `glowTile()` bakes each pair into a small
+    // offscreen canvas once and the paint pass just blits it, which also
+    // removes the shadow state thrash between glowing and plain runs.
     const fontStr = `${CELL_H - 2}px ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace`;
     if (this._lastFont !== fontStr) { ctx.font = fontStr; this._lastFont = fontStr; }
     ctx.textBaseline = "top";
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
     let lastFill: string | null = null;
-    let lastShadow = 0;
     for (let y = 0; y < rows; y++) {
       const row = grid[y];
       for (let x = 0; x < cols; x++) {
         const c = row[x];
         if (c.ch === " ") continue;
         if (c.glow) {
-          if (lastShadow !== 9) { ctx.shadowBlur = 9; lastShadow = 9; }
-          ctx.shadowColor = c.color;
-        } else if (lastShadow !== 0) {
-          ctx.shadowColor = "transparent";
-          ctx.shadowBlur = 0;
-          lastShadow = 0;
+          const tile = this.glowTile(c.ch, c.color, fontStr);
+          if (tile) {
+            ctx.drawImage(
+              tile.canvas,
+              x * CELL_W + shakeDX - GLOW_PAD,
+              y * CELL_H + shakeDY - GLOW_PAD,
+              tile.w, tile.h,
+            );
+            continue;
+          }
         }
         if (c.color !== lastFill) { ctx.fillStyle = c.color; lastFill = c.color; }
         ctx.fillText(c.ch, x * CELL_W + shakeDX, y * CELL_H + shakeDY);
       }
     }
-    if (lastShadow !== 0) { ctx.shadowBlur = 0; ctx.shadowColor = "transparent"; }
 
     // Shield-loss flash: brief cyan-white tint over the whole canvas the
     // instant shields collapse, decaying smoothly so it reads as a hit and
@@ -12933,6 +13148,49 @@ export class Voidwake {
     }
   }
 
+  // ---- 0.9.2 glow glyph atlas ------------------------------------------
+  // One offscreen tile per (glyph, colour) pair, rendered at device pixel
+  // density so a HiDPI blit stays sharp. The cache is dropped wholesale when
+  // it grows past GLOW_ATLAS_MAX or when the font/DPR changes (window resize,
+  // monitor swap) so tiles never render at the wrong scale.
+  private _glowAtlas = new Map<string, { canvas: HTMLCanvasElement; w: number; h: number }>();
+  private _glowKeyFont: string | null = null;
+  private _glowKeyDpr = 0;
+  private glowTile(ch: string, color: string, fontStr: string):
+    { canvas: HTMLCanvasElement; w: number; h: number } | null {
+    const dpr = this._dpr || 1;
+    if (this._glowKeyFont !== fontStr || this._glowKeyDpr !== dpr) {
+      this._glowAtlas.clear();
+      this._glowKeyFont = fontStr;
+      this._glowKeyDpr = dpr;
+    }
+    const key = ch + "\u0000" + color;
+    const hit = this._glowAtlas.get(key);
+    if (hit) return hit;
+    if (this._glowAtlas.size >= GLOW_ATLAS_MAX) this._glowAtlas.clear();
+    const w = CELL_W + GLOW_PAD * 2;
+    const h = CELL_H + GLOW_PAD * 2;
+    let cvs: HTMLCanvasElement;
+    try {
+      cvs = document.createElement("canvas");
+      cvs.width = Math.max(1, Math.ceil(w * dpr));
+      cvs.height = Math.max(1, Math.ceil(h * dpr));
+    } catch { return null; }
+    const c2 = cvs.getContext("2d");
+    if (!c2) return null;
+    c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c2.font = fontStr;
+    c2.textBaseline = "top";
+    c2.shadowBlur = 9;
+    c2.shadowColor = color;
+    c2.fillStyle = color;
+    // Two passes so the bloom reads as strongly as the old live-shadow fill.
+    c2.fillText(ch, GLOW_PAD, GLOW_PAD);
+    c2.fillText(ch, GLOW_PAD, GLOW_PAD);
+    const tile = { canvas: cvs, w, h };
+    this._glowAtlas.set(key, tile);
+    return tile;
+  }
 
   // Reusable cell grid — allocate once per resize, reset characters in place.
   // Replaces the per-frame blankGrid() that produced ~rows*cols fresh objects.
@@ -15387,7 +15645,13 @@ export class Voidwake {
     putText(g, 2, rows - 1, "W/S thr  A/D yaw  Q/E pit  SHIFT boost  SPC fire  T tgt  [/] kind  M mine  F dock  J jett  O auto  U log  L legend  K pin  \\ comms  P pause  ESC menu" + gunnerHint + autoHint, "#666");
 
     // FPS overlay (optional)
-    if (this.options.showFps) putText(g, cols - 10, 0, `fps ${this.fps}`, "#7CFC00");
+    // 0.9.2 — the frame counter now also reports the load it is carrying:
+    // total entities and how many of them the AI broad phase is indexing.
+    if (this.options.showFps) {
+      const gs = aiGridStats();
+      const line = `fps ${this.fps} · e${this.entities.length} · ai${gs.indexed}`;
+      putText(g, Math.max(0, cols - line.length - 1), 0, line, "#7CFC00");
+    }
 
     // Boost indicator
     if (this.input.keys.has(this.options.keybinds.boost) && p.ship.fuel > 0) {

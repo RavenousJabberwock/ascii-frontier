@@ -55,6 +55,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onSalvageCollected", "onMarketCycle", "onReputationChange", "onCrewLevelUp",
   // 0.9.0 — frontier events (phase "start" | "end")
   "onFrontierEvent",
+  // 0.9.2 — nav log deletions, cargo deltas, payroll
+  "onBookmarkRemoved", "onCargoChanged", "onCrewPaid",
 ];
 
 
@@ -96,7 +98,16 @@ export interface LuaHostBridge {
   setTarget?: (id: number) => boolean;
   currentScreen?: () => string;
   addBookmark?: (name: string, x: number, y: number, z: number) => boolean;
+  // 0.9.2 — remaining read surfaces plus a Nav Log delete.
+  crew?: () => Array<Record<string, unknown>>;
+  cargo?: () => Array<Record<string, unknown>>;
+  record?: () => Record<string, unknown> | null;
+  bookmarks?: () => Array<Record<string, unknown>>;
+  removeBookmark?: (name: string) => boolean;
+  reputation?: () => Record<string, number>;
+  perf?: () => Record<string, unknown>;
 }
+
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -349,6 +360,31 @@ export class LuaHost {
       return 1;
     });
     lua.lua_setfield(L, -2, to_luastring("bookmark"));
+
+    // --- 0.9.2 read surfaces --------------------------------------------
+    // frontier.crew(), frontier.cargo(), frontier.record(),
+    // frontier.bookmarks(), frontier.reputation(), frontier.perf()
+    // and frontier.unbookmark(name).
+    const pushGetter = (name: string, get: () => unknown) => {
+      lua.lua_pushjsfunction(L, (Ls: L) => {
+        pushJsAsLua(Ls, get(), 0);
+        return 1;
+      });
+      lua.lua_setfield(L, -2, to_luastring(name));
+    };
+    pushGetter("crew",       () => this.bridge.crew?.() ?? []);
+    pushGetter("cargo",      () => this.bridge.cargo?.() ?? []);
+    pushGetter("record",     () => this.bridge.record?.() ?? null);
+    pushGetter("bookmarks",  () => this.bridge.bookmarks?.() ?? []);
+    pushGetter("reputation", () => this.bridge.reputation?.() ?? {});
+    pushGetter("perf",       () => this.bridge.perf?.() ?? {});
+
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const name = String(lua.lua_tojsstring(Ls, 1) ?? "");
+      lua.lua_pushboolean(Ls, this.bridge.removeBookmark?.(name) ? 1 : 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("unbookmark"));
 
     // frontier.hooks() → every hook name this build dispatches. Lets a mod
     // feature-detect instead of hard-coding the 0.9.x hook table.
