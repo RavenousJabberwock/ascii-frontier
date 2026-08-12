@@ -1,3 +1,31 @@
+# 0.9.2 — Spatial Grid, Glyph Atlas & Scripting Completion
+
+Ships as **0.9.2**.
+
+- **Uniform spatial grid (`SpatialGrid` / `AI_GRID`).** The remaining O(n) hot
+  path was every active ship walking the whole entity array to find its nearest
+  enemy, plus pirate station turret scans and wing-escort engage scans. The grid
+  buckets ship-like kinds into 1024u cells, rebuilt once per frame before the AI
+  pass (`rebuildAiGrid`), and a query visits the 27 neighbouring cells with a
+  squared-distance reject. `findEnemyShip`, the pirate scan and `tickWing` all
+  go through it now.
+- **Glyph atlas (`glowTile`).** Glow cells used to toggle `shadowBlur` per cell,
+  which forces a fresh blur rasterisation each time. Each (glyph, color) pair is
+  now baked once into a HiDPI offscreen canvas and stamped with `drawImage`.
+- **Perf readout.** The FPS overlay reports entity count and how many bodies the
+  AI broad phase is indexing (`fps 60 · e1240 · ai86`).
+- **Scripting completion.** Read surfaces that were still missing: `frontier.crew()`,
+  `frontier.cargo()`, `frontier.record()`, `frontier.bookmarks()`,
+  `frontier.reputation()`, `frontier.perf()`, plus `frontier.unbookmark(name)`.
+- **Hooks.** `onBookmarkRemoved` (Nav Log delete), `onCargoChanged` (per-frame
+  manifest diff, so every one of the ~20 cargo callsites is covered by one
+  watcher) and `onCrewPaid` (dock payroll settlement).
+
+## Deferred
+
+- Player-to-NPC conversation trees (template replies keyed on reputation).
+- Culling the depth sort itself via a per-band bucket sort.
+
 # 0.9.1 — Performance Pass & Navigation Scripting
 
 Ships as **0.9.1**.
