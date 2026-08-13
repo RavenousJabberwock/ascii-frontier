@@ -57,6 +57,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onFrontierEvent",
   // 0.9.2 — nav log deletions, cargo deltas, payroll
   "onBookmarkRemoved", "onCargoChanged", "onCrewPaid",
+  // 0.9.3 — conversation trees
+  "onHailTopic", "onHailClosed",
 ];
 
 
@@ -106,6 +108,10 @@ export interface LuaHostBridge {
   removeBookmark?: (name: string) => boolean;
   reputation?: () => Record<string, number>;
   perf?: () => Record<string, unknown>;
+  // 0.9.3 — live conversation state: the open comms channel (target, node,
+  // mood, transcript) plus a disposition probe for any entity id.
+  hail?: () => Record<string, unknown> | null;
+  disposition?: (id: number) => string | null;
 }
 
 
@@ -378,6 +384,16 @@ export class LuaHost {
     pushGetter("bookmarks",  () => this.bridge.bookmarks?.() ?? []);
     pushGetter("reputation", () => this.bridge.reputation?.() ?? {});
     pushGetter("perf",       () => this.bridge.perf?.() ?? {});
+    pushGetter("hail",       () => this.bridge.hail?.() ?? null);
+
+    // frontier.disposition(id) → "friendly" | "neutral" | "hostile" | nil
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const id = Math.floor(Number(lua.lua_tonumber(Ls, 1)));
+      const d = this.bridge.disposition?.(id) ?? null;
+      if (d == null) lua.lua_pushnil(Ls); else lua.lua_pushstring(Ls, to_luastring(d));
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("disposition"));
 
     lua.lua_pushjsfunction(L, (Ls: L) => {
       const name = String(lua.lua_tojsstring(Ls, 1) ?? "");

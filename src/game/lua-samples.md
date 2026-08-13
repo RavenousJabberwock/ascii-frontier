@@ -391,3 +391,35 @@ frontier.on("onPlayerDock", function()
     :format(best or "none", lvl, tostring(perf.fps), tostring(perf.entities)))
 end)
 ```
+
+## Conversation coach (0.9.3)
+
+Watches the hail conversation tree: logs each node you walk, warns when the
+channel is going cold, and pays a small bonus for talking a hostile down.
+
+```lua
+frontier.on("onHailTopic", function(h)
+  frontier.log(("[comms] %s ▸ %s (mood %d, %s)")
+    :format(h.target or "?", h.topic, h.mood or 0, h.disposition or "?"))
+  if (h.mood or 0) <= -2 then
+    frontier.chat("Comms Officer", "They're about to stop talking, Captain.", "#ffd28a")
+  end
+end)
+
+frontier.on("onHailClosed", function(h)
+  if h.tone == "warm" then
+    frontier.chat("Comms Officer", "Channel closed on good terms. Rare.", "#7CFC00")
+  elseif h.tone == "cold" then
+    frontier.grant{ credits = 0 }  -- no reward; just note it
+    frontier.log("[comms] " .. (h.target or "contact") .. " signed off hostile.")
+  end
+end)
+
+-- Probe a contact before you open a channel at all.
+frontier.on("onTick", function()
+  local t = frontier.target()
+  if t and frontier.disposition(t.id) == "hostile" and (t.distance or 9e9) < 1500 then
+    frontier.log("[comms] hostile in comms range — bribe or bluff, your call.")
+  end
+end)
+```

@@ -537,6 +537,13 @@ covering every hook shipped so far.
 | `onBookmarkRemoved` | `{ name, kind, x, y, z }`                  | Nav Log entry deleted (0.9.2) |
 | `onCargoChanged`    | `{ changed: [{ id, qty, delta }], total }` | per-frame cargo manifest diff (0.9.2) |
 | `onCrewPaid`        | `{ bill, paid, short, wingBill, crew, credits, stationId, station }` | dock payroll settled (0.9.2) |
+| `onHailTopic`       | `{ targetId, target, topic, node, mood, disposition }` | every conversation node walked (0.9.3) |
+| `onHailClosed`      | `{ targetId, target, mood, tone }`         | comms channel closed (0.9.3) |
+
+0.9.3 adds the conversation surface: `frontier.hail()` returns the live channel
+(`targetId, target, faction, node, mood, tone, options, log`) or `nil`, and
+`frontier.disposition(id)` returns `"friendly"`, `"neutral"`, `"hostile"` or
+`nil` for any entity id.
 
 0.9.2 completes the read surface: `frontier.crew()` (name, role, level, xp,
 morale, wage, pet), `frontier.cargo()` (commodity rows plus quantities),

@@ -1,3 +1,40 @@
+# 0.9.3 — Conversation Trees & Depth Bucket Sort
+
+Ships as **0.9.3**.
+
+- **Conversation trees (`_hail`).** The hail screen is no longer a flat option
+  list. It carries a `node` (`root` / `news` / `deal` / `law`) plus a `mood`
+  score (-3..+3) seeded from the target's disposition. Options are rebuilt after
+  every choice, so branches open and close as the exchange moves:
+  - `news ▸` raider activity / market word / patrol movements. A cold channel
+    starts refusing to answer.
+  - `deal ▸` ask what they'd pay for your most valuable cargo (real station
+    `sell` price when hailing a dock, base price ± spread otherwise, nudged by
+    mood), request an emergency fuel transfer, or ask a friendly/law hull to
+    intercept the nearest hostile (retargets their AI for real).
+  - `law ▸` record readback (flags when federation *and* guild standing are
+    <= -15) and the existing 500cr restitution.
+  - Hostiles gain **bribe** (ask scales with credits + kills, success scales
+    with mood) and **taunt** (45% smug reply, otherwise the ship commits to an
+    attack run via the same `hostileUntil` window `tickAI` hunts on).
+  - Closing the channel plays a sign-off keyed to the final mood band, and the
+    header shows a mood meter and the current branch path.
+- **Chatter.** 15 new pools for the tree nodes and the three sign-off tones.
+- **Depth bucket sort.** `renderPlaying()`'s far→near ordering was a comparison
+  sort over every projected body. Frames with more than 48 projected entities
+  now bucket into 256 log-spaced depth bands and concatenate far→near: O(n) with
+  no comparator calls, and ordering inside a band is visually indistinguishable.
+- **Scripting.** `onHailTopic` (fires for every node walked, with `topic`,
+  `node`, `mood`, `disposition`) and `onHailClosed` (`mood`, `tone`).
+  `onPlayerHail` still fires for compatibility. New read surfaces
+  `frontier.hail()` (live channel: target, node, mood, tone, option ids,
+  transcript tail) and `frontier.disposition(id)`.
+
+## Deferred
+
+- Voiced/animated portrait frames for the comms screen.
+- Reputation-gated contract offers surfaced inside the conversation tree.
+
 # 0.9.2 — Spatial Grid, Glyph Atlas & Scripting Completion
 
 Ships as **0.9.2**.
@@ -23,8 +60,8 @@ Ships as **0.9.2**.
 
 ## Deferred
 
-- Player-to-NPC conversation trees (template replies keyed on reputation).
-- Culling the depth sort itself via a per-band bucket sort.
+- ~~Player-to-NPC conversation trees~~ — shipped in 0.9.3.
+- ~~Culling the depth sort itself via a per-band bucket sort~~ — shipped in 0.9.3.
 
 # 0.9.1 — Performance Pass & Navigation Scripting
 

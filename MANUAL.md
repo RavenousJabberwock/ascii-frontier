@@ -313,11 +313,24 @@ something else.
 ## 11a. Hailing and customs
 
 Press `H` with a ship, station or colony targeted inside 4000u to open a
-channel. What you can say depends on who they are: greet them, ask for local
-news and market word, beg an emergency fuel transfer, warn a hostile off
-(they may break away — bluffing works better with kills behind you), or pay
-500cr restitution to Patrol/Federation to repair standing. Aliens answer in
-static.
+channel. Since 0.9.3 a hail is a small **conversation tree** rather than one
+menu, and the header shows a **mood meter** that moves with the choices you
+make. Branches:
+
+- **Local news ▸** raider activity, what's paying this rotation, where the law
+  is flying. A channel you've soured stops answering.
+- **Ask them for something ▸** what they'd pay for your most valuable cargo
+  (real dock prices when you're hailing a station), an emergency fuel transfer,
+  or — from a friendly or lawful hull — an intercept on the nearest hostile.
+- **Talk to the law ▸** a readback of your record, or 500cr restitution to
+  repair Patrol/Federation standing.
+- **Hostiles** additionally let you bribe them off (the ask scales with your
+  credits and kill count), warn them off (bluffing works better with kills
+  behind you), or taunt them — which is funny slightly less than half the time
+  and otherwise buys you an immediate attack run.
+
+How you hang up matters: the sign-off you get is keyed to the mood the channel
+ended on. Aliens answer in static.
 
 Lawful docks scan the hold. A **Shielded Hold** conceals eight units of each
 banned good; whatever still shows opens an inspection where you may
