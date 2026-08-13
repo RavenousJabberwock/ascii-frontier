@@ -4,6 +4,20 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.3 — Conversation Trees & Depth Bucket Sort
+- **Comms**: hailing a contact now opens a branching conversation instead of a
+  single menu. Branch into local news, deals (cargo valuations, fuel, asking a
+  friendly hull to intercept a hostile) or law business (record readback,
+  restitution). Hostiles can be bribed or taunted, and taunting can commit them
+  to an attack run.
+- **Mood**: every channel tracks a mood that shifts with your choices, gates
+  fuel/bribe/escort outcomes, and picks the sign-off you get when you hang up.
+- **Chatter**: 15 new reply pools for the new nodes and sign-off tones.
+- **Renderer**: the per-frame depth ordering uses a 256-band bucket sort instead
+  of a comparison sort once a frame projects more than 48 bodies.
+- **Scripting**: `onHailTopic` and `onHailClosed` hooks, plus `frontier.hail()`
+  and `frontier.disposition(id)`.
+
 ## 0.9.2 — Spatial Grid, Glyph Atlas & Scripting Completion
 - **AI broad phase**: a uniform 1024u spatial grid replaces the full-array scans
   that every active ship, pirate station turret and wing escort ran each frame

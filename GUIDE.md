@@ -55,7 +55,7 @@ The galaxy has three zones:
 | `F`       | Dock with a targeted station or colony     |
 | `B` / `J` | Trade / contract board while docked        |
 | `C` / `R` | Character Sheet / Reputation panel         |
-| `H`       | Hail the current target                    |
+| `H`       | Hail the current target (branching comms tree) |
 | `N` / `V` | Bookmark target / open the Nav Log         |
 | `Y`       | Frontier Bulletin (live frontier events)   |
 | `U`       | Contract Log (`S` sorts, `F` filters)      |
@@ -221,7 +221,7 @@ editing and no build step.
 - Scripts register hooks: `onCommodityTrade`, `onPassengerBoard`,
   `onPlayerStationTierUp`, `onPlayerHail`, `onCustomsScan`,
   `onShipHullChange`, `onBountyAccepted`, `onBountyClaimed`,
-  `onBookmarkAdded`, and many more.
+  `onBookmarkAdded`, `onHailTopic`, `onHailClosed`, and many more.
 
 - They call into the `frontier.*` API for entities, world state, economy
   queries, chatter injection, and grants.

@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.2";
+const VERSION = "0.9.3";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -139,7 +139,13 @@ export type ScriptHookName =
   // manifest deltas, and payroll settlement.
   | "onBookmarkRemoved"
   | "onCargoChanged"
-  | "onCrewPaid";
+  | "onCrewPaid"
+  // 0.9.3 — conversation trees. `onHailTopic` fires for every node the pilot
+  // walks (not just the first choice, which is all `onPlayerHail` saw), and
+  // `onHailClosed` reports the final mood the channel ended on.
+  | "onHailTopic"
+  | "onHailClosed";
+
 
 
 
@@ -193,6 +199,8 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onBookmarkRemoved:    [],
   onCargoChanged:       [],
   onCrewPaid:           [],
+  onHailTopic:          [],
+  onHailClosed:         [],
 
 
 };
@@ -318,6 +326,16 @@ type ChatterKind =
   // reactions when a live event is inside sensor range.
   | "frontier_event" | "frontier_event_end"
   | "crew_ctx_event" | "npc_ctx_event"
+  // 0.9.3 — conversation trees. Every node the pilot can walk in a hail has
+  // its own reply pool, and closing lines are keyed to the mood the channel
+  // ended on rather than the disposition it opened with.
+  | "hail_news_raiders" | "hail_news_market" | "hail_news_patrol"
+  | "hail_trade_offer" | "hail_trade_none"
+  | "hail_bribe_ok" | "hail_bribe_no"
+  | "hail_taunt_calm" | "hail_taunt_enrage"
+  | "hail_record_clean" | "hail_record_flagged"
+  | "hail_escort_yes" | "hail_escort_no"
+  | "hail_close_warm" | "hail_close_flat" | "hail_close_cold"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1538,6 +1556,93 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Save it for the magistrate.",
   ],
 
+  // 0.9.3 — conversation-tree nodes. A hail is now a walkable tree: news
+  // splits three ways, hostiles can be bribed or taunted, law ships will read
+  // your record back to you, and friendlies can be asked to run interference.
+  hail_news_raiders: [
+    "Raider pickets working the {sector} approach. Two hulls, maybe three.",
+    "Lost a convoy partner near {sector} last rotation. Don't fly it alone.",
+    "Pirates have gone quiet, which is worse than loud. Watch your six.",
+    "If a hull scans clean but won't answer comms, it's not clean.",
+  ],
+  hail_news_market: [
+    "{target} was paying stupid money for tech last cycle. Might still be.",
+    "Everyone's hauling ore, so nobody's getting paid for ore. Carry something else.",
+    "Relics move fast and legal slow. Price your risk in.",
+    "Buy before market day rolls, sell the shift after. That's the whole trick.",
+  ],
+  hail_news_patrol: [
+    "Patrol's running scans two lanes over. Tidy your hold before you dock.",
+    "Law's thin out here. That cuts both ways, {cmdr}.",
+    "SPD towed a dry hauler this morning. Fees were worse than the pirates.",
+    "Customs mood is bad this rotation. Don't test it.",
+  ],
+  hail_trade_offer: [
+    "For {a}? I could go {b}cr a unit. Bring it alongside and we'll square it.",
+    "{a} is worth something to me — call it {b}cr each.",
+    "I'll take {a} off you at {b}cr. Don't shop it around, it insults me.",
+  ],
+  hail_trade_none: [
+    "You're flying empty and asking prices. Bold.",
+    "Nothing in your hold I want at any number.",
+    "Come back when you're carrying something heavier than optimism.",
+  ],
+  hail_bribe_ok: [
+    "Credits clear. We were never here, {cmdr}.",
+    "Generous. Disengaging — and we'll remember the hull, kindly.",
+    "That'll cover the fuel we burned chasing you. Go.",
+  ],
+  hail_bribe_no: [
+    "That's an insult with a decimal point on it.",
+    "Keep your change. We want the ship.",
+    "Not enough. Not nearly.",
+  ],
+  hail_taunt_calm: [
+    "Cute. Say it again when your shields are up.",
+    "Heard better from a cargo drone.",
+    "You'll run out of words before we run out of ammunition.",
+  ],
+  hail_taunt_enrage: [
+    "That's it. All guns, that hull, right now.",
+    "You just bought yourself a very short future, {cmdr}.",
+    "Everyone on this channel heard that. So will your widow.",
+  ],
+  hail_record_clean: [
+    "Your file's clean, {cmdr}. Keep it boring.",
+    "No warrants, no flags. Rare, out here.",
+    "Nothing outstanding. Don't make me update it.",
+  ],
+  hail_record_flagged: [
+    "Your file is a novel, {cmdr}. Pay it down at any patrol dock.",
+    "You're flagged. Fly humble until that clears.",
+    "We know exactly what you did in {sector}. So does everyone.",
+  ],
+  hail_escort_yes: [
+    "Copy. Vectoring onto the nearest hostile — stay off our firing line.",
+    "We'll clear it. Consider it a professional courtesy.",
+    "Moving to intercept. You owe us a drink, {cmdr}.",
+  ],
+  hail_escort_no: [
+    "Negative. We've got our own patrol pattern to fly.",
+    "Not at your standing, {cmdr}. Fix that first.",
+    "Nothing on our scope worth burning fuel over.",
+  ],
+  hail_close_warm: [
+    "Clear skies, {cmdr}. Channel's open if you need it.",
+    "Good talking to someone sane. {speaker} out.",
+    "Safe vectors. Don't be a stranger.",
+  ],
+  hail_close_flat: [
+    "Channel closed. {speaker} out.",
+    "That's our chat quota. Back to work.",
+    "Acknowledged. Nothing further.",
+  ],
+  hail_close_cold: [
+    "Don't hail us again.",
+    "Next transmission from us will be ordnance.",
+    "Channel's dead. So are you, shortly.",
+  ],
+
   // 0.8.1 — additional situational crew buckets. Same selection path as the
   // 0.8.0 ones: crewContextBuckets() tests the condition, tickCrewIdle()
   // picks a plausible role to voice it.
@@ -1811,6 +1916,11 @@ const TITLE_TIPS = [
   "Press C for your character sheet — crew, pets, modules and lifetime record.",
   "Press N to bookmark a contact, V to open the Nav Log. Waypoints draw in-world.",
   "Press H to hail a contact inside 4000u. Reputation changes what they say.",
+  "A hail is a conversation, not a menu — branch into news, deals or law business.",
+  "Watch the mood meter while hailing. How you hang up decides the sign-off.",
+  "Hostiles take bribes. The ask scales with your credits and your kill count.",
+  "Taunting a raider works out about half the time. The other half is an attack run.",
+  "Ask a friendly patrol to intercept the nearest hostile — they'll actually go.",
   "Buy low, sell high: every dock prices the same commodity differently.",
   "Contraband pays double and costs triple if customs finds it. Shielded Hold helps.",
   "Bounty Offices post fresh warrants every market day. Lawful docks only.",
@@ -6610,12 +6720,24 @@ export class Voidwake {
     putText(g, 4, row + 7, `Credits: ${p.credits}cr    ENTER select`, "#9fe");
   }
 
-  // --- 0.8.0 — Player-to-NPC comms ----------------------------------------
+  // --- 0.8.0 / 0.9.3 — Player-to-NPC comms --------------------------------
   // H opens a channel to the current target (ships, stations and colonies
-  // within 4000u; aliens don't answer). Options are filtered by what the
-  // target could plausibly do for you, and replies are keyed to their
-  // disposition: faction reputation plus whether they're currently hostile.
-  _hail?: { id: number; options: { id: string; label: string }[]; log: string[] };
+  // within 4000u; aliens don't answer). 0.9.3 turns the flat option list into
+  // a walkable conversation tree: `node` selects which options are offered,
+  // and `mood` tracks how the exchange is going. Mood starts from the target's
+  // disposition (faction reputation + current hostility), shifts with the
+  // topics the pilot picks, and gates outcomes — a bribe or a fuel transfer is
+  // likelier on a warm channel, and a taunt can tip a hostile into an
+  // immediate attack run. Closing lines are keyed to the mood the channel
+  // ended on, not the disposition it opened with.
+  _hail?: {
+    id: number;
+    node: "root" | "news" | "deal" | "law";
+    options: { id: string; label: string }[];
+    log: string[];
+    mood: number;        // -3 murderous … +3 cordial
+    asked: Record<string, boolean>;
+  };
 
   hailDisposition(t: Entity): "friendly" | "neutral" | "hostile" {
     const p = this.player;
@@ -6624,6 +6746,61 @@ export class Voidwake {
     if (rep <= -20) return "hostile";
     if (rep >= 20 || t.kind === "friendly") return "friendly";
     return "neutral";
+  }
+
+  /** Mood band → the tone a reply/close should be drawn in. */
+  private hailTone(mood: number): "warm" | "flat" | "cold" {
+    return mood >= 1 ? "warm" : mood <= -1 ? "cold" : "flat";
+  }
+
+  /** Rebuild the option list for the current node, target and mood. */
+  private hailOptions(t: Entity): { id: string; label: string }[] {
+    const h = this._hail!;
+
+    const disp = this.hailDisposition(t);
+    const law = t.faction === "patrol" || t.faction === "federation";
+    const out: { id: string; label: string }[] = [];
+    if (h.node === "news") {
+      out.push({ id: "news_raiders", label: "Ask about raider activity" });
+      out.push({ id: "news_market", label: "Ask what's paying this rotation" });
+      out.push({ id: "news_patrol", label: "Ask where the law is flying" });
+      out.push({ id: "back", label: "← Back" });
+      return out;
+    }
+    if (h.node === "deal") {
+      out.push({ id: "deal_price", label: "Ask what they'd pay for your cargo" });
+      if (disp !== "hostile") out.push({ id: "fuel", label: "Request an emergency fuel transfer" });
+      if (disp === "friendly" || (law && disp !== "hostile")) {
+        out.push({ id: "escort", label: "Ask them to clear the nearest hostile" });
+      }
+      out.push({ id: "back", label: "← Back" });
+      return out;
+    }
+    if (h.node === "law") {
+      out.push({ id: "record", label: "Ask them to read back your record" });
+      out.push({ id: "apology", label: "Offer restitution for prior incidents (500cr)" });
+      out.push({ id: "back", label: "← Back" });
+      return out;
+    }
+    // root
+    out.push({ id: "greet", label: h.asked.greet ? "Keep the pleasantries going" : "Open with a greeting" });
+    out.push({ id: "to_news", label: "Ask for local news ▸" });
+    out.push({ id: "to_deal", label: "Ask them for something ▸" });
+    if (law) out.push({ id: "to_law", label: "Talk to the law ▸" });
+    if (disp === "hostile") {
+      out.push({ id: "bribe", label: `Offer them ${this.hailBribeCost()}cr to break off` });
+      out.push({ id: "threat", label: "Warn them off — break contact or be fired on" });
+      out.push({ id: "taunt", label: "Taunt them (risky)" });
+    }
+    out.push({ id: "close", label: "Close the channel" });
+    return out;
+  }
+
+  /** Bribe ask scales with the pilot's visible worth and the hostile's nerve. */
+  private hailBribeCost(): number {
+    const p = this.player; if (!p) return 500;
+    const worth = p.credits + (p.kills ?? 0) * 120;
+    return Math.max(250, Math.round((250 + worth * 0.06) / 50) * 50);
   }
 
   openHail() {
@@ -6636,24 +6813,32 @@ export class Voidwake {
     const d = V.len(V.sub(t.pos, p.pos));
     if (d > 4000) { this.pushLog(`${t.name} is out of comms range (${Math.round(d)}u).`); return; }
     const disp = this.hailDisposition(t);
-    const options: { id: string; label: string }[] = [{ id: "greet", label: "Open with a greeting" }];
-    options.push({ id: "tip", label: "Ask for local news and market word" });
-    if (disp !== "hostile") options.push({ id: "fuel", label: "Request an emergency fuel transfer" });
-    if (disp === "hostile") options.push({ id: "threat", label: "Warn them off — break contact or be fired on" });
-    if (t.faction === "patrol" || t.faction === "federation") {
-      options.push({ id: "apology", label: "Offer restitution for prior incidents (500cr)" });
-    }
-    options.push({ id: "close", label: "Close the channel" });
-    this._hail = { id: t.id, options, log: [] };
+    this._hail = {
+      id: t.id, node: "root", options: [], log: [], asked: {},
+      mood: disp === "friendly" ? 1 : disp === "hostile" ? -2 : 0,
+    };
+    this._hail.options = this.hailOptions(t);
     this.menuCursor = 0;
     this.screen = "hail";
     this.sfx("scan");
   }
 
-  private hailReply(t: Entity, kind: ChatterKind) {
-    const line = pickLine(kind, this.chatterCtx(t, { target: t }));
+  private hailReply(t: Entity, kind: ChatterKind, extra?: { a?: string; b?: string }) {
+    const line = pickLine(kind, this.chatterCtx(t, { target: t, ...extra }));
     this._hail?.log.push(`${t.name}: ${line}`);
     this.pushChatter(t.name, line, t.kind === "hostile" ? "#ff8a8a" : "#c2c2ff", "external");
+  }
+
+  /** Close the channel, keying the sign-off to the mood we ended on. */
+  private closeHail(t?: Entity) {
+    const h = this._hail;
+    if (h && t) {
+      const tone = this.hailTone(h.mood);
+      this.hailReply(t, tone === "warm" ? "hail_close_warm" : tone === "cold" ? "hail_close_cold" : "hail_close_flat");
+      dispatchHook("onHailClosed", { targetId: t.id, target: t.name, mood: h.mood, tone });
+    }
+    this._hail = undefined;
+    this.screen = "playing";
   }
 
   updateHail() {
@@ -6665,23 +6850,58 @@ export class Voidwake {
     if (!this.input.consume("enter")) return;
     const choice = h.options[this.menuCursor].id;
     const disp = this.hailDisposition(t);
+    const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
     switch (choice) {
+      // --- navigation nodes ------------------------------------------------
+      case "to_news": h.node = "news"; break;
+      case "to_deal": h.node = "deal"; break;
+      case "to_law":  h.node = "law";  break;
+      case "back":    h.node = "root"; break;
+
       case "greet": {
-        h.log.push(`You: hail ${t.name}, identifying as ${p.char.name}.`);
+        h.log.push(h.asked.greet
+          ? "You: keeping the channel warm."
+          : `You: hail ${t.name}, identifying as ${p.char.name}.`);
         this.hailReply(t, disp === "friendly" ? "hail_greet_friendly"
           : disp === "hostile" ? "hail_greet_hostile" : "hail_greet_neutral");
+        if (!h.asked.greet) h.mood += disp === "hostile" ? 0 : 1;
+        h.asked.greet = true;
         if (disp === "neutral" && Math.random() < 0.25) adjustRep(p, t.faction ?? "guild", 1);
         break;
       }
-      case "tip": {
-        h.log.push("You: asking for local traffic and market word.");
-        this.hailReply(t, "hail_tip");
+      case "news_raiders":
+      case "news_market":
+      case "news_patrol": {
+        const label = choice === "news_raiders" ? "raider traffic"
+          : choice === "news_market" ? "market word" : "patrol movements";
+        h.log.push(`You: asking about ${label}.`);
+        if (this.hailTone(h.mood) === "cold" && Math.random() < 0.6) {
+          this.hailReply(t, "hail_close_cold");
+        } else {
+          this.hailReply(t,
+            choice === "news_raiders" ? "hail_news_raiders"
+            : choice === "news_market" ? "hail_news_market" : "hail_news_patrol");
+        }
+        break;
+      }
+      case "deal_price": {
+        h.log.push("You: asking what they'd pay for the hold.");
+        const best = Object.entries(p.cargo ?? {})
+          .filter(([k, v]) => (v as number) > 0 && k !== "ore")
+          .map(([k, v]) => ({ id: k, qty: v as number, meta: COMMODITIES.find((c) => c.id === k) }))
+          .filter((r) => r.meta)
+          .sort((a, b) => (b.meta!.base * b.qty) - (a.meta!.base * a.qty))[0];
+        if (!best) { this.hailReply(t, "hail_trade_none"); break; }
+        const stock = t.kind === "station" ? this.stationStocks.get(t.id) : undefined;
+        const row = stock?.commodities.find((c) => c.id === best.id);
+        const moodMul = 1 + h.mood * 0.03;
+        const offer = Math.max(1, Math.round((row?.sell ?? best.meta!.base * (0.8 + Math.random() * 0.4)) * moodMul));
+        this.hailReply(t, "hail_trade_offer", { a: best.meta!.name, b: String(offer) });
         break;
       }
       case "fuel": {
         h.log.push("You: requesting an emergency fuel transfer.");
-        const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
-        const ok = disp === "friendly" || (disp === "neutral" && rep >= 0 && Math.random() < 0.45);
+        const ok = disp === "friendly" || (disp === "neutral" && rep >= 0 && Math.random() < 0.45 + h.mood * 0.1);
         if (ok && p.ship.fuel < p.ship.fuelMax) {
           const amt = Math.min(25, p.ship.fuelMax - p.ship.fuel);
           p.ship.fuel += amt;
@@ -6689,6 +6909,45 @@ export class Voidwake {
           this.pushLog(`${t.name} transferred ${Math.round(amt)} fuel.`);
         } else {
           this.hailReply(t, "hail_fuel_no");
+          h.mood -= 1;
+        }
+        break;
+      }
+      case "escort": {
+        h.log.push("You: asking them to clear the nearest hostile.");
+        const foe = this.nearestOfKind("hostile", 6000);
+        if (foe && (disp === "friendly" || rep >= 0) && Math.random() < 0.55 + h.mood * 0.12) {
+          t.state = "attack";
+          t.targetId = foe.id;
+          t.hostileUntil = undefined;
+          this.hailReply(t, "hail_escort_yes");
+          this.pushLog(`${t.name} moves to intercept ${foe.name}.`);
+          h.mood += 1;
+        } else {
+          this.hailReply(t, "hail_escort_no");
+        }
+        break;
+      }
+      case "record": {
+        h.log.push("You: requesting a record readback.");
+        const flagged = Math.min(p.reputation?.federation ?? 0, p.reputation?.guild ?? 0) <= -15;
+        this.hailReply(t, flagged ? "hail_record_flagged" : "hail_record_clean");
+        break;
+      }
+      case "bribe": {
+        const cost = this.hailBribeCost();
+        h.log.push(`You: offering ${cost}cr to break off.`);
+        const chance = Math.min(0.85, 0.35 + (p.credits >= cost * 2 ? 0.15 : 0) + h.mood * 0.08);
+        if (p.credits >= cost && Math.random() < chance) {
+          p.credits -= cost;
+          t.state = "flee";
+          t.hostileUntil = undefined;
+          this.hailReply(t, "hail_bribe_ok");
+          this.pushLog(`Paid ${cost}cr — ${t.name} disengages.`);
+          h.mood += 2;
+        } else {
+          this.hailReply(t, "hail_bribe_no");
+          h.mood -= 1;
         }
         break;
       }
@@ -6704,26 +6963,50 @@ export class Voidwake {
           this.pushLog(`${t.name} breaks off.`);
         } else {
           this.hailReply(t, "hail_threat_refuse");
+          h.mood -= 1;
+        }
+        break;
+      }
+      case "taunt": {
+        h.log.push("You: taunting them on an open channel.");
+        if (Math.random() < 0.45) {
+          this.hailReply(t, "hail_taunt_calm");
+          h.mood -= 1;
+        } else {
+          this.hailReply(t, "hail_taunt_enrage");
+          // Same convention tickAI uses for "this ship wants the player":
+          // an active hostileUntil window rather than an explicit target id.
+          t.state = "attack";
+          t.hostileUntil = performance.now() / 1000 + 45;
+          h.mood -= 2;
+          this.pushLog(`${t.name} commits to an attack run.`);
         }
         break;
       }
       case "apology": {
         h.log.push("You: offering restitution.");
-        const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
         if (p.credits >= 500 && rep > -40) {
           p.credits -= 500;
           adjustRep(p, t.faction ?? "federation", 8);
           this.hailReply(t, "hail_apology_ok");
+          h.mood += 1;
         } else {
           this.hailReply(t, "hail_apology_no");
+          h.mood -= 1;
         }
         break;
       }
       default:
-        this._hail = undefined;
-        this.screen = "playing";
+        dispatchHook("onHailTopic", { targetId: t.id, target: t.name, topic: choice, node: h.node, mood: h.mood, disposition: disp });
+        this.closeHail(t);
         return;
     }
+    h.mood = Math.max(-3, Math.min(3, h.mood));
+    h.options = this.hailOptions(t);
+    this.menuCursor = Math.min(this.menuCursor, h.options.length - 1);
+    dispatchHook("onHailTopic", { targetId: t.id, target: t.name, topic: choice, node: h.node, mood: h.mood, disposition: disp });
+    // 0.8.0 compatibility: the original single-shot hook still fires so older
+    // mods keep seeing the pilot's choices.
     dispatchHook("onPlayerHail", { targetId: t.id, target: t.name, option: choice, disposition: disp });
   }
 
@@ -6735,10 +7018,14 @@ export class Voidwake {
     if (t) {
       const disp = this.hailDisposition(t);
       const rep = p.reputation?.[t.faction ?? "guild"] ?? 0;
-      putText(g, 4, 2, `${(t.faction ?? "independent").toUpperCase()}  ·  disposition ${disp}  ·  standing ${repLabel(rep)}`,
+      const tone = this.hailTone(h.mood);
+      const meter = "▁▂▃▅▆▇".charAt(Math.max(0, Math.min(5, h.mood + 3)));
+      putText(g, 4, 2, `${(t.faction ?? "independent").toUpperCase()}  ·  disposition ${disp}  ·  standing ${repLabel(rep)}  ·  mood ${meter} ${tone}`,
               disp === "hostile" ? "#ff8a8a" : disp === "friendly" ? "#7CFC00" : "#ffd28a");
+      const path = h.node === "root" ? "channel" : `channel ▸ ${h.node}`;
+      putText(g, 4, 3, path, "#7a8aa0");
     }
-    let row = 4;
+    let row = 5;
     for (const line of h.log.slice(-6)) {
       putText(g, 4, row++, line.slice(0, Math.max(10, g[0].length - 8)),
               line.startsWith("You:") ? "#8fd8ff" : "#c2c2ff");
@@ -6749,6 +7036,7 @@ export class Voidwake {
       putText(g, 4, row + i, `${sel ? "▶" : " "} ${h.options[i].label}`, sel ? "#ffe066" : "#cf6");
     }
   }
+
 
 
 
@@ -11325,6 +11613,21 @@ export class Voidwake {
             glowTiles: this._glowAtlas.size, screen: String(this.screen),
           };
         },
+        // 0.9.3 — conversation-tree read surface.
+        hail: () => {
+          const h = this._hail; if (!h) return null;
+          const t = this.byId(h.id);
+          return {
+            targetId: h.id, target: t?.name, faction: t?.faction,
+            node: h.node, mood: h.mood, tone: this.hailTone(h.mood),
+            options: h.options.map((o) => o.id),
+            log: h.log.slice(-8),
+          };
+        },
+        disposition: (id) => {
+          const e = this.byId(id);
+          return e ? this.hailDisposition(e) : null;
+        },
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -14309,7 +14612,29 @@ export class Voidwake {
           sy2 < vpTop - margin || sy2 > vpBottom + margin) continue;
       projected.push({ e, sx, sy: sy2, z: z2, r: rCells, far });
     }
-    projected.sort((a, b) => b.z - a.z);
+    // 0.9.3 perf — depth ordering by band bucket instead of a comparison sort.
+    // Camera depth is only used to decide overdraw order, so exact ordering
+    // inside a thin depth slice is invisible. Bucketing into 256 log-spaced
+    // bands makes this O(n) with no comparator calls, which matters most in the
+    // dense core where `projected` can hold hundreds of bodies every frame.
+    // Small frames fall back to the native sort (cheaper than allocating).
+    if (projected.length > 48) {
+      const BANDS = 256;
+      const invLog = BANDS / Math.log(FAR_CULL * 2);
+      const buckets: (typeof projected)[] = new Array(BANDS);
+      for (const it of projected) {
+        let b = Math.floor(Math.log(Math.max(1, it.z)) * invLog);
+        if (b < 0) b = 0; else if (b >= BANDS) b = BANDS - 1;
+        (buckets[b] ??= []).push(it);
+      }
+      projected.length = 0;
+      for (let b = BANDS - 1; b >= 0; b--) {       // far → near
+        const bk = buckets[b];
+        if (bk) for (const it of bk) projected.push(it);
+      }
+    } else {
+      projected.sort((a, b) => b.z - a.z);
+    }
 
 
     // Helper: project a world point into the same camera space as entities.
