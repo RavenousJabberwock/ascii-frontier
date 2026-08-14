@@ -6906,7 +6906,10 @@ export class Voidwake {
     const line = pickLine(kind, this.chatterCtx(t, { target: t, ...extra }));
     this._hail?.log.push(`${t.name}: ${line}`);
     this.pushChatter(t.name, line, t.kind === "hostile" ? "#ff8a8a" : "#c2c2ff", "external");
+    // 0.9.4 — every reply animates the portrait and blips a short voice run.
+    this.hailVoice(t, 3 + Math.min(3, Math.floor(line.length / 28)));
   }
+
 
   /** Close the channel, keying the sign-off to the mood we ended on. */
   private closeHail(t?: Entity) {
