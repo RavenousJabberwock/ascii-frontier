@@ -1925,6 +1925,9 @@ function pickLine(kind: ChatterKind, ctx: ChatterCtx): string {
 // Rotating tips shown on the title screen. Kept short so the line fits in
 // even a narrow terminal; the renderer swaps one every ~5 seconds.
 const TITLE_TIPS = [
+  "Hail a dock and pick 'Ask about work' — good standing gets you jobs the board never posts.",
+  "Priority contracts pay nearly double, but they want Friendly standing and rank Competent.",
+  "The portrait on a comms channel changes colour with the mood — watch it before you taunt anyone.",
   "Mouse wheel controls throttle. Scroll up = faster.",
   "Fly close to a star (not a black hole) with low throttle to scoop fuel.",
   "Hire a Pilot at any station — press O to autopilot to your target.",
