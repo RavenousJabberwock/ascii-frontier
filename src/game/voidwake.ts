@@ -6787,11 +6787,27 @@ export class Voidwake {
       out.push({ id: "back", label: "← Back" });
       return out;
     }
+    // 0.9.4 — reputation-gated work. What's on offer is decided by standing
+    // with this hull's faction and by the pilot's rank, and the labels say so
+    // up front rather than refusing after the fact.
+    if (h.node === "work") {
+      const gate = this.hailWorkGate(t);
+      out.push({ id: "work_board", label: gate.casual ? "Ask if they have a job going" : `Ask about work (needs ${repLabel(-4)} standing or better)` });
+      out.push({ id: "work_priority", label: gate.priority
+        ? "Ask for their priority contract (premium pay)"
+        : `Ask for priority work (needs Friendly standing + rank Competent)` });
+      out.push({ id: "back", label: "← Back" });
+      return out;
+    }
     // root
     out.push({ id: "greet", label: h.asked.greet ? "Keep the pleasantries going" : "Open with a greeting" });
     out.push({ id: "to_news", label: "Ask for local news ▸" });
     out.push({ id: "to_deal", label: "Ask them for something ▸" });
+    if (disp !== "hostile" && (t.kind === "station" || t.kind === "friendly" || law)) {
+      out.push({ id: "to_work", label: "Ask about work ▸" });
+    }
     if (law) out.push({ id: "to_law", label: "Talk to the law ▸" });
+
     if (disp === "hostile") {
       out.push({ id: "bribe", label: `Offer them ${this.hailBribeCost()}cr to break off` });
       out.push({ id: "threat", label: "Warn them off — break contact or be fired on" });
