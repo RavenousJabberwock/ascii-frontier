@@ -6730,14 +6730,19 @@ export class Voidwake {
   // likelier on a warm channel, and a taunt can tip a hostile into an
   // immediate attack run. Closing lines are keyed to the mood the channel
   // ended on, not the disposition it opened with.
+  // 0.9.4 adds a portrait frame: `speakUntil` is stamped every time the far
+  // end says something, and the renderer animates the face (and plays a short
+  // vocoded blip run) for as long as that window is open.
   _hail?: {
     id: number;
-    node: "root" | "news" | "deal" | "law";
+    node: "root" | "news" | "deal" | "law" | "work";
     options: { id: string; label: string }[];
     log: string[];
     mood: number;        // -3 murderous … +3 cordial
     asked: Record<string, boolean>;
+    speakUntil?: number; // ms timestamp — portrait animates until then
   };
+
 
   hailDisposition(t: Entity): "friendly" | "neutral" | "hostile" {
     const p = this.player;
