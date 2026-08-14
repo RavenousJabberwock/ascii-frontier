@@ -3936,6 +3936,10 @@ function recordFine(rep: number): number {
   return Math.max(300, Math.round((-5 - rep) * 120));
 }
 
+// Rank ladder, shared by awardXP's promotion check and the 0.9.4 hail work
+// gate (priority contracts need rank Competent or better).
+const HAIL_RANKS = ["Harmless", "Mostly Harmless", "Novice", "Competent", "Expert", "Master", "Elite"];
+
 function repLabel(v: number): string {
   if (v >= 50) return "Allied";
   if (v >= 20) return "Friendly";
