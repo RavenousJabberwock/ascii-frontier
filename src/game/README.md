@@ -539,6 +539,7 @@ covering every hook shipped so far.
 | `onCrewPaid`        | `{ bill, paid, short, wingBill, crew, credits, stationId, station }` | dock payroll settled (0.9.2) |
 | `onHailTopic`       | `{ targetId, target, topic, node, mood, disposition }` | every conversation node walked (0.9.3) |
 | `onHailClosed`      | `{ targetId, target, mood, tone }`         | comms channel closed (0.9.3) |
+| `onHailWork`        | `{ targetId, target, priority, standing, rank, offers }` | reputation-gated work offered over a hail (0.9.4) |
 
 0.9.3 adds the conversation surface: `frontier.hail()` returns the live channel
 (`targetId, target, faction, node, mood, tone, options, log`) or `nil`, and
