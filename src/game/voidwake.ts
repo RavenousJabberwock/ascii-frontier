@@ -6824,6 +6824,60 @@ export class Voidwake {
     return Math.max(250, Math.round((250 + worth * 0.06) / 50) * 50);
   }
 
+  /**
+   * 0.9.4 — what work this channel will hand out. `casual` opens the ordinary
+   * board (anything at Wary or better with the speaker's own faction);
+   * `priority` needs Friendly standing *and* rank Competent or above, and pays
+   * a premium. Mood nudges the casual gate by a point so a warm exchange can
+   * carry a marginal reputation.
+   */
+  private hailWorkGate(t: Entity): { casual: boolean; priority: boolean; rep: number } {
+    const p = this.player;
+    const rep = (p?.reputation?.[t.faction ?? "guild"] ?? 0) + (this._hail?.mood ?? 0);
+    const rankIdx = HAIL_RANKS.indexOf(p?.rank ?? "Harmless");
+    return { casual: rep > -5, priority: rep >= 20 && rankIdx >= 3, rep };
+  }
+
+  /**
+   * 0.9.4 — a 7-wide, 5-row portrait frame for the far end of the channel.
+   * Two frames per speaker (mouth shut / mouth open) so the face animates
+   * only while `speakUntil` is open; the crest row is keyed to faction so a
+   * patrol officer, a pirate and a dock controller are visibly different
+   * people. Cosmetic — nothing reads it back.
+   */
+  private hailPortrait(t: Entity, open: boolean): string[] {
+    const crest: Record<string, string> = {
+      pirate:     "<~vvv~>",
+      patrol:     "[|=+=|]",
+      federation: " _|H|_ ",
+      guild:      " /^$^\\ ",
+      aquila:     " >-A-< ",
+    };
+    const top = t.kind === "station" ? "[#####]" : (crest[t.faction ?? "guild"] ?? ".-----.");
+    const eye = t.kind === "hostile" ? "x" : t.kind === "friendly" ? "o" : "8";
+    const mouth = open ? "|  O  |" : "|  -  |";
+    return [top, "|     |", `| ${eye} ${eye} |`, mouth, "'-----'"];
+  }
+
+  /**
+   * Short vocoded blip run — the "voice" behind a portrait frame. Pitch is
+   * hashed off the speaker's name so each hull has a consistent register, and
+   * hostiles talk lower and rougher. Routed through `beep`, so the Audio
+   * options (master/SFX volume) gate it like every other cue.
+   */
+  private hailVoice(t: Entity, syllables = 4) {
+    let hash = 0;
+    for (let i = 0; i < t.name.length; i++) hash = (hash * 31 + t.name.charCodeAt(i)) & 0xffff;
+    const base = t.kind === "hostile" ? 150 + (hash % 60) : 260 + (hash % 180);
+    const wave: OscillatorType = t.kind === "station" ? "square" : t.kind === "hostile" ? "sawtooth" : "triangle";
+    for (let i = 0; i < syllables; i++) {
+      const f = base * (0.85 + ((hash >> (i * 3)) & 7) / 12);
+      setTimeout(() => this.beep(f, 0.05, wave, { glide: i % 2 ? -0.2 : 0.2, noise: 0.12 }), i * 110);
+    }
+    if (this._hail) this._hail.speakUntil = performance.now() + syllables * 110 + 200;
+  }
+
+
   openHail() {
     const p = this.player; if (!p) return;
     const t = this.targetId != null ? this.byId(this.targetId) : null;
