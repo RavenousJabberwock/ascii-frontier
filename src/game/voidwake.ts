@@ -9490,6 +9490,19 @@ export class Voidwake {
   // Seven kinds, chosen weighted-random each hand-in. Each kind pulls a live
   // entity as its objective where possible so the tracker + world marker have
   // something real to point at.
+  /**
+   * 0.9.4 — a premium variant of the ordinary contract. Priority work is the
+   * same generator with the reward scaled up and the description flagged, so
+   * every downstream system (contract log, payout, hooks, Lua) treats it as a
+   * normal mission and nothing special has to be maintained twice.
+   */
+  premiumMission(): Mission {
+    const m = this.generateMission();
+    m.reward = Math.round(m.reward * (1.6 + this.rng() * 0.5));
+    m.description = `PRIORITY: ${m.description}`;
+    return m;
+  }
+
   generateMission(): Mission {
     const rng = this.rng;
     const p = this.player;
