@@ -6824,10 +6824,10 @@ export class Voidwake {
     // up front rather than refusing after the fact.
     if (h.node === "work") {
       const gate = this.hailWorkGate(t);
-      out.push({ id: "work_board", label: gate.casual ? "Ask if they have a job going" : `Ask about work (needs ${repLabel(-4)} standing or better)` });
+      out.push({ id: "work_board", label: gate.casual ? "Ask if they have a job going" : "Ask about work (needs Neutral standing or better)" });
       out.push({ id: "work_priority", label: gate.priority
         ? "Ask for their priority contract (premium pay)"
-        : `Ask for priority work (needs Friendly standing + rank Competent)` });
+        : "Ask for priority work (needs Friendly standing + rank Competent)" });
       out.push({ id: "back", label: "← Back" });
       return out;
     }
