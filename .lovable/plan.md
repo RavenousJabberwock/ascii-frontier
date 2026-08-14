@@ -1,3 +1,41 @@
+# 0.9.4 — Comms Portraits & Reputation-Gated Work
+
+Ships as **0.9.4**.
+
+- **Portrait frames on the comms screen.** The hail screen now carries a
+  7x5 portrait of whoever is on the other end, top-right. The crest row is
+  keyed to faction (pirate / patrol / federation / guild / aquila, with a
+  structural frame for docks) and the eye glyph to disposition. `_hail.speakUntil`
+  is stamped by `hailReply()`, and the mouth frame only alternates while that
+  window is open — the face holds shut and shows `...` when the channel is
+  quiet, `((•))` while the far end is mid-line. Frame colour follows the mood
+  band, so a souring channel reads at a glance. The transcript now wraps to the
+  pane left of the portrait instead of running under it.
+- **Voiced replies (`hailVoice`).** Every reply plays a short blip run whose
+  register is hashed off the speaker's name (so a given hull always sounds the
+  same), lower and rougher for hostiles, square for dock control. Syllable count
+  scales with line length. Routed through `beep`, so Audio options gate it like
+  any other cue.
+- **Reputation-gated work (`work ▸`).** A new root branch on stations, friendly
+  hulls and law hulls. `hailWorkGate()` reads standing with *that hull's*
+  faction plus the live mood: `casual` work needs better than Wary, `priority`
+  work needs Friendly standing **and** rank Competent or above. The option
+  labels state the gate up front rather than refusing after the fact. Clearing
+  the gate closes the channel straight into the ordinary contract board, so
+  accept/skip/log-full behaviour is shared with docking; a refusal costs a point
+  of mood and leaves the branch open. Honours **Options ▸ Quest Offers: OFF**
+  and `CONTRACT_MAX`.
+- **`premiumMission()`.** Priority work is the standard generator with the
+  reward scaled 1.6–2.1x and a `PRIORITY:` flag on the description, so contract
+  log, payout, sorting, hooks and Lua all treat it as a normal mission.
+- **Scripting.** New `onHailWork` hook (`{ targetId, target, priority, standing,
+  rank, offers[] }`) fires the moment work is put on the board.
+
+## Deferred
+
+- Faction-specific contract flavour (priority work currently reuses the
+  general generator).
+
 # 0.9.3 — Conversation Trees & Depth Bucket Sort
 
 Ships as **0.9.3**.

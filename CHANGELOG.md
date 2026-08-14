@@ -4,6 +4,19 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.4 — Comms Portraits & Reputation-Gated Work
+- **Comms portraits**: hailing now shows an animated ASCII portrait of the
+  contact, keyed to their faction and disposition, that only moves while they
+  are actually speaking and takes its colour from the channel's mood.
+- **Voices**: each reply plays a short blip run with a per-hull register —
+  lower and rougher for hostiles, square for dock control.
+- **Work over comms**: a new `Ask about work ▸` branch on stations, friendly
+  hulls and patrol/federation hulls. Ordinary jobs need better than Wary
+  standing; priority contracts (1.6–2.1x pay) need Friendly standing and rank
+  Competent or better. Clearing the gate opens the usual contract board.
+- **Scripting**: new `onHailWork` hook reporting the gate cleared and the
+  offers put on the board.
+
 ## 0.9.3 — Conversation Trees & Depth Bucket Sort
 - **Comms**: hailing a contact now opens a branching conversation instead of a
   single menu. Branch into local news, deals (cargo valuations, fuel, asking a

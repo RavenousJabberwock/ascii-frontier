@@ -221,7 +221,7 @@ editing and no build step.
 - Scripts register hooks: `onCommodityTrade`, `onPassengerBoard`,
   `onPlayerStationTierUp`, `onPlayerHail`, `onCustomsScan`,
   `onShipHullChange`, `onBountyAccepted`, `onBountyClaimed`,
-  `onBookmarkAdded`, `onHailTopic`, `onHailClosed`, and many more.
+  `onBookmarkAdded`, `onHailTopic`, `onHailClosed`, `onHailWork`, and many more.
 
 - They call into the `frontier.*` API for entities, world state, economy
   queries, chatter injection, and grants.

@@ -59,6 +59,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onBookmarkRemoved", "onCargoChanged", "onCrewPaid",
   // 0.9.3 — conversation trees
   "onHailTopic", "onHailClosed",
+  // 0.9.4 — reputation-gated work handed out over a hail
+  "onHailWork",
 ];
 
 

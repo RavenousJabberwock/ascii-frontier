@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.3";
+const VERSION = "0.9.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -144,7 +144,10 @@ export type ScriptHookName =
   // walks (not just the first choice, which is all `onPlayerHail` saw), and
   // `onHailClosed` reports the final mood the channel ended on.
   | "onHailTopic"
-  | "onHailClosed";
+  | "onHailClosed"
+  // 0.9.4 — a reputation-gated contract handed out inside a hail. Carries the
+  // gate that was cleared (standing + rank) and the offers put on the board.
+  | "onHailWork";
 
 
 
@@ -201,6 +204,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onCrewPaid:           [],
   onHailTopic:          [],
   onHailClosed:         [],
+  onHailWork:           [],
 
 
 };
@@ -336,6 +340,8 @@ type ChatterKind =
   | "hail_record_clean" | "hail_record_flagged"
   | "hail_escort_yes" | "hail_escort_no"
   | "hail_close_warm" | "hail_close_flat" | "hail_close_cold"
+  // 0.9.4 — reputation-gated work offered over the channel.
+  | "hail_work_offer" | "hail_work_premium" | "hail_work_refuse" | "hail_work_none"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1637,6 +1643,28 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "That's our chat quota. Back to work.",
     "Acknowledged. Nothing further.",
   ],
+  hail_work_offer: [
+    "As it happens, yes. Filing two jobs to your board now, {cmdr}.",
+    "We've got paper going spare. Take a look and don't waste our time.",
+    "Something came off the wire this morning. Uploading it — your call.",
+    "Work? Always. Nothing glamorous, but it clears.",
+  ],
+  hail_work_premium: [
+    "Standing like yours gets the good paper. Priority contract, uploading now.",
+    "We keep the fat jobs off the public board. This one's yours if you want it.",
+    "Rank and record check out. Here's what we don't post publicly, {cmdr}.",
+  ],
+  hail_work_refuse: [
+    "We don't hand paper to hulls we don't trust. Fix your standing first.",
+    "Not at your record, {cmdr}. Try a dock that's less particular.",
+    "Our board is for people we know. You're not, yet.",
+    "Come back when your name means something better around here.",
+  ],
+  hail_work_none: [
+    "Board's empty. Try us next rotation.",
+    "Nothing on the wire we'd trust to an outside hull today.",
+    "Your log's already full, by the look of it. Finish something.",
+  ],
   hail_close_cold: [
     "Don't hail us again.",
     "Next transmission from us will be ordnance.",
@@ -1897,6 +1925,9 @@ function pickLine(kind: ChatterKind, ctx: ChatterCtx): string {
 // Rotating tips shown on the title screen. Kept short so the line fits in
 // even a narrow terminal; the renderer swaps one every ~5 seconds.
 const TITLE_TIPS = [
+  "Hail a dock and pick 'Ask about work' — good standing gets you jobs the board never posts.",
+  "Priority contracts pay nearly double, but they want Friendly standing and rank Competent.",
+  "The portrait on a comms channel changes colour with the mood — watch it before you taunt anyone.",
   "Mouse wheel controls throttle. Scroll up = faster.",
   "Fly close to a star (not a black hole) with low throttle to scoop fuel.",
   "Hire a Pilot at any station — press O to autopilot to your target.",
@@ -3935,6 +3966,10 @@ function adjustRep(p: PlayerState, faction: string, delta: number) {
 function recordFine(rep: number): number {
   return Math.max(300, Math.round((-5 - rep) * 120));
 }
+
+// Rank ladder, shared by awardXP's promotion check and the 0.9.4 hail work
+// gate (priority contracts need rank Competent or better).
+const HAIL_RANKS = ["Harmless", "Mostly Harmless", "Novice", "Competent", "Expert", "Master", "Elite"];
 
 function repLabel(v: number): string {
   if (v >= 50) return "Allied";
@@ -6730,14 +6765,19 @@ export class Voidwake {
   // likelier on a warm channel, and a taunt can tip a hostile into an
   // immediate attack run. Closing lines are keyed to the mood the channel
   // ended on, not the disposition it opened with.
+  // 0.9.4 adds a portrait frame: `speakUntil` is stamped every time the far
+  // end says something, and the renderer animates the face (and plays a short
+  // vocoded blip run) for as long as that window is open.
   _hail?: {
     id: number;
-    node: "root" | "news" | "deal" | "law";
+    node: "root" | "news" | "deal" | "law" | "work";
     options: { id: string; label: string }[];
     log: string[];
     mood: number;        // -3 murderous … +3 cordial
     asked: Record<string, boolean>;
+    speakUntil?: number; // ms timestamp — portrait animates until then
   };
+
 
   hailDisposition(t: Entity): "friendly" | "neutral" | "hostile" {
     const p = this.player;
@@ -6782,11 +6822,27 @@ export class Voidwake {
       out.push({ id: "back", label: "← Back" });
       return out;
     }
+    // 0.9.4 — reputation-gated work. What's on offer is decided by standing
+    // with this hull's faction and by the pilot's rank, and the labels say so
+    // up front rather than refusing after the fact.
+    if (h.node === "work") {
+      const gate = this.hailWorkGate(t);
+      out.push({ id: "work_board", label: gate.casual ? "Ask if they have a job going" : "Ask about work (needs Neutral standing or better)" });
+      out.push({ id: "work_priority", label: gate.priority
+        ? "Ask for their priority contract (premium pay)"
+        : "Ask for priority work (needs Friendly standing + rank Competent)" });
+      out.push({ id: "back", label: "← Back" });
+      return out;
+    }
     // root
     out.push({ id: "greet", label: h.asked.greet ? "Keep the pleasantries going" : "Open with a greeting" });
     out.push({ id: "to_news", label: "Ask for local news ▸" });
     out.push({ id: "to_deal", label: "Ask them for something ▸" });
+    if (disp !== "hostile" && (t.kind === "station" || t.kind === "friendly" || law)) {
+      out.push({ id: "to_work", label: "Ask about work ▸" });
+    }
     if (law) out.push({ id: "to_law", label: "Talk to the law ▸" });
+
     if (disp === "hostile") {
       out.push({ id: "bribe", label: `Offer them ${this.hailBribeCost()}cr to break off` });
       out.push({ id: "threat", label: "Warn them off — break contact or be fired on" });
@@ -6802,6 +6858,60 @@ export class Voidwake {
     const worth = p.credits + (p.kills ?? 0) * 120;
     return Math.max(250, Math.round((250 + worth * 0.06) / 50) * 50);
   }
+
+  /**
+   * 0.9.4 — what work this channel will hand out. `casual` opens the ordinary
+   * board (anything at Wary or better with the speaker's own faction);
+   * `priority` needs Friendly standing *and* rank Competent or above, and pays
+   * a premium. Mood nudges the casual gate by a point so a warm exchange can
+   * carry a marginal reputation.
+   */
+  private hailWorkGate(t: Entity): { casual: boolean; priority: boolean; rep: number } {
+    const p = this.player;
+    const rep = (p?.reputation?.[t.faction ?? "guild"] ?? 0) + (this._hail?.mood ?? 0);
+    const rankIdx = HAIL_RANKS.indexOf(p?.rank ?? "Harmless");
+    return { casual: rep > -5, priority: rep >= 20 && rankIdx >= 3, rep };
+  }
+
+  /**
+   * 0.9.4 — a 7-wide, 5-row portrait frame for the far end of the channel.
+   * Two frames per speaker (mouth shut / mouth open) so the face animates
+   * only while `speakUntil` is open; the crest row is keyed to faction so a
+   * patrol officer, a pirate and a dock controller are visibly different
+   * people. Cosmetic — nothing reads it back.
+   */
+  private hailPortrait(t: Entity, open: boolean): string[] {
+    const crest: Record<string, string> = {
+      pirate:     "<~vvv~>",
+      patrol:     "[|=+=|]",
+      federation: " _|H|_ ",
+      guild:      " /^$^\\ ",
+      aquila:     " >-A-< ",
+    };
+    const top = t.kind === "station" ? "[#####]" : (crest[t.faction ?? "guild"] ?? ".-----.");
+    const eye = t.kind === "hostile" ? "x" : t.kind === "friendly" ? "o" : "8";
+    const mouth = open ? "|  O  |" : "|  -  |";
+    return [top, "|     |", `| ${eye} ${eye} |`, mouth, "'-----'"];
+  }
+
+  /**
+   * Short vocoded blip run — the "voice" behind a portrait frame. Pitch is
+   * hashed off the speaker's name so each hull has a consistent register, and
+   * hostiles talk lower and rougher. Routed through `beep`, so the Audio
+   * options (master/SFX volume) gate it like every other cue.
+   */
+  private hailVoice(t: Entity, syllables = 4) {
+    let hash = 0;
+    for (let i = 0; i < t.name.length; i++) hash = (hash * 31 + t.name.charCodeAt(i)) & 0xffff;
+    const base = t.kind === "hostile" ? 150 + (hash % 60) : 260 + (hash % 180);
+    const wave: OscillatorType = t.kind === "station" ? "square" : t.kind === "hostile" ? "sawtooth" : "triangle";
+    for (let i = 0; i < syllables; i++) {
+      const f = base * (0.85 + ((hash >> (i * 3)) & 7) / 12);
+      setTimeout(() => this.beep(f, 0.05, wave, { glide: i % 2 ? -0.2 : 0.2, noise: 0.12 }), i * 110);
+    }
+    if (this._hail) this._hail.speakUntil = performance.now() + syllables * 110 + 200;
+  }
+
 
   openHail() {
     const p = this.player; if (!p) return;
@@ -6827,7 +6937,10 @@ export class Voidwake {
     const line = pickLine(kind, this.chatterCtx(t, { target: t, ...extra }));
     this._hail?.log.push(`${t.name}: ${line}`);
     this.pushChatter(t.name, line, t.kind === "hostile" ? "#ff8a8a" : "#c2c2ff", "external");
+    // 0.9.4 — every reply animates the portrait and blips a short voice run.
+    this.hailVoice(t, 3 + Math.min(3, Math.floor(line.length / 28)));
   }
+
 
   /** Close the channel, keying the sign-off to the mood we ended on. */
   private closeHail(t?: Entity) {
@@ -6856,6 +6969,43 @@ export class Voidwake {
       case "to_news": h.node = "news"; break;
       case "to_deal": h.node = "deal"; break;
       case "to_law":  h.node = "law";  break;
+      case "to_work": h.node = "work"; break;
+
+      // 0.9.4 — reputation-gated contract offers, handed out from inside the
+      // conversation tree. A successful ask closes the channel straight into
+      // the normal contract board so accept/skip works exactly as it does at
+      // a dock; a refusal costs a point of mood and leaves the branch open.
+      case "work_board":
+      case "work_priority": {
+        const priority = choice === "work_priority";
+        h.log.push(priority ? "You: asking after their priority contract." : "You: asking if they have a job going.");
+        const gate = this.hailWorkGate(t);
+        if (priority ? !gate.priority : !gate.casual) {
+          this.hailReply(t, "hail_work_refuse");
+          h.mood -= 1;
+          break;
+        }
+        if (this.options.questOffers === false) { this.hailReply(t, "hail_work_none"); break; }
+        if (contractList(p).length >= CONTRACT_MAX) {
+          this.pushLog(`Contract log full (${CONTRACT_MAX}) — finish or abandon a job first.`);
+          this.hailReply(t, "hail_work_none");
+          break;
+        }
+        const cands = priority
+          ? [this.premiumMission(), this.premiumMission()]
+          : [this.generateMission(), this.generateMission()];
+        this.hailReply(t, priority ? "hail_work_premium" : "hail_work_offer");
+        h.mood += 1;
+        dispatchHook("onHailTopic", { targetId: t.id, target: t.name, topic: choice, node: h.node, mood: h.mood, disposition: disp });
+        dispatchHook("onHailWork", {
+          targetId: t.id, target: t.name, priority, standing: gate.rep, rank: p.rank,
+          offers: cands.map((m) => ({ id: m.id, kind: m.kind, reward: m.reward, description: m.description })),
+        });
+        this._hail = undefined;
+        this.openMissionOffer(`${t.name} offers work over comms — pick a job, or ESC to skip.`, "playing", cands);
+        return;
+      }
+
       case "back":    h.node = "root"; break;
 
       case "greet": {
@@ -7025,9 +7175,27 @@ export class Voidwake {
       const path = h.node === "root" ? "channel" : `channel ▸ ${h.node}`;
       putText(g, 4, 3, path, "#7a8aa0");
     }
+    // 0.9.4 — portrait frame, top-right of the channel. The face animates only
+    // while the far end is mid-line (`speakUntil`), otherwise it holds the
+    // shut-mouth frame and blinks slowly; colour follows the mood band so a
+    // souring channel is readable at a glance.
+    if (t) {
+      const now = performance.now();
+      const speaking = (h.speakUntil ?? 0) > now;
+      const open = speaking && Math.floor(now / 130) % 2 === 0;
+      const art = this.hailPortrait(t, open);
+      const tone = this.hailTone(h.mood);
+      const col = tone === "warm" ? "#7CFC00" : tone === "cold" ? "#ff8a8a" : "#ffd28a";
+      const px = Math.max(20, g[0].length - 16), py = 5;
+      for (let i = 0; i < art.length; i++) putText(g, px, py + i, art[i], col);
+      putText(g, px, py + art.length, speaking ? " ((•)) " : "  ...  ", speaking ? "#9fe" : "#556");
+      putText(g, px - 1, py + art.length + 1, `${t.kind === "station" ? "DOCK CTRL" : "SHIP COMMS"}`, "#7a8aa0");
+    }
+
     let row = 5;
+    const logWidth = Math.max(10, (t ? Math.max(20, g[0].length - 16) : g[0].length) - 6);
     for (const line of h.log.slice(-6)) {
-      putText(g, 4, row++, line.slice(0, Math.max(10, g[0].length - 8)),
+      putText(g, 4, row++, line.slice(0, logWidth),
               line.startsWith("You:") ? "#8fd8ff" : "#c2c2ff");
     }
     row += 1;
@@ -9343,6 +9511,19 @@ export class Voidwake {
   // Seven kinds, chosen weighted-random each hand-in. Each kind pulls a live
   // entity as its objective where possible so the tracker + world marker have
   // something real to point at.
+  /**
+   * 0.9.4 — a premium variant of the ordinary contract. Priority work is the
+   * same generator with the reward scaled up and the description flagged, so
+   * every downstream system (contract log, payout, hooks, Lua) treats it as a
+   * normal mission and nothing special has to be maintained twice.
+   */
+  premiumMission(): Mission {
+    const m = this.generateMission();
+    m.reward = Math.round(m.reward * (1.6 + this.rng() * 0.5));
+    m.description = `PRIORITY: ${m.description}`;
+    return m;
+  }
+
   generateMission(): Mission {
     const rng = this.rng;
     const p = this.player;
