@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.3";
+const VERSION = "0.9.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -7172,9 +7172,27 @@ export class Voidwake {
       const path = h.node === "root" ? "channel" : `channel ▸ ${h.node}`;
       putText(g, 4, 3, path, "#7a8aa0");
     }
+    // 0.9.4 — portrait frame, top-right of the channel. The face animates only
+    // while the far end is mid-line (`speakUntil`), otherwise it holds the
+    // shut-mouth frame and blinks slowly; colour follows the mood band so a
+    // souring channel is readable at a glance.
+    if (t) {
+      const now = performance.now();
+      const speaking = (h.speakUntil ?? 0) > now;
+      const open = speaking && Math.floor(now / 130) % 2 === 0;
+      const art = this.hailPortrait(t, open);
+      const tone = this.hailTone(h.mood);
+      const col = tone === "warm" ? "#7CFC00" : tone === "cold" ? "#ff8a8a" : "#ffd28a";
+      const px = Math.max(20, g[0].length - 16), py = 5;
+      for (let i = 0; i < art.length; i++) putText(g, px, py + i, art[i], col);
+      putText(g, px, py + art.length, speaking ? " ((•)) " : "  ...  ", speaking ? "#9fe" : "#556");
+      putText(g, px - 1, py + art.length + 1, `${t.kind === "station" ? "DOCK CTRL" : "SHIP COMMS"}`, "#7a8aa0");
+    }
+
     let row = 5;
+    const logWidth = Math.max(10, (t ? Math.max(20, g[0].length - 16) : g[0].length) - 6);
     for (const line of h.log.slice(-6)) {
-      putText(g, 4, row++, line.slice(0, Math.max(10, g[0].length - 8)),
+      putText(g, 4, row++, line.slice(0, logWidth),
               line.startsWith("You:") ? "#8fd8ff" : "#c2c2ff");
     }
     row += 1;
