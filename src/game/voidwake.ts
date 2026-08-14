@@ -6938,6 +6938,43 @@ export class Voidwake {
       case "to_news": h.node = "news"; break;
       case "to_deal": h.node = "deal"; break;
       case "to_law":  h.node = "law";  break;
+      case "to_work": h.node = "work"; break;
+
+      // 0.9.4 — reputation-gated contract offers, handed out from inside the
+      // conversation tree. A successful ask closes the channel straight into
+      // the normal contract board so accept/skip works exactly as it does at
+      // a dock; a refusal costs a point of mood and leaves the branch open.
+      case "work_board":
+      case "work_priority": {
+        const priority = choice === "work_priority";
+        h.log.push(priority ? "You: asking after their priority contract." : "You: asking if they have a job going.");
+        const gate = this.hailWorkGate(t);
+        if (priority ? !gate.priority : !gate.casual) {
+          this.hailReply(t, "hail_work_refuse");
+          h.mood -= 1;
+          break;
+        }
+        if (this.options.questOffers === false) { this.hailReply(t, "hail_work_none"); break; }
+        if (contractList(p).length >= CONTRACT_MAX) {
+          this.pushLog(`Contract log full (${CONTRACT_MAX}) — finish or abandon a job first.`);
+          this.hailReply(t, "hail_work_none");
+          break;
+        }
+        const cands = priority
+          ? [this.premiumMission(), this.premiumMission()]
+          : [this.generateMission(), this.generateMission()];
+        this.hailReply(t, priority ? "hail_work_premium" : "hail_work_offer");
+        h.mood += 1;
+        dispatchHook("onHailTopic", { targetId: t.id, target: t.name, topic: choice, node: h.node, mood: h.mood, disposition: disp });
+        dispatchHook("onHailWork", {
+          targetId: t.id, target: t.name, priority, standing: gate.rep, rank: p.rank,
+          offers: cands.map((m) => ({ id: m.id, kind: m.kind, reward: m.reward, description: m.description })),
+        });
+        this._hail = undefined;
+        this.openMissionOffer(`${t.name} offers work over comms — pick a job, or ESC to skip.`, "playing", cands);
+        return;
+      }
+
       case "back":    h.node = "root"; break;
 
       case "greet": {
