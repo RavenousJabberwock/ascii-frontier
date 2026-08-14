@@ -423,3 +423,26 @@ frontier.on("onTick", function()
   end
 end)
 ```
+
+## Priority broker (0.9.4)
+
+Reacts to reputation-gated work handed out over a hail: logs the gate you
+cleared, calls out the fattest offer, and nudges the crew when a priority
+contract lands.
+
+```lua
+frontier.on("onHailWork", function(w)
+  local best = nil
+  for _, m in ipairs(w.offers or {}) do
+    if not best or (m.reward or 0) > (best.reward or 0) then best = m end
+  end
+  frontier.log(("[work] %s offered %d job(s) — standing %d, rank %s%s")
+    :format(w.target or "?", #(w.offers or {}), w.standing or 0,
+            w.rank or "?", w.priority and ", PRIORITY" or ""))
+  if best then
+    frontier.chat("Quartermaster",
+      ("Best of the batch: %s for %dcr."):format(best.description, best.reward),
+      w.priority and "#ffe066" or "#9fe")
+  end
+end)
+```

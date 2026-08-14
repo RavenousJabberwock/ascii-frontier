@@ -329,6 +329,18 @@ make. Branches:
   behind you), or taunt them — which is funny slightly less than half the time
   and otherwise buys you an immediate attack run.
 
+- **Ask about work ▸** (0.9.4) stations, friendly hulls and patrol/Federation
+  hulls will hand out contracts over the channel. An ordinary job needs better
+  than Wary standing with *that* hull's faction; their **priority contract**
+  (1.6–2.1x pay, flagged `PRIORITY:` in the log) needs Friendly standing and
+  rank Competent or better. The option labels tell you which gate you're short
+  of, and accepting drops you into the same contract board you get at a dock.
+
+Since 0.9.4 the channel also shows an animated **portrait** of whoever is
+answering — faction crest, disposition-keyed eyes, colour tracking the mood —
+and each reply comes with a short voice blip whose register is unique to that
+hull. Both are cosmetic; audio follows the usual volume options.
+
 How you hang up matters: the sign-off you get is keyed to the mood the channel
 ended on. Aliens answer in static.
 
