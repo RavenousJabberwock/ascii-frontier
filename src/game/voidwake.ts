@@ -144,7 +144,10 @@ export type ScriptHookName =
   // walks (not just the first choice, which is all `onPlayerHail` saw), and
   // `onHailClosed` reports the final mood the channel ended on.
   | "onHailTopic"
-  | "onHailClosed";
+  | "onHailClosed"
+  // 0.9.4 — a reputation-gated contract handed out inside a hail. Carries the
+  // gate that was cleared (standing + rank) and the offers put on the board.
+  | "onHailWork";
 
 
 
@@ -201,6 +204,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onCrewPaid:           [],
   onHailTopic:          [],
   onHailClosed:         [],
+  onHailWork:           [],
 
 
 };
@@ -336,6 +340,8 @@ type ChatterKind =
   | "hail_record_clean" | "hail_record_flagged"
   | "hail_escort_yes" | "hail_escort_no"
   | "hail_close_warm" | "hail_close_flat" | "hail_close_cold"
+  // 0.9.4 — reputation-gated work offered over the channel.
+  | "hail_work_offer" | "hail_work_premium" | "hail_work_refuse" | "hail_work_none"
   | "banter";
 
 // Reusable fragments. Resolved recursively via {bucket} slots in templates.
@@ -1636,6 +1642,28 @@ const TEMPLATES: Record<ChatterKind, string[]> = {
     "Channel closed. {speaker} out.",
     "That's our chat quota. Back to work.",
     "Acknowledged. Nothing further.",
+  ],
+  hail_work_offer: [
+    "As it happens, yes. Filing two jobs to your board now, {cmdr}.",
+    "We've got paper going spare. Take a look and don't waste our time.",
+    "Something came off the wire this morning. Uploading it — your call.",
+    "Work? Always. Nothing glamorous, but it clears.",
+  ],
+  hail_work_premium: [
+    "Standing like yours gets the good paper. Priority contract, uploading now.",
+    "We keep the fat jobs off the public board. This one's yours if you want it.",
+    "Rank and record check out. Here's what we don't post publicly, {cmdr}.",
+  ],
+  hail_work_refuse: [
+    "We don't hand paper to hulls we don't trust. Fix your standing first.",
+    "Not at your record, {cmdr}. Try a dock that's less particular.",
+    "Our board is for people we know. You're not, yet.",
+    "Come back when your name means something better around here.",
+  ],
+  hail_work_none: [
+    "Board's empty. Try us next rotation.",
+    "Nothing on the wire we'd trust to an outside hull today.",
+    "Your log's already full, by the look of it. Finish something.",
   ],
   hail_close_cold: [
     "Don't hail us again.",
