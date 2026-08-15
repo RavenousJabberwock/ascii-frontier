@@ -1,3 +1,39 @@
+# 0.9.5 — Faction Contracts & Collision Fast Path
+
+Ships as **0.9.5**.
+
+- **Faction contract flavour** (closes the 0.9.4 deferment). `FACTION_CONTRACTS`
+  maps each issuing faction to a house style: `issuer` label, `rewardMul`,
+  a `prefers` list of `MissionKind`s picked with `bias` probability, and a
+  `brief()` wording wrapper. `generateMission(faction?)` wraps the untouched
+  `rawMission(forced?)` core, so with no faction it behaves exactly like the
+  pre-0.9.5 generator (the starter board has no issuer). Passenger jobs are
+  filtered out of the preference pool when the ship has no berths.
+  Styles: Federal Office 1.15x (bounty/escort/scan), Patrol Command 1.1x
+  (bounty/destroy/rescue), Traders' Guild 1.05x (deliver/haul/passenger),
+  Aquila Reach 1.25x (scan/rescue/escort), the Den 1.4x (destroy/haul/bounty).
+- **Wired callsites.** Station contract boards and the `work ▸` hail branch both
+  pass the issuing hull's faction; `premiumMission(faction?)` forwards it so
+  priority work keeps its house flavour on top of the 1.6–2.1x scaling.
+- **Standing on payout.** Settling a contract with a `faction` adjusts rep with
+  that house (+2, +4 for `PRIORITY:`) and posts a log line naming the issuer.
+  Cashing in at a rival dock still counts.
+- **Collision fast path.** `V.d2` and a module-level `within(a, b, r)` replace
+  `V.len(V.sub(a, b)) < r` in the three bullet collision loops. Three axis
+  comparisons reject almost every pair before any multiply, removing a Vec3
+  allocation and a `hypot` per bullet-per-candidate-per-frame.
+- **Scripting.** `faction` / `issuer` added to `onMissionAccepted`,
+  `onMissionCompleted`, `onHailWork` offers and `frontier.contracts()` rows.
+  Samples: `src/game/samples/faction-ledger.lua` (user script) and
+  `src/game/samples/faction-broker.mod.json` (script + chatter mod bundle).
+
+## Deferred
+
+- Rival-house penalty on payout (taking Den work does not yet *cost* Federation
+  standing directly — only the existing crime/retaliation systems do that).
+- Faction-specific mission *targets* (a Guild consignment can still send you to
+  a rival dock).
+
 # 0.9.4 — Comms Portraits & Reputation-Gated Work
 
 Ships as **0.9.4**.
@@ -33,8 +69,7 @@ Ships as **0.9.4**.
 
 ## Deferred
 
-- Faction-specific contract flavour (priority work currently reuses the
-  general generator).
+- ~~Faction-specific contract flavour~~ — shipped in 0.9.5.
 
 # 0.9.3 — Conversation Trees & Depth Bucket Sort
 
