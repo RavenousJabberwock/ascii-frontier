@@ -2568,7 +2568,51 @@ interface Mission {
   destName?: string;
   deadlineAt?: number;
   vip?: boolean;
+  // 0.9.5 — issuing faction. Set when the contract came off a specific
+  // station's board or out of a hail with a known hull; drives the flavour
+  // text baked into `description`, the completion rep bonus, and the Lua
+  // payloads. Undefined for the starter board (no issuer yet).
+  faction?: string;
+  issuer?: string;
 }
+
+// 0.9.5 — faction contract flavour. Each issuing faction has a house style:
+// which job kinds it hands out, how it words them, and what it pays. The
+// generator still produces ordinary Mission objects — only the wording, the
+// reward multiplier and the kind weighting change, so every downstream system
+// (log, payout, tracker, hooks, Lua) is untouched.
+interface FactionContractStyle {
+  issuer: string;          // shown in the description prefix
+  rewardMul: number;       // applied to the base reward
+  /** Preferred job kinds; picked with `bias` probability before the general roll. */
+  prefers: MissionKind[];
+  bias: number;
+  /** Wording applied to the generated description. */
+  brief: (desc: string) => string;
+}
+const FACTION_CONTRACTS: Record<string, FactionContractStyle> = {
+  federation: {
+    issuer: "Federal Office", rewardMul: 1.15, prefers: ["bounty", "escort", "scan"], bias: 0.55,
+    brief: (d) => `Federal writ — ${d}`,
+  },
+  spd: {
+    issuer: "Patrol Command", rewardMul: 1.1, prefers: ["bounty", "destroy", "rescue"], bias: 0.7,
+    brief: (d) => `Patrol tasking — ${d}`,
+  },
+  guild: {
+    issuer: "Traders' Guild", rewardMul: 1.05, prefers: ["deliver", "haul", "passenger"], bias: 0.6,
+    brief: (d) => `Guild consignment — ${d}`,
+  },
+  aquila: {
+    issuer: "Aquila Reach", rewardMul: 1.25, prefers: ["scan", "rescue", "escort"], bias: 0.6,
+    brief: (d) => `Reach survey order — ${d}`,
+  },
+  pirate: {
+    issuer: "the Den", rewardMul: 1.4, prefers: ["destroy", "haul", "bounty"], bias: 0.65,
+    brief: (d) => `No-questions job — ${d}`,
+  },
+};
+
 
 // 0.8.8 — Contract Log view controls. The log is a flat list of at most
 // CONTRACT_MAX jobs, so these are ergonomics rather than data structures:
