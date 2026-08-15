@@ -3489,7 +3489,24 @@ const V = {
     const l = Math.hypot(a.x, a.y, a.z) || 1;
     return { x: a.x / l, y: a.y / l, z: a.z / l };
   },
+  /** Squared distance — no allocation, no sqrt. */
+  d2: (a: Vec3, b: Vec3) => {
+    const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+  },
 };
+
+// 0.9.5 perf — proximity test with a cheap per-axis reject before the squared
+// distance. Used by the bullet collision loops, which are the densest pairwise
+// test in the engine (bullets x entities, every frame): the old
+// `V.len(V.sub(a, b)) < r` form allocated a Vec3 and called `hypot` for every
+// pair, including the overwhelming majority that miss by kilometres.
+function within(a: Vec3, b: Vec3, r: number): boolean {
+  const dx = a.x - b.x; if (dx > r || dx < -r) return false;
+  const dy = a.y - b.y; if (dy > r || dy < -r) return false;
+  const dz = a.z - b.z; if (dz > r || dz < -r) return false;
+  return dx * dx + dy * dy + dz * dz < r * r;
+}
 
 // =============================================================================
 // 5. AI — minimal state machines
@@ -8879,7 +8896,7 @@ export class Voidwake {
       if (e.kind !== "bullet") return true;
       if ((e.ttlAt ?? 0) < now) return false;
       // Player hit
-      if (e.faction !== "player" && V.len(V.sub(e.pos, p.pos)) < 12) {
+      if (e.faction !== "player" && within(e.pos, p.pos, 12)) {
         if (!this.options.cheat) {
           let dmg = 6 * this.dmgScale();
           // 0.5.7 — NPC crit symmetry. Hostile fire crits back at 6% base
@@ -8925,7 +8942,7 @@ export class Voidwake {
           if (t.kind !== "asteroid") continue;
           if ((t.ore ?? 0) < 4) continue;
           if (t.name === "debris" || t.name === "wreckage") continue;
-          if (V.len(V.sub(e.pos, t.pos)) >= 12) continue;
+          if (!within(e.pos, t.pos, 12)) continue;
           consumedByRock = true;
           const budget = (t as unknown as { _splitLeft?: number })._splitLeft
             ?? Math.min(3, Math.floor((t.ore ?? 0) / 4));
@@ -8960,7 +8977,7 @@ export class Voidwake {
         // easy to grief friendly outposts) — only pirate stations are valid.
         if (isStation && t.faction !== "pirate") continue;
         const hitRadius = isStation ? 22 : 14;
-        if (V.len(V.sub(e.pos, t.pos)) < hitRadius) {
+        if (within(e.pos, t.pos, hitRadius)) {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
