@@ -4,6 +4,25 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.5 — Faction Contracts & Collision Fast Path
+- **Faction contracts**: every contract now remembers who issued it. Station
+  boards and comms work offers pull a house style — Federal writs, Patrol
+  taskings, Guild consignments, Reach survey orders and no-questions Den jobs —
+  which re-words the brief, biases the job kinds on offer (Federation leans
+  bounty/escort/scan, the Guild leans freight/passenger, the Den leans wetwork)
+  and scales the reward from 1.05x (Guild) to 1.4x (pirate).
+- **Standing pays out**: settling a faction-issued contract now improves your
+  standing with the issuing house (+2, or +4 for priority work), on top of the
+  credits, no matter where you cash it in.
+- **Performance**: the bullet collision loops — the densest pairwise test in
+  the engine — no longer allocate a vector and call `hypot` per candidate. A new
+  per-axis reject rules out the overwhelming majority of pairs with three
+  comparisons, which cuts GC churn noticeably in heavy firefights.
+- **Scripting**: `faction` and `issuer` are now on `onMissionAccepted`,
+  `onMissionCompleted`, `onHailWork` offers and `frontier.contracts()` rows.
+  Ships with a sample script (`src/game/samples/faction-ledger.lua`) and a
+  sample installable mod (`src/game/samples/faction-broker.mod.json`).
+
 ## 0.9.4 — Comms Portraits & Reputation-Gated Work
 - **Comms portraits**: hailing now shows an animated ASCII portrait of the
   contact, keyed to their faction and disposition, that only moves while they

@@ -496,7 +496,9 @@ Payloads are depth-capped Lua tables with primitive leaves. Anything
 past depth 2 is stringified so scripts never receive a live JS entity
 handle. See "M2 mutation API" below for the writable surface added in
 0.5.7 (credits, fuel, player snapshot). For copy-pasteable examples,
-see [`lua-samples.md`](lua-samples.md) — 7 self-contained snippets
+see [`lua-samples.md`](lua-samples.md) — self-contained snippets
+plus `samples/faction-ledger.lua` (user script) and
+`samples/faction-broker.mod.json` (installable mod bundle) —
 covering every hook shipped so far.
 
 ### Available hooks
@@ -539,7 +541,8 @@ covering every hook shipped so far.
 | `onCrewPaid`        | `{ bill, paid, short, wingBill, crew, credits, stationId, station }` | dock payroll settled (0.9.2) |
 | `onHailTopic`       | `{ targetId, target, topic, node, mood, disposition }` | every conversation node walked (0.9.3) |
 | `onHailClosed`      | `{ targetId, target, mood, tone }`         | comms channel closed (0.9.3) |
-| `onHailWork`        | `{ targetId, target, priority, standing, rank, offers }` | reputation-gated work offered over a hail (0.9.4) |
+| `onHailWork`        | `{ targetId, target, priority, standing, rank, offers }` | reputation-gated work offered over a hail (0.9.4); each offer carries `faction` / `issuer` since 0.9.5 |
+| `onMissionAccepted` / `onMissionCompleted` | `{ id, kind, description, reward, faction, issuer, ... }` | `faction` / `issuer` added in 0.9.5 |
 
 0.9.3 adds the conversation surface: `frontier.hail()` returns the live channel
 (`targetId, target, faction, node, mood, tone, options, log`) or `nil`, and
