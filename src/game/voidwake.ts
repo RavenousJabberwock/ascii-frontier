@@ -9561,14 +9561,39 @@ export class Voidwake {
    * every downstream system (contract log, payout, hooks, Lua) treats it as a
    * normal mission and nothing special has to be maintained twice.
    */
-  premiumMission(): Mission {
-    const m = this.generateMission();
+  premiumMission(faction?: string): Mission {
+    const m = this.generateMission(faction);
     m.reward = Math.round(m.reward * (1.6 + this.rng() * 0.5));
     m.description = `PRIORITY: ${m.description}`;
     return m;
   }
 
-  generateMission(): Mission {
+  /**
+   * 0.9.5 — faction flavour wrapper. Picks a house-preferred job kind (with
+   * `bias` probability), then re-words the brief, scales the reward and stamps
+   * the issuer. Called with no faction it behaves exactly like the pre-0.9.5
+   * generator, which is what the starter board wants.
+   */
+  generateMission(faction?: string): Mission {
+    const style = faction ? FACTION_CONTRACTS[faction] : undefined;
+    let forced: MissionKind | undefined;
+    if (style && this.rng() < style.bias) {
+      const p = this.player;
+      const pool = style.prefers.filter(
+        (k) => k !== "passenger" || (!!p && effectiveBerthMax(p) > 0),
+      );
+      if (pool.length) forced = pool[Math.floor(this.rng() * pool.length)];
+    }
+    const m = this.rawMission(forced);
+    if (!style) return m;
+    m.faction = faction;
+    m.issuer = style.issuer;
+    m.reward = Math.round(m.reward * style.rewardMul);
+    m.description = style.brief(m.description);
+    return m;
+  }
+
+  rawMission(kForced?: MissionKind): Mission {
     const rng = this.rng;
     const p = this.player;
     // Passenger missions unlock once the ship has any Luxury Cabin
@@ -9576,6 +9601,7 @@ export class Voidwake {
     const canPassenger = !!p && effectiveBerthMax(p) > 0;
     const roll = rng();
     const kinds: MissionKind[] =
+      kForced ? [kForced] :
       canPassenger && roll < 0.15 ? ["passenger"] :
       roll < 0.30 ? ["deliver"] :
       roll < 0.42 ? ["haul"] :
@@ -9586,6 +9612,7 @@ export class Voidwake {
       ["rescue"];
     const k = kinds[0];
     const id = nextId();
+
     if (k === "destroy") {
       const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
       return {
