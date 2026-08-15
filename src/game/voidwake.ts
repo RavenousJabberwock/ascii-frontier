@@ -7036,14 +7036,14 @@ export class Voidwake {
           break;
         }
         const cands = priority
-          ? [this.premiumMission(), this.premiumMission()]
-          : [this.generateMission(), this.generateMission()];
+          ? [this.premiumMission(t.faction), this.premiumMission(t.faction)]
+          : [this.generateMission(t.faction), this.generateMission(t.faction)];
         this.hailReply(t, priority ? "hail_work_premium" : "hail_work_offer");
         h.mood += 1;
         dispatchHook("onHailTopic", { targetId: t.id, target: t.name, topic: choice, node: h.node, mood: h.mood, disposition: disp });
         dispatchHook("onHailWork", {
           targetId: t.id, target: t.name, priority, standing: gate.rep, rank: p.rank,
-          offers: cands.map((m) => ({ id: m.id, kind: m.kind, reward: m.reward, description: m.description })),
+          offers: cands.map((m) => ({ id: m.id, kind: m.kind, reward: m.reward, description: m.description, faction: m.faction, issuer: m.issuer })),
         });
         this._hail = undefined;
         this.openMissionOffer(`${t.name} offers work over comms — pick a job, or ESC to skip.`, "playing", cands);
@@ -9444,8 +9444,15 @@ export class Voidwake {
       awardXP(p, 80);
       if (p.record) { p.record.missions += 1; p.record.earned += cm.reward; }
       this.pushLog(`Contract paid: ${cm.description} (+${cm.reward}cr)`);
+      // 0.9.5 — a faction-issued contract also buys standing with its issuer,
+      // and paying it in at a rival dock still counts (the writ is the writ).
+      if (cm.faction) {
+        adjustRep(p, cm.faction, cm.description.startsWith("PRIORITY:") ? 4 : 2);
+        this.pushLog(`${cm.issuer ?? cm.faction} notes the job done — standing improved.`);
+      }
       dispatchHook("onMissionCompleted", {
         id: cm.id, kind: cm.kind, description: cm.description, reward: cm.reward,
+        faction: cm.faction, issuer: cm.issuer,
         stationId: t.id, station: t.name,
       });
       p.passengers = (p.passengers ?? []).filter((x) => x.missionId !== cm.id);
@@ -9456,7 +9463,7 @@ export class Voidwake {
     // decline all and enjoy pure sandbox flight.
     if (contractList(p).length < CONTRACT_MAX && this.options.questOffers !== false
         && t.kind === "station" && t.faction !== "pirate") {
-      const cands = [this.generateMission(), this.generateMission(), this.generateMission()];
+      const cands = [this.generateMission(t.faction), this.generateMission(t.faction), this.generateMission(t.faction)];
       this.openMissionOffer(`${t.name} contract board — pick a job, or ESC to skip.`, "station", cands);
     }
 
@@ -10432,6 +10439,7 @@ export class Voidwake {
         dispatchHook("onMissionAccepted", {
           id: picked.id, kind: picked.kind, description: picked.description,
           reward: picked.reward, targetId: picked.targetId,
+          faction: picked.faction, issuer: picked.issuer,
         });
         if (picked.kind === "passenger") {
           dispatchHook("onPassengerBoard", {
@@ -11757,6 +11765,7 @@ export class Voidwake {
           return contractList(p).map((m) => ({
             id: m.id, kind: m.kind, description: m.description, reward: m.reward,
             done: m.done, targetId: m.targetId, tracked: p.mission?.id === m.id,
+            faction: m.faction, issuer: m.issuer,
             deadlineIn: m.deadlineAt ? Math.max(0, m.deadlineAt - performance.now() / 1000) : undefined,
           }));
         },
