@@ -1,0 +1,19 @@
+{
+  "id": "faction-broker",
+  "name": "Faction Broker (0.9.5 sample)",
+  "script": "-- Faction Broker: reacts to faction-issued contracts.\n-- Pays a small finder's fee for priority work and warns when you take a\n-- pirate job while carrying federal standing worth protecting.\nlocal FEE = 150\n\nfrontier.on(\"onHailWork\", function(w)\n  if not w.priority then return end\n  local snap = frontier.grant{ credits = FEE }\n  frontier.chat(\"Broker\",\n    (\"Priority work logged for %s. Finder's fee paid: %dcr (balance %s).\"):format(\n      w.target or \"contact\", FEE, snap and tostring(snap.credits) or \"?\"),\n    \"#ffe066\")\nend)\n\nfrontier.on(\"onMissionAccepted\", function(m)\n  if m.faction ~= \"pirate\" then return end\n  local rep = frontier.reputation() or {}\n  if (rep.federation or 0) >= 20 then\n    frontier.chat(\"Comms Officer\",\n      \"Captain, that's a Den job and we're in good standing with the Federation. This will cost us.\",\n      \"#ff9a9a\")\n  end\nend)\n\nfrontier.on(\"onMissionCompleted\", function(m)\n  if m.issuer then\n    frontier.log(\"broker: \" .. m.issuer .. \" paid out \" .. tostring(m.reward or 0) .. \"cr\")\n  end\nend)\n",
+  "chatter": {
+    "hail_work_offer": [
+      "We've got paper going out, if you're not squeamish about the small print.",
+      "House work, house rates. Take it or leave it."
+    ],
+    "hail_work_premium": [
+      "Priority tasking. The pay is real and so is the deadline.",
+      "This one's off the public board. Don't make us regret it."
+    ],
+    "hail_work_refuse": [
+      "Our contracts go to people we know. You aren't people we know.",
+      "Come back with a better name attached to you."
+    ]
+  }
+}

@@ -176,6 +176,15 @@ compact **[Buy] / [Sell]** view (LEFT/RIGHT switches mode).
 - Kinds include: destroy a raider, scan an object, deliver supplies, courier
   cargo between outposts, fuel a stranded ship, and crew-specific quest lines
   offered when you hire someone.
+- **Issuing houses** (0.9.5): a contract taken off a station board or out of a
+  comms work offer is stamped with the house that wrote it, and the brief is
+  worded to match — *Federal writ*, *Patrol tasking*, *Guild consignment*,
+  *Reach survey order*, *no-questions job*. Each house favours different work
+  and pays differently: the Traders' Guild pays a modest premium on freight and
+  passenger runs, Aquila Reach pays well for survey and rescue, and the Den pays
+  best of all for the jobs nobody signs their name to. Settling a house
+  contract also raises your standing with that house (more so for priority
+  work), so running for one faction steadily closes doors at its rivals.
 - **Passengers** occupy a berth and have a delivery deadline. They also talk.
 - **Bounty Office** (docked ▸ Bounty Office, lawful stations only). Lawful
   docks post 0–3 warrants per market day on named pirate captains; Federation

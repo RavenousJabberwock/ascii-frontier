@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.4";
+const VERSION = "0.9.5";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -2568,7 +2568,51 @@ interface Mission {
   destName?: string;
   deadlineAt?: number;
   vip?: boolean;
+  // 0.9.5 — issuing faction. Set when the contract came off a specific
+  // station's board or out of a hail with a known hull; drives the flavour
+  // text baked into `description`, the completion rep bonus, and the Lua
+  // payloads. Undefined for the starter board (no issuer yet).
+  faction?: string;
+  issuer?: string;
 }
+
+// 0.9.5 — faction contract flavour. Each issuing faction has a house style:
+// which job kinds it hands out, how it words them, and what it pays. The
+// generator still produces ordinary Mission objects — only the wording, the
+// reward multiplier and the kind weighting change, so every downstream system
+// (log, payout, tracker, hooks, Lua) is untouched.
+interface FactionContractStyle {
+  issuer: string;          // shown in the description prefix
+  rewardMul: number;       // applied to the base reward
+  /** Preferred job kinds; picked with `bias` probability before the general roll. */
+  prefers: MissionKind[];
+  bias: number;
+  /** Wording applied to the generated description. */
+  brief: (desc: string) => string;
+}
+const FACTION_CONTRACTS: Record<string, FactionContractStyle> = {
+  federation: {
+    issuer: "Federal Office", rewardMul: 1.15, prefers: ["bounty", "escort", "scan"], bias: 0.55,
+    brief: (d) => `Federal writ — ${d}`,
+  },
+  spd: {
+    issuer: "Patrol Command", rewardMul: 1.1, prefers: ["bounty", "destroy", "rescue"], bias: 0.7,
+    brief: (d) => `Patrol tasking — ${d}`,
+  },
+  guild: {
+    issuer: "Traders' Guild", rewardMul: 1.05, prefers: ["deliver", "haul", "passenger"], bias: 0.6,
+    brief: (d) => `Guild consignment — ${d}`,
+  },
+  aquila: {
+    issuer: "Aquila Reach", rewardMul: 1.25, prefers: ["scan", "rescue", "escort"], bias: 0.6,
+    brief: (d) => `Reach survey order — ${d}`,
+  },
+  pirate: {
+    issuer: "the Den", rewardMul: 1.4, prefers: ["destroy", "haul", "bounty"], bias: 0.65,
+    brief: (d) => `No-questions job — ${d}`,
+  },
+};
+
 
 // 0.8.8 — Contract Log view controls. The log is a flat list of at most
 // CONTRACT_MAX jobs, so these are ergonomics rather than data structures:
@@ -3445,7 +3489,24 @@ const V = {
     const l = Math.hypot(a.x, a.y, a.z) || 1;
     return { x: a.x / l, y: a.y / l, z: a.z / l };
   },
+  /** Squared distance — no allocation, no sqrt. */
+  d2: (a: Vec3, b: Vec3) => {
+    const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+  },
 };
+
+// 0.9.5 perf — proximity test with a cheap per-axis reject before the squared
+// distance. Used by the bullet collision loops, which are the densest pairwise
+// test in the engine (bullets x entities, every frame): the old
+// `V.len(V.sub(a, b)) < r` form allocated a Vec3 and called `hypot` for every
+// pair, including the overwhelming majority that miss by kilometres.
+function within(a: Vec3, b: Vec3, r: number): boolean {
+  const dx = a.x - b.x; if (dx > r || dx < -r) return false;
+  const dy = a.y - b.y; if (dy > r || dy < -r) return false;
+  const dz = a.z - b.z; if (dz > r || dz < -r) return false;
+  return dx * dx + dy * dy + dz * dz < r * r;
+}
 
 // =============================================================================
 // 5. AI — minimal state machines
@@ -6992,14 +7053,14 @@ export class Voidwake {
           break;
         }
         const cands = priority
-          ? [this.premiumMission(), this.premiumMission()]
-          : [this.generateMission(), this.generateMission()];
+          ? [this.premiumMission(t.faction), this.premiumMission(t.faction)]
+          : [this.generateMission(t.faction), this.generateMission(t.faction)];
         this.hailReply(t, priority ? "hail_work_premium" : "hail_work_offer");
         h.mood += 1;
         dispatchHook("onHailTopic", { targetId: t.id, target: t.name, topic: choice, node: h.node, mood: h.mood, disposition: disp });
         dispatchHook("onHailWork", {
           targetId: t.id, target: t.name, priority, standing: gate.rep, rank: p.rank,
-          offers: cands.map((m) => ({ id: m.id, kind: m.kind, reward: m.reward, description: m.description })),
+          offers: cands.map((m) => ({ id: m.id, kind: m.kind, reward: m.reward, description: m.description, faction: m.faction, issuer: m.issuer })),
         });
         this._hail = undefined;
         this.openMissionOffer(`${t.name} offers work over comms — pick a job, or ESC to skip.`, "playing", cands);
@@ -8835,7 +8896,7 @@ export class Voidwake {
       if (e.kind !== "bullet") return true;
       if ((e.ttlAt ?? 0) < now) return false;
       // Player hit
-      if (e.faction !== "player" && V.len(V.sub(e.pos, p.pos)) < 12) {
+      if (e.faction !== "player" && within(e.pos, p.pos, 12)) {
         if (!this.options.cheat) {
           let dmg = 6 * this.dmgScale();
           // 0.5.7 — NPC crit symmetry. Hostile fire crits back at 6% base
@@ -8881,7 +8942,7 @@ export class Voidwake {
           if (t.kind !== "asteroid") continue;
           if ((t.ore ?? 0) < 4) continue;
           if (t.name === "debris" || t.name === "wreckage") continue;
-          if (V.len(V.sub(e.pos, t.pos)) >= 12) continue;
+          if (!within(e.pos, t.pos, 12)) continue;
           consumedByRock = true;
           const budget = (t as unknown as { _splitLeft?: number })._splitLeft
             ?? Math.min(3, Math.floor((t.ore ?? 0) / 4));
@@ -8916,7 +8977,7 @@ export class Voidwake {
         // easy to grief friendly outposts) — only pirate stations are valid.
         if (isStation && t.faction !== "pirate") continue;
         const hitRadius = isStation ? 22 : 14;
-        if (V.len(V.sub(e.pos, t.pos)) < hitRadius) {
+        if (within(e.pos, t.pos, hitRadius)) {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
@@ -9400,8 +9461,15 @@ export class Voidwake {
       awardXP(p, 80);
       if (p.record) { p.record.missions += 1; p.record.earned += cm.reward; }
       this.pushLog(`Contract paid: ${cm.description} (+${cm.reward}cr)`);
+      // 0.9.5 — a faction-issued contract also buys standing with its issuer,
+      // and paying it in at a rival dock still counts (the writ is the writ).
+      if (cm.faction) {
+        adjustRep(p, cm.faction, cm.description.startsWith("PRIORITY:") ? 4 : 2);
+        this.pushLog(`${cm.issuer ?? cm.faction} notes the job done — standing improved.`);
+      }
       dispatchHook("onMissionCompleted", {
         id: cm.id, kind: cm.kind, description: cm.description, reward: cm.reward,
+        faction: cm.faction, issuer: cm.issuer,
         stationId: t.id, station: t.name,
       });
       p.passengers = (p.passengers ?? []).filter((x) => x.missionId !== cm.id);
@@ -9412,7 +9480,7 @@ export class Voidwake {
     // decline all and enjoy pure sandbox flight.
     if (contractList(p).length < CONTRACT_MAX && this.options.questOffers !== false
         && t.kind === "station" && t.faction !== "pirate") {
-      const cands = [this.generateMission(), this.generateMission(), this.generateMission()];
+      const cands = [this.generateMission(t.faction), this.generateMission(t.faction), this.generateMission(t.faction)];
       this.openMissionOffer(`${t.name} contract board — pick a job, or ESC to skip.`, "station", cands);
     }
 
@@ -9517,14 +9585,39 @@ export class Voidwake {
    * every downstream system (contract log, payout, hooks, Lua) treats it as a
    * normal mission and nothing special has to be maintained twice.
    */
-  premiumMission(): Mission {
-    const m = this.generateMission();
+  premiumMission(faction?: string): Mission {
+    const m = this.generateMission(faction);
     m.reward = Math.round(m.reward * (1.6 + this.rng() * 0.5));
     m.description = `PRIORITY: ${m.description}`;
     return m;
   }
 
-  generateMission(): Mission {
+  /**
+   * 0.9.5 — faction flavour wrapper. Picks a house-preferred job kind (with
+   * `bias` probability), then re-words the brief, scales the reward and stamps
+   * the issuer. Called with no faction it behaves exactly like the pre-0.9.5
+   * generator, which is what the starter board wants.
+   */
+  generateMission(faction?: string): Mission {
+    const style = faction ? FACTION_CONTRACTS[faction] : undefined;
+    let forced: MissionKind | undefined;
+    if (style && this.rng() < style.bias) {
+      const p = this.player;
+      const pool = style.prefers.filter(
+        (k) => k !== "passenger" || (!!p && effectiveBerthMax(p) > 0),
+      );
+      if (pool.length) forced = pool[Math.floor(this.rng() * pool.length)];
+    }
+    const m = this.rawMission(forced);
+    if (!style) return m;
+    m.faction = faction;
+    m.issuer = style.issuer;
+    m.reward = Math.round(m.reward * style.rewardMul);
+    m.description = style.brief(m.description);
+    return m;
+  }
+
+  rawMission(kForced?: MissionKind): Mission {
     const rng = this.rng;
     const p = this.player;
     // Passenger missions unlock once the ship has any Luxury Cabin
@@ -9532,6 +9625,7 @@ export class Voidwake {
     const canPassenger = !!p && effectiveBerthMax(p) > 0;
     const roll = rng();
     const kinds: MissionKind[] =
+      kForced ? [kForced] :
       canPassenger && roll < 0.15 ? ["passenger"] :
       roll < 0.30 ? ["deliver"] :
       roll < 0.42 ? ["haul"] :
@@ -9542,6 +9636,7 @@ export class Voidwake {
       ["rescue"];
     const k = kinds[0];
     const id = nextId();
+
     if (k === "destroy") {
       const target = this.entities.find((e) => e.kind === "hostile" && (e.hull ?? 0) > 0);
       return {
@@ -10361,6 +10456,7 @@ export class Voidwake {
         dispatchHook("onMissionAccepted", {
           id: picked.id, kind: picked.kind, description: picked.description,
           reward: picked.reward, targetId: picked.targetId,
+          faction: picked.faction, issuer: picked.issuer,
         });
         if (picked.kind === "passenger") {
           dispatchHook("onPassengerBoard", {
@@ -11686,6 +11782,7 @@ export class Voidwake {
           return contractList(p).map((m) => ({
             id: m.id, kind: m.kind, description: m.description, reward: m.reward,
             done: m.done, targetId: m.targetId, tracked: p.mission?.id === m.id,
+            faction: m.faction, issuer: m.issuer,
             deadlineIn: m.deadlineAt ? Math.max(0, m.deadlineAt - performance.now() / 1000) : undefined,
           }));
         },
