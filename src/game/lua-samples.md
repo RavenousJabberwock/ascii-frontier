@@ -446,3 +446,41 @@ frontier.on("onHailWork", function(w)
   end
 end)
 ```
+
+## Faction ledger (0.9.5)
+
+Contracts now carry `faction` and `issuer` on `onMissionAccepted`,
+`onMissionCompleted`, `onHailWork` offers, and every `frontier.contracts()` row.
+Full versions of both files ship in the repo:
+
+- `src/game/samples/faction-ledger.lua` — user script for **Edit Script…**
+- `src/game/samples/faction-broker.mod.json` — installable bundle for
+  **Options ▸ Mods ▸ Add Mod…** (script + chatter pack in one file)
+
+```lua
+frontier.on("onMissionAccepted", function(m)
+  frontier.log(("signed for %s [%s]: %s (%dcr)")
+    :format(m.issuer or "no house", m.faction or "freelance", m.description, m.reward or 0))
+end)
+
+frontier.on("onMissionCompleted", function(m)
+  if not m.faction then return end
+  local rep = frontier.reputation() or {}
+  frontier.chat("Purser",
+    ("%s settled — standing with %s now %d."):format(m.issuer, m.faction, rep[m.faction] or 0),
+    "#9fe")
+end)
+
+-- Summarise the log by issuing house whenever you dock.
+frontier.on("onPlayerDock", function(evt)
+  if evt.kind ~= "station" then return end
+  local byHouse = {}
+  for _, c in ipairs(frontier.contracts()) do
+    local k = c.faction or "freelance"
+    byHouse[k] = (byHouse[k] or 0) + 1
+  end
+  local parts = {}
+  for house, n in pairs(byHouse) do parts[#parts + 1] = house .. "x" .. n end
+  frontier.log("log by house: " .. table.concat(parts, ", "))
+end)
+```
