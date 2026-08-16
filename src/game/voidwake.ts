@@ -211,6 +211,10 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onHailTopic:          [],
   onHailClosed:         [],
   onHailWork:           [],
+  onHullRefit:          [],
+  onFleetStored:        [],
+  onFleetSwapped:       [],
+  onFleetSold:          [],
 
 
 };
