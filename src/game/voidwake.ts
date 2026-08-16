@@ -12576,7 +12576,10 @@ export class Voidwake {
     const sid = this.dockedStationId;
     if (!p || sid == null) return [];
     const stock = this.getStock(sid);
-    const trade = hullTradeIn(p.ship.hullId);
+    // 0.9.6 — in KEEP mode there is no trade-in to offset the price; the old
+    // frame goes to the hangar instead and the yard charges a berth fee.
+    const keep = this.yardKeepHull && (p.fleet?.length ?? 0) < FLEET_MAX;
+    const trade = keep ? -FLEET_BERTH_FEE : hullTradeIn(p.ship.hullId);
     const prior = hasPriorSave();
     const out: Array<{ hull: typeof SHIP_HULLS[number]; net: number; reason: string }> = [];
     for (const id of stock.hulls) {
@@ -12619,8 +12622,30 @@ export class Voidwake {
       return;
     }
     const old = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
+    // 0.9.6 — KEEP mode parks the frame you flew in on. Everything bolted to it
+    // (modules, both mounts, refits, its policy and its battle damage) goes with
+    // it, so the new frame comes out of the yard bare except its own fittings.
+    const keep = this.yardKeepHull && (p.fleet?.length ?? 0) < FLEET_MAX;
     p.credits -= offer.net;
+    if (keep) {
+      this.fleetStore(old);
+      p.ship.hullId = h.id;
+      p.ship.modules = [];
+      p.ship.refit = undefined;
+      p.ship.insured = false;
+      recomputeShipStats(p, true);
+      p.ship.fuel = p.ship.fuelMax;
+      this.pushLog(`Bought a ${h.name}; the ${old} is berthed in the hangar. New frame ships bare.`);
+      this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. Hangar holds ${(p.fleet ?? []).length} frame(s).`, "#9fe");
+      dispatchHook("onShipHullChange", {
+        hullId: h.id, name: h.name, net: offer.net, previous: old,
+        stationId: this.dockedStationId, keptPrevious: true,
+      });
+      this.sfx("levelup");
+      return;
+    }
     p.ship.hullId = h.id;
+    p.ship.refit = undefined;
     recomputeShipStats(p, true);
     // 0.8.3 — a policy is written against a specific frame, so it lapses on
     // trade-in. The yard will happily sell you another one.
@@ -12628,10 +12653,126 @@ export class Voidwake {
       p.ship.insured = false;
       this.pushLog("Hull policy lapsed with the trade-in — buy a new one for this frame.");
     }
-    this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred.`);
+    this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred; refits did not.`);
     this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. All systems nominal.`, "#9fe");
     dispatchHook("onShipHullChange", {
       hullId: h.id, name: h.name, net: offer.net, previous: old,
+      stationId: this.dockedStationId,
+    });
+    this.sfx("levelup");
+  }
+
+  // --- 0.9.6 Fleet hangar --------------------------------------------------
+  // A stored frame is a whole ship: hull condition, fuel, mounts, modules and
+  // refits. The pilot, crew, cargo and contracts always stay with the pilot.
+  private shipSnapshot(): FleetShip {
+    const p = this.player!;
+    const st = this.dockedStationId != null ? this.byId(this.dockedStationId) : undefined;
+    return {
+      hullId: p.ship.hullId,
+      hull: p.ship.hull, shield: p.ship.shield, fuel: p.ship.fuel,
+      weaponId: p.ship.weaponId, gunnerWeaponId: p.ship.gunnerWeaponId,
+      modules: [...p.ship.modules],
+      refit: p.ship.refit ? { ...p.ship.refit } : undefined,
+      insured: p.ship.insured,
+      storedAt: st?.id, storedAtName: st?.name ?? "Yard",
+      storedAtMs: Date.now(),
+    };
+  }
+  /** Park the frame currently flown. Caller has already charged for it. */
+  private fleetStore(label: string): void {
+    const p = this.player!;
+    if (!p.fleet) p.fleet = [];
+    const snap = this.shipSnapshot();
+    p.fleet.push(snap);
+    dispatchHook("onFleetStored", {
+      hullId: snap.hullId, name: label, stationId: snap.storedAt,
+      station: snap.storedAtName, fleetSize: p.fleet.length,
+    });
+  }
+  /** Caps a stored frame would give, used for the fit checks before a swap. */
+  private fleetCaps(f: FleetShip): { cargo: number; berths: number; name: string } {
+    const p = this.player!;
+    const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
+    const sp = speciesOf(p.char.species);
+    const n = (id: string) => f.modules.filter((m) => m === id).length;
+    const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
+    return {
+      cargo: Math.max(1, Math.round(h.cargo * (sp.cargoMul ?? 1))) + n("cargo-expander") * 12
+        + refitBonus(f.refit, "cargo"),
+      berths: Math.max(1, h.crewSlots + n("crew-quarters") + refitBonus(f.refit, "berths") - stow),
+      name: h.name,
+    };
+  }
+  /** Take a stored frame out and park the current one in its place. */
+  fleetSwap(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const caps = this.fleetCaps(f);
+    if (p.credits < FLEET_SWAP_FEE) { this.pushLog(`The hangar crew want ${FLEET_SWAP_FEE}cr to move frames.`); return; }
+    if (cargoTotal(p) > caps.cargo) {
+      this.pushLog(`${caps.name} holds only ${caps.cargo} units — sell down ${cargoTotal(p) - caps.cargo} first.`);
+      return;
+    }
+    if (crewCount(p) > caps.berths) {
+      this.pushLog(`${caps.name} berths ${caps.berths} — pay off ${crewCount(p) - caps.berths} crew first.`);
+      return;
+    }
+    const prev = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
+    p.credits -= FLEET_SWAP_FEE;
+    const stored = this.shipSnapshot();
+    p.ship.hullId = f.hullId;
+    p.ship.modules = [...f.modules];
+    p.ship.refit = f.refit ? { ...f.refit } : undefined;
+    p.ship.weaponId = f.weaponId;
+    p.ship.gunnerWeaponId = f.gunnerWeaponId;
+    p.ship.insured = f.insured;
+    recomputeShipStats(p);
+    // Condition travels with the frame, clamped to whatever the caps now allow.
+    p.ship.hull = Math.max(1, Math.min(p.ship.hullMax, f.hull));
+    p.ship.shield = Math.min(p.ship.shieldMax, f.shield);
+    p.ship.fuel = Math.min(p.ship.fuelMax, f.fuel);
+    p.fleet![idx] = stored;
+    this.pushLog(`Took the ${caps.name} out of the hangar for ${FLEET_SWAP_FEE}cr; the ${prev} is berthed.`);
+    this.pushChatter("Computer", `Active frame: ${caps.name}. Hull ${Math.round(p.ship.hull)}/${p.ship.hullMax}, fuel ${Math.round(p.ship.fuel)}u.`, "#9fe");
+    dispatchHook("onFleetSwapped", {
+      hullId: f.hullId, name: caps.name, previous: prev, fee: FLEET_SWAP_FEE,
+      stationId: this.dockedStationId,
+    });
+    this.sfx("levelup");
+  }
+  /** Sell a stored frame outright. Pays the usual 55% trade-in on list. */
+  fleetSell(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const name = SHIP_HULLS.find((x) => x.id === f.hullId)?.name ?? f.hullId;
+    const paid = hullTradeIn(f.hullId);
+    p.credits += paid;
+    p.fleet!.splice(idx, 1);
+    this.pushLog(`Sold the berthed ${name} for ${paid}cr. Its modules and refits went with it.`);
+    dispatchHook("onFleetSold", {
+      hullId: f.hullId, name, paid, stationId: this.dockedStationId,
+      fleetSize: p.fleet!.length,
+    });
+    this.sfx("chime");
+  }
+
+  // 0.9.6 — buy one refit step on the frame currently flown.
+  buyRefit(stat: RefitStat): void {
+    const p = this.player; if (!p) return;
+    const spec = REFIT_SPECS.find((r) => r.id === stat)!;
+    const lvl = refitLevel(p.ship.refit, stat);
+    if (lvl >= REFIT_MAX) { this.pushLog(`${spec.name} is already at its structural limit.`); return; }
+    const cost = refitPrice(p, stat);
+    if (p.credits < cost) { this.pushLog(`The refit crew want ${cost}cr for that work.`); return; }
+    p.credits -= cost;
+    if (!p.ship.refit) p.ship.refit = {};
+    p.ship.refit[stat] = lvl + 1;
+    recomputeShipStats(p);
+    this.pushLog(`${spec.name} L${lvl + 1} fitted for ${cost}cr — +${spec.per} ${spec.unit}.`);
+    this.pushChatter("Computer", `Frame profile updated: ${spec.name} level ${lvl + 1}.`, "#9fe");
+    dispatchHook("onHullRefit", {
+      stat, level: lvl + 1, cost, hullId: p.ship.hullId,
       stationId: this.dockedStationId,
     });
     this.sfx("levelup");
