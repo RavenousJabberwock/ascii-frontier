@@ -484,3 +484,39 @@ frontier.on("onPlayerDock", function(evt)
   frontier.log("log by house: " .. table.concat(parts, ", "))
 end)
 ```
+
+## Fleet & refit logbook (0.9.6)
+
+`frontier.fleet()` returns the frame you are flying (`active == true`) followed
+by every frame berthed in a hangar, each with its refit levels. Combined with
+the new hangar hooks it makes a small fleet ledger:
+
+```lua
+local function describe(f)
+  local bits = {}
+  for stat, lvl in pairs(f.refit or {}) do
+    if lvl > 0 then table.insert(bits, stat .. " L" .. lvl) end
+  end
+  return string.format("%s — hull %d, fuel %du, cargo %d, berths %d%s%s",
+    f.name, f.hull, f.fuel, f.cargoMax, f.berths,
+    #bits > 0 and (" [" .. table.concat(bits, ", ") .. "]") or "",
+    f.active and " (flying)" or (" @ " .. tostring(f.station)))
+end
+
+frontier.on("onHullRefit", function(r)
+  frontier.chat("Yard", string.format("%s refit to level %d for %dcr.", r.stat, r.level, r.cost), "#6f9")
+end)
+
+frontier.on("onFleetStored", function(f)
+  frontier.log("berthed " .. f.name .. " at " .. f.station .. " (" .. f.fleetSize .. " in hangar)")
+end)
+
+frontier.on("onFleetSwapped", function(f)
+  frontier.chat("Computer", "Now flying the " .. f.name .. "; " .. f.previous .. " berthed.", "#9fe")
+  for _, ship in ipairs(frontier.fleet()) do frontier.log(describe(ship)) end
+end)
+
+frontier.on("onFleetSold", function(f)
+  frontier.log("sold the berthed " .. f.name .. " for " .. f.paid .. "cr")
+end)
+```

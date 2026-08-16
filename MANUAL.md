@@ -293,6 +293,22 @@ The message tells you how much to sell down or pay off. Hulls locked to a
 species or to veteran commanders are listed but flagged `LOCKED` so you can
 see what else flies out there.
 
+**Refit Bay** (0.9.6). The yard will also rebuild the frame you already fly.
+Five lines — structural bracing, emitter tuning, hold restructure, thrust remap,
+deck partition — go three levels deep each and add +30 hull, +25 shield, +8
+cargo, +6 speed or +1 berth per level. Prices scale with the frame and with each
+step taken, and the usual haggling perks apply. Refits belong to the hull, so
+they follow it into a hangar and are **lost if you trade it in**.
+
+**The hangar** (0.9.6). You no longer have to sell the old ship to buy a new
+one. The Shipyard has a purchase-mode row: `TRADE IN` behaves as before, while
+`KEEP` berths your current frame for 800cr and hands you a bare new one with a
+full tank. Up to three frames can sit in hangars, each keeping its own modules,
+armament, refits, insurance and hull damage. `Hangar ▸` lists them: flying one
+again costs 300cr and refuses the same way a trade-in does if your cargo or crew
+won't fit; selling one pays the usual 55% of list. A frame stays parked at the
+station where you left it, so note which dock that was.
+
 **Hull insurance.** The yard writes a policy on your current frame for 15% of
 its list price (Merchant/Quartermaster discounts apply). One claim: on a
 respawn it waives the rescue fee, refills the tank, and pays 60cr per unit of
