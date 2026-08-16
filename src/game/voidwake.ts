@@ -11053,6 +11053,17 @@ export class Voidwake {
     putText(g, sx, sry++, `Weapon: ${weapon ? `${weapon.name} (dmg ${weapon.dmg}, cd ${weapon.cooldown}s, ${weapon.range}u)` : p.ship.weaponId}`, "#ffe066");
     if (gunnerW) putText(g, sx, sry++, `Gunner rig: ${gunnerW.name} (dmg ${gunnerW.dmg}, cd ${gunnerW.cooldown}s)`, "#fc6");
     if (hull.blurb) putText(g, sx, sry++, `Frame: ${hull.blurb}`, "#888");
+    // 0.9.6 — refits fitted to this frame, and anything berthed in a hangar.
+    const refitBits = REFIT_SPECS
+      .filter((r) => refitLevel(p.ship.refit, r.id) > 0)
+      .map((r) => `${r.name} L${refitLevel(p.ship.refit, r.id)} (+${refitBonus(p.ship.refit, r.id)} ${r.unit})`);
+    if (refitBits.length) putText(g, sx, sry++, `Refits: ${refitBits.join(", ")}`, "#6f9");
+    if (p.fleet?.length) {
+      const berthed = p.fleet
+        .map((f) => `${SHIP_HULLS.find((h2) => h2.id === f.hullId)?.name ?? f.hullId} @ ${f.storedAtName}`)
+        .join(", ");
+      putText(g, sx, sry++, `Hangar (${p.fleet.length}/${FLEET_MAX}): ${berthed}`, "#8cf", cols - sx - 2);
+    }
 
     // Installed modules list, right column.
     const mx = Math.min(cols - 46, Math.max(56, cols / 2));
