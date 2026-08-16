@@ -11895,6 +11895,40 @@ export class Voidwake {
             incomePerMinute: stationIncomePerMinute(p, s0) + stationRouteIncome(p, s0),
           }));
         },
+        // 0.9.6 — fleet + refit read surface: the frame you fly (with its refit
+        // levels) plus every frame berthed in a hangar.
+        fleet: () => {
+          const p = this.player; if (!p) return [];
+          const refitOf = (r?: ShipRefit) => {
+            const out: Record<string, number> = {};
+            for (const spec of REFIT_SPECS) out[spec.id] = refitLevel(r, spec.id);
+            return out;
+          };
+          const active = SHIP_HULLS.find((h) => h.id === p.ship.hullId);
+          return [
+            {
+              active: true, hullId: p.ship.hullId, name: active?.name ?? p.ship.hullId,
+              hull: Math.round(p.ship.hull), hullMax: p.ship.hullMax,
+              shield: Math.round(p.ship.shield), shieldMax: p.ship.shieldMax,
+              fuel: Math.round(p.ship.fuel), cargoMax: effectiveCargoMax(p),
+              berths: effectiveCrewMax(p), modules: [...p.ship.modules],
+              insured: !!p.ship.insured, refit: refitOf(p.ship.refit),
+              station: "", stationId: undefined as number | undefined,
+            },
+            ...(p.fleet ?? []).map((f) => {
+              const caps = this.fleetCaps(f);
+              return {
+                active: false, hullId: f.hullId, name: caps.name,
+                hull: Math.round(f.hull), hullMax: 0,
+                shield: Math.round(f.shield), shieldMax: 0,
+                fuel: Math.round(f.fuel), cargoMax: caps.cargo,
+                berths: caps.berths, modules: [...f.modules],
+                insured: !!f.insured, refit: refitOf(f.refit),
+                station: f.storedAtName, stationId: f.storedAt,
+              };
+            }),
+          ];
+        },
         // 0.9.1 — mod ergonomics. A read of the tracked contact and the active
         // screen, a narrow target setter, and Nav Log writes, so a mod can
         // build a navigation assistant without touching engine internals.
