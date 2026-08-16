@@ -61,6 +61,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onHailTopic", "onHailClosed",
   // 0.9.4 — reputation-gated work handed out over a hail
   "onHailWork",
+  // 0.9.6 — hull refits and fleet hangar movements
+  "onHullRefit", "onFleetStored", "onFleetSwapped", "onFleetSold",
 ];
 
 
