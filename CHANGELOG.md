@@ -4,6 +4,26 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.6 — Refits & Fleets (Phase 1)
+- **Hull refits**: the Shipyard now has a **Refit Bay**. Five permanent upgrade
+  lines — structural bracing, emitter tuning, hold restructure, thrust remap and
+  a deck partition — each go three levels deep and add +30 hull, +25 shield,
+  +8 cargo, +6 speed or +1 berth per level. Prices scale with the frame you're
+  refitting and with each step taken, and Merchant/Quartermaster haggling
+  applies. Refits belong to the hull, not the pilot: they follow the frame into
+  a hangar and are lost if you trade it in.
+- **Fleet hangar**: you can now own more than one ship. The yard has a purchase
+  mode toggle — TRADE IN (as before) or KEEP, which berths the frame you flew in
+  on for an 800cr fee instead of selling it back. Up to three frames can sit in
+  hangars, each keeping its own modules, armament, refits, insurance and battle
+  damage. Taking one back out costs 300cr and runs the same cargo/berth fit
+  checks as a trade-in; selling a berthed frame pays the usual 55% of list.
+- **Character Sheet** lists your fitted refits and everything berthed, with the
+  station each frame is parked at.
+- **Scripting**: new `onHullRefit`, `onFleetStored`, `onFleetSwapped` and
+  `onFleetSold` hooks, plus `frontier.fleet()` — the active frame and every
+  hangar frame with refit levels, caps and condition.
+
 ## 0.9.5 — Faction Contracts & Collision Fast Path
 - **Faction contracts**: every contract now remembers who issued it. Station
   boards and comms work offers pull a house style — Federal writs, Patrol

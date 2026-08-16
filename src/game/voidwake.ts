@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.5";
+const VERSION = "0.9.6";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -147,7 +147,13 @@ export type ScriptHookName =
   | "onHailClosed"
   // 0.9.4 — a reputation-gated contract handed out inside a hail. Carries the
   // gate that was cleared (standing + rank) and the offers put on the board.
-  | "onHailWork";
+  | "onHailWork"
+  // 0.9.6 — hull refits and the fleet hangar. `onHullRefit` fires per purchased
+  // refit step; the fleet hooks bracket every hangar movement.
+  | "onHullRefit"
+  | "onFleetStored"
+  | "onFleetSwapped"
+  | "onFleetSold";
 
 
 
@@ -205,6 +211,10 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onHailTopic:          [],
   onHailClosed:         [],
   onHailWork:           [],
+  onHullRefit:          [],
+  onFleetStored:        [],
+  onFleetSwapped:       [],
+  onFleetSold:          [],
 
 
 };
@@ -2149,6 +2159,65 @@ function insurancePremium(p: PlayerState): number {
   return Math.max(120, Math.round(hullPrice(h) * 0.15 * merchantBuyMult(p)));
 }
 
+// ---------------------------------------------------------------------------
+// 0.9.6 — Hull refits and the fleet hangar.
+//
+// A *refit* permanently widens one stat on the frame you fly. Levels are held
+// per stat (0..REFIT_MAX) on `PlayerShip.refit`, and every derived cap reads
+// them through `refitBonus()`, so a refit behaves exactly like a module bonus:
+// it survives save/load, is re-applied by `recomputeShipStats`, and travels
+// with the hull into the hangar rather than with the pilot.
+//
+// The *hangar* is the groundwork for owning a fleet. Buying a hull at the yard
+// in KEEP mode parks the old frame — with its own modules, armament, refits and
+// battle damage — as a `FleetShip` instead of trading it in. Swapping back is a
+// flat transfer fee plus the same cargo/berth fit checks a trade-in runs.
+// ---------------------------------------------------------------------------
+type RefitStat = "hull" | "shield" | "cargo" | "speed" | "berths";
+type ShipRefit = Partial<Record<RefitStat, number>>;
+const REFIT_MAX = 3;
+const REFIT_SPECS: Array<{
+  id: RefitStat; name: string; per: number; unit: string; desc: string;
+}> = [
+  { id: "hull",   name: "Structural bracing", per: 30, unit: "hull",   desc: "cross-braced ribs and a second skin over the spine" },
+  { id: "shield", name: "Emitter tuning",     per: 25, unit: "shield", desc: "re-phased emitters draw a wider bubble" },
+  { id: "cargo",  name: "Hold restructure",   per: 8,  unit: "cargo",  desc: "bulkheads moved aft to free stowage" },
+  { id: "speed",  name: "Thrust remap",       per: 6,  unit: "spd",    desc: "injector remap and a lighter shroud" },
+  { id: "berths", name: "Deck partition",     per: 1,  unit: "berth",  desc: "one more bunk carved out of the crew deck" },
+];
+function refitLevel(refit: ShipRefit | undefined, stat: RefitStat): number {
+  return Math.max(0, Math.min(REFIT_MAX, refit?.[stat] ?? 0));
+}
+function refitBonus(refit: ShipRefit | undefined, stat: RefitStat): number {
+  const spec = REFIT_SPECS.find((r) => r.id === stat)!;
+  return refitLevel(refit, stat) * spec.per;
+}
+// Refits get dearer with the frame they're bolted to and with each step taken,
+// and the same Merchant/Quartermaster haggling that discounts yard work applies.
+function refitPrice(p: PlayerState, stat: RefitStat): number {
+  const h = SHIP_HULLS.find((x) => x.id === p.ship.hullId) ?? SHIP_HULLS[0];
+  const next = refitLevel(p.ship.refit, stat) + 1;
+  return Math.max(400, Math.round(hullPrice(h) * 0.12 * next * merchantBuyMult(p)));
+}
+
+// A frame parked in a station hangar. Everything bolted to the ship travels
+// with it; only the pilot, crew and cargo stay behind.
+interface FleetShip {
+  hullId: string;
+  hull: number; shield: number; fuel: number;
+  weaponId: string;
+  gunnerWeaponId?: string;
+  modules: string[];
+  refit?: ShipRefit;
+  insured?: boolean;
+  storedAt?: number;      // station entity id, when it was parked at one
+  storedAtName: string;
+  storedAtMs: number;
+}
+const FLEET_MAX = 3;              // hangar berths the player may hold
+const FLEET_BERTH_FEE = 800;      // charged when a frame is parked
+const FLEET_SWAP_FEE = 300;       // charged when a frame is taken back out
+
 
 
 
@@ -2266,6 +2335,9 @@ interface PlayerShip {
   // claim (respawn) and lapses when the frame is traded in. Optional so
   // older saves load unchanged.
   insured?: boolean;
+  // 0.9.6 — permanent per-stat refit levels bought at the yard's Refit Bay.
+  // Undefined on older saves; every reader goes through refitLevel/refitBonus.
+  refit?: ShipRefit;
 }
 
 // A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
@@ -2388,6 +2460,9 @@ interface PlayerState {
   // entity; `entityId` is re-bound by ensureWingEntities() whenever the ship
   // is missing (save load, wormhole jump, destruction is handled separately).
   wing?: { name: string; wage: number; entityId?: number }[];
+  // 0.9.6 — frames parked in station hangars (max FLEET_MAX). Groundwork for
+  // running a fleet: each entry is a whole ship, not a berth.
+  fleet?: FleetShip[];
 }
 const XENO_HIRE_THRESHOLD = 5;
 
@@ -4468,7 +4543,7 @@ function generateStationStock(stationId: number, faction: string = "guild", day:
 function effectiveCargoMax(p: PlayerState): number {
   const base = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.cargo ?? p.ship.cargoMax;
   const expanders = p.ship.modules.filter((m) => m === "cargo-expander").length;
-  return base + expanders * 12;
+  return base + expanders * 12 + refitBonus(p.ship.refit, "cargo");
 }
 
 // Effective crew capacity after hull base + Crew Quarters modules. An
@@ -4480,7 +4555,7 @@ function effectiveCrewMax(p: PlayerState): number {
   const base = hull?.crewSlots ?? 1;
   const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
   const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
-  return Math.max(1, base + quarters - stow);
+  return Math.max(1, base + quarters + refitBonus(p.ship.refit, "berths") - stow);
 }
 
 // 0.8.2 — Recompute every derived ship cap from (hull x species x modules).
@@ -4491,18 +4566,22 @@ function recomputeShipStats(p: PlayerState, fresh = false): void {
   const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
   const s = speciesOf(p.char.species);
   const n = (id: string) => p.ship.modules.filter((m) => m === id).length;
+  // 0.9.6 — refit levels stack on top of the (hull x species x modules) maths
+  // rather than replacing any of it, so a refitted frame re-derives correctly
+  // after a module install, a species bonus change or a save load.
+  const rf = p.ship.refit;
   const hullMax = Math.max(1, Math.round(hull.hull * (s.hullMul ?? 1)))
-    + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80;
+    + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80 + refitBonus(rf, "hull");
   const shieldMax = Math.max(0, Math.round(hull.shield * (s.shieldMul ?? 1)))
-    + n("shield-booster") * 25;
+    + n("shield-booster") * 25 + refitBonus(rf, "shield");
   const cargoMax = Math.max(1, Math.round(hull.cargo * (s.cargoMul ?? 1)))
-    + n("cargo-expander") * 12;
+    + n("cargo-expander") * 12 + refitBonus(rf, "cargo");
   const fuelMax = 100 + n("aux-fuel-tank") * 50;
   p.ship.hullMax = hullMax;
   p.ship.shieldMax = shieldMax;
   p.ship.cargoMax = cargoMax;
   p.ship.fuelMax = fuelMax;
-  p.ship.speed = hull.speed;
+  p.ship.speed = hull.speed + refitBonus(p.ship.refit, "speed");
   p.ship.hull = fresh ? hullMax : Math.min(p.ship.hull, hullMax);
   p.ship.shield = fresh ? shieldMax : Math.min(p.ship.shield, shieldMax);
   p.ship.fuel = Math.min(p.ship.fuel, fuelMax);
@@ -5921,7 +6000,10 @@ export class Voidwake {
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" | "shipyard" | "bounty-office" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" | "shipyard" | "refit-bay" | "hangar" | "bounty-office" = "main";
+  // 0.9.6 — yard purchase mode. TRADE IN sells the old frame back (pre-0.9.6
+  // behaviour); KEEP parks it in the hangar for FLEET_BERTH_FEE instead.
+  yardKeepHull = false;
   // 0.7.2 — Commodities page mode toggle. Cycled with LEFT/RIGHT arrows.
   commodityMode: "buy" | "sell" = "buy";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
@@ -10971,6 +11053,17 @@ export class Voidwake {
     putText(g, sx, sry++, `Weapon: ${weapon ? `${weapon.name} (dmg ${weapon.dmg}, cd ${weapon.cooldown}s, ${weapon.range}u)` : p.ship.weaponId}`, "#ffe066");
     if (gunnerW) putText(g, sx, sry++, `Gunner rig: ${gunnerW.name} (dmg ${gunnerW.dmg}, cd ${gunnerW.cooldown}s)`, "#fc6");
     if (hull.blurb) putText(g, sx, sry++, `Frame: ${hull.blurb}`, "#888");
+    // 0.9.6 — refits fitted to this frame, and anything berthed in a hangar.
+    const refitBits = REFIT_SPECS
+      .filter((r) => refitLevel(p.ship.refit, r.id) > 0)
+      .map((r) => `${r.name} L${refitLevel(p.ship.refit, r.id)} (+${refitBonus(p.ship.refit, r.id)} ${r.unit})`);
+    if (refitBits.length) putText(g, sx, sry++, `Refits: ${refitBits.join(", ")}`, "#6f9");
+    if (p.fleet?.length) {
+      const berthed = p.fleet
+        .map((f) => `${SHIP_HULLS.find((h2) => h2.id === f.hullId)?.name ?? f.hullId} @ ${f.storedAtName}`)
+        .join(", ");
+      putText(g, sx, sry++, `Hangar (${p.fleet.length}/${FLEET_MAX}): ${berthed}`, "#8cf", cols - sx - 2);
+    }
 
     // Installed modules list, right column.
     const mx = Math.min(cols - 46, Math.max(56, cols / 2));
@@ -11802,6 +11895,40 @@ export class Voidwake {
             incomePerMinute: stationIncomePerMinute(p, s0) + stationRouteIncome(p, s0),
           }));
         },
+        // 0.9.6 — fleet + refit read surface: the frame you fly (with its refit
+        // levels) plus every frame berthed in a hangar.
+        fleet: () => {
+          const p = this.player; if (!p) return [];
+          const refitOf = (r?: ShipRefit) => {
+            const out: Record<string, number> = {};
+            for (const spec of REFIT_SPECS) out[spec.id] = refitLevel(r, spec.id);
+            return out;
+          };
+          const active = SHIP_HULLS.find((h) => h.id === p.ship.hullId);
+          return [
+            {
+              active: true, hullId: p.ship.hullId, name: active?.name ?? p.ship.hullId,
+              hull: Math.round(p.ship.hull), hullMax: p.ship.hullMax,
+              shield: Math.round(p.ship.shield), shieldMax: p.ship.shieldMax,
+              fuel: Math.round(p.ship.fuel), cargoMax: effectiveCargoMax(p),
+              berths: effectiveCrewMax(p), modules: [...p.ship.modules],
+              insured: !!p.ship.insured, refit: refitOf(p.ship.refit),
+              station: "", stationId: undefined as number | undefined,
+            },
+            ...(p.fleet ?? []).map((f) => {
+              const caps = this.fleetCaps(f);
+              return {
+                active: false, hullId: f.hullId, name: caps.name,
+                hull: Math.round(f.hull), hullMax: 0,
+                shield: Math.round(f.shield), shieldMax: 0,
+                fuel: Math.round(f.fuel), cargoMax: caps.cargo,
+                berths: caps.berths, modules: [...f.modules],
+                insured: !!f.insured, refit: refitOf(f.refit),
+                station: f.storedAtName, stationId: f.storedAt,
+              };
+            }),
+          ];
+        },
         // 0.9.1 — mod ergonomics. A read of the tracked contact and the active
         // screen, a narrow target setter, and Nav Log writes, so a mod can
         // build a navigation assistant without touching engine internals.
@@ -12494,7 +12621,10 @@ export class Voidwake {
     const sid = this.dockedStationId;
     if (!p || sid == null) return [];
     const stock = this.getStock(sid);
-    const trade = hullTradeIn(p.ship.hullId);
+    // 0.9.6 — in KEEP mode there is no trade-in to offset the price; the old
+    // frame goes to the hangar instead and the yard charges a berth fee.
+    const keep = this.yardKeepHull && (p.fleet?.length ?? 0) < FLEET_MAX;
+    const trade = keep ? -FLEET_BERTH_FEE : hullTradeIn(p.ship.hullId);
     const prior = hasPriorSave();
     const out: Array<{ hull: typeof SHIP_HULLS[number]; net: number; reason: string }> = [];
     for (const id of stock.hulls) {
@@ -12537,8 +12667,30 @@ export class Voidwake {
       return;
     }
     const old = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
+    // 0.9.6 — KEEP mode parks the frame you flew in on. Everything bolted to it
+    // (modules, both mounts, refits, its policy and its battle damage) goes with
+    // it, so the new frame comes out of the yard bare except its own fittings.
+    const keep = this.yardKeepHull && (p.fleet?.length ?? 0) < FLEET_MAX;
     p.credits -= offer.net;
+    if (keep) {
+      this.fleetStore(old);
+      p.ship.hullId = h.id;
+      p.ship.modules = [];
+      p.ship.refit = undefined;
+      p.ship.insured = false;
+      recomputeShipStats(p, true);
+      p.ship.fuel = p.ship.fuelMax;
+      this.pushLog(`Bought a ${h.name}; the ${old} is berthed in the hangar. New frame ships bare.`);
+      this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. Hangar holds ${(p.fleet ?? []).length} frame(s).`, "#9fe");
+      dispatchHook("onShipHullChange", {
+        hullId: h.id, name: h.name, net: offer.net, previous: old,
+        stationId: this.dockedStationId, keptPrevious: true,
+      });
+      this.sfx("levelup");
+      return;
+    }
     p.ship.hullId = h.id;
+    p.ship.refit = undefined;
     recomputeShipStats(p, true);
     // 0.8.3 — a policy is written against a specific frame, so it lapses on
     // trade-in. The yard will happily sell you another one.
@@ -12546,10 +12698,126 @@ export class Voidwake {
       p.ship.insured = false;
       this.pushLog("Hull policy lapsed with the trade-in — buy a new one for this frame.");
     }
-    this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred.`);
+    this.pushLog(`Traded the ${old} for a ${h.name}. Modules and armament transferred; refits did not.`);
     this.pushChatter("Computer", `Frame swap complete. New profile: ${h.name}. All systems nominal.`, "#9fe");
     dispatchHook("onShipHullChange", {
       hullId: h.id, name: h.name, net: offer.net, previous: old,
+      stationId: this.dockedStationId,
+    });
+    this.sfx("levelup");
+  }
+
+  // --- 0.9.6 Fleet hangar --------------------------------------------------
+  // A stored frame is a whole ship: hull condition, fuel, mounts, modules and
+  // refits. The pilot, crew, cargo and contracts always stay with the pilot.
+  private shipSnapshot(): FleetShip {
+    const p = this.player!;
+    const st = this.dockedStationId != null ? this.byId(this.dockedStationId) : undefined;
+    return {
+      hullId: p.ship.hullId,
+      hull: p.ship.hull, shield: p.ship.shield, fuel: p.ship.fuel,
+      weaponId: p.ship.weaponId, gunnerWeaponId: p.ship.gunnerWeaponId,
+      modules: [...p.ship.modules],
+      refit: p.ship.refit ? { ...p.ship.refit } : undefined,
+      insured: p.ship.insured,
+      storedAt: st?.id, storedAtName: st?.name ?? "Yard",
+      storedAtMs: Date.now(),
+    };
+  }
+  /** Park the frame currently flown. Caller has already charged for it. */
+  private fleetStore(label: string): void {
+    const p = this.player!;
+    if (!p.fleet) p.fleet = [];
+    const snap = this.shipSnapshot();
+    p.fleet.push(snap);
+    dispatchHook("onFleetStored", {
+      hullId: snap.hullId, name: label, stationId: snap.storedAt,
+      station: snap.storedAtName, fleetSize: p.fleet.length,
+    });
+  }
+  /** Caps a stored frame would give, used for the fit checks before a swap. */
+  private fleetCaps(f: FleetShip): { cargo: number; berths: number; name: string } {
+    const p = this.player!;
+    const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
+    const sp = speciesOf(p.char.species);
+    const n = (id: string) => f.modules.filter((m) => m === id).length;
+    const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
+    return {
+      cargo: Math.max(1, Math.round(h.cargo * (sp.cargoMul ?? 1))) + n("cargo-expander") * 12
+        + refitBonus(f.refit, "cargo"),
+      berths: Math.max(1, h.crewSlots + n("crew-quarters") + refitBonus(f.refit, "berths") - stow),
+      name: h.name,
+    };
+  }
+  /** Take a stored frame out and park the current one in its place. */
+  fleetSwap(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const caps = this.fleetCaps(f);
+    if (p.credits < FLEET_SWAP_FEE) { this.pushLog(`The hangar crew want ${FLEET_SWAP_FEE}cr to move frames.`); return; }
+    if (cargoTotal(p) > caps.cargo) {
+      this.pushLog(`${caps.name} holds only ${caps.cargo} units — sell down ${cargoTotal(p) - caps.cargo} first.`);
+      return;
+    }
+    if (crewCount(p) > caps.berths) {
+      this.pushLog(`${caps.name} berths ${caps.berths} — pay off ${crewCount(p) - caps.berths} crew first.`);
+      return;
+    }
+    const prev = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
+    p.credits -= FLEET_SWAP_FEE;
+    const stored = this.shipSnapshot();
+    p.ship.hullId = f.hullId;
+    p.ship.modules = [...f.modules];
+    p.ship.refit = f.refit ? { ...f.refit } : undefined;
+    p.ship.weaponId = f.weaponId;
+    p.ship.gunnerWeaponId = f.gunnerWeaponId;
+    p.ship.insured = f.insured;
+    recomputeShipStats(p);
+    // Condition travels with the frame, clamped to whatever the caps now allow.
+    p.ship.hull = Math.max(1, Math.min(p.ship.hullMax, f.hull));
+    p.ship.shield = Math.min(p.ship.shieldMax, f.shield);
+    p.ship.fuel = Math.min(p.ship.fuelMax, f.fuel);
+    p.fleet![idx] = stored;
+    this.pushLog(`Took the ${caps.name} out of the hangar for ${FLEET_SWAP_FEE}cr; the ${prev} is berthed.`);
+    this.pushChatter("Computer", `Active frame: ${caps.name}. Hull ${Math.round(p.ship.hull)}/${p.ship.hullMax}, fuel ${Math.round(p.ship.fuel)}u.`, "#9fe");
+    dispatchHook("onFleetSwapped", {
+      hullId: f.hullId, name: caps.name, previous: prev, fee: FLEET_SWAP_FEE,
+      stationId: this.dockedStationId,
+    });
+    this.sfx("levelup");
+  }
+  /** Sell a stored frame outright. Pays the usual 55% trade-in on list. */
+  fleetSell(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const name = SHIP_HULLS.find((x) => x.id === f.hullId)?.name ?? f.hullId;
+    const paid = hullTradeIn(f.hullId);
+    p.credits += paid;
+    p.fleet!.splice(idx, 1);
+    this.pushLog(`Sold the berthed ${name} for ${paid}cr. Its modules and refits went with it.`);
+    dispatchHook("onFleetSold", {
+      hullId: f.hullId, name, paid, stationId: this.dockedStationId,
+      fleetSize: p.fleet!.length,
+    });
+    this.sfx("chime");
+  }
+
+  // 0.9.6 — buy one refit step on the frame currently flown.
+  buyRefit(stat: RefitStat): void {
+    const p = this.player; if (!p) return;
+    const spec = REFIT_SPECS.find((r) => r.id === stat)!;
+    const lvl = refitLevel(p.ship.refit, stat);
+    if (lvl >= REFIT_MAX) { this.pushLog(`${spec.name} is already at its structural limit.`); return; }
+    const cost = refitPrice(p, stat);
+    if (p.credits < cost) { this.pushLog(`The refit crew want ${cost}cr for that work.`); return; }
+    p.credits -= cost;
+    if (!p.ship.refit) p.ship.refit = {};
+    p.ship.refit[stat] = lvl + 1;
+    recomputeShipStats(p);
+    this.pushLog(`${spec.name} L${lvl + 1} fitted for ${cost}cr — +${spec.per} ${spec.unit}.`);
+    this.pushChatter("Computer", `Frame profile updated: ${spec.name} level ${lvl + 1}.`, "#9fe");
+    dispatchHook("onHullRefit", {
+      stat, level: lvl + 1, cost, hullId: p.ship.hullId,
       stationId: this.dockedStationId,
     });
     this.sfx("levelup");
@@ -12713,9 +12981,17 @@ export class Voidwake {
     if (this.stationPage === "shipyard") {
       const cur = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
       const trade = hullTradeIn(p.ship.hullId);
+      const fleetN = (p.fleet ?? []).length;
+      const keep = this.yardKeepHull && fleetN < FLEET_MAX;
+      const refitTag = REFIT_SPECS
+        .filter((r) => refitLevel(p.ship.refit, r.id) > 0)
+        .map((r) => `${r.unit}+${refitBonus(p.ship.refit, r.id)}`)
+        .join(" ");
       const rows: string[] = [
-        `~ Flying: ${cur.name}  HP ${cur.hull}  SH ${cur.shield}  cargo ${cur.cargo}  spd ${cur.speed}  berths ${cur.crewSlots} ~`,
-        `~ Trade-in value ${trade}cr   Credits ${p.credits}cr   (modules and weapons transfer) ~`,
+        `~ Flying: ${cur.name}  HP ${cur.hull}  SH ${cur.shield}  cargo ${cur.cargo}  spd ${cur.speed}  berths ${cur.crewSlots}${refitTag ? `  refits ${refitTag}` : ""} ~`,
+        keep
+          ? `~ KEEP mode: old frame berthed for ${FLEET_BERTH_FEE}cr   Credits ${p.credits}cr   (new frame ships bare) ~`
+          : `~ Trade-in value ${trade}cr   Credits ${p.credits}cr   (modules and weapons transfer, refits do not) ~`,
       ];
       const offers = this.shipyardOffers();
       if (!offers.length) rows.push("~ No hulls on the pad this rotation — check back next cycle ~");
@@ -12734,6 +13010,59 @@ export class Voidwake {
       // refills the tank and pays 60cr per unit of cargo lost with the wreck.
       if (p.ship.insured) rows.push("Hull policy: ACTIVE — covers one rescue (fee waived + freight payout)");
       else rows.push(`Buy hull insurance — ${insurancePremium(p)}cr — waives the rescue fee, pays 60cr per cargo unit lost`);
+      // 0.9.6 — refit bay, hangar, and the purchase-mode toggle.
+      rows.push("Refit Bay \u25b8 — permanent upgrades to the frame you fly");
+      rows.push(`Hangar \u25b8 — ${fleetN}/${FLEET_MAX} frames berthed`);
+      rows.push(
+        fleetN >= FLEET_MAX && this.yardKeepHull
+          ? `Purchase mode: KEEP (hangar full — sale will trade in for ${trade}cr)`
+          : `Purchase mode: ${this.yardKeepHull ? `KEEP old frame (+${FLEET_BERTH_FEE}cr berth fee)` : `TRADE IN old frame (-${trade}cr)`}`,
+      );
+      rows.push("Back");
+      return rows;
+    }
+
+    // ---- Refit Bay (0.9.6) --------------------------------------------------
+    // One row per stat, showing the level you hold, what the next step adds and
+    // what it costs on this frame. Refits stay with the hull, not the pilot.
+    if (this.stationPage === "refit-bay") {
+      const cur = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
+      const rows: string[] = [
+        `~ Refit Bay — ${cur.name}   Credits ${p.credits}cr   (refits are permanent and travel with the frame) ~`,
+        `~ Now: HP ${p.ship.hullMax}  SH ${p.ship.shieldMax}  cargo ${effectiveCargoMax(p)}  spd ${p.ship.speed}  berths ${effectiveCrewMax(p)} ~`,
+      ];
+      for (const r of REFIT_SPECS) {
+        const lvl = refitLevel(p.ship.refit, r.id);
+        const bar = "\u25a0".repeat(lvl) + "\u00b7".repeat(REFIT_MAX - lvl);
+        rows.push(lvl >= REFIT_MAX
+          ? `${r.name} [${bar}] — MAX — ${r.desc}`
+          : `${r.name} [${bar}] — ${refitPrice(p, r.id)}cr — +${r.per} ${r.unit} — ${r.desc}`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+
+    // ---- Hangar (0.9.6) -----------------------------------------------------
+    // Frames you own but are not flying. Swapping charges a transfer fee and
+    // runs the same cargo/berth fit checks a trade-in does.
+    if (this.stationPage === "hangar") {
+      const fleet = p.fleet ?? [];
+      const rows: string[] = [
+        `~ Hangar — ${fleet.length}/${FLEET_MAX} berthed   Swap fee ${FLEET_SWAP_FEE}cr   Credits ${p.credits}cr ~`,
+      ];
+      if (!fleet.length) {
+        rows.push("~ Nothing berthed. Buy a hull in KEEP mode to park the frame you fly in on. ~");
+      }
+      fleet.forEach((f, idx) => {
+        const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
+        const caps = this.fleetCaps(f);
+        const rf = REFIT_SPECS.filter((r) => refitLevel(f.refit, r.id) > 0)
+          .map((r) => `${r.unit}+${refitBonus(f.refit, r.id)}`).join(" ");
+        rows.push(`Fly ${h.name} #${idx + 1} — HP ${Math.round(f.hull)} fuel ${Math.round(f.fuel)}u`
+          + ` cargo ${caps.cargo} berths ${caps.berths} mods ${f.modules.length}`
+          + `${rf ? ` refits ${rf}` : ""}${f.insured ? " insured" : ""} — at ${f.storedAtName}`);
+        rows.push(`Sell ${h.name} #${idx + 1} — +${hullTradeIn(f.hullId)}cr (modules and refits go with it)`);
+      });
       rows.push("Back");
       return rows;
     }
@@ -13045,9 +13374,43 @@ export class Voidwake {
         this.sfx("chime");
         return;
       }
+      if (row.startsWith("Refit Bay")) { this.stationPage = "refit-bay"; this.menuCursor = 0; return; }
+      if (row.startsWith("Hangar")) { this.stationPage = "hangar"; this.menuCursor = 0; return; }
+      if (row.startsWith("Purchase mode:")) {
+        this.yardKeepHull = !this.yardKeepHull;
+        if (this.yardKeepHull && (p.fleet?.length ?? 0) >= FLEET_MAX) {
+          this.pushLog(`Hangar is full (${FLEET_MAX} frames) — a sale will still trade in.`);
+        } else {
+          this.pushLog(this.yardKeepHull
+            ? `KEEP mode: the frame you fly in on gets berthed for ${FLEET_BERTH_FEE}cr instead of traded in.`
+            : "TRADE IN mode: the yard buys your old frame back.");
+        }
+        return;
+      }
       const offer = this.shipyardOffers().find((o) => row.startsWith(o.hull.name));
       if (!offer) return;
       this.buyHull(offer);
+      return;
+    }
+
+    // ---- Refit Bay page (0.9.6) --------------------------------------------
+    if (this.stationPage === "refit-bay") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~") || row === "Back") return;
+      const spec = REFIT_SPECS.find((r) => row.startsWith(r.name));
+      if (spec) this.buyRefit(spec.id);
+      return;
+    }
+
+    // ---- Hangar page (0.9.6) ----------------------------------------------
+    if (this.stationPage === "hangar") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~") || row === "Back") return;
+      const m = /#(\d+)/.exec(row);
+      if (!m) return;
+      const idx = Number(m[1]) - 1;
+      if (row.startsWith("Fly ")) this.fleetSwap(idx);
+      else if (row.startsWith("Sell ")) this.fleetSell(idx);
       return;
     }
 

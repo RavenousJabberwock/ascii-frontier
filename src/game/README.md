@@ -542,6 +542,10 @@ covering every hook shipped so far.
 | `onHailTopic`       | `{ targetId, target, topic, node, mood, disposition }` | every conversation node walked (0.9.3) |
 | `onHailClosed`      | `{ targetId, target, mood, tone }`         | comms channel closed (0.9.3) |
 | `onHailWork`        | `{ targetId, target, priority, standing, rank, offers }` | reputation-gated work offered over a hail (0.9.4); each offer carries `faction` / `issuer` since 0.9.5 |
+| `onHullRefit`       | `{ stat, level, cost, hullId, stationId }`  | a refit step bought in the Refit Bay (0.9.6) |
+| `onFleetStored`     | `{ hullId, name, stationId, station, fleetSize }` | a frame berthed in a hangar (0.9.6) |
+| `onFleetSwapped`    | `{ hullId, name, previous, fee, stationId }` | a berthed frame taken back out (0.9.6) |
+| `onFleetSold`       | `{ hullId, name, paid, stationId, fleetSize }` | a berthed frame sold (0.9.6) |
 | `onMissionAccepted` / `onMissionCompleted` | `{ id, kind, description, reward, faction, issuer, ... }` | `faction` / `issuer` added in 0.9.5 |
 
 0.9.3 adds the conversation surface: `frontier.hail()` returns the live channel
@@ -572,6 +576,14 @@ archetype) and `rockClass` (asteroid mineralogy), plus the raw entity `id`.
 active contract log (`id, kind, description, reward, done, tracked,
 deadlineIn`), and `frontier.holdings()` returns your owned stations
 (`id, name, tier, treasury, routes, incomePerMinute`).
+
+0.9.6 adds `frontier.fleet()`: one row for the frame you are flying
+(`active = true`) followed by every frame berthed in a hangar. Each row carries
+`hullId, name, hull, hullMax, shield, shieldMax, fuel, cargoMax, berths,
+modules, insured, refit, station, stationId`, where `refit` is a table of the
+five refit stats (`hull, shield, cargo, speed, berths`) to their levels (0-3).
+`hullMax` / `shieldMax` are 0 for berthed frames, whose caps depend on the
+pilot at the time of the swap.
 
 Payload shapes are stable — changes require a `VERSION` bump and a note
 in this section. Additional hooks must land as no-op dispatchers first

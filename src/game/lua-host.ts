@@ -61,6 +61,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onHailTopic", "onHailClosed",
   // 0.9.4 — reputation-gated work handed out over a hail
   "onHailWork",
+  // 0.9.6 — hull refits and fleet hangar movements
+  "onHullRefit", "onFleetStored", "onFleetSwapped", "onFleetSold",
 ];
 
 
@@ -94,6 +96,8 @@ export interface LuaHostBridge {
   // their automated freight lanes and current income rate).
   contracts?: () => Array<Record<string, unknown>>;
   holdings?: () => Array<Record<string, unknown>>;
+  // 0.9.6 — active frame + hangar contents, including refit levels.
+  fleet?: () => Array<Record<string, unknown>>;
   // 0.9.0 — live frontier events (advisories currently moving the economy).
   events?: () => Array<Record<string, unknown>>;
   // 0.9.1 — navigation surface: read the tracked contact and current screen,
@@ -328,6 +332,13 @@ export class LuaHost {
       return 1;
     });
     lua.lua_setfield(L, -2, to_luastring("holdings"));
+
+    // frontier.fleet() → active frame + hangar frames with refit levels (read-only)
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      pushJsAsLua(Ls, this.bridge.fleet?.() ?? [], 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("fleet"));
 
     // frontier.events() → list of live frontier events (read-only)
     lua.lua_pushjsfunction(L, (Ls: L) => {

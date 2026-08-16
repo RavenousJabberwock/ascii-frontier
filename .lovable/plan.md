@@ -1,3 +1,46 @@
+# 0.9.6 — Refits & Fleets (Phase 1)
+
+Ships as **0.9.6**.
+
+- **Hull refits.** `PlayerShip.refit` holds a per-stat level map
+  (`hull`/`shield`/`cargo`/`speed`/`berths`, 0..`REFIT_MAX` = 3). `REFIT_SPECS`
+  carries the per-level amount (+30 hull, +25 shield, +8 cargo, +6 spd, +1
+  berth) and the flavour text. `refitBonus()` is read by `recomputeShipStats`,
+  `effectiveCargoMax` and `effectiveCrewMax`, so refits stack on top of the
+  hull x species x module maths instead of replacing any of it and survive a
+  module install, a load, or a stat recompute. `refitPrice()` scales with the
+  frame's list price and the step being bought (12% x next level, min 400cr) and
+  honours Merchant/Quartermaster haggling.
+- **Refit Bay page** under the Shipyard: one row per stat with a `[■■·]` level
+  bar, the next step's price and what it adds. Refits belong to the *frame*, so
+  they travel into the hangar with it and are lost on a trade-in (the trade-in
+  log line now says so).
+- **Fleet hangar (groundwork for owning multiple ships).** `PlayerState.fleet`
+  holds up to `FLEET_MAX` = 3 `FleetShip` records — hull id, hull/shield/fuel
+  condition, both weapon mounts, modules, refits and the insurance flag, plus
+  where and when it was parked.
+- **Yard purchase mode.** A toggle row on the Shipyard page switches between
+  TRADE IN (pre-0.9.6 behaviour) and KEEP. In KEEP mode `shipyardOffers()` drops
+  the trade-in credit and adds an 800cr berth fee, and `buyHull()` snapshots the
+  old frame into the hangar; the new frame then comes out bare with a full tank.
+  KEEP silently falls back to a trade-in when the hangar is full.
+- **Hangar page.** Per stored frame: `Fly …` (300cr transfer) and `Sell …` (the
+  usual 55% of list). A swap runs the same cargo and berth fit checks as a
+  trade-in against caps derived from the stored frame's own hull, modules and
+  refits, and it preserves that frame's hull/shield/fuel condition.
+- **Character Sheet** now lists fitted refits and hangar contents.
+- **Scripting.** New hooks `onHullRefit`, `onFleetStored`, `onFleetSwapped`,
+  `onFleetSold`, and a `frontier.fleet()` read surface returning the active
+  frame (flagged `active = true`) plus every berthed frame with its refit levels.
+
+## Deferred
+
+- Fleet ships flying as AI escorts rather than sitting in a hangar (phase 2).
+- Remote hangar access (a frame parked at one station cannot be recalled to
+  another; you must dock where it is berthed).
+- Per-hull insurance quotes for stored frames, and hangar rent over time.
+- Refit *slots* beyond the five stats (weapon hardpoint count, module bays).
+
 # 0.9.5 — Faction Contracts & Collision Fast Path
 
 Ships as **0.9.5**.
