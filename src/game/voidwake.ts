@@ -147,7 +147,13 @@ export type ScriptHookName =
   | "onHailClosed"
   // 0.9.4 — a reputation-gated contract handed out inside a hail. Carries the
   // gate that was cleared (standing + rank) and the offers put on the board.
-  | "onHailWork";
+  | "onHailWork"
+  // 0.9.6 — hull refits and the fleet hangar. `onHullRefit` fires per purchased
+  // refit step; the fleet hooks bracket every hangar movement.
+  | "onHullRefit"
+  | "onFleetStored"
+  | "onFleetSwapped"
+  | "onFleetSold";
 
 
 
