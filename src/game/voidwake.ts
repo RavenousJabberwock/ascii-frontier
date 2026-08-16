@@ -2159,6 +2159,65 @@ function insurancePremium(p: PlayerState): number {
   return Math.max(120, Math.round(hullPrice(h) * 0.15 * merchantBuyMult(p)));
 }
 
+// ---------------------------------------------------------------------------
+// 0.9.6 — Hull refits and the fleet hangar.
+//
+// A *refit* permanently widens one stat on the frame you fly. Levels are held
+// per stat (0..REFIT_MAX) on `PlayerShip.refit`, and every derived cap reads
+// them through `refitBonus()`, so a refit behaves exactly like a module bonus:
+// it survives save/load, is re-applied by `recomputeShipStats`, and travels
+// with the hull into the hangar rather than with the pilot.
+//
+// The *hangar* is the groundwork for owning a fleet. Buying a hull at the yard
+// in KEEP mode parks the old frame — with its own modules, armament, refits and
+// battle damage — as a `FleetShip` instead of trading it in. Swapping back is a
+// flat transfer fee plus the same cargo/berth fit checks a trade-in runs.
+// ---------------------------------------------------------------------------
+type RefitStat = "hull" | "shield" | "cargo" | "speed" | "berths";
+type ShipRefit = Partial<Record<RefitStat, number>>;
+const REFIT_MAX = 3;
+const REFIT_SPECS: Array<{
+  id: RefitStat; name: string; per: number; unit: string; desc: string;
+}> = [
+  { id: "hull",   name: "Structural bracing", per: 30, unit: "hull",   desc: "cross-braced ribs and a second skin over the spine" },
+  { id: "shield", name: "Emitter tuning",     per: 25, unit: "shield", desc: "re-phased emitters draw a wider bubble" },
+  { id: "cargo",  name: "Hold restructure",   per: 8,  unit: "cargo",  desc: "bulkheads moved aft to free stowage" },
+  { id: "speed",  name: "Thrust remap",       per: 6,  unit: "spd",    desc: "injector remap and a lighter shroud" },
+  { id: "berths", name: "Deck partition",     per: 1,  unit: "berth",  desc: "one more bunk carved out of the crew deck" },
+];
+function refitLevel(refit: ShipRefit | undefined, stat: RefitStat): number {
+  return Math.max(0, Math.min(REFIT_MAX, refit?.[stat] ?? 0));
+}
+function refitBonus(refit: ShipRefit | undefined, stat: RefitStat): number {
+  const spec = REFIT_SPECS.find((r) => r.id === stat)!;
+  return refitLevel(refit, stat) * spec.per;
+}
+// Refits get dearer with the frame they're bolted to and with each step taken,
+// and the same Merchant/Quartermaster haggling that discounts yard work applies.
+function refitPrice(p: PlayerState, stat: RefitStat): number {
+  const h = SHIP_HULLS.find((x) => x.id === p.ship.hullId) ?? SHIP_HULLS[0];
+  const next = refitLevel(p.ship.refit, stat) + 1;
+  return Math.max(400, Math.round(hullPrice(h) * 0.12 * next * merchantBuyMult(p)));
+}
+
+// A frame parked in a station hangar. Everything bolted to the ship travels
+// with it; only the pilot, crew and cargo stay behind.
+interface FleetShip {
+  hullId: string;
+  hull: number; shield: number; fuel: number;
+  weaponId: string;
+  gunnerWeaponId?: string;
+  modules: string[];
+  refit?: ShipRefit;
+  insured?: boolean;
+  storedAt?: number;      // station entity id, when it was parked at one
+  storedAtName: string;
+  storedAtMs: number;
+}
+const FLEET_MAX = 3;              // hangar berths the player may hold
+const FLEET_BERTH_FEE = 800;      // charged when a frame is parked
+const FLEET_SWAP_FEE = 300;       // charged when a frame is taken back out
+
 
 
 
