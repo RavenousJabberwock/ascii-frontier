@@ -12936,9 +12936,17 @@ export class Voidwake {
     if (this.stationPage === "shipyard") {
       const cur = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
       const trade = hullTradeIn(p.ship.hullId);
+      const fleetN = (p.fleet ?? []).length;
+      const keep = this.yardKeepHull && fleetN < FLEET_MAX;
+      const refitTag = REFIT_SPECS
+        .filter((r) => refitLevel(p.ship.refit, r.id) > 0)
+        .map((r) => `${r.unit}+${refitBonus(p.ship.refit, r.id)}`)
+        .join(" ");
       const rows: string[] = [
-        `~ Flying: ${cur.name}  HP ${cur.hull}  SH ${cur.shield}  cargo ${cur.cargo}  spd ${cur.speed}  berths ${cur.crewSlots} ~`,
-        `~ Trade-in value ${trade}cr   Credits ${p.credits}cr   (modules and weapons transfer) ~`,
+        `~ Flying: ${cur.name}  HP ${cur.hull}  SH ${cur.shield}  cargo ${cur.cargo}  spd ${cur.speed}  berths ${cur.crewSlots}${refitTag ? `  refits ${refitTag}` : ""} ~`,
+        keep
+          ? `~ KEEP mode: old frame berthed for ${FLEET_BERTH_FEE}cr   Credits ${p.credits}cr   (new frame ships bare) ~`
+          : `~ Trade-in value ${trade}cr   Credits ${p.credits}cr   (modules and weapons transfer, refits do not) ~`,
       ];
       const offers = this.shipyardOffers();
       if (!offers.length) rows.push("~ No hulls on the pad this rotation — check back next cycle ~");
@@ -12957,6 +12965,59 @@ export class Voidwake {
       // refills the tank and pays 60cr per unit of cargo lost with the wreck.
       if (p.ship.insured) rows.push("Hull policy: ACTIVE — covers one rescue (fee waived + freight payout)");
       else rows.push(`Buy hull insurance — ${insurancePremium(p)}cr — waives the rescue fee, pays 60cr per cargo unit lost`);
+      // 0.9.6 — refit bay, hangar, and the purchase-mode toggle.
+      rows.push("Refit Bay \u25b8 — permanent upgrades to the frame you fly");
+      rows.push(`Hangar \u25b8 — ${fleetN}/${FLEET_MAX} frames berthed`);
+      rows.push(
+        fleetN >= FLEET_MAX && this.yardKeepHull
+          ? `Purchase mode: KEEP (hangar full — sale will trade in for ${trade}cr)`
+          : `Purchase mode: ${this.yardKeepHull ? `KEEP old frame (+${FLEET_BERTH_FEE}cr berth fee)` : `TRADE IN old frame (-${trade}cr)`}`,
+      );
+      rows.push("Back");
+      return rows;
+    }
+
+    // ---- Refit Bay (0.9.6) --------------------------------------------------
+    // One row per stat, showing the level you hold, what the next step adds and
+    // what it costs on this frame. Refits stay with the hull, not the pilot.
+    if (this.stationPage === "refit-bay") {
+      const cur = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
+      const rows: string[] = [
+        `~ Refit Bay — ${cur.name}   Credits ${p.credits}cr   (refits are permanent and travel with the frame) ~`,
+        `~ Now: HP ${p.ship.hullMax}  SH ${p.ship.shieldMax}  cargo ${effectiveCargoMax(p)}  spd ${p.ship.speed}  berths ${effectiveCrewMax(p)} ~`,
+      ];
+      for (const r of REFIT_SPECS) {
+        const lvl = refitLevel(p.ship.refit, r.id);
+        const bar = "\u25a0".repeat(lvl) + "\u00b7".repeat(REFIT_MAX - lvl);
+        rows.push(lvl >= REFIT_MAX
+          ? `${r.name} [${bar}] — MAX — ${r.desc}`
+          : `${r.name} [${bar}] — ${refitPrice(p, r.id)}cr — +${r.per} ${r.unit} — ${r.desc}`);
+      }
+      rows.push("Back");
+      return rows;
+    }
+
+    // ---- Hangar (0.9.6) -----------------------------------------------------
+    // Frames you own but are not flying. Swapping charges a transfer fee and
+    // runs the same cargo/berth fit checks a trade-in does.
+    if (this.stationPage === "hangar") {
+      const fleet = p.fleet ?? [];
+      const rows: string[] = [
+        `~ Hangar — ${fleet.length}/${FLEET_MAX} berthed   Swap fee ${FLEET_SWAP_FEE}cr   Credits ${p.credits}cr ~`,
+      ];
+      if (!fleet.length) {
+        rows.push("~ Nothing berthed. Buy a hull in KEEP mode to park the frame you fly in on. ~");
+      }
+      fleet.forEach((f, idx) => {
+        const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
+        const caps = this.fleetCaps(f);
+        const rf = REFIT_SPECS.filter((r) => refitLevel(f.refit, r.id) > 0)
+          .map((r) => `${r.unit}+${refitBonus(f.refit, r.id)}`).join(" ");
+        rows.push(`Fly ${h.name} #${idx + 1} — HP ${Math.round(f.hull)} fuel ${Math.round(f.fuel)}u`
+          + ` cargo ${caps.cargo} berths ${caps.berths} mods ${f.modules.length}`
+          + `${rf ? ` refits ${rf}` : ""}${f.insured ? " insured" : ""} — at ${f.storedAtName}`);
+        rows.push(`Sell ${h.name} #${idx + 1} — +${hullTradeIn(f.hullId)}cr (modules and refits go with it)`);
+      });
       rows.push("Back");
       return rows;
     }
@@ -13268,9 +13329,43 @@ export class Voidwake {
         this.sfx("chime");
         return;
       }
+      if (row.startsWith("Refit Bay")) { this.stationPage = "refit-bay"; this.menuCursor = 0; return; }
+      if (row.startsWith("Hangar")) { this.stationPage = "hangar"; this.menuCursor = 0; return; }
+      if (row.startsWith("Purchase mode:")) {
+        this.yardKeepHull = !this.yardKeepHull;
+        if (this.yardKeepHull && (p.fleet?.length ?? 0) >= FLEET_MAX) {
+          this.pushLog(`Hangar is full (${FLEET_MAX} frames) — a sale will still trade in.`);
+        } else {
+          this.pushLog(this.yardKeepHull
+            ? `KEEP mode: the frame you fly in on gets berthed for ${FLEET_BERTH_FEE}cr instead of traded in.`
+            : "TRADE IN mode: the yard buys your old frame back.");
+        }
+        return;
+      }
       const offer = this.shipyardOffers().find((o) => row.startsWith(o.hull.name));
       if (!offer) return;
       this.buyHull(offer);
+      return;
+    }
+
+    // ---- Refit Bay page (0.9.6) --------------------------------------------
+    if (this.stationPage === "refit-bay") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~") || row === "Back") return;
+      const spec = REFIT_SPECS.find((r) => row.startsWith(r.name));
+      if (spec) this.buyRefit(spec.id);
+      return;
+    }
+
+    // ---- Hangar page (0.9.6) ----------------------------------------------
+    if (this.stationPage === "hangar") {
+      const row = lines[i] ?? "";
+      if (!row || row.startsWith("~") || row === "Back") return;
+      const m = /#(\d+)/.exec(row);
+      if (!m) return;
+      const idx = Number(m[1]) - 1;
+      if (row.startsWith("Fly ")) this.fleetSwap(idx);
+      else if (row.startsWith("Sell ")) this.fleetSell(idx);
       return;
     }
 
