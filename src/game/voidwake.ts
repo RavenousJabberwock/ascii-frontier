@@ -2335,6 +2335,9 @@ interface PlayerShip {
   // claim (respawn) and lapses when the frame is traded in. Optional so
   // older saves load unchanged.
   insured?: boolean;
+  // 0.9.6 — permanent per-stat refit levels bought at the yard's Refit Bay.
+  // Undefined on older saves; every reader goes through refitLevel/refitBonus.
+  refit?: ShipRefit;
 }
 
 // A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
@@ -2457,6 +2460,9 @@ interface PlayerState {
   // entity; `entityId` is re-bound by ensureWingEntities() whenever the ship
   // is missing (save load, wormhole jump, destruction is handled separately).
   wing?: { name: string; wage: number; entityId?: number }[];
+  // 0.9.6 — frames parked in station hangars (max FLEET_MAX). Groundwork for
+  // running a fleet: each entry is a whole ship, not a berth.
+  fleet?: FleetShip[];
 }
 const XENO_HIRE_THRESHOLD = 5;
 
@@ -4537,7 +4543,7 @@ function generateStationStock(stationId: number, faction: string = "guild", day:
 function effectiveCargoMax(p: PlayerState): number {
   const base = SHIP_HULLS.find((h) => h.id === p.ship.hullId)?.cargo ?? p.ship.cargoMax;
   const expanders = p.ship.modules.filter((m) => m === "cargo-expander").length;
-  return base + expanders * 12;
+  return base + expanders * 12 + refitBonus(p.ship.refit, "cargo");
 }
 
 // Effective crew capacity after hull base + Crew Quarters modules. An
@@ -4549,7 +4555,7 @@ function effectiveCrewMax(p: PlayerState): number {
   const base = hull?.crewSlots ?? 1;
   const quarters = p.ship.modules.filter((m) => m === "crew-quarters").length;
   const stow = p.stowaway && !p.stowaway.discovered ? 1 : 0;
-  return Math.max(1, base + quarters - stow);
+  return Math.max(1, base + quarters + refitBonus(p.ship.refit, "berths") - stow);
 }
 
 // 0.8.2 — Recompute every derived ship cap from (hull x species x modules).
@@ -4560,18 +4566,22 @@ function recomputeShipStats(p: PlayerState, fresh = false): void {
   const hull = SHIP_HULLS.find((h) => h.id === p.ship.hullId) ?? SHIP_HULLS[0];
   const s = speciesOf(p.char.species);
   const n = (id: string) => p.ship.modules.filter((m) => m === id).length;
+  // 0.9.6 — refit levels stack on top of the (hull x species x modules) maths
+  // rather than replacing any of it, so a refitted frame re-derives correctly
+  // after a module install, a species bonus change or a save load.
+  const rf = p.ship.refit;
   const hullMax = Math.max(1, Math.round(hull.hull * (s.hullMul ?? 1)))
-    + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80;
+    + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80 + refitBonus(rf, "hull");
   const shieldMax = Math.max(0, Math.round(hull.shield * (s.shieldMul ?? 1)))
-    + n("shield-booster") * 25;
+    + n("shield-booster") * 25 + refitBonus(rf, "shield");
   const cargoMax = Math.max(1, Math.round(hull.cargo * (s.cargoMul ?? 1)))
-    + n("cargo-expander") * 12;
+    + n("cargo-expander") * 12 + refitBonus(rf, "cargo");
   const fuelMax = 100 + n("aux-fuel-tank") * 50;
   p.ship.hullMax = hullMax;
   p.ship.shieldMax = shieldMax;
   p.ship.cargoMax = cargoMax;
   p.ship.fuelMax = fuelMax;
-  p.ship.speed = hull.speed;
+  p.ship.speed = hull.speed + refitBonus(p.ship.refit, "speed");
   p.ship.hull = fresh ? hullMax : Math.min(p.ship.hull, hullMax);
   p.ship.shield = fresh ? shieldMax : Math.min(p.ship.shield, shieldMax);
   p.ship.fuel = Math.min(p.ship.fuel, fuelMax);
@@ -5990,7 +6000,10 @@ export class Voidwake {
   // Scroll offset into the filtered feed. 0 = pinned to newest.
   chatterScroll = 0;
   // Cursor in the multi-page station screen.
-  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" | "shipyard" | "bounty-office" = "main";
+  stationPage: "main" | "market" | "weapons" | "gunner-bay" | "modules" | "crew" | "commodities" | "build-station" | "shipyard" | "refit-bay" | "hangar" | "bounty-office" = "main";
+  // 0.9.6 — yard purchase mode. TRADE IN sells the old frame back (pre-0.9.6
+  // behaviour); KEEP parks it in the hangar for FLEET_BERTH_FEE instead.
+  yardKeepHull = false;
   // 0.7.2 — Commodities page mode toggle. Cycled with LEFT/RIGHT arrows.
   commodityMode: "buy" | "sell" = "buy";
   // Throttle for ambient world chatter (hostile taunts, station beacons, etc).
