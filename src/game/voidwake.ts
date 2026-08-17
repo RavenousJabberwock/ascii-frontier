@@ -2279,7 +2279,7 @@ const FLEET_DUTY_SPECS: Array<{
     id: "prospect", name: "Prospecting", hire: 1100, wage: 70, fuel: 9, risk: 0.09, dmg: [6, 18],
     desc: "works a belt and sells the ore on — better with mining gear and a big hold",
     gross: (caps, f) => {
-      const rigs = f.modules.filter((m) => m === "mining-array" || m === "mining-laser" || m === "refinery").length;
+      const rigs = f.modules.filter((m) => m === "mining-upgrade" || m === "cargo-expander" || m === "repair-drones").length;
       return Math.round(90 + caps.cargo * 5.5 + rigs * 70);
     },
   },
