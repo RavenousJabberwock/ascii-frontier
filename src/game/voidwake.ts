@@ -12830,6 +12830,16 @@ export class Voidwake {
     const p = this.player; if (!p) return;
     const f = p.fleet?.[idx]; if (!f) return;
     const caps = this.fleetCaps(f);
+    // 0.9.7 — a frame lives at a dock. Swap where it is berthed, or pay a
+    // ferry crew to bring it to you first.
+    if (this.dockedStationId != null && f.storedAt != null && f.storedAt !== this.dockedStationId) {
+      this.pushLog(`The ${caps.name} is berthed at ${f.storedAtName} — recall it here for ${Math.round(FLEET_RECALL_FEE * merchantBuyMult(p))}cr first.`);
+      return;
+    }
+    if (fleetDutySpec(f.duty)) {
+      this.pushLog(`The ${caps.name} is out on ${fleetDutySpec(f.duty)!.name.toLowerCase()} — stand it down before you fly it.`);
+      return;
+    }
     if (p.credits < FLEET_SWAP_FEE) { this.pushLog(`The hangar crew want ${FLEET_SWAP_FEE}cr to move frames.`); return; }
     if (cargoTotal(p) > caps.cargo) {
       this.pushLog(`${caps.name} holds only ${caps.cargo} units — sell down ${cargoTotal(p) - caps.cargo} first.`);
@@ -12841,6 +12851,9 @@ export class Voidwake {
     }
     const prev = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
     p.credits -= FLEET_SWAP_FEE;
+    // Anything the frame banked on duty is paid out as you take it over.
+    const banked = Math.round(f.earned ?? 0);
+    if (banked > 0) { p.credits += banked; f.earned = 0; this.pushLog(`Its duty account paid out ${banked}cr.`); }
     const stored = this.shipSnapshot();
     p.ship.hullId = f.hullId;
     p.ship.modules = [...f.modules];
@@ -12867,7 +12880,11 @@ export class Voidwake {
     const p = this.player; if (!p) return;
     const f = p.fleet?.[idx]; if (!f) return;
     const name = SHIP_HULLS.find((x) => x.id === f.hullId)?.name ?? f.hullId;
-    const paid = hullTradeIn(f.hullId);
+    if (fleetDutySpec(f.duty)) {
+      this.pushLog(`The ${name} is out working — stand it down before you sell it.`);
+      return;
+    }
+    const paid = hullTradeIn(f.hullId) + Math.round(f.earned ?? 0);
     p.credits += paid;
     p.fleet!.splice(idx, 1);
     this.pushLog(`Sold the berthed ${name} for ${paid}cr. Its modules and refits went with it.`);
