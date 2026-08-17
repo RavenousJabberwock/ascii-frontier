@@ -4,6 +4,30 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.7 — Working Fleets (Phase 2)
+- **Standing duties.** A frame berthed in a hangar can now be crewed and put to
+  work while you fly something else. Three duties: **Freight run** (pays off the
+  hold), **Escort patrol** (pays off armament and structure) and **Prospecting**
+  (pays off hold plus mining gear). Signing hands on costs a one-off fee; each
+  pay period of real time the frame grosses a rate derived from its own hull,
+  hold, guns and refits, pays its hands, burns its own fuel and rolls once
+  against the duty's risk.
+- **Its own account.** Net pay banks on the frame (up to 24,000cr) rather than
+  landing in your wallet. `Collect …` pays it out, and taking the frame over
+  with `Fly …` or selling it pays out whatever is banked.
+- **Nothing is lost off-screen.** A duty that runs the tank dry, gets beaten
+  below 35% structure, or fills its account stands *itself* down and files a
+  Comms line. Damage never destroys a working frame; insurance halves the knock.
+- **Hangar services.** Per-frame `Repair` (9cr/point), `Refuel` (3cr/unit),
+  `Insure` (per-hull quote at 15% of list) and `Recall` — a 600cr ferry that
+  brings a frame parked at another dock to the one you are standing in. Swapping
+  now requires the frame to be berthed where you are, so the recall closes the
+  0.9.6 remote-hangar gap.
+- **Character Sheet** shows each berthed frame's duty and banked pay.
+- **Scripting.** New hooks `onFleetDuty`, `onFleetIncome`, `onFleetIncident`,
+  and `frontier.fleet()` rows now carry `duty`, `earned`, `netPerPeriod`,
+  `grossPerPeriod` and `note`.
+
 ## 0.9.6 — Refits & Fleets (Phase 1)
 - **Hull refits**: the Shipyard now has a **Refit Bay**. Five permanent upgrade
   lines — structural bracing, emitter tuning, hold restructure, thrust remap and

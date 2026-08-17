@@ -546,6 +546,9 @@ covering every hook shipped so far.
 | `onFleetStored`     | `{ hullId, name, stationId, station, fleetSize }` | a frame berthed in a hangar (0.9.6) |
 | `onFleetSwapped`    | `{ hullId, name, previous, fee, stationId }` | a berthed frame taken back out (0.9.6) |
 | `onFleetSold`       | `{ hullId, name, paid, stationId, fleetSize }` | a berthed frame sold (0.9.6) |
+| `onFleetDuty`       | `{ hullId, name, duty, hire?, fee?, recalledFrom?, station, grossPerPeriod?, netPerPeriod? }` | a berthed frame put on / taken off a standing duty, or ferried (0.9.7) |
+| `onFleetIncome`     | `{ hullId, name, duty, paid, banked, station, fuel }` | a working frame settled a pay period (0.9.7) |
+| `onFleetIncident`   | `{ hullId, name, duty, damage?, reason?, hull, fuel?, insured?, station }` | a working frame took damage or stood itself down (0.9.7) |
 | `onMissionAccepted` / `onMissionCompleted` | `{ id, kind, description, reward, faction, issuer, ... }` | `faction` / `issuer` added in 0.9.5 |
 
 0.9.3 adds the conversation surface: `frontier.hail()` returns the live channel
@@ -584,6 +587,11 @@ modules, insured, refit, station, stationId`, where `refit` is a table of the
 five refit stats (`hull, shield, cargo, speed, berths`) to their levels (0-3).
 `hullMax` / `shieldMax` are 0 for berthed frames, whose caps depend on the
 pilot at the time of the swap.
+
+0.9.7 adds the working-fleet fields to every `frontier.fleet()` row: `duty`
+(`"flying"` for the active frame, otherwise `"idle" | "freight" | "patrol" |
+"prospect"`), `earned` (credits banked on that frame), `netPerPeriod`,
+`grossPerPeriod` and `note` (the last incident line, `""` when clean).
 
 Payload shapes are stable — changes require a `VERSION` bump and a note
 in this section. Additional hooks must land as no-op dispatchers first
