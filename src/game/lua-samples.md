@@ -520,3 +520,42 @@ frontier.on("onFleetSold", function(f)
   frontier.log("sold the berthed " .. f.name .. " for " .. f.paid .. "cr")
 end)
 ```
+
+## Fleet payroll watcher (0.9.7)
+
+Berthed frames on a standing duty settle a pay period every minute. This script
+logs each settlement, nags you when an account fills, and calls out an incident.
+
+```lua
+frontier.on("onFleetDuty", function(f)
+  frontier.log(("[fleet] %s -> %s @ %s"):format(f.name, f.duty, f.station or "?"))
+end)
+
+frontier.on("onFleetIncome", function(f)
+  frontier.log(("[fleet] %s banked %dcr (%dcr total, fuel %d)")
+    :format(f.name, f.paid or 0, f.banked or 0, f.fuel or 0))
+  if (f.banked or 0) >= 20000 then
+    frontier.chat("Purser", f.name .. "'s account is nearly full — collect it.", "#ffcc55")
+  end
+end)
+
+frontier.on("onFleetIncident", function(f)
+  if f.reason then
+    frontier.chat("Purser", f.name .. " stood down: " .. f.reason .. ".", "#ffcc55")
+  else
+    frontier.chat("Purser", ("%s took %d damage on duty (hull %d)")
+      :format(f.name, f.damage or 0, f.hull or 0), "#ff9a9a")
+  end
+end)
+
+-- Dock report: what the whole fleet is up to.
+frontier.on("onPlayerDock", function()
+  for _, s in ipairs(frontier.fleet()) do
+    if not s.active then
+      frontier.log(("%s @ %s — %s, %dcr/min net, %dcr banked%s")
+        :format(s.name, s.station, s.duty, s.netPerPeriod or 0, s.earned or 0,
+                (s.note ~= "" and (" (" .. s.note .. ")") or "")))
+    end
+  end
+end)
+```
