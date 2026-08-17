@@ -1,3 +1,38 @@
+# 0.9.7 — Working Fleets (Phase 2)
+
+Ships as **0.9.7**.
+
+- **Standing duties.** `FleetShip` gains `duty` / `dutySinceMs` / `earned` /
+  `note`. `FLEET_DUTY_SPECS` carries three duties — `freight`, `patrol`,
+  `prospect` — each with a sign-on `hire`, a per-period `wage`, `fuel` burn,
+  `risk` chance, `dmg` band and a `gross(caps, frame)` closure so the rate is
+  derived from the frame's own hold, armament, structure and refits rather than
+  from the pilot.
+- **`tickFleetDuty(dt)`** runs beside `tickStationIncome` and settles a period
+  every `FLEET_PAY_PERIOD` (60s): net (gross - wage) banks on the frame up to
+  `FLEET_EARN_CAP`, fuel burns, and one risk roll may cost structure (halved by
+  a policy). Stand-down conditions — dry tank, hull at or below
+  `FLEET_STANDDOWN` (35%) of `fleetHullMax`, or a full account — set `duty` back
+  to idle and post a Comms line. A working frame is never destroyed off-screen.
+- **Hangar services.** `fleetCycleDuty`, `fleetCollect`, `fleetRepair` (9cr per
+  point), `fleetRefuel` (3cr per unit, tank from `fleetFuelMax`), `fleetInsure`
+  (`fleetInsuranceQuote`, 15% of that hull's list) and `fleetRecall`
+  (`FLEET_RECALL_FEE` 600cr ferry). `fleetSwap` now requires the frame to be
+  berthed at the dock you are in and refuses while a duty is running; it pays
+  out any banked credits on takeover. `fleetSell` refuses a working frame and
+  adds the banked balance to the payout.
+- **Scripting.** `onFleetDuty`, `onFleetIncome`, `onFleetIncident`, plus `duty`,
+  `earned`, `netPerPeriod`, `grossPerPeriod`, `note` on `frontier.fleet()`.
+
+## Deferred
+
+- Working frames as *visible* AI hulls in the world (they are still abstract
+  off-screen workers, not spawned entities).
+- Assigning named crew from your roster to a duty instead of anonymous
+  contracted hands.
+- Hangar rent over time (a parked frame is still free to store).
+- Refit slots beyond the five stats (weapon hardpoints, module bays).
+
 # 0.9.6 — Refits & Fleets (Phase 1)
 
 Ships as **0.9.6**.
@@ -35,10 +70,11 @@ Ships as **0.9.6**.
 
 ## Deferred
 
-- Fleet ships flying as AI escorts rather than sitting in a hangar (phase 2).
-- Remote hangar access (a frame parked at one station cannot be recalled to
-  another; you must dock where it is berthed).
-- Per-hull insurance quotes for stored frames, and hangar rent over time.
+- ~~Fleet ships doing useful work rather than sitting in a hangar~~ — shipped in
+  0.9.7 as standing duties (still off-screen workers, not spawned escorts).
+- ~~Remote hangar access~~ — shipped in 0.9.7 as `Recall` (600cr ferry).
+- ~~Per-hull insurance quotes for stored frames~~ — shipped in 0.9.7. Hangar rent
+  over time remains deferred.
 - Refit *slots* beyond the five stats (weapon hardpoint count, module bays).
 
 # 0.9.5 — Faction Contracts & Collision Fast Path

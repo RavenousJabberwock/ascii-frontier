@@ -309,6 +309,27 @@ again costs 300cr and refuses the same way a trade-in does if your cargo or crew
 won't fit; selling one pays the usual 55% of list. A frame stays parked at the
 station where you left it, so note which dock that was.
 
+**Working fleets** (0.9.7). A berthed frame does not have to sit idle. On the
+`Hangar ▸` page each frame carries a `Duty …` row that cycles idle → Freight run
+→ Escort patrol → Prospecting. Signing hands on costs a fee up front (900 /
+1400 / 1100cr, haggling applies); after that the frame works on its own clock.
+Every minute of real time it grosses a rate off its own hold, guns, structure
+and refits, pays its hands out of that gross, burns 7–10u of fuel, and takes one
+risk roll — freight is the safe, dull money; patrol pays best and gets shot at.
+
+Net pay banks **on the frame**, up to 24,000cr. `Collect …` moves it to your
+wallet; flying or selling the frame pays out whatever is banked. A frame that
+runs dry, drops below 35% structure, or fills its account stands itself down and
+says so in Comms — a working ship can never be destroyed while you are away, and
+a policy on it halves duty damage.
+
+The hangar also sells per-frame services: `Repair` at 9cr per point of
+structure, `Refuel` at 3cr a unit, `Insure` for 15% of that hull's list price,
+and `Recall` — 600cr for a ferry crew to bring a frame from the dock it is
+parked at to the one you are standing in. You can only take a frame out where it
+is berthed, so recall first if it is elsewhere, and stand a duty down before you
+fly or sell that frame.
+
 **Hull insurance.** The yard writes a policy on your current frame for 15% of
 its list price (Merchant/Quartermaster discounts apply). One claim: on a
 respawn it waives the rescue fee, refills the tank, and pays 60cr per unit of
