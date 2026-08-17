@@ -179,6 +179,18 @@ contact and the TARGET panel tells you exactly what you are looking at.
   Escorts fly their own armed fighter in formation, shoot hostiles that come
   inside ~1200u, and bill a wage every dock. They take no berth. Lose one in
   combat and the contract is gone with the hull.
+- **Refit Bay** (Shipyard). Five permanent lines on the frame you fly —
+  bracing, emitters, hold, thrust, deck partition — three levels each. Refits
+  stay with the hull, so they follow it into a hangar and are lost on trade-in.
+- **Your fleet.** Buy a hull in `KEEP` mode and the yard berths your old frame
+  (800cr) instead of buying it back; up to three sit in hangars with their own
+  modules, guns, refits and damage. On the `Hangar` page each frame can be put
+  on a **standing duty** — freight, escort patrol or prospecting — for a sign-on
+  fee. It then works while you fly elsewhere, banking net pay on itself every
+  minute, burning its own fuel and occasionally getting knocked about. Collect,
+  repair, refuel and insure it there; a frame parked at another dock can be
+  ferried in for 600cr. Ships stand themselves down when dry, badly damaged or
+  full of money — nothing is ever lost while you're away.
 - **Character Sheet** (`C`) shows portraits, attributes, your ship
   silhouette, and a plain-language description of every fitted module.
 
