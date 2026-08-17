@@ -153,7 +153,14 @@ export type ScriptHookName =
   | "onHullRefit"
   | "onFleetStored"
   | "onFleetSwapped"
-  | "onFleetSold";
+  | "onFleetSold"
+  // 0.9.7 — working fleets. `onFleetDuty` fires when a berthed frame is put on
+  // (or taken off) a standing duty; `onFleetIncome` fires each time a duty
+  // settles a pay period, and `onFleetIncident` when one takes damage or stands
+  // itself down.
+  | "onFleetDuty"
+  | "onFleetIncome"
+  | "onFleetIncident";
 
 
 
@@ -215,6 +222,9 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onFleetStored:        [],
   onFleetSwapped:       [],
   onFleetSold:          [],
+  onFleetDuty:          [],
+  onFleetIncome:        [],
+  onFleetIncident:      [],
 
 
 };
