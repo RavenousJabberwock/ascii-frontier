@@ -8841,6 +8841,7 @@ export class Voidwake {
     this.tickTradeSim(dt);
     this.tickFrontierEvents(dt);
     this.tickStationIncome(dt);
+    this.tickFleetDuty(dt);
     // 0.7.7 — Rank-up sfx + chatter: awardXP() stamps a pending rank on the
     // player when the label ticks over. Consume here so any call site
     // (kills, mining, missions) gets a unified fanfare.
@@ -12875,6 +12876,185 @@ export class Voidwake {
       fleetSize: p.fleet!.length,
     });
     this.sfx("chime");
+  }
+
+  // ---- 0.9.7 — working fleets -------------------------------------------
+  /** Human label for a berthed frame. */
+  private fleetName(f: FleetShip): string {
+    return SHIP_HULLS.find((x) => x.id === f.hullId)?.name ?? f.hullId;
+  }
+  /** Gross credits per pay period for a frame's current duty (0 when idle). */
+  private fleetGross(f: FleetShip): number {
+    const spec = fleetDutySpec(f.duty); if (!spec) return 0;
+    return spec.gross(this.fleetCaps(f), f);
+  }
+  /** Net (post-wage) credits per pay period. */
+  private fleetNet(f: FleetShip): number {
+    const spec = fleetDutySpec(f.duty); if (!spec) return 0;
+    return Math.max(0, this.fleetGross(f) - spec.wage);
+  }
+  /** Cycle a berthed frame between idle and each standing duty. */
+  fleetCycleDuty(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const order: FleetDuty[] = ["idle", ...FLEET_DUTY_SPECS.map((d) => d.id)];
+    const next = order[(order.indexOf(f.duty ?? "idle") + 1) % order.length];
+    const name = this.fleetName(f);
+    if (next === "idle") {
+      const was = fleetDutySpec(f.duty)?.name ?? "duty";
+      f.duty = "idle"; f.dutySinceMs = undefined;
+      this.pushLog(`Stood the ${name} down from ${was}; its hands are paid off.`);
+      dispatchHook("onFleetDuty", { hullId: f.hullId, name, duty: "idle", station: f.storedAtName });
+      return;
+    }
+    const spec = fleetDutySpec(next)!;
+    if (f.hull <= this.fleetHullMax(f) * FLEET_STANDDOWN) {
+      this.pushLog(`The ${name} is too beaten up for ${spec.name.toLowerCase()} — repair it first.`);
+      return;
+    }
+    if (f.fuel < spec.fuel) {
+      this.pushLog(`The ${name} needs fuel before it can take a ${spec.name.toLowerCase()}.`);
+      return;
+    }
+    const hire = Math.round(spec.hire * merchantBuyMult(p));
+    if (p.credits < hire) { this.pushLog(`Signing hands for a ${spec.name.toLowerCase()} costs ${hire}cr.`); return; }
+    p.credits -= hire;
+    f.duty = next; f.dutySinceMs = Date.now(); f.note = undefined;
+    this.pushLog(`${name} signed on for ${spec.name.toLowerCase()} out of ${f.storedAtName} — ${hire}cr up front, ~${this.fleetNet(f)}cr/min net.`);
+    this.pushChatter(`${name} Crew`, `Hands aboard, Captain. We'll work the ${spec.name.toLowerCase()} and bank your cut.`, "#8cf", "external");
+    dispatchHook("onFleetDuty", {
+      hullId: f.hullId, name, duty: next, hire, station: f.storedAtName,
+      grossPerPeriod: this.fleetGross(f), netPerPeriod: this.fleetNet(f),
+    });
+    this.sfx("chime");
+  }
+  /** Structural max for a stored frame (hull + modules + refits). */
+  private fleetHullMax(f: FleetShip): number {
+    const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
+    const n = (id: string) => f.modules.filter((m) => m === id).length;
+    return Math.max(1, h.hull + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80
+      + refitBonus(f.refit, "hull"));
+  }
+  /** Collect a frame's banked pay. */
+  fleetCollect(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const due = Math.round(f.earned ?? 0);
+    if (due <= 0) { this.pushLog(`The ${this.fleetName(f)} has nothing banked yet.`); return; }
+    p.credits += due; f.earned = 0;
+    this.pushLog(`Collected ${due}cr from the ${this.fleetName(f)}'s account.`);
+    this.sfx("chime");
+  }
+  /** Ferry a berthed frame to the dock you are standing in (0.9.7). */
+  fleetRecall(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const here = this.dockedStationId != null ? this.byId(this.dockedStationId) : undefined;
+    if (!here) { this.pushLog("You need to be docked to have a frame ferried in."); return; }
+    if (f.storedAt === here.id) { this.pushLog(`The ${this.fleetName(f)} is already berthed here.`); return; }
+    const fee = Math.round(FLEET_RECALL_FEE * merchantBuyMult(p));
+    if (p.credits < fee) { this.pushLog(`A ferry crew wants ${fee}cr to bring it over.`); return; }
+    p.credits -= fee;
+    const from = f.storedAtName;
+    f.storedAt = here.id; f.storedAtName = here.name; f.storedAtMs = Date.now();
+    f.fuel = Math.max(0, f.fuel - 10);
+    this.pushLog(`Ferried the ${this.fleetName(f)} from ${from} to ${here.name} for ${fee}cr.`);
+    dispatchHook("onFleetDuty", {
+      hullId: f.hullId, name: this.fleetName(f), duty: f.duty ?? "idle",
+      recalledFrom: from, station: here.name, fee,
+    });
+  }
+  /** Buy a policy on a berthed frame (0.9.7 — per-hull quotes). */
+  fleetInsure(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    if (f.insured) { this.pushLog(`The ${this.fleetName(f)} is already covered.`); return; }
+    const cost = fleetInsuranceQuote(p, f);
+    if (p.credits < cost) { this.pushLog(`That policy runs ${cost}cr.`); return; }
+    p.credits -= cost; f.insured = true;
+    this.pushLog(`Policy written on the berthed ${this.fleetName(f)} for ${cost}cr.`);
+  }
+  /** Patch a berthed frame back up: 9cr per point of structure. */
+  fleetRepair(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const max = this.fleetHullMax(f);
+    const missing = Math.max(0, Math.round(max - f.hull));
+    if (missing <= 0) { this.pushLog(`The ${this.fleetName(f)} is sound.`); return; }
+    const cost = Math.max(40, Math.round(missing * 9 * merchantBuyMult(p)));
+    if (p.credits < cost) { this.pushLog(`The yard wants ${cost}cr for that work.`); return; }
+    p.credits -= cost; f.hull = max; f.shield = Math.max(f.shield, 0);
+    this.pushLog(`Patched the ${this.fleetName(f)} to ${max} structure for ${cost}cr.`);
+  }
+  /** Refuel a berthed frame at 3cr/unit, to its hull's tank. */
+  fleetRefuel(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const cap = this.fleetFuelMax(f);
+    const need = Math.max(0, Math.round(cap - f.fuel));
+    if (need <= 0) { this.pushLog(`The ${this.fleetName(f)}'s tank is full.`); return; }
+    const cost = Math.max(20, Math.round(need * 3 * merchantBuyMult(p)));
+    if (p.credits < cost) { this.pushLog(`Topping it off costs ${cost}cr.`); return; }
+    p.credits -= cost; f.fuel = cap;
+    this.pushLog(`Topped the ${this.fleetName(f)} off with ${need}u for ${cost}cr.`);
+  }
+  private fleetFuelMax(f: FleetShip): number {
+    const n = (id: string) => f.modules.filter((m) => m === id).length;
+    return 100 + n("aux-fuel-tank") * 50;
+  }
+  /**
+   * 0.9.7 — settle every working frame. Runs on the same 10s cadence as
+   * station income and settles a pay period every FLEET_PAY_PERIOD seconds:
+   * gross - wage banks on the frame, fuel burns, and one risk roll may cost
+   * structure or stand the duty down. Reports land in Comms.
+   */
+  private _fleetPayAt = 0;
+  tickFleetDuty(dt: number) {
+    const p = this.player; if (!p?.fleet?.length) return;
+    this._fleetPayAt += dt;
+    if (this._fleetPayAt < FLEET_PAY_PERIOD) return;
+    const periods = this._fleetPayAt / FLEET_PAY_PERIOD;
+    this._fleetPayAt = 0;
+    for (const f of p.fleet) {
+      const spec = fleetDutySpec(f.duty); if (!spec) continue;
+      const name = this.fleetName(f);
+      const net = Math.round(this.fleetNet(f) * periods);
+      f.earned = Math.min(FLEET_EARN_CAP, Math.round((f.earned ?? 0) + net));
+      f.fuel = Math.max(0, f.fuel - spec.fuel * periods);
+      dispatchHook("onFleetIncome", {
+        hullId: f.hullId, name, duty: f.duty, paid: net, banked: Math.round(f.earned),
+        station: f.storedAtName, fuel: Math.round(f.fuel),
+      });
+      // Risk roll. Insurance absorbs half the knock; a hard hit stands the
+      // frame down rather than destroying it, so a fleet never vanishes
+      // while the player is elsewhere.
+      if (Math.random() < spec.risk * periods) {
+        const [lo, hi] = spec.dmg;
+        let dmg = lo + Math.random() * (hi - lo);
+        if (f.insured) dmg *= 0.5;
+        f.hull = Math.max(1, f.hull - dmg);
+        f.note = `took ${Math.round(dmg)} damage on duty`;
+        this.pushChatter(`${name} Crew`, `We caught trouble on the ${spec.name.toLowerCase()} — structure down to ${Math.round(f.hull)}.`, "#ff9a9a", "external");
+        dispatchHook("onFleetIncident", {
+          hullId: f.hullId, name, duty: f.duty, damage: Math.round(dmg),
+          hull: Math.round(f.hull), insured: !!f.insured, station: f.storedAtName,
+        });
+      }
+      const standDown =
+        f.fuel < spec.fuel ? "ran the tank dry"
+        : f.hull <= this.fleetHullMax(f) * FLEET_STANDDOWN ? "is too beaten up to keep working"
+        : (f.earned ?? 0) >= FLEET_EARN_CAP ? "has filled its account"
+        : null;
+      if (standDown) {
+        const was = spec.name.toLowerCase();
+        f.duty = "idle"; f.note = standDown;
+        this.pushChatter(`${name} Crew`, `Standing down from the ${was} — she ${standDown}. Berthed at ${f.storedAtName}.`, "#ffcc55", "external");
+        dispatchHook("onFleetIncident", {
+          hullId: f.hullId, name, duty: "idle", reason: standDown,
+          hull: Math.round(f.hull), fuel: Math.round(f.fuel), station: f.storedAtName,
+        });
+      }
+    }
   }
 
   // 0.9.6 — buy one refit step on the frame currently flown.
