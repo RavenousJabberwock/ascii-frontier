@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.6";
+const VERSION = "0.9.7";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -11136,7 +11136,12 @@ export class Voidwake {
     if (refitBits.length) putText(g, sx, sry++, `Refits: ${refitBits.join(", ")}`, "#6f9");
     if (p.fleet?.length) {
       const berthed = p.fleet
-        .map((f) => `${SHIP_HULLS.find((h2) => h2.id === f.hullId)?.name ?? f.hullId} @ ${f.storedAtName}`)
+        .map((f) => {
+          const nm = SHIP_HULLS.find((h2) => h2.id === f.hullId)?.name ?? f.hullId;
+          const spec = fleetDutySpec(f.duty);
+          const bank = Math.round(f.earned ?? 0);
+          return `${nm} @ ${f.storedAtName}${spec ? ` [${spec.name}]` : ""}${bank > 0 ? ` +${bank}cr` : ""}`;
+        })
         .join(", ");
       putText(g, sx, sry++, `Hangar (${p.fleet.length}/${FLEET_MAX}): ${berthed}`, "#8cf", cols - sx - 2);
     }
@@ -11990,6 +11995,7 @@ export class Voidwake {
               berths: effectiveCrewMax(p), modules: [...p.ship.modules],
               insured: !!p.ship.insured, refit: refitOf(p.ship.refit),
               station: "", stationId: undefined as number | undefined,
+              duty: "flying", earned: 0, netPerPeriod: 0, grossPerPeriod: 0, note: "",
             },
             ...(p.fleet ?? []).map((f) => {
               const caps = this.fleetCaps(f);
@@ -12001,6 +12007,10 @@ export class Voidwake {
                 berths: caps.berths, modules: [...f.modules],
                 insured: !!f.insured, refit: refitOf(f.refit),
                 station: f.storedAtName, stationId: f.storedAt,
+                // 0.9.7 — working fleet state
+                duty: f.duty ?? "idle", earned: Math.round(f.earned ?? 0),
+                netPerPeriod: this.fleetNet(f), grossPerPeriod: this.fleetGross(f),
+                note: f.note ?? "",
               };
             }),
           ];
@@ -13330,9 +13340,26 @@ export class Voidwake {
         const caps = this.fleetCaps(f);
         const rf = REFIT_SPECS.filter((r) => refitLevel(f.refit, r.id) > 0)
           .map((r) => `${r.unit}+${refitBonus(f.refit, r.id)}`).join(" ");
-        rows.push(`Fly ${h.name} #${idx + 1} — HP ${Math.round(f.hull)} fuel ${Math.round(f.fuel)}u`
+        const spec = fleetDutySpec(f.duty);
+        const hullMax = this.fleetHullMax(f);
+        rows.push(`~ ${h.name} #${idx + 1} — HP ${Math.round(f.hull)}/${hullMax} fuel ${Math.round(f.fuel)}/${this.fleetFuelMax(f)}u`
           + ` cargo ${caps.cargo} berths ${caps.berths} mods ${f.modules.length}`
-          + `${rf ? ` refits ${rf}` : ""}${f.insured ? " insured" : ""} — at ${f.storedAtName}`);
+          + `${rf ? ` refits ${rf}` : ""}${f.insured ? " insured" : ""} — at ${f.storedAtName}`
+          + `${f.note ? `  (${f.note})` : ""} ~`);
+        // 0.9.7 — standing duty: cycles idle -> freight -> patrol -> prospect.
+        const order: FleetDuty[] = ["idle", ...FLEET_DUTY_SPECS.map((d) => d.id)];
+        const nextSpec = fleetDutySpec(order[(order.indexOf(f.duty ?? "idle") + 1) % order.length]);
+        rows.push(`Duty ${h.name} #${idx + 1} — ${spec ? `${spec.name}, ${this.fleetNet(f)}cr/min net` : "idle"}`
+          + `  →  ${nextSpec ? `${nextSpec.name} (${Math.round(nextSpec.hire * merchantBuyMult(p))}cr to sign on; ${nextSpec.desc})` : "stand down"}`);
+        rows.push(`Collect ${h.name} #${idx + 1} — ${Math.round(f.earned ?? 0)}cr banked`);
+        if (f.hull < hullMax) rows.push(`Repair ${h.name} #${idx + 1} — ${Math.max(40, Math.round((hullMax - f.hull) * 9 * merchantBuyMult(p)))}cr to full structure`);
+        if (f.fuel < this.fleetFuelMax(f)) rows.push(`Refuel ${h.name} #${idx + 1} — ${Math.max(20, Math.round((this.fleetFuelMax(f) - f.fuel) * 3 * merchantBuyMult(p)))}cr to a full tank`);
+        if (!f.insured) rows.push(`Insure ${h.name} #${idx + 1} — ${fleetInsuranceQuote(p, f)}cr (halves duty damage, covers a loss)`);
+        if (f.storedAt != null && this.dockedStationId != null && f.storedAt !== this.dockedStationId) {
+          rows.push(`Recall ${h.name} #${idx + 1} — ${Math.round(FLEET_RECALL_FEE * merchantBuyMult(p))}cr to ferry it here`);
+        } else {
+          rows.push(`Fly ${h.name} #${idx + 1} — ${FLEET_SWAP_FEE}cr transfer (this frame becomes yours to fly)`);
+        }
         rows.push(`Sell ${h.name} #${idx + 1} — +${hullTradeIn(f.hullId)}cr (modules and refits go with it)`);
       });
       rows.push("Back");
@@ -13683,6 +13710,12 @@ export class Voidwake {
       const idx = Number(m[1]) - 1;
       if (row.startsWith("Fly ")) this.fleetSwap(idx);
       else if (row.startsWith("Sell ")) this.fleetSell(idx);
+      else if (row.startsWith("Duty ")) this.fleetCycleDuty(idx);
+      else if (row.startsWith("Collect ")) this.fleetCollect(idx);
+      else if (row.startsWith("Repair ")) this.fleetRepair(idx);
+      else if (row.startsWith("Refuel ")) this.fleetRefuel(idx);
+      else if (row.startsWith("Insure ")) this.fleetInsure(idx);
+      else if (row.startsWith("Recall ")) this.fleetRecall(idx);
       return;
     }
 
