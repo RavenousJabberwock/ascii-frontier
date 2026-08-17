@@ -2223,10 +2223,75 @@ interface FleetShip {
   storedAt?: number;      // station entity id, when it was parked at one
   storedAtName: string;
   storedAtMs: number;
+  // 0.9.7 — a berthed frame can be crewed and put on a standing duty. It then
+  // works while the player flies something else: it earns into its own account
+  // (`earned`), burns its own fuel, and takes its own knocks.
+  duty?: FleetDuty;
+  dutySinceMs?: number;
+  earned?: number;
+  note?: string;          // last incident line, shown on the hangar row
 }
 const FLEET_MAX = 3;              // hangar berths the player may hold
 const FLEET_BERTH_FEE = 800;      // charged when a frame is parked
 const FLEET_SWAP_FEE = 300;       // charged when a frame is taken back out
+const FLEET_RECALL_FEE = 600;     // charged to ferry a frame to another dock
+
+// 0.9.7 — Working fleets (phase 2).
+//
+// A duty is a standing job a crewed frame runs off-screen. Each pay period
+// (`FLEET_PAY_PERIOD` seconds of real time) the frame grosses a rate derived
+// from its own hull, hold, armament and refits, pays its contracted hands out of
+// that gross, burns fuel, and rolls once against the duty's risk. Net pay banks
+// on the frame; you collect it from the Hangar page. A frame runs dry, or beaten
+// below `FLEET_STANDDOWN` of its structure, stands itself down and files a line
+// in Comms — nothing happens silently.
+type FleetDuty = "idle" | "freight" | "patrol" | "prospect";
+const FLEET_PAY_PERIOD = 60;      // seconds of real time per settled period
+const FLEET_STANDDOWN = 0.35;     // fraction of hull below which a duty stops
+const FLEET_EARN_CAP = 24000;     // per-frame account ceiling
+const FLEET_DUTY_SPECS: Array<{
+  id: Exclude<FleetDuty, "idle">;
+  name: string;
+  hire: number;        // one-off cost to sign the hands on
+  wage: number;        // credits per period paid to those hands
+  fuel: number;        // fuel units burned per period
+  risk: number;        // chance per period of an incident
+  dmg: [number, number];
+  desc: string;
+  gross: (caps: { cargo: number; berths: number }, f: FleetShip) => number;
+}> = [
+  {
+    id: "freight", name: "Freight run", hire: 900, wage: 60, fuel: 7, risk: 0.06, dmg: [4, 14],
+    desc: "hauls bulk between the nearest markets — pays off the hold, not the guns",
+    gross: (caps) => Math.round(120 + caps.cargo * 7.5),
+  },
+  {
+    id: "patrol", name: "Escort patrol", hire: 1400, wage: 95, fuel: 10, risk: 0.18, dmg: [10, 28],
+    desc: "runs convoy cover for the local dock — pays off armament and structure",
+    gross: (_caps, f) => {
+      const w = WEAPONS.find((x) => x.id === f.weaponId);
+      const g = WEAPONS.find((x) => x.id === f.gunnerWeaponId);
+      const guns = (w?.dmg ?? 0) + (g?.dmg ?? 0);
+      return Math.round(140 + guns * 9 + f.hull * 0.35 + refitBonus(f.refit, "shield") * 0.8);
+    },
+  },
+  {
+    id: "prospect", name: "Prospecting", hire: 1100, wage: 70, fuel: 9, risk: 0.09, dmg: [6, 18],
+    desc: "works a belt and sells the ore on — better with mining gear and a big hold",
+    gross: (caps, f) => {
+      const rigs = f.modules.filter((m) => m === "mining-array" || m === "mining-laser" || m === "refinery").length;
+      return Math.round(90 + caps.cargo * 5.5 + rigs * 70);
+    },
+  },
+];
+function fleetDutySpec(d: FleetDuty | undefined) {
+  return FLEET_DUTY_SPECS.find((x) => x.id === d);
+}
+/** List price of a stored frame's insurance policy (0.9.7 — per-hull quotes). */
+function fleetInsuranceQuote(p: PlayerState, f: FleetShip): number {
+  const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
+  return Math.max(120, Math.round(hullPrice(h) * 0.15 * merchantBuyMult(p)));
+}
 
 
 
