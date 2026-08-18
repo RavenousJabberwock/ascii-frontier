@@ -12963,12 +12963,78 @@ export class Voidwake {
   /** Gross credits per pay period for a frame's current duty (0 when idle). */
   private fleetGross(f: FleetShip): number {
     const spec = fleetDutySpec(f.duty); if (!spec) return 0;
-    return spec.gross(this.fleetCaps(f), f);
+    // 0.9.8 — a seconded officer lifts the take out of the same duty.
+    return Math.round(spec.gross(this.fleetCaps(f), f) * fleetOfficerGrossMul(f));
   }
   /** Net (post-wage) credits per pay period. */
   private fleetNet(f: FleetShip): number {
     const spec = fleetDutySpec(f.duty); if (!spec) return 0;
-    return Math.max(0, this.fleetGross(f) - spec.wage);
+    return Math.max(0, this.fleetGross(f) - Math.round(spec.wage * fleetOfficerWageMul(f)));
+  }
+  /**
+   * 0.9.8 — settle a frame's berth arrears out of the wallet. Arrears block a
+   * takeover and are netted off a sale, so a fleet you can't afford to keep is
+   * a decision rather than a silent drain.
+   */
+  fleetPayRent(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const owed = Math.round(f.rentOwed ?? 0);
+    if (owed <= 0) { this.pushLog(`The ${this.fleetName(f)}'s berth is paid up.`); return; }
+    if (p.credits < owed) { this.pushLog(`The dockmaster wants ${owed}cr in back rent; you have ${p.credits}cr.`); return; }
+    p.credits -= owed; f.rentOwed = 0;
+    this.pushLog(`Settled ${owed}cr of berth rent on the ${this.fleetName(f)}.`);
+    dispatchHook("onFleetRent", {
+      hullId: f.hullId, name: this.fleetName(f), paid: owed, owed: 0,
+      station: f.storedAtName, source: "wallet",
+    });
+    this.sfx("chime");
+  }
+  /**
+   * 0.9.8 — second a named crewmate aboard a berthed frame, or recall them.
+   * Cycles: none → each crewmate currently on your roster → none. A seconded
+   * officer leaves `p.crew` (so their perks stop working for you) and lives on
+   * the frame; recalling them needs a free berth on the frame you fly.
+   */
+  fleetCycleOfficer(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const name = this.fleetName(f);
+    const roster = p.crew ?? [];
+    // Recall the sitting officer first — one press off, one press on.
+    if (f.officer) {
+      const o = f.officer;
+      if (crewCount(p) >= effectiveCrewMax(p)) {
+        this.pushLog(`No berth aboard for ${o.name} — free a bunk before recalling them.`);
+        return;
+      }
+      (p.crew ??= []).push(o);
+      f.officer = undefined;
+      this.pushLog(`${CREW_ROLE_INFO[o.role].title} ${o.name} came back aboard from the ${name}.`);
+      this.pushChatter(o.name, "Reporting back, Captain. That frame runs sweeter than it looks.", "#8cf");
+      dispatchHook("onFleetOfficer", {
+        hullId: f.hullId, name, action: "recalled", officer: o.name, role: o.role,
+        level: crewLevel(o), station: f.storedAtName,
+      });
+      return;
+    }
+    if (fleetDutySpec(f.duty)) {
+      this.pushLog(`Stand the ${name} down before changing who runs it.`);
+      return;
+    }
+    // Pick the first crewmate not already seconded elsewhere.
+    const taken = new Set((p.fleet ?? []).map((x) => x.officer?.name).filter(Boolean) as string[]);
+    const pick = roster.find((c) => !taken.has(c.name));
+    if (!pick) { this.pushLog("You have no crewmate free to second to a frame."); return; }
+    p.crew = roster.filter((c) => c !== pick);
+    f.officer = pick;
+    this.pushLog(`Seconded ${CREW_ROLE_INFO[pick.role].title} ${pick.name} to the ${name} — their perks stop working for you while they're aboard.`);
+    this.pushChatter(pick.name, `Taking the ${name}, Captain. I'll run her properly and bank your cut.`, "#8cf", "external");
+    dispatchHook("onFleetOfficer", {
+      hullId: f.hullId, name, action: "seconded", officer: pick.name, role: pick.role,
+      level: crewLevel(pick), station: f.storedAtName,
+    });
+    this.sfx("chime");
   }
   /** Cycle a berthed frame between idle and each standing duty. */
   fleetCycleDuty(idx: number): void {
