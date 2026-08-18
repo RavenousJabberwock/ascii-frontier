@@ -2240,11 +2240,29 @@ interface FleetShip {
   dutySinceMs?: number;
   earned?: number;
   note?: string;          // last incident line, shown on the hangar row
+  // 0.9.8 — fleet command. A berth is no longer free: rent accrues per pay
+  // period and is drawn from the frame's own account first, falling into
+  // `rentOwed` arrears when the account is empty. A named crewmate may be
+  // seconded aboard as `officer` — they leave your active roster (their perks
+  // stop) but lift the frame's gross, cut its wage bill and earn XP on duty.
+  // `presenceId` binds the live world entity while the frame is flying its
+  // duty inside sensor range of the pilot.
+  rentOwed?: number;
+  officer?: CrewMember;
+  presenceId?: number;
 }
 const FLEET_MAX = 3;              // hangar berths the player may hold
 const FLEET_BERTH_FEE = 800;      // charged when a frame is parked
 const FLEET_SWAP_FEE = 300;       // charged when a frame is taken back out
 const FLEET_RECALL_FEE = 600;     // charged to ferry a frame to another dock
+// 0.9.8 — berth rent. Charged per pay period per parked frame, scaled by the
+// hull's list price so a capital frame costs more to keep than a shuttle.
+const FLEET_RENT_BASE = 14;       // credits per period, before hull scaling
+const FLEET_RENT_ARREARS_MAX = 6000; // arrears ceiling — the yard stops billing
+// 0.9.8 — a working frame shows up in the world while you are near the dock it
+// works out of, so a fleet is something you can see rather than a ledger line.
+const FLEET_PRESENCE_IN = 9000;   // spawn inside this range of its home dock
+const FLEET_PRESENCE_OUT = 15000; // despawn beyond this range
 
 // 0.9.7 — Working fleets (phase 2).
 //
