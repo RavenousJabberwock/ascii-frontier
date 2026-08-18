@@ -232,6 +232,9 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onFleetDuty:          [],
   onFleetIncome:        [],
   onFleetIncident:      [],
+  onFleetRent:          [],
+  onFleetOfficer:       [],
+  onFleetPresence:      [],
 
 
 };
