@@ -65,6 +65,8 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onHullRefit", "onFleetStored", "onFleetSwapped", "onFleetSold",
   // 0.9.7 — working fleets: standing duties, pay periods and incidents
   "onFleetDuty", "onFleetIncome", "onFleetIncident",
+  // 0.9.8 — fleet command: berth rent, seconded officers, world presence
+  "onFleetRent", "onFleetOfficer", "onFleetPresence",
 ];
 
 
