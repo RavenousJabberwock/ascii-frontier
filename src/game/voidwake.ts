@@ -2320,6 +2320,28 @@ function fleetInsuranceQuote(p: PlayerState, f: FleetShip): number {
   const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
   return Math.max(120, Math.round(hullPrice(h) * 0.15 * merchantBuyMult(p)));
 }
+/**
+ * 0.9.8 — berth rent per pay period for a parked frame. Scales with the hull's
+ * list price (a capital frame eats dock space a shuttle does not) and honours
+ * Merchant/Quartermaster haggling, so a trade crew pays its own way here too.
+ */
+function fleetRentPerPeriod(p: PlayerState, f: FleetShip): number {
+  const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
+  const scale = 1 + hullPrice(h) / 26000;
+  return Math.max(6, Math.round(FLEET_RENT_BASE * scale * merchantBuyMult(p)));
+}
+/**
+ * 0.9.8 — a seconded officer's effect on a working frame. A named crewmate who
+ * knows the ship earns more out of the same duty than contracted hands do, and
+ * takes a smaller cut for it. Multipliers rise with their crew level.
+ */
+function fleetOfficerGrossMul(f: FleetShip): number {
+  const o = f.officer; if (!o) return 1;
+  return 1.15 + 0.04 * crewLevel(o);
+}
+function fleetOfficerWageMul(f: FleetShip): number {
+  return f.officer ? 0.7 : 1;
+}
 
 
 
