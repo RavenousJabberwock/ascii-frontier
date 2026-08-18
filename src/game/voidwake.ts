@@ -13150,6 +13150,12 @@ export class Voidwake {
    * station income and settles a pay period every FLEET_PAY_PERIOD seconds:
    * gross - wage banks on the frame, fuel burns, and one risk roll may cost
    * structure or stand the duty down. Reports land in Comms.
+   *
+   * 0.9.8 — every parked frame (working or idle) is also billed berth rent for
+   * the period. Rent draws on the frame's own account first and only falls into
+   * arrears when that account is empty, so a working fleet pays its own dock
+   * fees and an idle one slowly runs up a tab you can see on the hangar row.
+   * A seconded officer earns crew XP for the periods they work.
    */
   private _fleetPayAt = 0;
   tickFleetDuty(dt: number) {
@@ -13159,15 +13165,50 @@ export class Voidwake {
     const periods = this._fleetPayAt / FLEET_PAY_PERIOD;
     this._fleetPayAt = 0;
     for (const f of p.fleet) {
-      const spec = fleetDutySpec(f.duty); if (!spec) continue;
       const name = this.fleetName(f);
-      const net = Math.round(this.fleetNet(f) * periods);
-      f.earned = Math.min(FLEET_EARN_CAP, Math.round((f.earned ?? 0) + net));
-      f.fuel = Math.max(0, f.fuel - spec.fuel * periods);
-      dispatchHook("onFleetIncome", {
-        hullId: f.hullId, name, duty: f.duty, paid: net, banked: Math.round(f.earned),
-        station: f.storedAtName, fuel: Math.round(f.fuel),
+      const spec = fleetDutySpec(f.duty);
+      if (spec) {
+        const net = Math.round(this.fleetNet(f) * periods);
+        f.earned = Math.min(FLEET_EARN_CAP, Math.round((f.earned ?? 0) + net));
+        f.fuel = Math.max(0, f.fuel - spec.fuel * periods);
+        // A seconded officer learns the frame: XP per worked period.
+        if (f.officer) {
+          const before = crewLevel(f.officer);
+          f.officer.xp = (f.officer.xp ?? 0) + Math.round(6 * periods);
+          const after = crewLevel(f.officer);
+          if (after > before) {
+            this.pushChatter(f.officer.name, `Ran the ${name} clean this run, Captain. Rated up.`, "#8cf", "external");
+            dispatchHook("onCrewLevelUp", { name: f.officer.name, role: f.officer.role, level: after, xp: f.officer.xp });
+          }
+        }
+        dispatchHook("onFleetIncome", {
+          hullId: f.hullId, name, duty: f.duty, paid: net, banked: Math.round(f.earned),
+          station: f.storedAtName, fuel: Math.round(f.fuel),
+          officer: f.officer?.name, officerRole: f.officer?.role,
+        });
+      }
+      // ---- 0.9.8 berth rent -------------------------------------------------
+      const rent = Math.round(fleetRentPerPeriod(p, f) * periods);
+      let fromAccount = Math.min(rent, Math.round(f.earned ?? 0));
+      if (fromAccount > 0) f.earned = Math.round((f.earned ?? 0) - fromAccount);
+      let arrears = rent - fromAccount;
+      if (arrears > 0) {
+        const before = Math.round(f.rentOwed ?? 0);
+        f.rentOwed = Math.min(FLEET_RENT_ARREARS_MAX, before + arrears);
+        arrears = Math.round(f.rentOwed) - before;
+        if (before === 0 && f.rentOwed > 0) {
+          this.pushChatter(`${f.storedAtName} Dockmaster`,
+            `Berth fees on the ${name} are running unpaid, Captain. We'll hold the frame, but the tab grows.`,
+            "#ffcc55", "external");
+        }
+      } else {
+        fromAccount = rent;
+      }
+      dispatchHook("onFleetRent", {
+        hullId: f.hullId, name, rent, fromAccount, arrears: Math.round(f.rentOwed ?? 0),
+        station: f.storedAtName, duty: f.duty ?? "idle", source: "period",
       });
+      if (!spec) continue;
       // Risk roll. Insurance absorbs half the knock; a hard hit stands the
       // frame down rather than destroying it, so a fleet never vanishes
       // while the player is elsewhere.
@@ -13175,12 +13216,15 @@ export class Voidwake {
         const [lo, hi] = spec.dmg;
         let dmg = lo + Math.random() * (hi - lo);
         if (f.insured) dmg *= 0.5;
+        // A named officer flies it better than contracted hands do.
+        if (f.officer) dmg *= 0.8;
         f.hull = Math.max(1, f.hull - dmg);
         f.note = `took ${Math.round(dmg)} damage on duty`;
-        this.pushChatter(`${name} Crew`, `We caught trouble on the ${spec.name.toLowerCase()} — structure down to ${Math.round(f.hull)}.`, "#ff9a9a", "external");
+        this.pushChatter(f.officer?.name ?? `${name} Crew`, `We caught trouble on the ${spec.name.toLowerCase()} — structure down to ${Math.round(f.hull)}.`, "#ff9a9a", "external");
         dispatchHook("onFleetIncident", {
           hullId: f.hullId, name, duty: f.duty, damage: Math.round(dmg),
           hull: Math.round(f.hull), insured: !!f.insured, station: f.storedAtName,
+          officer: f.officer?.name,
         });
       }
       const standDown =
@@ -13191,12 +13235,63 @@ export class Voidwake {
       if (standDown) {
         const was = spec.name.toLowerCase();
         f.duty = "idle"; f.note = standDown;
-        this.pushChatter(`${name} Crew`, `Standing down from the ${was} — she ${standDown}. Berthed at ${f.storedAtName}.`, "#ffcc55", "external");
+        this.pushChatter(f.officer?.name ?? `${name} Crew`, `Standing down from the ${was} — she ${standDown}. Berthed at ${f.storedAtName}.`, "#ffcc55", "external");
         dispatchHook("onFleetIncident", {
           hullId: f.hullId, name, duty: "idle", reason: standDown,
           hull: Math.round(f.hull), fuel: Math.round(f.fuel), station: f.storedAtName,
         });
       }
+    }
+  }
+  /**
+   * 0.9.8 — fleet presence. A frame on duty is no longer purely abstract: when
+   * the pilot comes within FLEET_PRESENCE_IN of the dock it works out of, the
+   * frame is spawned as a friendly `fleet` hull holding station near that dock,
+   * and it is struck again past FLEET_PRESENCE_OUT (or when the duty ends).
+   * Presence is cosmetic — nothing about the duty ledger depends on it, and a
+   * destroyed presence entity only files a note, never loses the frame.
+   */
+  tickFleetPresence() {
+    const p = this.player; if (!p?.fleet?.length) return;
+    for (const f of p.fleet) {
+      const home = f.storedAt != null ? this.byId(f.storedAt) : undefined;
+      const live = f.presenceId != null ? this.byId(f.presenceId) : undefined;
+      const working = !!fleetDutySpec(f.duty);
+      const dist = home ? V.len(V.sub(home.pos, p.pos)) : Infinity;
+      if (live) {
+        if (!working || dist > FLEET_PRESENCE_OUT || (live.hull ?? 1) <= 0) {
+          this.entities = this.entities.filter((e) => e.id !== f.presenceId);
+          dispatchHook("onFleetPresence", {
+            hullId: f.hullId, name: this.fleetName(f), phase: "left",
+            station: f.storedAtName, duty: f.duty ?? "idle",
+          });
+          f.presenceId = undefined;
+        }
+        continue;
+      }
+      if (!working || !home || dist > FLEET_PRESENCE_IN) continue;
+      const label = `${this.fleetName(f)} (yours)`;
+      const ang = (f.storedAtMs % 360) * (Math.PI / 180);
+      const e: Entity = {
+        id: nextId(), kind: "friendly", name: label,
+        pos: {
+          x: home.pos.x + Math.cos(ang) * 900,
+          y: home.pos.y + 120,
+          z: home.pos.z + Math.sin(ang) * 900,
+        },
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "fleet",
+        hull: Math.max(1, Math.round(f.hull)), shield: Math.max(0, Math.round(f.shield)),
+        state: "patrol", cooldown: 0, weaponId: f.weaponId,
+        pilotName: f.officer?.name ?? `${this.fleetName(f)} Crew`,
+      };
+      this.entities.push(e);
+      f.presenceId = e.id;
+      dispatchHook("onFleetPresence", {
+        hullId: f.hullId, name: label, phase: "arrived", station: f.storedAtName,
+        duty: f.duty ?? "idle", officer: f.officer?.name,
+        x: e.pos.x, y: e.pos.y, z: e.pos.z,
+      });
     }
   }
 
