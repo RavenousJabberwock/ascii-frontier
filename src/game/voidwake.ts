@@ -160,7 +160,14 @@ export type ScriptHookName =
   // itself down.
   | "onFleetDuty"
   | "onFleetIncome"
-  | "onFleetIncident";
+  | "onFleetIncident"
+  // 0.9.8 — fleet command. `onFleetRent` fires when berth rent is settled (or
+  // falls into arrears), `onFleetOfficer` when a named crewmate is seconded to
+  // (or recalled from) a berthed frame, and `onFleetPresence` when a working
+  // frame appears in, or leaves, the world around the pilot.
+  | "onFleetRent"
+  | "onFleetOfficer"
+  | "onFleetPresence";
 
 
 
