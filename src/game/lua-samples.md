@@ -559,3 +559,40 @@ frontier.on("onPlayerDock", function()
   end
 end)
 ```
+
+### 0.9.8 — berth rent and seconded officers
+
+```lua
+-- Warn before arrears build up, and celebrate a good officer.
+frontier.on("onFleetRent", function(r)
+  if (r.arrears or 0) > 0 then
+    frontier.chat("Purser",
+      ("%s is %dcr behind on berth fees at %s."):format(r.name, r.arrears, r.station or "dock"),
+      "#ff9a9a")
+  else
+    frontier.log(("[rent] %s paid %dcr from %s"):format(r.name, r.paid or 0, r.source or "account"))
+  end
+end)
+
+frontier.on("onFleetOfficer", function(o)
+  frontier.chat("Purser",
+    ("%s %s the %s (L%d %s)"):format(o.officer, o.action, o.name, o.level or 0, o.role or "hand"),
+    "#8cf")
+end)
+
+frontier.on("onFleetPresence", function(e)
+  if e.phase == "arrived" then
+    frontier.log(("[fleet] %s is working nearby out of %s"):format(e.name, e.station or "dock"))
+  end
+end)
+
+-- Rent watchdog: stand a frame down if it is bleeding money.
+frontier.on("onPlayerDock", function()
+  for _, s in ipairs(frontier.fleet()) do
+    if not s.active and (s.netPerPeriod or 0) < (s.rentPerPeriod or 0) then
+      frontier.log(("%s nets %dcr/min but costs %dcr/min in rent — reconsider."):
+        format(s.name, s.netPerPeriod or 0, s.rentPerPeriod or 0))
+    end
+  end
+end)
+```
