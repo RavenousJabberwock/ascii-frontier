@@ -5832,6 +5832,8 @@ function tintFor(e: Entity): { fill: string; edge: string } {
       // 0.8.6 — hired wing escorts read amber so they never get mistaken for
       // an unaffiliated federation ship in a dogfight.
       if (e.faction === "wing") return { fill: "#ffd166", edge: "#c9962e" };
+      // 0.9.8 — one of your own working frames, out on a standing duty.
+      if (e.faction === "fleet") return { fill: "#8cf0ff", edge: "#2f6f8f" };
       return { fill: colorFor("friendly"), edge: colorFor("friendly") };
     }
     case "asteroid": {
