@@ -13560,13 +13560,21 @@ export class Voidwake {
         rows.push(`~ ${h.name} #${idx + 1} — HP ${Math.round(f.hull)}/${hullMax} fuel ${Math.round(f.fuel)}/${this.fleetFuelMax(f)}u`
           + ` cargo ${caps.cargo} berths ${caps.berths} mods ${f.modules.length}`
           + `${rf ? ` refits ${rf}` : ""}${f.insured ? " insured" : ""} — at ${f.storedAtName}`
+          + `  rent ${fleetRentPerPeriod(p, f)}cr/min`
+          + `${(f.rentOwed ?? 0) > 0 ? ` OWED ${Math.round(f.rentOwed!)}cr` : ""}`
+          + `${f.officer ? `  officer ${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name} L${crewLevel(f.officer)}` : ""}`
           + `${f.note ? `  (${f.note})` : ""} ~`);
         // 0.9.7 — standing duty: cycles idle -> freight -> patrol -> prospect.
         const order: FleetDuty[] = ["idle", ...FLEET_DUTY_SPECS.map((d) => d.id)];
         const nextSpec = fleetDutySpec(order[(order.indexOf(f.duty ?? "idle") + 1) % order.length]);
         rows.push(`Duty ${h.name} #${idx + 1} — ${spec ? `${spec.name}, ${this.fleetNet(f)}cr/min net` : "idle"}`
           + `  →  ${nextSpec ? `${nextSpec.name} (${Math.round(nextSpec.hire * merchantBuyMult(p))}cr to sign on; ${nextSpec.desc})` : "stand down"}`);
+        // 0.9.8 — second a named crewmate to the frame, or bring them back.
+        rows.push(`Officer ${h.name} #${idx + 1} — ${f.officer
+          ? `${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name} aboard (+${Math.round((fleetOfficerGrossMul(f) - 1) * 100)}% gross, -30% wages) → recall to your crew`
+          : "contracted hands → second a crewmate from your roster"}`);
         rows.push(`Collect ${h.name} #${idx + 1} — ${Math.round(f.earned ?? 0)}cr banked`);
+        if ((f.rentOwed ?? 0) > 0) rows.push(`Rent ${h.name} #${idx + 1} — pay ${Math.round(f.rentOwed!)}cr of back berth fees`);
         if (f.hull < hullMax) rows.push(`Repair ${h.name} #${idx + 1} — ${Math.max(40, Math.round((hullMax - f.hull) * 9 * merchantBuyMult(p)))}cr to full structure`);
         if (f.fuel < this.fleetFuelMax(f)) rows.push(`Refuel ${h.name} #${idx + 1} — ${Math.max(20, Math.round((this.fleetFuelMax(f) - f.fuel) * 3 * merchantBuyMult(p)))}cr to a full tank`);
         if (!f.insured) rows.push(`Insure ${h.name} #${idx + 1} — ${fleetInsuranceQuote(p, f)}cr (halves duty damage, covers a loss)`);
