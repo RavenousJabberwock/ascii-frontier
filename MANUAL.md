@@ -330,6 +330,24 @@ parked at to the one you are standing in. You can only take a frame out where it
 is berthed, so recall first if it is elsewhere, and stand a duty down before you
 fly or sell that frame.
 
+**Fleet command** (0.9.8). Keeping a frame parked is no longer free: every pay
+period each berthed hull accrues **berth rent** scaled to its list price. Rent
+comes out of that frame's own duty account first, so a working ship pays its own
+dock bill; only when the account is empty does it fall into arrears, shown on the
+`Hangar ▸` row and on the Character Sheet. `Collect …` settles arrears off the
+top, `Rent …` clears them from your wallet, selling a frame nets them off the
+price, and the dockmaster will not hand a frame over while rent is outstanding.
+
+`Officer …` seconds a named crewmate from your roster to a berthed frame. While
+they are away you lose their perk, but the frame grosses 15–51% more (by their
+level), pays 30% less in wages, and the officer keeps earning crew XP. Press the
+row again to recall them — they need a free bunk aboard whatever you are flying
+— and they come home automatically if you take that frame over.
+
+A frame out on duty also **shows up in the world**: within 9,000u of its home
+dock it spawns as a friendly contact flying escort AI alongside you, and
+despawns again past 15,000u.
+
 **Hull insurance.** The yard writes a policy on your current frame for 15% of
 its list price (Merchant/Quartermaster discounts apply). One claim: on a
 respawn it waives the rescue fee, refills the tank, and pays 60cr per unit of

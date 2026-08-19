@@ -549,6 +549,9 @@ covering every hook shipped so far.
 | `onFleetDuty`       | `{ hullId, name, duty, hire?, fee?, recalledFrom?, station, grossPerPeriod?, netPerPeriod? }` | a berthed frame put on / taken off a standing duty, or ferried (0.9.7) |
 | `onFleetIncome`     | `{ hullId, name, duty, paid, banked, station, fuel }` | a working frame settled a pay period (0.9.7) |
 | `onFleetIncident`   | `{ hullId, name, duty, damage?, reason?, hull, fuel?, insured?, station }` | a working frame took damage or stood itself down (0.9.7) |
+| `onFleetRent`       | `{ hullId, name, paid, arrears?/owed?, station, source }` | berth rent settled from the frame's account (`source="account"`), your wallet, or dropped into arrears (0.9.8) |
+| `onFleetOfficer`    | `{ hullId, name, action, officer, role, level, station }` | `action` is `"seconded"` or `"recalled"` (0.9.8) |
+| `onFleetPresence`   | `{ hullId, name, phase, station, duty, officer?, x?, y?, z? }` | `phase` is `"arrived"` or `"left"` as a working frame enters/leaves the world (0.9.8) |
 | `onMissionAccepted` / `onMissionCompleted` | `{ id, kind, description, reward, faction, issuer, ... }` | `faction` / `issuer` added in 0.9.5 |
 
 0.9.3 adds the conversation surface: `frontier.hail()` returns the live channel

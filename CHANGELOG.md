@@ -4,6 +4,25 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 0.9.8 — Fleet Command (Phase 3)
+- **Berth rent.** A parked frame now costs you something to keep. Each pay
+  period every berthed hull accrues rent scaled to its list price; the bill is
+  drawn from the frame's own duty account first and only falls into `rentOwed`
+  arrears when the account is empty. `Collect …` settles arrears off the top,
+  `Rent …` pays them outright, selling a frame nets them off the price, and the
+  dockmaster will not release a frame with rent outstanding.
+- **Seconded officers.** `Officer …` seconds a named crewmate from your roster
+  to a berthed frame. You lose their perk while they are away, but the frame
+  grosses +15–51% (by their level), pays 30% less in wages, and the officer
+  earns crew XP on duty. Recall them the same way; they rejoin your crew if a
+  bunk is free, and they come home automatically when you take the frame over.
+- **Fleet presence.** A frame out on duty now physically shows up as a friendly
+  contact when you are within 9,000u of its home dock, flying wing/escort AI,
+  and despawns again beyond 15,000u.
+- **Scripting.** New hooks `onFleetRent`, `onFleetOfficer`, `onFleetPresence`.
+  `frontier.fleet()` rows now also carry `rentPerPeriod`, `rentOwed`, `officer`
+  (`name`/`role`/`level`) and `present`.
+
 ## 0.9.7 — Working Fleets (Phase 2)
 - **Standing duties.** A frame berthed in a hangar can now be crewed and put to
   work while you fly something else. Three duties: **Freight run** (pays off the

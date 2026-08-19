@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.7";
+const VERSION = "0.9.8";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -5832,6 +5832,8 @@ function tintFor(e: Entity): { fill: string; edge: string } {
       // 0.8.6 — hired wing escorts read amber so they never get mistaken for
       // an unaffiliated federation ship in a dogfight.
       if (e.faction === "wing") return { fill: "#ffd166", edge: "#c9962e" };
+      // 0.9.8 — one of your own working frames, out on a standing duty.
+      if (e.faction === "fleet") return { fill: "#8cf0ff", edge: "#2f6f8f" };
       return { fill: colorFor("friendly"), edge: colorFor("friendly") };
     }
     case "asteroid": {
@@ -9085,6 +9087,8 @@ export class Voidwake {
     const aiEvents = drainAiEvents();
     // 0.8.6 — keep hired wing escorts alive and bound to live entities.
     this.tickWing();
+    // 0.9.8 — working frames appear in the world near the dock they work out of.
+    this.tickFleetPresence();
     if (aiEvents.length) {
       for (const ev of aiEvents) {
         if (ev.kind === "patrol_tow_start") {
@@ -11190,7 +11194,10 @@ export class Voidwake {
           const nm = SHIP_HULLS.find((h2) => h2.id === f.hullId)?.name ?? f.hullId;
           const spec = fleetDutySpec(f.duty);
           const bank = Math.round(f.earned ?? 0);
-          return `${nm} @ ${f.storedAtName}${spec ? ` [${spec.name}]` : ""}${bank > 0 ? ` +${bank}cr` : ""}`;
+          const owed = Math.round(f.rentOwed ?? 0);
+          const off = f.officer ? ` {${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name}}` : "";
+          return `${nm} @ ${f.storedAtName}${spec ? ` [${spec.name}]` : ""}${off}`
+            + `${bank > 0 ? ` +${bank}cr` : ""}${owed > 0 ? ` -${owed}cr rent` : ""}`;
         })
         .join(", ");
       putText(g, sx, sry++, `Hangar (${p.fleet.length}/${FLEET_MAX}): ${berthed}`, "#8cf", cols - sx - 2);
@@ -12060,6 +12067,13 @@ export class Voidwake {
                 // 0.9.7 — working fleet state
                 duty: f.duty ?? "idle", earned: Math.round(f.earned ?? 0),
                 netPerPeriod: this.fleetNet(f), grossPerPeriod: this.fleetGross(f),
+                // 0.9.8 — berth rent and seconded officer
+                rentPerPeriod: fleetRentPerPeriod(p, f),
+                rentOwed: Math.round(f.rentOwed ?? 0),
+                officer: f.officer
+                  ? { name: f.officer.name, role: f.officer.role, level: crewLevel(f.officer) }
+                  : undefined,
+                present: f.presenceId != null,
                 note: f.note ?? "",
               };
             }),
@@ -12901,19 +12915,39 @@ export class Voidwake {
       return;
     }
     if (p.credits < FLEET_SWAP_FEE) { this.pushLog(`The hangar crew want ${FLEET_SWAP_FEE}cr to move frames.`); return; }
+    // 0.9.8 — the dockmaster will not release a frame with unpaid berth fees.
+    if ((f.rentOwed ?? 0) > 0) {
+      this.pushLog(`${Math.round(f.rentOwed!)}cr of berth rent is outstanding on the ${caps.name} — settle it first.`);
+      return;
+    }
     if (cargoTotal(p) > caps.cargo) {
       this.pushLog(`${caps.name} holds only ${caps.cargo} units — sell down ${cargoTotal(p) - caps.cargo} first.`);
       return;
     }
-    if (crewCount(p) > caps.berths) {
-      this.pushLog(`${caps.name} berths ${caps.berths} — pay off ${crewCount(p) - caps.berths} crew first.`);
+    // 0.9.8 — a seconded officer rejoins the roster on takeover, so they need a
+    // bunk on the frame you are climbing into.
+    const incoming = crewCount(p) + (f.officer ? 1 : 0);
+    if (incoming > caps.berths) {
+      this.pushLog(`${caps.name} berths ${caps.berths} — pay off ${incoming - caps.berths} crew first.`);
       return;
+    }
+    // A working frame's world presence goes away with the takeover.
+    if (f.presenceId != null) {
+      this.entities = this.entities.filter((e) => e.id !== f.presenceId);
+      f.presenceId = undefined;
     }
     const prev = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
     p.credits -= FLEET_SWAP_FEE;
     // Anything the frame banked on duty is paid out as you take it over.
     const banked = Math.round(f.earned ?? 0);
     if (banked > 0) { p.credits += banked; f.earned = 0; this.pushLog(`Its duty account paid out ${banked}cr.`); }
+    // 0.9.8 — a seconded officer stays with the frame you are now flying, so
+    // they simply rejoin your roster if there is a bunk for them.
+    if (f.officer) {
+      const o = f.officer; f.officer = undefined;
+      (p.crew ??= []).push(o);
+      this.pushLog(`${CREW_ROLE_INFO[o.role].title} ${o.name} stayed with the frame and is back on your crew.`);
+    }
     const stored = this.shipSnapshot();
     p.ship.hullId = f.hullId;
     p.ship.modules = [...f.modules];
@@ -12944,12 +12978,29 @@ export class Voidwake {
       this.pushLog(`The ${name} is out working — stand it down before you sell it.`);
       return;
     }
-    const paid = hullTradeIn(f.hullId) + Math.round(f.earned ?? 0);
+    // 0.9.8 — a seconded officer comes off the frame before it changes hands,
+    // and outstanding berth rent is netted off the sale price.
+    if (f.officer) {
+      const o = f.officer; f.officer = undefined;
+      if (crewCount(p) < effectiveCrewMax(p)) {
+        (p.crew ??= []).push(o);
+        this.pushLog(`${CREW_ROLE_INFO[o.role].title} ${o.name} came back aboard before the sale.`);
+      } else {
+        this.pushLog(`${CREW_ROLE_INFO[o.role].title} ${o.name} left with the frame — no bunk free for them here.`);
+        dispatchHook("onCrewLeft", { name: o.name, role: o.role, reason: "frame-sold" });
+      }
+    }
+    if (f.presenceId != null) {
+      this.entities = this.entities.filter((e) => e.id !== f.presenceId);
+      f.presenceId = undefined;
+    }
+    const owed = Math.round(f.rentOwed ?? 0);
+    const paid = Math.max(0, hullTradeIn(f.hullId) + Math.round(f.earned ?? 0) - owed);
     p.credits += paid;
     p.fleet!.splice(idx, 1);
-    this.pushLog(`Sold the berthed ${name} for ${paid}cr. Its modules and refits went with it.`);
+    this.pushLog(`Sold the berthed ${name} for ${paid}cr${owed > 0 ? ` (after ${owed}cr of back rent)` : ""}. Its modules and refits went with it.`);
     dispatchHook("onFleetSold", {
-      hullId: f.hullId, name, paid, stationId: this.dockedStationId,
+      hullId: f.hullId, name, paid, rentSettled: owed, stationId: this.dockedStationId,
       fleetSize: p.fleet!.length,
     });
     this.sfx("chime");
@@ -13078,14 +13129,27 @@ export class Voidwake {
     return Math.max(1, h.hull + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80
       + refitBonus(f.refit, "hull"));
   }
-  /** Collect a frame's banked pay. */
+  /**
+   * Collect a frame's banked pay. 0.9.8 — any outstanding berth rent is drawn
+   * off the top, so a working frame settles its own dock bill first.
+   */
   fleetCollect(idx: number): void {
     const p = this.player; if (!p) return;
     const f = p.fleet?.[idx]; if (!f) return;
-    const due = Math.round(f.earned ?? 0);
-    if (due <= 0) { this.pushLog(`The ${this.fleetName(f)} has nothing banked yet.`); return; }
+    const banked = Math.round(f.earned ?? 0);
+    if (banked <= 0) { this.pushLog(`The ${this.fleetName(f)} has nothing banked yet.`); return; }
+    const owed = Math.round(f.rentOwed ?? 0);
+    const rent = Math.min(owed, banked);
+    if (rent > 0) {
+      f.rentOwed = owed - rent;
+      dispatchHook("onFleetRent", {
+        hullId: f.hullId, name: this.fleetName(f), paid: rent,
+        arrears: Math.round(f.rentOwed), station: f.storedAtName, source: "account",
+      });
+    }
+    const due = banked - rent;
     p.credits += due; f.earned = 0;
-    this.pushLog(`Collected ${due}cr from the ${this.fleetName(f)}'s account.`);
+    this.pushLog(`Collected ${due}cr from the ${this.fleetName(f)}'s account${rent > 0 ? ` (${rent}cr went to back rent)` : ""}.`);
     this.sfx("chime");
   }
   /** Ferry a berthed frame to the dock you are standing in (0.9.7). */
@@ -13556,13 +13620,21 @@ export class Voidwake {
         rows.push(`~ ${h.name} #${idx + 1} — HP ${Math.round(f.hull)}/${hullMax} fuel ${Math.round(f.fuel)}/${this.fleetFuelMax(f)}u`
           + ` cargo ${caps.cargo} berths ${caps.berths} mods ${f.modules.length}`
           + `${rf ? ` refits ${rf}` : ""}${f.insured ? " insured" : ""} — at ${f.storedAtName}`
+          + `  rent ${fleetRentPerPeriod(p, f)}cr/min`
+          + `${(f.rentOwed ?? 0) > 0 ? ` OWED ${Math.round(f.rentOwed!)}cr` : ""}`
+          + `${f.officer ? `  officer ${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name} L${crewLevel(f.officer)}` : ""}`
           + `${f.note ? `  (${f.note})` : ""} ~`);
         // 0.9.7 — standing duty: cycles idle -> freight -> patrol -> prospect.
         const order: FleetDuty[] = ["idle", ...FLEET_DUTY_SPECS.map((d) => d.id)];
         const nextSpec = fleetDutySpec(order[(order.indexOf(f.duty ?? "idle") + 1) % order.length]);
         rows.push(`Duty ${h.name} #${idx + 1} — ${spec ? `${spec.name}, ${this.fleetNet(f)}cr/min net` : "idle"}`
           + `  →  ${nextSpec ? `${nextSpec.name} (${Math.round(nextSpec.hire * merchantBuyMult(p))}cr to sign on; ${nextSpec.desc})` : "stand down"}`);
+        // 0.9.8 — second a named crewmate to the frame, or bring them back.
+        rows.push(`Officer ${h.name} #${idx + 1} — ${f.officer
+          ? `${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name} aboard (+${Math.round((fleetOfficerGrossMul(f) - 1) * 100)}% gross, -30% wages) → recall to your crew`
+          : "contracted hands → second a crewmate from your roster"}`);
         rows.push(`Collect ${h.name} #${idx + 1} — ${Math.round(f.earned ?? 0)}cr banked`);
+        if ((f.rentOwed ?? 0) > 0) rows.push(`Rent ${h.name} #${idx + 1} — pay ${Math.round(f.rentOwed!)}cr of back berth fees`);
         if (f.hull < hullMax) rows.push(`Repair ${h.name} #${idx + 1} — ${Math.max(40, Math.round((hullMax - f.hull) * 9 * merchantBuyMult(p)))}cr to full structure`);
         if (f.fuel < this.fleetFuelMax(f)) rows.push(`Refuel ${h.name} #${idx + 1} — ${Math.max(20, Math.round((this.fleetFuelMax(f) - f.fuel) * 3 * merchantBuyMult(p)))}cr to a full tank`);
         if (!f.insured) rows.push(`Insure ${h.name} #${idx + 1} — ${fleetInsuranceQuote(p, f)}cr (halves duty damage, covers a loss)`);
@@ -13927,6 +13999,8 @@ export class Voidwake {
       else if (row.startsWith("Refuel ")) this.fleetRefuel(idx);
       else if (row.startsWith("Insure ")) this.fleetInsure(idx);
       else if (row.startsWith("Recall ")) this.fleetRecall(idx);
+      else if (row.startsWith("Officer ")) this.fleetCycleOfficer(idx);
+      else if (row.startsWith("Rent ")) this.fleetPayRent(idx);
       return;
     }
 

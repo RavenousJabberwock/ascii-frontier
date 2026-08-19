@@ -1,3 +1,31 @@
+# 0.9.8 — Fleet Command (Phase 3)
+
+Ships as **0.9.8**.
+
+- **Berth rent.** `FleetShip` gains `rentOwed`. `fleetRentPerPeriod(p, f)` scales
+  the per-period bill off the hull's list price; `tickFleetDuty` charges every
+  berthed frame each `FLEET_PAY_PERIOD`, drawing from `earned` first and pushing
+  the remainder into `rentOwed`. `fleetCollect` settles arrears off the top,
+  `fleetPayRent` clears them from the wallet, `fleetSell` nets them off the
+  payout, and `fleetSwap` refuses while rent is outstanding.
+- **Seconded officers.** `FleetShip.officer` holds a `CrewMember` lifted out of
+  `p.crew` (so their perks stop applying to the player). `fleetOfficerGrossMul`
+  gives +15% +4%/level gross, wages drop 30%, and the officer accrues crew XP
+  each settled period. `fleetCycleOfficer` toggles seconding/recalling; recall
+  needs a free berth, and a takeover or sale brings them home.
+- **Fleet presence.** `presenceId` binds a live friendly entity (faction
+  `"fleet"`, wing/escort AI, own hull tint) spawned when the pilot is inside
+  9,000u of the frame's home dock and despawned past 15,000u.
+- **Scripting.** `onFleetRent`, `onFleetOfficer`, `onFleetPresence`; plus
+  `rentPerPeriod`, `rentOwed`, `officer`, `present` on `frontier.fleet()`.
+
+## Deferred
+
+- Multi-frame duty *chaining* (a frame that rotates between duties on its own).
+- Officer-specific duty bonuses per role (any role currently gives the same
+  gross/wage effect scaled only by level).
+- Refit slots beyond the five stats (weapon hardpoints, module bays).
+
 # 0.9.7 — Working Fleets (Phase 2)
 
 Ships as **0.9.7**.
@@ -26,11 +54,11 @@ Ships as **0.9.7**.
 
 ## Deferred
 
-- Working frames as *visible* AI hulls in the world (they are still abstract
-  off-screen workers, not spawned entities).
-- Assigning named crew from your roster to a duty instead of anonymous
-  contracted hands.
-- Hangar rent over time (a parked frame is still free to store).
+- ~~Working frames as *visible* AI hulls in the world~~ — shipped in 0.9.8 as
+  fleet presence entities.
+- ~~Assigning named crew from your roster to a duty~~ — shipped in 0.9.8 as
+  seconded officers.
+- ~~Hangar rent over time~~ — shipped in 0.9.8 as berth rent + arrears.
 - Refit slots beyond the five stats (weapon hardpoints, module bays).
 
 # 0.9.6 — Refits & Fleets (Phase 1)
