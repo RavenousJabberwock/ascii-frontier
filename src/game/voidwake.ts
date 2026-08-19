@@ -12905,6 +12905,11 @@ export class Voidwake {
       return;
     }
     if (p.credits < FLEET_SWAP_FEE) { this.pushLog(`The hangar crew want ${FLEET_SWAP_FEE}cr to move frames.`); return; }
+    // 0.9.8 — the dockmaster will not release a frame with unpaid berth fees.
+    if ((f.rentOwed ?? 0) > 0) {
+      this.pushLog(`${Math.round(f.rentOwed!)}cr of berth rent is outstanding on the ${caps.name} — settle it first.`);
+      return;
+    }
     if (cargoTotal(p) > caps.cargo) {
       this.pushLog(`${caps.name} holds only ${caps.cargo} units — sell down ${cargoTotal(p) - caps.cargo} first.`);
       return;
@@ -12918,6 +12923,13 @@ export class Voidwake {
     // Anything the frame banked on duty is paid out as you take it over.
     const banked = Math.round(f.earned ?? 0);
     if (banked > 0) { p.credits += banked; f.earned = 0; this.pushLog(`Its duty account paid out ${banked}cr.`); }
+    // 0.9.8 — a seconded officer stays with the frame you are now flying, so
+    // they simply rejoin your roster if there is a bunk for them.
+    if (f.officer) {
+      const o = f.officer; f.officer = undefined;
+      (p.crew ??= []).push(o);
+      this.pushLog(`${CREW_ROLE_INFO[o.role].title} ${o.name} stayed with the frame and is back on your crew.`);
+    }
     const stored = this.shipSnapshot();
     p.ship.hullId = f.hullId;
     p.ship.modules = [...f.modules];
