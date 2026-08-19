@@ -13939,6 +13939,8 @@ export class Voidwake {
       else if (row.startsWith("Refuel ")) this.fleetRefuel(idx);
       else if (row.startsWith("Insure ")) this.fleetInsure(idx);
       else if (row.startsWith("Recall ")) this.fleetRecall(idx);
+      else if (row.startsWith("Officer ")) this.fleetCycleOfficer(idx);
+      else if (row.startsWith("Rent ")) this.fleetPayRent(idx);
       return;
     }
 
