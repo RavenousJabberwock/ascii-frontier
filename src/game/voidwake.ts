@@ -11194,7 +11194,10 @@ export class Voidwake {
           const nm = SHIP_HULLS.find((h2) => h2.id === f.hullId)?.name ?? f.hullId;
           const spec = fleetDutySpec(f.duty);
           const bank = Math.round(f.earned ?? 0);
-          return `${nm} @ ${f.storedAtName}${spec ? ` [${spec.name}]` : ""}${bank > 0 ? ` +${bank}cr` : ""}`;
+          const owed = Math.round(f.rentOwed ?? 0);
+          const off = f.officer ? ` {${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name}}` : "";
+          return `${nm} @ ${f.storedAtName}${spec ? ` [${spec.name}]` : ""}${off}`
+            + `${bank > 0 ? ` +${bank}cr` : ""}${owed > 0 ? ` -${owed}cr rent` : ""}`;
         })
         .join(", ");
       putText(g, sx, sry++, `Hangar (${p.fleet.length}/${FLEET_MAX}): ${berthed}`, "#8cf", cols - sx - 2);
