@@ -12067,6 +12067,13 @@ export class Voidwake {
                 // 0.9.7 — working fleet state
                 duty: f.duty ?? "idle", earned: Math.round(f.earned ?? 0),
                 netPerPeriod: this.fleetNet(f), grossPerPeriod: this.fleetGross(f),
+                // 0.9.8 — berth rent and seconded officer
+                rentPerPeriod: fleetRentPerPeriod(p, f),
+                rentOwed: Math.round(f.rentOwed ?? 0),
+                officer: f.officer
+                  ? { name: f.officer.name, role: f.officer.role, level: crewLevel(f.officer) }
+                  : undefined,
+                present: f.presenceId != null,
                 note: f.note ?? "",
               };
             }),
