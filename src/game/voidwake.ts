@@ -13119,14 +13119,27 @@ export class Voidwake {
     return Math.max(1, h.hull + n("reinforced-plating") * 40 + n("hull-plating-mk2") * 80
       + refitBonus(f.refit, "hull"));
   }
-  /** Collect a frame's banked pay. */
+  /**
+   * Collect a frame's banked pay. 0.9.8 — any outstanding berth rent is drawn
+   * off the top, so a working frame settles its own dock bill first.
+   */
   fleetCollect(idx: number): void {
     const p = this.player; if (!p) return;
     const f = p.fleet?.[idx]; if (!f) return;
-    const due = Math.round(f.earned ?? 0);
-    if (due <= 0) { this.pushLog(`The ${this.fleetName(f)} has nothing banked yet.`); return; }
+    const banked = Math.round(f.earned ?? 0);
+    if (banked <= 0) { this.pushLog(`The ${this.fleetName(f)} has nothing banked yet.`); return; }
+    const owed = Math.round(f.rentOwed ?? 0);
+    const rent = Math.min(owed, banked);
+    if (rent > 0) {
+      f.rentOwed = owed - rent;
+      dispatchHook("onFleetRent", {
+        hullId: f.hullId, name: this.fleetName(f), paid: rent,
+        arrears: Math.round(f.rentOwed), station: f.storedAtName, source: "account",
+      });
+    }
+    const due = banked - rent;
     p.credits += due; f.earned = 0;
-    this.pushLog(`Collected ${due}cr from the ${this.fleetName(f)}'s account.`);
+    this.pushLog(`Collected ${due}cr from the ${this.fleetName(f)}'s account${rent > 0 ? ` (${rent}cr went to back rent)` : ""}.`);
     this.sfx("chime");
   }
   /** Ferry a berthed frame to the dock you are standing in (0.9.7). */
