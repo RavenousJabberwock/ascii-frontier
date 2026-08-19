@@ -54,11 +54,11 @@ Ships as **0.9.7**.
 
 ## Deferred
 
-- Working frames as *visible* AI hulls in the world (they are still abstract
-  off-screen workers, not spawned entities).
-- Assigning named crew from your roster to a duty instead of anonymous
-  contracted hands.
-- Hangar rent over time (a parked frame is still free to store).
+- ~~Working frames as *visible* AI hulls in the world~~ — shipped in 0.9.8 as
+  fleet presence entities.
+- ~~Assigning named crew from your roster to a duty~~ — shipped in 0.9.8 as
+  seconded officers.
+- ~~Hangar rent over time~~ — shipped in 0.9.8 as berth rent + arrears.
 - Refit slots beyond the five stats (weapon hardpoints, module bays).
 
 # 0.9.6 — Refits & Fleets (Phase 1)
