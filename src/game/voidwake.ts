@@ -9085,6 +9085,8 @@ export class Voidwake {
     const aiEvents = drainAiEvents();
     // 0.8.6 — keep hired wing escorts alive and bound to live entities.
     this.tickWing();
+    // 0.9.8 — working frames appear in the world near the dock they work out of.
+    this.tickFleetPresence();
     if (aiEvents.length) {
       for (const ev of aiEvents) {
         if (ev.kind === "patrol_tow_start") {
