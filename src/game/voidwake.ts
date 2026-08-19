@@ -12914,9 +12914,17 @@ export class Voidwake {
       this.pushLog(`${caps.name} holds only ${caps.cargo} units — sell down ${cargoTotal(p) - caps.cargo} first.`);
       return;
     }
-    if (crewCount(p) > caps.berths) {
-      this.pushLog(`${caps.name} berths ${caps.berths} — pay off ${crewCount(p) - caps.berths} crew first.`);
+    // 0.9.8 — a seconded officer rejoins the roster on takeover, so they need a
+    // bunk on the frame you are climbing into.
+    const incoming = crewCount(p) + (f.officer ? 1 : 0);
+    if (incoming > caps.berths) {
+      this.pushLog(`${caps.name} berths ${caps.berths} — pay off ${incoming - caps.berths} crew first.`);
       return;
+    }
+    // A working frame's world presence goes away with the takeover.
+    if (f.presenceId != null) {
+      this.entities = this.entities.filter((e) => e.id !== f.presenceId);
+      f.presenceId = undefined;
     }
     const prev = SHIP_HULLS.find((x) => x.id === p.ship.hullId)?.name ?? p.ship.hullId;
     p.credits -= FLEET_SWAP_FEE;
