@@ -12968,12 +12968,29 @@ export class Voidwake {
       this.pushLog(`The ${name} is out working — stand it down before you sell it.`);
       return;
     }
-    const paid = hullTradeIn(f.hullId) + Math.round(f.earned ?? 0);
+    // 0.9.8 — a seconded officer comes off the frame before it changes hands,
+    // and outstanding berth rent is netted off the sale price.
+    if (f.officer) {
+      const o = f.officer; f.officer = undefined;
+      if (crewCount(p) < effectiveCrewMax(p)) {
+        (p.crew ??= []).push(o);
+        this.pushLog(`${CREW_ROLE_INFO[o.role].title} ${o.name} came back aboard before the sale.`);
+      } else {
+        this.pushLog(`${CREW_ROLE_INFO[o.role].title} ${o.name} left with the frame — no bunk free for them here.`);
+        dispatchHook("onCrewLeft", { name: o.name, role: o.role, reason: "frame-sold" });
+      }
+    }
+    if (f.presenceId != null) {
+      this.entities = this.entities.filter((e) => e.id !== f.presenceId);
+      f.presenceId = undefined;
+    }
+    const owed = Math.round(f.rentOwed ?? 0);
+    const paid = Math.max(0, hullTradeIn(f.hullId) + Math.round(f.earned ?? 0) - owed);
     p.credits += paid;
     p.fleet!.splice(idx, 1);
-    this.pushLog(`Sold the berthed ${name} for ${paid}cr. Its modules and refits went with it.`);
+    this.pushLog(`Sold the berthed ${name} for ${paid}cr${owed > 0 ? ` (after ${owed}cr of back rent)` : ""}. Its modules and refits went with it.`);
     dispatchHook("onFleetSold", {
-      hullId: f.hullId, name, paid, stationId: this.dockedStationId,
+      hullId: f.hullId, name, paid, rentSettled: owed, stationId: this.dockedStationId,
       fleetSize: p.fleet!.length,
     });
     this.sfx("chime");
