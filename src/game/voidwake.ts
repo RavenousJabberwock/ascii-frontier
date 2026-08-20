@@ -8711,7 +8711,9 @@ export class Voidwake {
           }
         } else if (e.state === "leave") {
           // Streak away and re-arm dormant timer.
+          const dv = V.sub(p.pos, e.pos);
           const away = V.norm({ x: -dv.x, y: -dv.y, z: -dv.z });
+
           e.vel = V.scale(away, 400);
           if ((e.cooldown ?? 0) <= 0) {
             e.pos = randPos(Math.random, WORLD_RADIUS * 0.95);
