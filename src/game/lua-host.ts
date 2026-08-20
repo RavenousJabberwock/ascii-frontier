@@ -29,63 +29,107 @@
 // milestone — see plan.md ▸ "Modding roadmap".
 
 import { lua, lauxlib, lualib, to_luastring } from "fengari-web";
-import {
-  registerScriptHook,
-  type ScriptHookName,
-} from "./voidwake";
+import { registerScriptHook, type ScriptHookName } from "./voidwake";
 
 const HOOK_NAMES: ScriptHookName[] = [
-  "onWorldGenerate", "onTick", "onPlayerFire", "onPlayerDock",
-  "onEntityDestroyed", "onChatter", "onSave", "onLoad", "onPlanetLand",
-  "onCommodityTrade", "onPassengerBoard", "onPassengerDeliver", "onPlayerStationTierUp",
+  "onWorldGenerate",
+  "onTick",
+  "onPlayerFire",
+  "onPlayerDock",
+  "onEntityDestroyed",
+  "onChatter",
+  "onSave",
+  "onLoad",
+  "onPlanetLand",
+  "onCommodityTrade",
+  "onPassengerBoard",
+  "onPassengerDeliver",
+  "onPlayerStationTierUp",
   // 0.8.0
-  "onPlayerHail", "onCustomsScan", "onShipHullChange",
+  "onPlayerHail",
+  "onCustomsScan",
+  "onShipHullChange",
   // 0.8.4 — Bounty Office
-  "onBountyAccepted", "onBountyClaimed", "onBookmarkAdded",
+  "onBountyAccepted",
+  "onBountyClaimed",
+  "onBookmarkAdded",
   // 0.8.6 — wing escorts
-  "onWingHired", "onWingLost",
+  "onWingHired",
+  "onWingLost",
   // 0.8.7 — contract log & station trade routes
-  "onMissionAccepted", "onMissionAbandoned", "onTradeRouteEstablished",
+  "onMissionAccepted",
+  "onMissionAbandoned",
+  "onTradeRouteEstablished",
   // 0.8.8 — lifecycle hook audit
-  "onMissionCompleted", "onCrewHired", "onCrewLeft", "onRankUp",
-  "onModuleInstalled", "onStationFounded", "onWormholeJump",
-  "onPlayerDestroyed", "onStowawayRevealed", "onTradeRouteClosed",
+  "onMissionCompleted",
+  "onCrewHired",
+  "onCrewLeft",
+  "onRankUp",
+  "onModuleInstalled",
+  "onStationFounded",
+  "onWormholeJump",
+  "onPlayerDestroyed",
+  "onStowawayRevealed",
+  "onTradeRouteClosed",
   // 0.8.9 — visual variety milestone hook pass
-  "onEntitySpawned", "onPlayerDamaged", "onScreenChange", "onOreMined",
-  "onSalvageCollected", "onMarketCycle", "onReputationChange", "onCrewLevelUp",
+  "onEntitySpawned",
+  "onPlayerDamaged",
+  "onScreenChange",
+  "onOreMined",
+  "onSalvageCollected",
+  "onMarketCycle",
+  "onReputationChange",
+  "onCrewLevelUp",
   // 0.9.0 — frontier events (phase "start" | "end")
   "onFrontierEvent",
   // 0.9.2 — nav log deletions, cargo deltas, payroll
-  "onBookmarkRemoved", "onCargoChanged", "onCrewPaid",
+  "onBookmarkRemoved",
+  "onCargoChanged",
+  "onCrewPaid",
   // 0.9.3 — conversation trees
-  "onHailTopic", "onHailClosed",
+  "onHailTopic",
+  "onHailClosed",
   // 0.9.4 — reputation-gated work handed out over a hail
   "onHailWork",
   // 0.9.6 — hull refits and fleet hangar movements
-  "onHullRefit", "onFleetStored", "onFleetSwapped", "onFleetSold",
+  "onHullRefit",
+  "onFleetStored",
+  "onFleetSwapped",
+  "onFleetSold",
   // 0.9.7 — working fleets: standing duties, pay periods and incidents
-  "onFleetDuty", "onFleetIncome", "onFleetIncident",
+  "onFleetDuty",
+  "onFleetIncome",
+  "onFleetIncident",
   // 0.9.8 — fleet command: berth rent, seconded officers, world presence
-  "onFleetRent", "onFleetOfficer", "onFleetPresence",
+  "onFleetRent",
+  "onFleetOfficer",
+  "onFleetPresence",
 ];
-
 
 export interface LuaHostBridge {
   pushLog: (msg: string) => void;
   pushChatter: (who: string, msg: string, color?: string) => void;
   // 0.5.7 — M2 mutation API. Scripts can nudge player state via a narrow,
   // audited surface. All mutators are optional so older bridges keep working.
-  addCredits?: (delta: number) => number | null;   // returns new balance, or null if no player
-  addFuel?:    (delta: number) => number | null;   // returns new fuel, or null if no player
+  addCredits?: (delta: number) => number | null; // returns new balance, or null if no player
+  addFuel?: (delta: number) => number | null; // returns new fuel, or null if no player
   getPlayerSnapshot?: () => Record<string, unknown> | null;
   // 0.7.0 — expanded M2 surface + M3/M4 read-only content hooks.
-  addXp?:      (delta: number) => number | null;
-  addOre?:     (delta: number) => number | null;
-  worldTime?:  () => number;                       // seconds since engine start (or Date.now/1000)
-  worldSeed?:  () => number;
-  listEntities?: (filter?: { kind?: string; faction?: string; max?: number; radius?: number; nearX?: number; nearY?: number; nearZ?: number }) => Array<Record<string, unknown>>;
-  getEntity?:  (idx: number) => Record<string, unknown> | null;
-  chatterAdd?: (kind: string, line: string) => boolean;   // append a template line; returns true if kind is known
+  addXp?: (delta: number) => number | null;
+  addOre?: (delta: number) => number | null;
+  worldTime?: () => number; // seconds since engine start (or Date.now/1000)
+  worldSeed?: () => number;
+  listEntities?: (filter?: {
+    kind?: string;
+    faction?: string;
+    max?: number;
+    radius?: number;
+    nearX?: number;
+    nearY?: number;
+    nearZ?: number;
+  }) => Array<Record<string, unknown>>;
+  getEntity?: (idx: number) => Record<string, unknown> | null;
+  chatterAdd?: (kind: string, line: string) => boolean; // append a template line; returns true if kind is known
   installedMods?: () => Array<{ id: string; name: string; enabled: boolean }>;
   // 0.7.0 — per-mod error attribution. When provided, the host calls this on
   // every load/run/hook error string before storing it on `lastError`. The
@@ -95,7 +139,10 @@ export interface LuaHostBridge {
   // 0.7.2 — economy read surface. Returns { buy, sell, stock } for a
   // (commodityId, stationId?) pair. If stationId is omitted, the currently
   // docked station is used. Returns null if the pair is unknown.
-  commodityPrice?: (commodityId: string, stationId?: number) => { buy: number; sell: number; stock: number } | null;
+  commodityPrice?: (
+    commodityId: string,
+    stationId?: number,
+  ) => { buy: number; sell: number; stock: number } | null;
   // 0.8.7 — read-only contract log and player holdings (owned stations plus
   // their automated freight lanes and current income rate).
   contracts?: () => Array<Record<string, unknown>>;
@@ -124,8 +171,6 @@ export interface LuaHostBridge {
   disposition?: (id: number) => string | null;
 }
 
-
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type L = any;
 
@@ -135,13 +180,26 @@ export class LuaHost {
   lastError: string | null = null;
   loaded = false;
 
-  constructor(private bridge: LuaHostBridge, private version: string) {}
+  constructor(
+    private bridge: LuaHostBridge,
+    private version: string,
+  ) {}
 
   dispose(): void {
-    for (const off of this.unsubs) { try { off(); } catch { /* noop */ } }
+    for (const off of this.unsubs) {
+      try {
+        off();
+      } catch {
+        /* noop */
+      }
+    }
     this.unsubs = [];
     if (this.L) {
-      try { lua.lua_close(this.L); } catch { /* noop */ }
+      try {
+        lua.lua_close(this.L);
+      } catch {
+        /* noop */
+      }
     }
     this.L = null;
     this.loaded = false;
@@ -161,15 +219,30 @@ export class LuaHost {
       lua.lua_pushnil(L);
       lua.lua_setglobal(L, to_luastring(name));
     };
-    for (const n of ["io", "package", "debug", "dofile", "loadfile", "load",
-                     "loadstring", "require", "collectgarbage"]) {
+    for (const n of [
+      "io",
+      "package",
+      "debug",
+      "dofile",
+      "loadfile",
+      "load",
+      "loadstring",
+      "require",
+      "collectgarbage",
+    ]) {
       nullGlobal(n);
     }
     // Replace `os` with a timing-only stub.
     lua.lua_newtable(L);
-    lua.lua_pushjsfunction(L, () => { lua.lua_pushnumber(L, Date.now() / 1000); return 1; });
+    lua.lua_pushjsfunction(L, () => {
+      lua.lua_pushnumber(L, Date.now() / 1000);
+      return 1;
+    });
     lua.lua_setfield(L, -2, to_luastring("time"));
-    lua.lua_pushjsfunction(L, () => { lua.lua_pushnumber(L, performance.now() / 1000); return 1; });
+    lua.lua_pushjsfunction(L, () => {
+      lua.lua_pushnumber(L, performance.now() / 1000);
+      return 1;
+    });
     lua.lua_setfield(L, -2, to_luastring("clock"));
     lua.lua_setglobal(L, to_luastring("os"));
 
@@ -200,7 +273,8 @@ export class LuaHost {
     lua.lua_pushjsfunction(L, (Ls: L) => {
       const d = lua.lua_tonumber(Ls, 1);
       const r = this.bridge.addCredits?.(Number(d) || 0) ?? null;
-      if (r == null) lua.lua_pushnil(Ls); else lua.lua_pushnumber(Ls, r);
+      if (r == null) lua.lua_pushnil(Ls);
+      else lua.lua_pushnumber(Ls, r);
       return 1;
     });
     lua.lua_setfield(L, -2, to_luastring("addCredits"));
@@ -208,7 +282,8 @@ export class LuaHost {
     lua.lua_pushjsfunction(L, (Ls: L) => {
       const d = lua.lua_tonumber(Ls, 1);
       const r = this.bridge.addFuel?.(Number(d) || 0) ?? null;
-      if (r == null) lua.lua_pushnil(Ls); else lua.lua_pushnumber(Ls, r);
+      if (r == null) lua.lua_pushnil(Ls);
+      else lua.lua_pushnumber(Ls, r);
       return 1;
     });
     lua.lua_setfield(L, -2, to_luastring("addFuel"));
@@ -231,9 +306,9 @@ export class LuaHost {
       const df = readNum("fuel");
       const dx = readNum("xp");
       const dor = readNum("ore");
-      if (dc)  this.bridge.addCredits?.(dc);
-      if (df)  this.bridge.addFuel?.(df);
-      if (dx)  this.bridge.addXp?.(dx);
+      if (dc) this.bridge.addCredits?.(dc);
+      if (df) this.bridge.addFuel?.(df);
+      if (dx) this.bridge.addXp?.(dx);
       if (dor) this.bridge.addOre?.(dor);
       const snap = this.bridge.getPlayerSnapshot?.() ?? null;
       pushJsAsLua(Ls, snap, 0);
@@ -241,25 +316,43 @@ export class LuaHost {
     });
     lua.lua_setfield(L, -2, to_luastring("grant"));
 
-
     // frontier.entities.list{ kind=?, faction=?, max=? } / frontier.entities.get(idx)
     lua.lua_newtable(L);
     lua.lua_pushjsfunction(L, (Ls: L) => {
-      let filter: { kind?: string; faction?: string; max?: number; radius?: number; nearX?: number; nearY?: number; nearZ?: number } | undefined;
+      let filter:
+        | {
+            kind?: string;
+            faction?: string;
+            max?: number;
+            radius?: number;
+            nearX?: number;
+            nearY?: number;
+            nearZ?: number;
+          }
+        | undefined;
       if (lua.lua_type(Ls, 1) === lua.LUA_TTABLE) {
         const readStr = (f: string) => {
           lua.lua_getfield(Ls, 1, to_luastring(f));
-          const s = lua.lua_type(Ls, -1) === lua.LUA_TSTRING ? lua.lua_tojsstring(Ls, -1) : undefined;
-          lua.lua_pop(Ls, 1); return s ?? undefined;
+          const s =
+            lua.lua_type(Ls, -1) === lua.LUA_TSTRING ? lua.lua_tojsstring(Ls, -1) : undefined;
+          lua.lua_pop(Ls, 1);
+          return s ?? undefined;
         };
         const readNum = (f: string) => {
           lua.lua_getfield(Ls, 1, to_luastring(f));
-          const n = lua.lua_type(Ls, -1) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, -1)) : undefined;
-          lua.lua_pop(Ls, 1); return n;
+          const n =
+            lua.lua_type(Ls, -1) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, -1)) : undefined;
+          lua.lua_pop(Ls, 1);
+          return n;
         };
         filter = {
-          kind: readStr("kind"), faction: readStr("faction"), max: readNum("max"),
-          radius: readNum("radius"), nearX: readNum("nearX"), nearY: readNum("nearY"), nearZ: readNum("nearZ"),
+          kind: readStr("kind"),
+          faction: readStr("faction"),
+          max: readNum("max"),
+          radius: readNum("radius"),
+          nearX: readNum("nearX"),
+          nearY: readNum("nearY"),
+          nearZ: readNum("nearZ"),
         };
       }
       const arr = this.bridge.listEntities?.(filter) ?? [];
@@ -282,7 +375,7 @@ export class LuaHost {
     lua.lua_pushnumber(L, seedVal);
     lua.lua_setfield(L, -2, to_luastring("seed"));
     lua.lua_pushjsfunction(L, (Ls: L) => {
-      const t = this.bridge.worldTime?.() ?? (Date.now() / 1000);
+      const t = this.bridge.worldTime?.() ?? Date.now() / 1000;
       lua.lua_pushnumber(Ls, t);
       return 1;
     });
@@ -315,7 +408,8 @@ export class LuaHost {
     lua.lua_newtable(L);
     lua.lua_pushjsfunction(L, (Ls: L) => {
       const id = lua.lua_tojsstring(Ls, 1) ?? "";
-      const sid = lua.lua_type(Ls, 2) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, 2)) : undefined;
+      const sid =
+        lua.lua_type(Ls, 2) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, 2)) : undefined;
       const row = this.bridge.commodityPrice?.(String(id), sid) ?? null;
       pushJsAsLua(Ls, row, 0);
       return 1;
@@ -395,19 +489,20 @@ export class LuaHost {
       });
       lua.lua_setfield(L, -2, to_luastring(name));
     };
-    pushGetter("crew",       () => this.bridge.crew?.() ?? []);
-    pushGetter("cargo",      () => this.bridge.cargo?.() ?? []);
-    pushGetter("record",     () => this.bridge.record?.() ?? null);
-    pushGetter("bookmarks",  () => this.bridge.bookmarks?.() ?? []);
+    pushGetter("crew", () => this.bridge.crew?.() ?? []);
+    pushGetter("cargo", () => this.bridge.cargo?.() ?? []);
+    pushGetter("record", () => this.bridge.record?.() ?? null);
+    pushGetter("bookmarks", () => this.bridge.bookmarks?.() ?? []);
     pushGetter("reputation", () => this.bridge.reputation?.() ?? {});
-    pushGetter("perf",       () => this.bridge.perf?.() ?? {});
-    pushGetter("hail",       () => this.bridge.hail?.() ?? null);
+    pushGetter("perf", () => this.bridge.perf?.() ?? {});
+    pushGetter("hail", () => this.bridge.hail?.() ?? null);
 
     // frontier.disposition(id) → "friendly" | "neutral" | "hostile" | nil
     lua.lua_pushjsfunction(L, (Ls: L) => {
       const id = Math.floor(Number(lua.lua_tonumber(Ls, 1)));
       const d = this.bridge.disposition?.(id) ?? null;
-      if (d == null) lua.lua_pushnil(Ls); else lua.lua_pushstring(Ls, to_luastring(d));
+      if (d == null) lua.lua_pushnil(Ls);
+      else lua.lua_pushstring(Ls, to_luastring(d));
       return 1;
     });
     lua.lua_setfield(L, -2, to_luastring("disposition"));
@@ -428,7 +523,6 @@ export class LuaHost {
     lua.lua_setfield(L, -2, to_luastring("hooks"));
 
     lua.lua_pushjsfunction(L, (Ls: L) => {
-
       const snap = this.bridge.getPlayerSnapshot?.() ?? null;
       pushJsAsLua(Ls, snap, 0);
       return 1;
@@ -498,12 +592,27 @@ export class LuaHost {
  * skipped entirely. Beyond depth 2, values are stringified.
  */
 function pushJsAsLua(L: L, v: unknown, depth: number): void {
-  if (v === null || v === undefined) { lua.lua_pushnil(L); return; }
+  if (v === null || v === undefined) {
+    lua.lua_pushnil(L);
+    return;
+  }
   const t = typeof v;
-  if (t === "number") { lua.lua_pushnumber(L, v as number); return; }
-  if (t === "boolean") { lua.lua_pushboolean(L, (v as boolean) ? 1 : 0); return; }
-  if (t === "string") { lua.lua_pushstring(L, to_luastring(v as string)); return; }
-  if (depth >= 2) { lua.lua_pushstring(L, to_luastring(String(v))); return; }
+  if (t === "number") {
+    lua.lua_pushnumber(L, v as number);
+    return;
+  }
+  if (t === "boolean") {
+    lua.lua_pushboolean(L, (v as boolean) ? 1 : 0);
+    return;
+  }
+  if (t === "string") {
+    lua.lua_pushstring(L, to_luastring(v as string));
+    return;
+  }
+  if (depth >= 2) {
+    lua.lua_pushstring(L, to_luastring(String(v)));
+    return;
+  }
   if (Array.isArray(v)) {
     lua.lua_createtable(L, v.length, 0);
     for (let i = 0; i < v.length; i++) {

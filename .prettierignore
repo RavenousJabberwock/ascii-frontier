@@ -6,3 +6,8 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# The engine is hand-formatted in a dense, column-aligned style on purpose;
+# prettier would explode its tables and one-line state updates.
+src/game/voidwake.ts
+dist-offline
