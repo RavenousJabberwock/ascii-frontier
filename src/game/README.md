@@ -552,6 +552,11 @@ covering every hook shipped so far.
 | `onFleetRent`       | `{ hullId, name, paid, arrears?/owed?, station, source }` | berth rent settled from the frame's account (`source="account"`), your wallet, or dropped into arrears (0.9.8) |
 | `onFleetOfficer`    | `{ hullId, name, action, officer, role, level, station }` | `action` is `"seconded"` or `"recalled"` (0.9.8) |
 | `onFleetPresence`   | `{ hullId, name, phase, station, duty, officer?, x?, y?, z? }` | `phase` is `"arrived"` or `"left"` as a working frame enters/leaves the world (0.9.8) |
+
+Since 1.0.0 `onFleetIncome` payloads reflect **officer role affinity**
+(`FLEET_OFFICER_AFFINITY`), and `onReputationChange` fires once per affected
+house when a faction contract pays out — the issuer's gain plus one event per
+rival in `RIVAL_HOUSES`.
 | `onMissionAccepted` / `onMissionCompleted` | `{ id, kind, description, reward, faction, issuer, ... }` | `faction` / `issuer` added in 0.9.5 |
 
 0.9.3 adds the conversation surface: `frontier.hail()` returns the live channel
