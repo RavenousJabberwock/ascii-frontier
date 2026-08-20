@@ -4244,6 +4244,29 @@ function adjustRep(p: PlayerState, faction: string, delta: number) {
   p.reputation[faction] = before + delta;
   dispatchHook("onReputationChange", { faction, delta, before, after: p.reputation[faction] });
 }
+// 1.0.0 — rival houses. Closes the 0.9.5 deferment: standing is now zero-sum
+// between opposed houses, so a paid contract lifts its issuer *and* costs you a
+// little with whoever they are at odds with. Symmetric by construction.
+const RIVAL_HOUSES: Record<string, string[]> = {
+  federation: ["pirate"],
+  patrol: ["pirate"],
+  guild: ["pirate"],
+  aquila: ["federation"],
+  pirate: ["federation", "patrol", "guild"],
+};
+/** Apply an issuer gain and the matching rival loss in one call. */
+function adjustRepWithRivals(p: PlayerState, faction: string, delta: number): string[] {
+  adjustRep(p, faction, delta);
+  const hit: string[] = [];
+  if (delta <= 0) return hit;
+  for (const r of RIVAL_HOUSES[faction] ?? []) {
+    const loss = Math.max(1, Math.round(delta * 0.5));
+    adjustRep(p, r, -loss);
+    hit.push(`${r} -${loss}`);
+  }
+  return hit;
+}
+
 // 0.8.4 — Price of an expungement at a Bounty Office: 120cr per point of
 // standing bought back, floored at 300cr so it's never trivially cheap.
 function recordFine(rep: number): number {
