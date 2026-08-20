@@ -2331,17 +2331,39 @@ function fleetRentPerPeriod(p: PlayerState, f: FleetShip): number {
   return Math.max(6, Math.round(FLEET_RENT_BASE * scale * merchantBuyMult(p)));
 }
 /**
+ * 1.0.0 — role affinity for a seconded officer. Closes the 0.9.8 deferment
+ * ("officer-specific duty bonuses per role"): an officer whose trade matches the
+ * work earns more out of the same run, an unrelated trade earns a little less
+ * than the flat bonus, and nobody is ever a penalty against contracted hands.
+ */
+const FLEET_OFFICER_AFFINITY: Record<CrewRole, Partial<Record<Exclude<FleetDuty, "idle">, number>>> = {
+  gunner:        { patrol: 0.14, prospect: 0.05 },
+  pilot:         { freight: 0.08, patrol: 0.08, prospect: 0.04 },
+  engineer:      { prospect: 0.10, freight: 0.05, patrol: 0.05 },
+  merchant:      { freight: 0.14, prospect: 0.08 },
+  navigator:     { freight: 0.10, patrol: 0.05, prospect: 0.05 },
+  quartermaster: { freight: 0.12, prospect: 0.06 },
+  recruiter:     { freight: 0.03, patrol: 0.03, prospect: 0.03 },
+  tactical:      { patrol: 0.16 },
+};
+function fleetOfficerAffinity(f: FleetShip): number {
+  const o = f.officer; if (!o || !f.duty || f.duty === "idle") return 0;
+  return FLEET_OFFICER_AFFINITY[o.role]?.[f.duty] ?? 0;
+}
+/**
  * 0.9.8 — a seconded officer's effect on a working frame. A named crewmate who
  * knows the ship earns more out of the same duty than contracted hands do, and
- * takes a smaller cut for it. Multipliers rise with their crew level.
+ * takes a smaller cut for it. Multipliers rise with their crew level, and from
+ * 1.0.0 with how well their trade fits the duty they are standing.
  */
 function fleetOfficerGrossMul(f: FleetShip): number {
   const o = f.officer; if (!o) return 1;
-  return 1.15 + 0.04 * crewLevel(o);
+  return 1.15 + 0.04 * crewLevel(o) + fleetOfficerAffinity(f);
 }
 function fleetOfficerWageMul(f: FleetShip): number {
   return f.officer ? 0.7 : 1;
 }
+
 
 
 
