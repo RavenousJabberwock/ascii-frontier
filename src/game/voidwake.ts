@@ -8679,8 +8679,6 @@ export class Voidwake {
         }
       } else if (e.kind === "thargoid") {
         // Rare EMP encounter. State: dormant -> approach -> emp -> leave.
-        const dv = V.sub(p.pos, e.pos);
-        const d = V.len(dv);
         e.cooldown = (e.cooldown ?? 0) - dt;
         if (e.state === "dormant") {
           // Tick down; when it hits zero AND player isn't docked, warp near.
