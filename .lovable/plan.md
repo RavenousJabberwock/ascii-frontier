@@ -1,3 +1,30 @@
+# 1.0.0 — Prime Time
+
+Ships as **1.0.0** — the first stable release.
+
+- **Officer role affinity** (closes 0.9.8's deferment). `FLEET_OFFICER_AFFINITY`
+  maps each `CrewRole` to a per-duty bonus, read by `fleetOfficerAffinity(f)` and
+  folded into `fleetOfficerGrossMul(f)` alongside the flat +15% and +4%/level.
+  Tactical/Gunner peak on `patrol`, Merchant/Quartermaster on `freight`,
+  Engineer on `prospect`; every role is >= 0, so seconding is never a downgrade.
+- **Rival houses** (closes 0.9.5's deferment). `RIVAL_HOUSES` +
+  `adjustRepWithRivals(p, faction, delta)` apply the issuer gain and a
+  half-magnitude loss to each rival in one call. Wired into the contract payout
+  path; the log line names the rivals that reacted.
+- **Clean tree.** Dead locals removed from the `ufo`/`thargoid` AI branches,
+  five stale `eslint-disable` directives dropped, `src/game/voidwake.ts` and
+  `dist-offline` added to `.prettierignore` (the engine is hand-aligned on
+  purpose), everything else prettier-formatted. `tsgo --noEmit` and `bun run
+  lint` are both clean; only shadcn `react-refresh` advisories remain.
+- **Docs.** CHANGELOG 1.0.0 entry with a save-compatibility note, MANUAL fleet
+  and reputation sections updated, engine README hook/API tables current.
+
+## Deferred past 1.0
+
+- Multi-frame duty *chaining* (a frame that rotates duties on its own).
+- Refit slots beyond the five stats (weapon hardpoints, module bays).
+- Player-to-NPC free-text comms (templated replies only today).
+
 # 0.9.8 — Fleet Command (Phase 3)
 
 Ships as **0.9.8**.

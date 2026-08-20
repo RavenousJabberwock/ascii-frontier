@@ -33,9 +33,9 @@ export default function VoidwakeGame() {
         <div className="max-w-md text-center font-mono text-sm">
           <h1 className="mb-2 text-lg">ASCII Frontier could not start</h1>
           <p className="mb-3 opacity-80">
-            Your browser refused to give us a 2D canvas. This is usually fixed
-            by enabling hardware acceleration, disabling a canvas-blocking
-            extension, or trying a recent Chromium / Firefox / Safari build.
+            Your browser refused to give us a 2D canvas. This is usually fixed by enabling hardware
+            acceleration, disabling a canvas-blocking extension, or trying a recent Chromium /
+            Firefox / Safari build.
           </p>
           <pre className="whitespace-pre-wrap break-words rounded border border-emerald-900 bg-black/40 p-2 text-xs">
             {initError}

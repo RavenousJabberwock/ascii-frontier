@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "0.9.8";
+const VERSION = "1.0.0";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -172,7 +172,6 @@ export type ScriptHookName =
 
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
 
 const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
@@ -252,7 +251,6 @@ export function clearScriptHooks(name?: ScriptHookName): void {
   if (name) _scriptHooks[name].length = 0;
   else (Object.keys(_scriptHooks) as ScriptHookName[]).forEach((k) => (_scriptHooks[k].length = 0));
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function dispatchHook(name: ScriptHookName, payload: any): void {
   const arr = _scriptHooks[name];
   if (arr.length === 0) return; // hot-path fast exit
@@ -2331,17 +2329,39 @@ function fleetRentPerPeriod(p: PlayerState, f: FleetShip): number {
   return Math.max(6, Math.round(FLEET_RENT_BASE * scale * merchantBuyMult(p)));
 }
 /**
+ * 1.0.0 — role affinity for a seconded officer. Closes the 0.9.8 deferment
+ * ("officer-specific duty bonuses per role"): an officer whose trade matches the
+ * work earns more out of the same run, an unrelated trade earns a little less
+ * than the flat bonus, and nobody is ever a penalty against contracted hands.
+ */
+const FLEET_OFFICER_AFFINITY: Record<CrewRole, Partial<Record<Exclude<FleetDuty, "idle">, number>>> = {
+  gunner:        { patrol: 0.14, prospect: 0.05 },
+  pilot:         { freight: 0.08, patrol: 0.08, prospect: 0.04 },
+  engineer:      { prospect: 0.10, freight: 0.05, patrol: 0.05 },
+  merchant:      { freight: 0.14, prospect: 0.08 },
+  navigator:     { freight: 0.10, patrol: 0.05, prospect: 0.05 },
+  quartermaster: { freight: 0.12, prospect: 0.06 },
+  recruiter:     { freight: 0.03, patrol: 0.03, prospect: 0.03 },
+  tactical:      { patrol: 0.16 },
+};
+function fleetOfficerAffinity(f: FleetShip): number {
+  const o = f.officer; if (!o || !f.duty || f.duty === "idle") return 0;
+  return FLEET_OFFICER_AFFINITY[o.role]?.[f.duty] ?? 0;
+}
+/**
  * 0.9.8 — a seconded officer's effect on a working frame. A named crewmate who
  * knows the ship earns more out of the same duty than contracted hands do, and
- * takes a smaller cut for it. Multipliers rise with their crew level.
+ * takes a smaller cut for it. Multipliers rise with their crew level, and from
+ * 1.0.0 with how well their trade fits the duty they are standing.
  */
 function fleetOfficerGrossMul(f: FleetShip): number {
   const o = f.officer; if (!o) return 1;
-  return 1.15 + 0.04 * crewLevel(o);
+  return 1.15 + 0.04 * crewLevel(o) + fleetOfficerAffinity(f);
 }
 function fleetOfficerWageMul(f: FleetShip): number {
   return f.officer ? 0.7 : 1;
 }
+
 
 
 
@@ -4222,6 +4242,29 @@ function adjustRep(p: PlayerState, faction: string, delta: number) {
   p.reputation[faction] = before + delta;
   dispatchHook("onReputationChange", { faction, delta, before, after: p.reputation[faction] });
 }
+// 1.0.0 — rival houses. Closes the 0.9.5 deferment: standing is now zero-sum
+// between opposed houses, so a paid contract lifts its issuer *and* costs you a
+// little with whoever they are at odds with. Symmetric by construction.
+const RIVAL_HOUSES: Record<string, string[]> = {
+  federation: ["pirate"],
+  patrol: ["pirate"],
+  guild: ["pirate"],
+  aquila: ["federation"],
+  pirate: ["federation", "patrol", "guild"],
+};
+/** Apply an issuer gain and the matching rival loss in one call. */
+function adjustRepWithRivals(p: PlayerState, faction: string, delta: number): string[] {
+  adjustRep(p, faction, delta);
+  const hit: string[] = [];
+  if (delta <= 0) return hit;
+  for (const r of RIVAL_HOUSES[faction] ?? []) {
+    const loss = Math.max(1, Math.round(delta * 0.5));
+    adjustRep(p, r, -loss);
+    hit.push(`${r} -${loss}`);
+  }
+  return hit;
+}
+
 // 0.8.4 — Price of an expungement at a Bounty Office: 120cr per point of
 // standing bought back, floored at 300cr so it's never trivially cheap.
 function recordFine(rep: number): number {
@@ -5135,7 +5178,7 @@ class Input {
     }, opts);
     el.addEventListener("pointermove", (e) => {
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
-      const { x, y, w, h } = localXY(e);
+      const { x, y, h } = localXY(e);
       if (e.pointerId === this._stickPtrId) {
         this.stickCurX = x; this.stickCurY = y;
         e.preventDefault();
@@ -5357,7 +5400,6 @@ function saveGame(slot: string, blob: SaveBlob): { ok: true } | { ok: false; rea
     const isQuota =
       e instanceof DOMException &&
       (e.code === 22 || e.code === 1014 || /quota/i.test(e.name));
-    // eslint-disable-next-line no-console
     console.warn("[ASCII Frontier] saveGame failed:", e);
     return { ok: false, reason: isQuota ? "quota" : "error", error: e };
   }
@@ -6436,7 +6478,6 @@ export class Voidwake {
     this.titleNotice = reason.slice(0, 220);
     this.titleNoticeAt = performance.now() / 1000;
     writeDiagnostic(TITLE_NOTICE_KEY, { reason: this.titleNotice, wall: Date.now() });
-    // eslint-disable-next-line no-console
     console.info("[ASCII Frontier] title return:", this.titleNotice);
   }
 
@@ -7570,7 +7611,6 @@ export class Voidwake {
     this.crashError = e.message || "Unknown error";
     this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
     this.recordFlight(`crash: ${this.crashError}`, false, true);
-    // eslint-disable-next-line no-console
     console.error("[Voidwake crash]", e);
     // Also persist as a title notice so if the page reloads (HMR, React
     // remount, etc.) and we land on the title without seeing the crash
@@ -8599,6 +8639,7 @@ export class Voidwake {
         const dv = V.sub(p.pos, e.pos);
         const d = V.len(dv);
         e.cooldown = (e.cooldown ?? 0) - dt;
+
         if (e.state === "wander") {
           if (d < 900) {
             e.state = "observe";
@@ -8636,8 +8677,6 @@ export class Voidwake {
         }
       } else if (e.kind === "thargoid") {
         // Rare EMP encounter. State: dormant -> approach -> emp -> leave.
-        const dv = V.sub(p.pos, e.pos);
-        const d = V.len(dv);
         e.cooldown = (e.cooldown ?? 0) - dt;
         if (e.state === "dormant") {
           // Tick down; when it hits zero AND player isn't docked, warp near.
@@ -8667,7 +8706,9 @@ export class Voidwake {
           }
         } else if (e.state === "leave") {
           // Streak away and re-arm dormant timer.
+          const dv = V.sub(p.pos, e.pos);
           const away = V.norm({ x: -dv.x, y: -dv.y, z: -dv.z });
+
           e.vel = V.scale(away, 400);
           if ((e.cooldown ?? 0) <= 0) {
             e.pos = randPos(Math.random, WORLD_RADIUS * 0.95);
@@ -9675,10 +9716,16 @@ export class Voidwake {
       this.pushLog(`Contract paid: ${cm.description} (+${cm.reward}cr)`);
       // 0.9.5 — a faction-issued contract also buys standing with its issuer,
       // and paying it in at a rival dock still counts (the writ is the writ).
+      // 1.0.0 — and it now costs you with that issuer's rivals.
       if (cm.faction) {
-        adjustRep(p, cm.faction, cm.description.startsWith("PRIORITY:") ? 4 : 2);
-        this.pushLog(`${cm.issuer ?? cm.faction} notes the job done — standing improved.`);
+        const gain = cm.description.startsWith("PRIORITY:") ? 4 : 2;
+        const hit = adjustRepWithRivals(p, cm.faction, gain);
+        this.pushLog(
+          `${cm.issuer ?? cm.faction} notes the job done — standing improved.` +
+            (hit.length ? ` Rivals took note (${hit.join(", ")}).` : ""),
+        );
       }
+
       dispatchHook("onMissionCompleted", {
         id: cm.id, kind: cm.kind, description: cm.description, reward: cm.reward,
         faction: cm.faction, issuer: cm.issuer,
