@@ -344,6 +344,17 @@ level), pays 30% less in wages, and the officer keeps earning crew XP. Press the
 row again to recall them — they need a free bunk aboard whatever you are flying
 — and they come home automatically if you take that frame over.
 
+From **1.0.0** an officer's trade also matters: a Tactical or Gunner is worth the
+most on an escort patrol, a Merchant or Quartermaster on a freight run, and an
+Engineer on prospecting. Put the right specialist on the right duty and the same
+frame earns noticeably more.
+
+**Rival houses** (1.0.0). Paying in a faction contract lifts your standing with
+its issuer and costs you half that amount with each of that house's rivals — the
+Federation, Patrol Command and the Traders' Guild are all set against the Den,
+and Aquila Reach is set against the Federation. Running work for everyone at once
+no longer works; pick a side, or accept that both sides will price you for it.
+
 A frame out on duty also **shows up in the world**: within 9,000u of its home
 dock it spawns as a friendly contact flying escort AI alongside you, and
 despawns again past 15,000u.

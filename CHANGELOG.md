@@ -4,6 +4,32 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 1.0.0 — Prime Time
+The first stable release. No new subsystems — this milestone closes out two
+long-standing deferments, cleans the last lint/type debt out of the tree, and
+locks the documentation set.
+
+- **Officer role affinity.** A seconded officer's earnings now depend on whether
+  their trade fits the work. `FLEET_OFFICER_AFFINITY` adds a per-role, per-duty
+  bonus on top of the flat +15% and the +4%/level: Tactical and Gunner are worth
+  most on an escort patrol, Merchant and Quartermaster on a freight run, an
+  Engineer on prospecting. No role is ever worse than contracted hands.
+- **Rival houses.** Contract standing is no longer free money. `RIVAL_HOUSES`
+  pairs each issuing house with the ones it is at odds with, and a paid faction
+  contract now lifts the issuer *and* costs you half that amount with each of
+  their rivals. The payout log line names who took note.
+- **Clean tree.** Zero TypeScript errors, zero lint errors (the engine's dense,
+  hand-aligned formatting is now explicitly out of prettier's scope so `bun run
+  lint` is meaningful again), stale `eslint-disable` directives and dead locals
+  removed from the AI tick.
+- **Docs.** `README.md`, `GUIDE.md`, `MANUAL.md`, `src/game/README.md` and
+  `src/game/lua-samples.md` reviewed end to end for a 1.0 reader; offline bundle
+  regenerated.
+
+## Save compatibility
+Saves are shape-tolerant and unversioned at load: a pre-1.0 save loads into
+1.0.0 with the new fields defaulted. Exported `.json` saves remain readable.
+
 ## 0.9.8 — Fleet Command (Phase 3)
 - **Berth rent.** A parked frame now costs you something to keep. Each pay
   period every berthed hull accrues rent scaled to its list price; the bill is
