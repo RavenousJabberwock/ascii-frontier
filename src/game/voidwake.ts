@@ -9720,10 +9720,16 @@ export class Voidwake {
       this.pushLog(`Contract paid: ${cm.description} (+${cm.reward}cr)`);
       // 0.9.5 — a faction-issued contract also buys standing with its issuer,
       // and paying it in at a rival dock still counts (the writ is the writ).
+      // 1.0.0 — and it now costs you with that issuer's rivals.
       if (cm.faction) {
-        adjustRep(p, cm.faction, cm.description.startsWith("PRIORITY:") ? 4 : 2);
-        this.pushLog(`${cm.issuer ?? cm.faction} notes the job done — standing improved.`);
+        const gain = cm.description.startsWith("PRIORITY:") ? 4 : 2;
+        const hit = adjustRepWithRivals(p, cm.faction, gain);
+        this.pushLog(
+          `${cm.issuer ?? cm.faction} notes the job done — standing improved.` +
+            (hit.length ? ` Rivals took note (${hit.join(", ")}).` : ""),
+        );
       }
+
       dispatchHook("onMissionCompleted", {
         id: cm.id, kind: cm.kind, description: cm.description, reward: cm.reward,
         faction: cm.faction, issuer: cm.issuer,
