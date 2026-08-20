@@ -5180,7 +5180,7 @@ class Input {
     }, opts);
     el.addEventListener("pointermove", (e) => {
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
-      const { x, y, w, h } = localXY(e);
+      const { x, y, h } = localXY(e);
       if (e.pointerId === this._stickPtrId) {
         this.stickCurX = x; this.stickCurY = y;
         e.preventDefault();
@@ -8641,8 +8641,6 @@ export class Voidwake {
         }
       } else if (e.kind === "ufo") {
         // Observe-then-flee. Close approach turns them curious.
-        const dv = V.sub(p.pos, e.pos);
-        const d = V.len(dv);
         e.cooldown = (e.cooldown ?? 0) - dt;
         if (e.state === "wander") {
           if (d < 900) {
