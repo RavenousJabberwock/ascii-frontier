@@ -172,7 +172,6 @@ export type ScriptHookName =
 
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ScriptHookFn = (payload: any) => void;
 
 const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
@@ -252,7 +251,6 @@ export function clearScriptHooks(name?: ScriptHookName): void {
   if (name) _scriptHooks[name].length = 0;
   else (Object.keys(_scriptHooks) as ScriptHookName[]).forEach((k) => (_scriptHooks[k].length = 0));
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function dispatchHook(name: ScriptHookName, payload: any): void {
   const arr = _scriptHooks[name];
   if (arr.length === 0) return; // hot-path fast exit
@@ -5402,7 +5400,6 @@ function saveGame(slot: string, blob: SaveBlob): { ok: true } | { ok: false; rea
     const isQuota =
       e instanceof DOMException &&
       (e.code === 22 || e.code === 1014 || /quota/i.test(e.name));
-    // eslint-disable-next-line no-console
     console.warn("[ASCII Frontier] saveGame failed:", e);
     return { ok: false, reason: isQuota ? "quota" : "error", error: e };
   }
@@ -6481,7 +6478,6 @@ export class Voidwake {
     this.titleNotice = reason.slice(0, 220);
     this.titleNoticeAt = performance.now() / 1000;
     writeDiagnostic(TITLE_NOTICE_KEY, { reason: this.titleNotice, wall: Date.now() });
-    // eslint-disable-next-line no-console
     console.info("[ASCII Frontier] title return:", this.titleNotice);
   }
 
@@ -7615,7 +7611,6 @@ export class Voidwake {
     this.crashError = e.message || "Unknown error";
     this.crashStack = (e.stack || "").split("\n").slice(0, 8).join("\n");
     this.recordFlight(`crash: ${this.crashError}`, false, true);
-    // eslint-disable-next-line no-console
     console.error("[Voidwake crash]", e);
     // Also persist as a title notice so if the page reloads (HMR, React
     // remount, etc.) and we land on the title without seeing the crash
