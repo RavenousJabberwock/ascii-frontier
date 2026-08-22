@@ -9913,14 +9913,19 @@ export class Voidwake {
     const roll = rng();
     const kinds: MissionKind[] =
       kForced ? [kForced] :
-      canPassenger && roll < 0.15 ? ["passenger"] :
-      roll < 0.30 ? ["deliver"] :
-      roll < 0.42 ? ["haul"] :
-      roll < 0.55 ? ["destroy"] :
-      roll < 0.66 ? ["bounty"] :
-      roll < 0.77 ? ["scan"] :
-      roll < 0.88 ? ["escort"] :
-      ["rescue"];
+      canPassenger && roll < 0.12 ? ["passenger"] :
+      roll < 0.24 ? ["deliver"] :
+      roll < 0.33 ? ["haul"] :
+      roll < 0.43 ? ["destroy"] :
+      roll < 0.52 ? ["bounty"] :
+      roll < 0.61 ? ["scan"] :
+      roll < 0.69 ? ["escort"] :
+      roll < 0.77 ? ["rescue"] :
+      // 1.0.1 — the new job families sit alongside the classics.
+      roll < 0.85 ? ["convoy"] :
+      roll < 0.93 ? ["defend"] :
+      ["supply"];
+
     const k = kinds[0];
     const id = nextId();
 
