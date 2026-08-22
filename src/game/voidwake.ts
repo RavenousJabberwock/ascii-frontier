@@ -2447,6 +2447,11 @@ interface Entity {
   // opens a stripped station-style market (ore/fuel only). Untouched by
   // combat AI — colonies stay "nature" faction and non-hostile.
   populated?: boolean;
+  // 1.0.1 — convoy escort work. When set on a friendly hull, its idle AI
+  // routes to this station id instead of the nearest civilian dock, so an
+  // escorted freighter actually makes the run the contract describes.
+  convoyToId?: number;
+
 }
 
 interface PlayerChar {
@@ -2770,7 +2775,10 @@ for (const pool of [EXTRA_TEMPLATES, EXTRA_TEMPLATES_088]) {
 
 
 
-type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
+type MissionKind =
+  | "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger"
+  // 1.0.1 — station-to-station convoy work, distress response, and supply runs.
+  | "convoy" | "defend" | "supply";
 interface Mission {
   id: number;
   kind: MissionKind;
@@ -2794,7 +2802,20 @@ interface Mission {
   // payloads. Undefined for the starter board (no issuer yet).
   faction?: string;
   issuer?: string;
+  // --- 1.0.1 -----------------------------------------------------------
+  // Destination station for convoy ("see this hull safely to dock") and
+  // supply ("sell the goods at this dock") work.
+  destId?: number;
+  // The friendly hull under protection on a "defend" job. `targetId` is the
+  // attacker; the ward is what must survive.
+  wardId?: number;
+  // Units already handed over on a "supply" contract.
+  deliveredQty?: number;
+  // Set once a lazily-spawned job (defend attacker, convoy routing) has been
+  // wired into the live world on its first tick.
+  activated?: boolean;
 }
+
 
 // 0.9.5 — faction contract flavour. Each issuing faction has a house style:
 // which job kinds it hands out, how it words them, and what it pays. The
@@ -2812,23 +2833,23 @@ interface FactionContractStyle {
 }
 const FACTION_CONTRACTS: Record<string, FactionContractStyle> = {
   federation: {
-    issuer: "Federal Office", rewardMul: 1.15, prefers: ["bounty", "escort", "scan"], bias: 0.55,
+    issuer: "Federal Office", rewardMul: 1.15, prefers: ["bounty", "escort", "scan", "convoy"], bias: 0.55,
     brief: (d) => `Federal writ — ${d}`,
   },
   spd: {
-    issuer: "Patrol Command", rewardMul: 1.1, prefers: ["bounty", "destroy", "rescue"], bias: 0.7,
+    issuer: "Patrol Command", rewardMul: 1.1, prefers: ["bounty", "destroy", "rescue", "defend"], bias: 0.7,
     brief: (d) => `Patrol tasking — ${d}`,
   },
   guild: {
-    issuer: "Traders' Guild", rewardMul: 1.05, prefers: ["deliver", "haul", "passenger"], bias: 0.6,
+    issuer: "Traders' Guild", rewardMul: 1.05, prefers: ["deliver", "haul", "passenger", "supply", "convoy"], bias: 0.6,
     brief: (d) => `Guild consignment — ${d}`,
   },
   aquila: {
-    issuer: "Aquila Reach", rewardMul: 1.25, prefers: ["scan", "rescue", "escort"], bias: 0.6,
+    issuer: "Aquila Reach", rewardMul: 1.25, prefers: ["scan", "rescue", "escort", "supply"], bias: 0.6,
     brief: (d) => `Reach survey order — ${d}`,
   },
   pirate: {
-    issuer: "the Den", rewardMul: 1.4, prefers: ["destroy", "haul", "bounty"], bias: 0.65,
+    issuer: "the Den", rewardMul: 1.4, prefers: ["destroy", "haul", "bounty", "supply"], bias: 0.65,
     brief: (d) => `No-questions job — ${d}`,
   },
 };
@@ -2843,9 +2864,10 @@ const CONTRACT_SORT_LABEL: Record<"added" | "reward" | "deadline" | "kind", stri
 const CONTRACT_FILTERS: Array<{ label: string; match: (m: Mission) => boolean }> = [
   { label: "all",       match: () => true },
   { label: "ready",     match: (m) => m.done },
-  { label: "combat",    match: (m) => m.kind === "destroy" || m.kind === "bounty" },
-  { label: "freight",   match: (m) => m.kind === "deliver" || m.kind === "haul" },
-  { label: "people",    match: (m) => m.kind === "passenger" || m.kind === "rescue" || m.kind === "escort" },
+  { label: "combat",    match: (m) => m.kind === "destroy" || m.kind === "bounty" || m.kind === "defend" },
+  { label: "freight",   match: (m) => m.kind === "deliver" || m.kind === "haul" || m.kind === "supply" },
+  { label: "people",    match: (m) => m.kind === "passenger" || m.kind === "rescue" || m.kind === "escort" || m.kind === "convoy" },
+
   { label: "timed",     match: (m) => m.deadlineAt != null },
 ];
 
@@ -4128,7 +4150,13 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       }
       return;
     }
-    const station = ents.find((x) => x.kind === "station" && x.faction !== "pirate");
+    // 1.0.1 — a convoy under contract runs for its assigned dock; everything
+    // else drifts toward whichever civilian station is first in the list.
+    const station = e.convoyToId != null
+      ? (ents.find((x) => x.id === e.convoyToId)
+         ?? ents.find((x) => x.kind === "station" && x.faction !== "pirate"))
+      : ents.find((x) => x.kind === "station" && x.faction !== "pirate");
+
     if (station) {
       const d = V.sub(station.pos, e.pos);
       if (V.len(d) > 80) e.vel = V.scale(V.norm(d), 20);
@@ -9885,14 +9913,19 @@ export class Voidwake {
     const roll = rng();
     const kinds: MissionKind[] =
       kForced ? [kForced] :
-      canPassenger && roll < 0.15 ? ["passenger"] :
-      roll < 0.30 ? ["deliver"] :
-      roll < 0.42 ? ["haul"] :
-      roll < 0.55 ? ["destroy"] :
-      roll < 0.66 ? ["bounty"] :
-      roll < 0.77 ? ["scan"] :
-      roll < 0.88 ? ["escort"] :
-      ["rescue"];
+      canPassenger && roll < 0.12 ? ["passenger"] :
+      roll < 0.24 ? ["deliver"] :
+      roll < 0.33 ? ["haul"] :
+      roll < 0.43 ? ["destroy"] :
+      roll < 0.52 ? ["bounty"] :
+      roll < 0.61 ? ["scan"] :
+      roll < 0.69 ? ["escort"] :
+      roll < 0.77 ? ["rescue"] :
+      // 1.0.1 — the new job families sit alongside the classics.
+      roll < 0.85 ? ["convoy"] :
+      roll < 0.93 ? ["defend"] :
+      ["supply"];
+
     const k = kinds[0];
     const id = nextId();
 
@@ -9967,7 +10000,55 @@ export class Voidwake {
         reward, done: false,
       };
     }
+    // --- 1.0.1 -----------------------------------------------------------
+    // Convoy: shepherd a named friendly hull from wherever it is now to a
+    // specific dock. The ward routes itself (see friendly AI + convoyToId);
+    // the player has to keep it alive and stay in formation range.
+    if (k === "convoy") {
+      const ward = this.entities.find((e) => e.kind === "friendly" && (e.hull ?? 1) > 0 && e.faction !== "wing");
+      const stations = this.entities.filter((e) =>
+        e.kind === "station" && e.faction !== "pirate" && e.id !== this.dockedStationId);
+      const dest = stations.length ? stations[Math.floor(rng() * stations.length)] : null;
+      const dist = ward && dest ? V.len(V.sub(dest.pos, ward.pos)) : 4000;
+      return {
+        id, kind: "convoy",
+        targetId: ward?.id, destId: dest?.id,
+        destName: dest?.name ?? "the next dock",
+        description: `Escort ${ward?.name ?? "convoy"} to ${dest?.name ?? "the next dock"} — keep it inside 1200u and alive`,
+        reward: Math.round(420 + dist * 0.05), done: false,
+      };
+    }
+    // Defend: a friendly hull is (about to be) jumped. The attacker is spawned
+    // lazily on the first tick after acceptance so declined offers never
+    // litter the world; kill it or drive it off 5000u from the ward.
+    if (k === "defend") {
+      const ward = this.entities.find((e) => e.kind === "friendly" && (e.hull ?? 1) > 0 && e.faction !== "wing")
+        ?? this.entities.find((e) => e.kind === "neutral" && (e.hull ?? 1) > 0);
+      return {
+        id, kind: "defend", wardId: ward?.id,
+        description: `Distress call: ${ward?.name ?? "a civilian hull"} is under fire — destroy or drive off the attacker`,
+        reward: 480 + Math.floor(rng() * 260), done: false,
+      };
+    }
+    // Supply: sell a set number of units of one commodity at a named dock.
+    // Progress is credited by the market sell path, so partial sales count.
+    if (k === "supply") {
+      const legal = COMMODITIES.filter((c) => c.legality === "clean");
+      const pick = legal.length ? legal[Math.floor(rng() * legal.length)] : COMMODITIES[0];
+      const qty = 8 + Math.floor(rng() * 17);          // 8..24 units
+      const stations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate");
+      const dest = stations.length ? stations[Math.floor(rng() * stations.length)] : null;
+      return {
+        id, kind: "supply",
+        cargoItem: pick.id, cargoQty: qty, deliveredQty: 0,
+        targetId: dest?.id, destId: dest?.id,
+        destName: dest?.name ?? "any civilian dock",
+        description: `Supply run: sell ${qty} ${pick.name} to ${dest?.name ?? "any civilian dock"}`,
+        reward: Math.round(qty * 34 + 240), done: false,
+      };
+    }
     return {
+
       id, kind: "deliver", cargoItem: "ore", cargoQty: 5,
       description: "Deliver 5 ore to any station",
       reward: 200, done: false,
@@ -10025,8 +10106,134 @@ export class Voidwake {
       // Completion is set in tryDock (we need to know WHERE the player
       // docked). Only render remaining time here — mission log handles it.
     }
+    // --- 1.0.1 job families ----------------------------------------------
+    if (m.kind === "convoy") this.tickConvoy(p, m);
+    if (m.kind === "defend") this.tickDefend(p, m);
+    if (m.kind === "supply") {
+      if ((m.deliveredQty ?? 0) >= (m.cargoQty ?? 0)) {
+        m.done = true;
+        this.pushLog("Supply contract filled — collect on hand-in.");
+      }
+    }
     // "bounty" / "destroy" completion is set by the bullet-hit loop.
   }
+
+  /**
+   * 1.0.1 — convoy escort. The ward routes itself to `destId` via convoyToId;
+   * the contract closes when it reaches the dock, and fails if it is destroyed
+   * or the player abandons it far behind (>6000u) for a sustained stretch.
+   */
+  private tickConvoy(p: PlayerState, m: Mission) {
+    const ward = m.targetId != null ? this.byId(m.targetId) : null;
+    if (!ward || (ward.hull ?? 1) <= 0 || ward.kind !== "friendly") {
+      this.pushLog(`✗ Convoy lost — ${m.destName ? `${m.destName} run` : "escort"} contract failed.`);
+      this.pushChatter("Computer", "Ward transponder off the board. Contract voided.", "#ff8a8a");
+      adjustRep(p, "guild", -2);
+      dropContract(p, m);
+      return;
+    }
+    if (!m.activated) {
+      m.activated = true;
+      if (m.destId != null) ward.convoyToId = m.destId;
+      this.pushChatter(ward.name, `Forming up, Captain. Running for ${m.destName ?? "the dock"} — stay close.`, "#aef58a");
+    }
+    const dest = m.destId != null ? this.byId(m.destId) : null;
+    const near = V.len(V.sub(ward.pos, p.pos));
+    if (dest && V.len(V.sub(ward.pos, dest.pos)) < 900) {
+      m.done = true;
+      ward.convoyToId = undefined;
+      this.pushLog(`Convoy delivered to ${dest.name}.`);
+      this.pushChatter(ward.name, "Docking clamps in sight. Good flying — the fee's yours.", "#aef58a");
+      return;
+    }
+    // Drifting too far for too long lapses the job rather than failing it
+    // outright, so a long detour is recoverable.
+    const key = -m.id;                        // reuse the escort timer map
+    if (near > 6000) {
+      const since = this._escortStay.get(key) ?? 0;
+      const now = performance.now() / 1000;
+      if (since === 0) this._escortStay.set(key, now);
+      else if (now - since >= 45) {
+        this.pushLog("✗ Convoy left unescorted — contract lapsed.");
+        adjustRep(p, "guild", -2);
+        ward.convoyToId = undefined;
+        this._escortStay.delete(key);
+        dropContract(p, m);
+      }
+    } else {
+      this._escortStay.set(key, 0);
+    }
+  }
+
+  /**
+   * 1.0.1 — distress response. On activation the attacker spawns near the ward
+   * and hails the player over comms. The job closes when the raider dies (the
+   * bullet-hit loop handles that) or when it breaks off 5000u from the ward.
+   */
+  private tickDefend(p: PlayerState, m: Mission) {
+    const ward = m.wardId != null ? this.byId(m.wardId) : null;
+    if (!ward || (ward.hull ?? 1) <= 0) {
+      this.pushLog("✗ The hull that called for help is gone — contract failed.");
+      adjustRep(p, "federation", -2);
+      dropContract(p, m);
+      return;
+    }
+    if (!m.activated) {
+      m.activated = true;
+      const heavy = Math.random() < 0.35;
+      const dir = V.norm({
+        x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() * 2 - 1,
+      });
+      const raider: Entity = {
+        id: nextId(), kind: "hostile",
+        name: nameFrom(this.rng, "Raider"),
+        pos: V.add(ward.pos, V.scale(dir, 700 + Math.random() * 500)),
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "pirate",
+        hull: heavy ? 90 : 55, shield: heavy ? 60 : 20,
+        state: "hunt", cooldown: 0, weaponId: heavy ? "rail" : "pulse",
+        targetId: ward.id,
+      };
+      this.entities.push(raider);
+      m.targetId = raider.id;
+      ward.hostileUntil = performance.now() / 1000 + 90;
+      this.pushChatter(ward.name, `Mayday, mayday — ${raider.name} is on us! Anyone with guns, please!`, "#ffd28a");
+      this.pushChatter(raider.name, "Stay out of this, freelancer. This hull's already paid for.", "#ff8a8a");
+      this.pushLog(`Distress beacon: ${ward.name} under attack by ${raider.name}.`);
+      this.sfx("warning");
+      return;
+    }
+    const foe = m.targetId != null ? this.byId(m.targetId) : null;
+    if (!foe || (foe.hull ?? 0) <= 0 || foe.kind !== "hostile") {
+      m.done = true;
+      this.pushLog("Attacker neutralised — the ward is clear.");
+      this.pushChatter(ward.name, "That's them off us. We owe you, Captain.", "#aef58a");
+      return;
+    }
+    if (V.len(V.sub(foe.pos, ward.pos)) > 5000) {
+      m.done = true;
+      this.pushLog("Attacker broke off — the ward is clear.");
+      this.pushChatter(ward.name, "They've run for it. Filing your fee with the Guild now.", "#aef58a");
+    }
+  }
+
+  /**
+   * 1.0.1 — credit a supply contract when the market sell path moves units of
+   * the contracted commodity at the contracted dock (partial sales count).
+   */
+  creditSupply(commodityId: string, qty: number, stationId: number) {
+    const p = this.player; if (!p || qty <= 0) return;
+    for (const m of contractList(p)) {
+      if (m.done || m.kind !== "supply" || m.cargoItem !== commodityId) continue;
+      if (m.destId != null && m.destId !== stationId) continue;
+      m.deliveredQty = Math.min(m.cargoQty ?? 0, (m.deliveredQty ?? 0) + qty);
+      const left = Math.max(0, (m.cargoQty ?? 0) - m.deliveredQty);
+      this.pushLog(left
+        ? `Supply contract: ${m.deliveredQty}/${m.cargoQty} ${commodityId} delivered (${left} to go).`
+        : `Supply contract: ${m.cargoQty}/${m.cargoQty} ${commodityId} delivered.`);
+    }
+  }
+
 
   // --- Gunner autopilot ---------------------------------------------------
   // "Smart with rules" (selected during character creation discussion):
