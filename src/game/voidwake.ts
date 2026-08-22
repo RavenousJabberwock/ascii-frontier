@@ -2828,23 +2828,23 @@ interface FactionContractStyle {
 }
 const FACTION_CONTRACTS: Record<string, FactionContractStyle> = {
   federation: {
-    issuer: "Federal Office", rewardMul: 1.15, prefers: ["bounty", "escort", "scan"], bias: 0.55,
+    issuer: "Federal Office", rewardMul: 1.15, prefers: ["bounty", "escort", "scan", "convoy"], bias: 0.55,
     brief: (d) => `Federal writ — ${d}`,
   },
   spd: {
-    issuer: "Patrol Command", rewardMul: 1.1, prefers: ["bounty", "destroy", "rescue"], bias: 0.7,
+    issuer: "Patrol Command", rewardMul: 1.1, prefers: ["bounty", "destroy", "rescue", "defend"], bias: 0.7,
     brief: (d) => `Patrol tasking — ${d}`,
   },
   guild: {
-    issuer: "Traders' Guild", rewardMul: 1.05, prefers: ["deliver", "haul", "passenger"], bias: 0.6,
+    issuer: "Traders' Guild", rewardMul: 1.05, prefers: ["deliver", "haul", "passenger", "supply", "convoy"], bias: 0.6,
     brief: (d) => `Guild consignment — ${d}`,
   },
   aquila: {
-    issuer: "Aquila Reach", rewardMul: 1.25, prefers: ["scan", "rescue", "escort"], bias: 0.6,
+    issuer: "Aquila Reach", rewardMul: 1.25, prefers: ["scan", "rescue", "escort", "supply"], bias: 0.6,
     brief: (d) => `Reach survey order — ${d}`,
   },
   pirate: {
-    issuer: "the Den", rewardMul: 1.4, prefers: ["destroy", "haul", "bounty"], bias: 0.65,
+    issuer: "the Den", rewardMul: 1.4, prefers: ["destroy", "haul", "bounty", "supply"], bias: 0.65,
     brief: (d) => `No-questions job — ${d}`,
   },
 };
@@ -2859,9 +2859,10 @@ const CONTRACT_SORT_LABEL: Record<"added" | "reward" | "deadline" | "kind", stri
 const CONTRACT_FILTERS: Array<{ label: string; match: (m: Mission) => boolean }> = [
   { label: "all",       match: () => true },
   { label: "ready",     match: (m) => m.done },
-  { label: "combat",    match: (m) => m.kind === "destroy" || m.kind === "bounty" },
-  { label: "freight",   match: (m) => m.kind === "deliver" || m.kind === "haul" },
-  { label: "people",    match: (m) => m.kind === "passenger" || m.kind === "rescue" || m.kind === "escort" },
+  { label: "combat",    match: (m) => m.kind === "destroy" || m.kind === "bounty" || m.kind === "defend" },
+  { label: "freight",   match: (m) => m.kind === "deliver" || m.kind === "haul" || m.kind === "supply" },
+  { label: "people",    match: (m) => m.kind === "passenger" || m.kind === "rescue" || m.kind === "escort" || m.kind === "convoy" },
+
   { label: "timed",     match: (m) => m.deadlineAt != null },
 ];
 
