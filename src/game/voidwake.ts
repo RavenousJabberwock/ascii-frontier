@@ -2447,6 +2447,11 @@ interface Entity {
   // opens a stripped station-style market (ore/fuel only). Untouched by
   // combat AI — colonies stay "nature" faction and non-hostile.
   populated?: boolean;
+  // 1.0.1 — convoy escort work. When set on a friendly hull, its idle AI
+  // routes to this station id instead of the nearest civilian dock, so an
+  // escorted freighter actually makes the run the contract describes.
+  convoyToId?: number;
+
 }
 
 interface PlayerChar {
