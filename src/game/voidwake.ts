@@ -10000,7 +10000,55 @@ export class Voidwake {
         reward, done: false,
       };
     }
+    // --- 1.0.1 -----------------------------------------------------------
+    // Convoy: shepherd a named friendly hull from wherever it is now to a
+    // specific dock. The ward routes itself (see friendly AI + convoyToId);
+    // the player has to keep it alive and stay in formation range.
+    if (k === "convoy") {
+      const ward = this.entities.find((e) => e.kind === "friendly" && (e.hull ?? 1) > 0 && e.faction !== "wing");
+      const stations = this.entities.filter((e) =>
+        e.kind === "station" && e.faction !== "pirate" && e.id !== this.dockedStationId);
+      const dest = stations.length ? stations[Math.floor(rng() * stations.length)] : null;
+      const dist = ward && dest ? V.len(V.sub(dest.pos, ward.pos)) : 4000;
+      return {
+        id, kind: "convoy",
+        targetId: ward?.id, destId: dest?.id,
+        destName: dest?.name ?? "the next dock",
+        description: `Escort ${ward?.name ?? "convoy"} to ${dest?.name ?? "the next dock"} — keep it inside 1200u and alive`,
+        reward: Math.round(420 + dist * 0.05), done: false,
+      };
+    }
+    // Defend: a friendly hull is (about to be) jumped. The attacker is spawned
+    // lazily on the first tick after acceptance so declined offers never
+    // litter the world; kill it or drive it off 5000u from the ward.
+    if (k === "defend") {
+      const ward = this.entities.find((e) => e.kind === "friendly" && (e.hull ?? 1) > 0 && e.faction !== "wing")
+        ?? this.entities.find((e) => e.kind === "neutral" && (e.hull ?? 1) > 0);
+      return {
+        id, kind: "defend", wardId: ward?.id,
+        description: `Distress call: ${ward?.name ?? "a civilian hull"} is under fire — destroy or drive off the attacker`,
+        reward: 480 + Math.floor(rng() * 260), done: false,
+      };
+    }
+    // Supply: sell a set number of units of one commodity at a named dock.
+    // Progress is credited by the market sell path, so partial sales count.
+    if (k === "supply") {
+      const legal = COMMODITIES.filter((c) => c.legality === "legal");
+      const pick = legal.length ? legal[Math.floor(rng() * legal.length)] : COMMODITIES[0];
+      const qty = 8 + Math.floor(rng() * 17);          // 8..24 units
+      const stations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate");
+      const dest = stations.length ? stations[Math.floor(rng() * stations.length)] : null;
+      return {
+        id, kind: "supply",
+        cargoItem: pick.id, cargoQty: qty, deliveredQty: 0,
+        targetId: dest?.id, destId: dest?.id,
+        destName: dest?.name ?? "any civilian dock",
+        description: `Supply run: sell ${qty} ${pick.name} to ${dest?.name ?? "any civilian dock"}`,
+        reward: Math.round(qty * 34 + 240), done: false,
+      };
+    }
     return {
+
       id, kind: "deliver", cargoItem: "ore", cargoQty: 5,
       description: "Deliver 5 ore to any station",
       reward: 200, done: false,
