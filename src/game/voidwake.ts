@@ -2770,7 +2770,10 @@ for (const pool of [EXTRA_TEMPLATES, EXTRA_TEMPLATES_088]) {
 
 
 
-type MissionKind = "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger";
+type MissionKind =
+  | "deliver" | "destroy" | "scan" | "bounty" | "escort" | "rescue" | "haul" | "passenger"
+  // 1.0.1 — station-to-station convoy work, distress response, and supply runs.
+  | "convoy" | "defend" | "supply";
 interface Mission {
   id: number;
   kind: MissionKind;
@@ -2794,7 +2797,20 @@ interface Mission {
   // payloads. Undefined for the starter board (no issuer yet).
   faction?: string;
   issuer?: string;
+  // --- 1.0.1 -----------------------------------------------------------
+  // Destination station for convoy ("see this hull safely to dock") and
+  // supply ("sell the goods at this dock") work.
+  destId?: number;
+  // The friendly hull under protection on a "defend" job. `targetId` is the
+  // attacker; the ward is what must survive.
+  wardId?: number;
+  // Units already handed over on a "supply" contract.
+  deliveredQty?: number;
+  // Set once a lazily-spawned job (defend attacker, convoy routing) has been
+  // wired into the live world on its first tick.
+  activated?: boolean;
 }
+
 
 // 0.9.5 — faction contract flavour. Each issuing faction has a house style:
 // which job kinds it hands out, how it words them, and what it pays. The
