@@ -4150,7 +4150,13 @@ function tickAI(e: Entity, dt: number, player: PlayerState, ents: Entity[], rng:
       }
       return;
     }
-    const station = ents.find((x) => x.kind === "station" && x.faction !== "pirate");
+    // 1.0.1 — a convoy under contract runs for its assigned dock; everything
+    // else drifts toward whichever civilian station is first in the list.
+    const station = e.convoyToId != null
+      ? (ents.find((x) => x.id === e.convoyToId)
+         ?? ents.find((x) => x.kind === "station" && x.faction !== "pirate"))
+      : ents.find((x) => x.kind === "station" && x.faction !== "pirate");
+
     if (station) {
       const d = V.sub(station.pos, e.pos);
       if (V.len(d) > 80) e.vel = V.scale(V.norm(d), 20);
