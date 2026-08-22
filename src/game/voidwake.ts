@@ -10106,8 +10106,134 @@ export class Voidwake {
       // Completion is set in tryDock (we need to know WHERE the player
       // docked). Only render remaining time here — mission log handles it.
     }
+    // --- 1.0.1 job families ----------------------------------------------
+    if (m.kind === "convoy") this.tickConvoy(p, m);
+    if (m.kind === "defend") this.tickDefend(p, m);
+    if (m.kind === "supply") {
+      if ((m.deliveredQty ?? 0) >= (m.cargoQty ?? 0)) {
+        m.done = true;
+        this.pushLog("Supply contract filled — collect on hand-in.");
+      }
+    }
     // "bounty" / "destroy" completion is set by the bullet-hit loop.
   }
+
+  /**
+   * 1.0.1 — convoy escort. The ward routes itself to `destId` via convoyToId;
+   * the contract closes when it reaches the dock, and fails if it is destroyed
+   * or the player abandons it far behind (>6000u) for a sustained stretch.
+   */
+  private tickConvoy(p: PlayerState, m: Mission) {
+    const ward = m.targetId != null ? this.byId(m.targetId) : null;
+    if (!ward || (ward.hull ?? 1) <= 0 || ward.kind !== "friendly") {
+      this.pushLog(`✗ Convoy lost — ${m.destName ? `${m.destName} run` : "escort"} contract failed.`);
+      this.pushChatter("Computer", "Ward transponder off the board. Contract voided.", "#ff8a8a");
+      adjustRep(p, "guild", -2);
+      dropContract(p, m);
+      return;
+    }
+    if (!m.activated) {
+      m.activated = true;
+      if (m.destId != null) ward.convoyToId = m.destId;
+      this.pushChatter(ward.name, `Forming up, Captain. Running for ${m.destName ?? "the dock"} — stay close.`, "#aef58a");
+    }
+    const dest = m.destId != null ? this.byId(m.destId) : null;
+    const near = V.len(V.sub(ward.pos, p.pos));
+    if (dest && V.len(V.sub(ward.pos, dest.pos)) < 900) {
+      m.done = true;
+      ward.convoyToId = undefined;
+      this.pushLog(`Convoy delivered to ${dest.name}.`);
+      this.pushChatter(ward.name, "Docking clamps in sight. Good flying — the fee's yours.", "#aef58a");
+      return;
+    }
+    // Drifting too far for too long lapses the job rather than failing it
+    // outright, so a long detour is recoverable.
+    const key = -m.id;                        // reuse the escort timer map
+    if (near > 6000) {
+      const since = this._escortStay.get(key) ?? 0;
+      const now = performance.now() / 1000;
+      if (since === 0) this._escortStay.set(key, now);
+      else if (now - since >= 45) {
+        this.pushLog("✗ Convoy left unescorted — contract lapsed.");
+        adjustRep(p, "guild", -2);
+        ward.convoyToId = undefined;
+        this._escortStay.delete(key);
+        dropContract(p, m);
+      }
+    } else {
+      this._escortStay.set(key, 0);
+    }
+  }
+
+  /**
+   * 1.0.1 — distress response. On activation the attacker spawns near the ward
+   * and hails the player over comms. The job closes when the raider dies (the
+   * bullet-hit loop handles that) or when it breaks off 5000u from the ward.
+   */
+  private tickDefend(p: PlayerState, m: Mission) {
+    const ward = m.wardId != null ? this.byId(m.wardId) : null;
+    if (!ward || (ward.hull ?? 1) <= 0) {
+      this.pushLog("✗ The hull that called for help is gone — contract failed.");
+      adjustRep(p, "federation", -2);
+      dropContract(p, m);
+      return;
+    }
+    if (!m.activated) {
+      m.activated = true;
+      const heavy = Math.random() < 0.35;
+      const dir = V.norm({
+        x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() * 2 - 1,
+      });
+      const raider: Entity = {
+        id: nextId(), kind: "hostile",
+        name: nameFrom(this.rng, "Raider"),
+        pos: V.add(ward.pos, V.scale(dir, 700 + Math.random() * 500)),
+        vel: { x: 0, y: 0, z: 0 },
+        faction: "pirate",
+        hull: heavy ? 90 : 55, shield: heavy ? 60 : 20,
+        state: "hunt", cooldown: 0, weaponId: heavy ? "rail" : "pulse",
+        targetId: ward.id,
+      };
+      this.entities.push(raider);
+      m.targetId = raider.id;
+      ward.hostileUntil = performance.now() / 1000 + 90;
+      this.pushChatter(ward.name, `Mayday, mayday — ${raider.name} is on us! Anyone with guns, please!`, "#ffd28a");
+      this.pushChatter(raider.name, "Stay out of this, freelancer. This hull's already paid for.", "#ff8a8a");
+      this.pushLog(`Distress beacon: ${ward.name} under attack by ${raider.name}.`);
+      this.sfx("warning");
+      return;
+    }
+    const foe = m.targetId != null ? this.byId(m.targetId) : null;
+    if (!foe || (foe.hull ?? 0) <= 0 || foe.kind !== "hostile") {
+      m.done = true;
+      this.pushLog("Attacker neutralised — the ward is clear.");
+      this.pushChatter(ward.name, "That's them off us. We owe you, Captain.", "#aef58a");
+      return;
+    }
+    if (V.len(V.sub(foe.pos, ward.pos)) > 5000) {
+      m.done = true;
+      this.pushLog("Attacker broke off — the ward is clear.");
+      this.pushChatter(ward.name, "They've run for it. Filing your fee with the Guild now.", "#aef58a");
+    }
+  }
+
+  /**
+   * 1.0.1 — credit a supply contract when the market sell path moves units of
+   * the contracted commodity at the contracted dock (partial sales count).
+   */
+  creditSupply(commodityId: string, qty: number, stationId: number) {
+    const p = this.player; if (!p || qty <= 0) return;
+    for (const m of contractList(p)) {
+      if (m.done || m.kind !== "supply" || m.cargoItem !== commodityId) continue;
+      if (m.destId != null && m.destId !== stationId) continue;
+      m.deliveredQty = Math.min(m.cargoQty ?? 0, (m.deliveredQty ?? 0) + qty);
+      const left = Math.max(0, (m.cargoQty ?? 0) - m.deliveredQty);
+      this.pushLog(left
+        ? `Supply contract: ${m.deliveredQty}/${m.cargoQty} ${commodityId} delivered (${left} to go).`
+        : `Supply contract: ${m.cargoQty}/${m.cargoQty} ${commodityId} delivered.`);
+    }
+  }
+
 
   // --- Gunner autopilot ---------------------------------------------------
   // "Smart with rules" (selected during character creation discussion):
