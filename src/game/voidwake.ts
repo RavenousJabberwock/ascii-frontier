@@ -10033,7 +10033,7 @@ export class Voidwake {
     // Supply: sell a set number of units of one commodity at a named dock.
     // Progress is credited by the market sell path, so partial sales count.
     if (k === "supply") {
-      const legal = COMMODITIES.filter((c) => c.legality === "legal");
+      const legal = COMMODITIES.filter((c) => c.legality === "clean");
       const pick = legal.length ? legal[Math.floor(rng() * legal.length)] : COMMODITIES[0];
       const qty = 8 + Math.floor(rng() * 17);          // 8..24 units
       const stations = this.entities.filter((e) => e.kind === "station" && e.faction !== "pirate");
