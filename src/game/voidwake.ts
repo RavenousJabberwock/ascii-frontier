@@ -16993,6 +16993,20 @@ export class Voidwake {
           const d = V.len(V.sub(tt.pos, p.pos));
           prog = m.done ? "✓ scanned — DOCK" : `${tt.name}  ${d.toFixed(0)}u`;
         }
+      } else if (m.kind === "supply") {
+        prog = m.done ? "✓ supplied — DOCK"
+          : `${m.deliveredQty ?? 0}/${m.cargoQty} sold · ${p.cargo[m.cargoItem ?? ""] ?? 0} held`;
+      } else if (m.kind === "convoy" && m.targetId != null) {
+        const tt = this.byId(m.targetId);
+        const dd = m.destId != null ? this.byId(m.destId) : null;
+        if (m.done) prog = "✓ delivered — DOCK";
+        else if (tt && dd) prog = `${tt.name}  ${V.len(V.sub(tt.pos, dd.pos)).toFixed(0)}u out`;
+        else if (tt) prog = `${tt.name}  ${V.len(V.sub(tt.pos, p.pos)).toFixed(0)}u`;
+      } else if (m.kind === "defend") {
+        const foe = m.targetId != null ? this.byId(m.targetId) : null;
+        if (m.done) prog = "✓ ward clear — DOCK";
+        else if (!m.activated) prog = "answering mayday…";
+        else if (foe) prog = `${foe.name}  ${V.len(V.sub(foe.pos, p.pos)).toFixed(0)}u`;
       }
       if (prog) putText(g, qx, qy + 2, prog, m.done ? "#7CFC00" : "#cf6", vpRight);
       // Draw a small ◇ at the projected objective if on-screen.
@@ -17004,7 +17018,8 @@ export class Voidwake {
       // point at the nearest station regardless of state.
       const needStationObj =
         m.kind === "deliver" ||
-        ((m.kind === "destroy" || m.kind === "bounty" || m.kind === "scan") && m.done);
+        ((m.kind === "destroy" || m.kind === "bounty" || m.kind === "scan"
+          || m.kind === "defend" || m.kind === "convoy" || m.kind === "supply") && m.done);
 
       if (needStationObj) {
         let bestS: Entity | null = null; let bestD = Infinity;
