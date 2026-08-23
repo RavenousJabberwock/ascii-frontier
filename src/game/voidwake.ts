@@ -9360,9 +9360,11 @@ export class Voidwake {
               // checked, not just the tracked one.
               for (const cm of contractList(p)) {
                 if (cm.done) continue;
-                if ((cm.kind !== "destroy" && cm.kind !== "bounty") || cm.targetId !== t.id) continue;
+                if ((cm.kind !== "destroy" && cm.kind !== "bounty" && cm.kind !== "defend") || cm.targetId !== t.id) continue;
                 cm.done = true;
-                this.pushLog("Bounty completed — return to a station.");
+                this.pushLog(cm.kind === "defend"
+                  ? "Attacker destroyed — the ward is clear."
+                  : "Bounty completed — return to a station.");
                 if (cm.kind === "bounty") {
                   dispatchHook("onBountyClaimed", { name: t.name, reward: cm.reward, targetId: t.id });
                 }
@@ -10968,7 +10970,7 @@ export class Voidwake {
   private contractView(p: PlayerState): Mission[] {
     const f = CONTRACT_FILTERS[this.contractFilter % CONTRACT_FILTERS.length];
     let list = contractList(p).filter((m) => f.match(m));
-    const rank = (m: Mission) => ({ destroy: 0, bounty: 1, deliver: 2, haul: 3, passenger: 4, scan: 5, escort: 6 } as Record<string, number>)[m.kind] ?? 9;
+    const rank = (m: Mission) => ({ destroy: 0, bounty: 1, defend: 2, deliver: 3, supply: 4, haul: 5, passenger: 6, scan: 7, escort: 8, convoy: 9 } as Record<string, number>)[m.kind] ?? 9;
     if (this.contractSort === "reward") list = [...list].sort((a, b) => b.reward - a.reward);
     else if (this.contractSort === "deadline") {
       const at = (m: Mission) => m.deadlineAt ?? Number.POSITIVE_INFINITY;
@@ -11034,6 +11036,27 @@ export class Voidwake {
         const held = since ? Math.floor(performance.now() / 1000 - since) : 0;
         return d < 500 ? `${held}/60 s in range of ${t.name}` : `out of range (d=${d.toFixed(0)}u)`;
       }
+    }
+    if (m.kind === "supply") {
+      return `${m.deliveredQty ?? 0}/${m.cargoQty} ${m.cargoItem} sold at ${m.destName ?? "the dock"}` +
+        ` · ${p.cargo[m.cargoItem ?? ""] ?? 0} in hold`;
+    }
+    if (m.kind === "convoy" && m.targetId != null) {
+      const t = this.byId(m.targetId);
+      const dest = m.destId != null ? this.byId(m.destId) : null;
+      if (t) {
+        const d = V.len(V.sub(t.pos, p.pos));
+        const togo = dest ? V.len(V.sub(t.pos, dest.pos)) : 0;
+        return `${t.name} at ${d.toFixed(0)}u` + (dest ? ` · ${togo.toFixed(0)}u from ${dest.name}` : "");
+      }
+      return "convoy off sensors";
+    }
+    if (m.kind === "defend") {
+      const w = m.wardId != null ? this.byId(m.wardId) : null;
+      const foe = m.targetId != null ? this.byId(m.targetId) : null;
+      if (!m.activated) return "answering the distress call";
+      if (foe && w) return `${foe.name} ${V.len(V.sub(foe.pos, w.pos)).toFixed(0)}u from ${w.name}`;
+      return w ? `${w.name} holding` : "ward off sensors";
     }
     if (m.kind === "passenger" && m.deadlineAt) {
       const left = Math.max(0, m.deadlineAt - performance.now() / 1000);
@@ -14415,6 +14438,7 @@ export class Voidwake {
           c.stock += have;
           p.cargo[c.id] = 0;
           dispatchHook("onCommodityTrade", { action: "sell", id: c.id, name: c.name, qty: have, price: c.sell, stationId: sid });
+          this.creditSupply(c.id, have, sid);
         }
         if (!units) { this.pushLog("Nothing in the hold this dock will buy."); return; }
         p.credits += total;
@@ -14446,6 +14470,7 @@ export class Voidwake {
         c.stock += n;
         this.pushLog(`Sold ${n} ${c.name} for ${total}cr.`);
         dispatchHook("onCommodityTrade", { action: "sell", id: c.id, name: c.name, qty: n, price: c.sell, total, stationId: sid });
+        this.creditSupply(c.id, n, sid);
       }
       return;
     }
