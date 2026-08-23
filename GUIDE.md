@@ -131,6 +131,10 @@ contact and the TARGET panel tells you exactly what you are looking at.
 - **Contract log.** You can hold three contracts at once. `U` opens the log:
   `ENTER` tracks one, `X` abandons it (Guild standing hit). Completed jobs all
   pay out the next time you dock.
+- **New job families.** Alongside the classics you'll see **convoy escorts**
+  (shepherd a friendly hull to a named dock), **distress calls** (a civilian
+  under fire — kill or chase off the attacker), and **supply runs** (sell N
+  units of a commodity at a named dock; partial sales count).
 - **Contracts.** `J` at a dock: destroy, scan, deliver, courier, refuel a
   stranded ship, plus crew-specific quest lines. Completed objectives
   redirect the marker to the nearest civilian station for payout.

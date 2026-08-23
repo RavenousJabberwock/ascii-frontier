@@ -176,6 +176,18 @@ compact **[Buy] / [Sell]** view (LEFT/RIGHT switches mode).
 - Kinds include: destroy a raider, scan an object, deliver supplies, courier
   cargo between outposts, fuel a stranded ship, and crew-specific quest lines
   offered when you hire someone.
+- **Convoy escort** (1.0.1): a named friendly hull makes a run to a specific
+  dock and you fly shotgun. It routes itself; your job is to stay inside 1200u
+  and keep it alive. Paid when it reaches the dock. If it dies the contract
+  fails, and leaving it more than 6000u behind for 45 seconds lapses the job
+  with a small Guild standing hit.
+- **Distress response** (1.0.1): a civilian hull calls mayday over comms and its
+  attacker hails you too. Destroy the raider, or drive it more than 5000u off
+  the ship it is hunting. Lose the ward and the contract fails.
+- **Supply run** (1.0.1): sell a set number of units of one commodity at a named
+  dock. Both the per-commodity `[SELL]` rows and `[SELL ALL]` count toward it,
+  so partial sales are fine — the tracker shows units sold and units still in
+  the hold.
 - **Issuing houses** (0.9.5): a contract taken off a station board or out of a
   comms work offer is stamped with the house that wrote it, and the brief is
   worded to match — *Federal writ*, *Patrol tasking*, *Guild consignment*,

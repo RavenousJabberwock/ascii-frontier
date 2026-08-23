@@ -4,6 +4,30 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 1.0.1 — Wider Contract Board
+Three new job families join the eight classics, so a station board is far less
+likely to hand you three variations on "shoot that raider".
+
+- **Convoy escort (`convoy`).** A named friendly hull is routed to a specific
+  dock (`Entity.convoyToId` overrides its idle station-seeking AI) and you fly
+  shotgun. The job pays on arrival, fails if the ward is destroyed, and lapses
+  with a small Guild standing hit if you leave it more than 6000u behind for
+  45 seconds.
+- **Distress response (`defend`).** A civilian hull calls mayday over comms; the
+  attacker is spawned next to it on the contract's first tick (never before, so
+  declined offers leave nothing behind) and hails you itself. Close it by killing
+  the raider — the normal kill path handles the credit — or by driving it more
+  than 5000u off the ward. Losing the ward fails the job.
+- **Supply run (`supply`).** Sell a set number of units of one clean commodity at
+  a named dock. Both the per-commodity sell row and `[SELL ALL]` credit progress,
+  so partial sales count and the tracker shows units sold plus units still in
+  the hold.
+- Contract Log filters and sorting cover the new kinds (`combat` includes
+  defend, `freight` includes supply, `people` includes convoy), the pinned HUD
+  tracker renders per-kind progress for each, and the faction houses hand out
+  the ones that fit their style — Patrol Command favours distress calls, the
+  Traders' Guild favours convoys and supply runs.
+
 ## 1.0.0 — Prime Time
 The first stable release. No new subsystems — this milestone closes out two
 long-standing deferments, cleans the last lint/type debt out of the tree, and
