@@ -2303,6 +2303,11 @@ type FleetDuty = "idle" | "freight" | "patrol" | "prospect";
 const FLEET_PAY_PERIOD = 60;      // seconds of real time per settled period
 const FLEET_STANDDOWN = 0.35;     // fraction of hull below which a duty stops
 const FLEET_EARN_CAP = 24000;     // per-frame account ceiling
+// 1.0.2 — duty rotation. A rotating frame changes duty after this many settled
+// periods, and only pays FLEET_ROTATE_HIRE_MUL of the usual sign-on fee.
+const FLEET_ROTATE_PERIODS = 5;
+const FLEET_ROTATE_HIRE_MUL = 0.5;
+
 const FLEET_DUTY_SPECS: Array<{
   id: Exclude<FleetDuty, "idle">;
   name: string;
