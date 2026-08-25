@@ -13666,14 +13666,56 @@ export class Voidwake {
         : null;
       if (standDown) {
         const was = spec.name.toLowerCase();
-        f.duty = "idle"; f.note = standDown;
+        f.duty = "idle"; f.note = standDown; f.dutyPeriods = 0;
         this.pushChatter(f.officer?.name ?? `${name} Crew`, `Standing down from the ${was} — she ${standDown}. Berthed at ${f.storedAtName}.`, "#ffcc55", "external");
         dispatchHook("onFleetIncident", {
           hullId: f.hullId, name, duty: "idle", reason: standDown,
           hull: Math.round(f.hull), fuel: Math.round(f.fuel), station: f.storedAtName,
         });
+        if (f.rotate) {
+          f.rotate = false;
+          this.pushChatter(`${f.storedAtName} Dockmaster`,
+            `Rotation on the ${name} is off the roster until she's fit to work again.`, "#ffcc55", "external");
+        }
+        continue;
+      }
+      // ---- 1.0.2 duty rotation ---------------------------------------------
+      // A rotating frame hands its hands over to the next duty in the roster
+      // once it has worked its stint, at half the usual sign-on fee. The fee
+      // comes out of the frame's own account first, then your wallet; if neither
+      // can cover it the frame keeps working the duty it is on and says so once.
+      if (f.rotate && (f.dutyPeriods ?? 0) >= FLEET_ROTATE_PERIODS) {
+        const ids = FLEET_DUTY_SPECS.map((d) => d.id);
+        const nextId = ids[(ids.indexOf(spec.id) + 1) % ids.length];
+        const nextSpec = fleetDutySpec(nextId)!;
+        const fee = Math.round(nextSpec.hire * FLEET_ROTATE_HIRE_MUL * merchantBuyMult(p));
+        const fromAcct = Math.min(fee, Math.round(f.earned ?? 0));
+        const fromWallet = fee - fromAcct;
+        if (p.credits < fromWallet) {
+          if (f.note !== "rotation stalled — no credits to sign new hands") {
+            f.note = "rotation stalled — no credits to sign new hands";
+            this.pushChatter(f.officer?.name ?? `${name} Crew`,
+              `We're due to rotate off the ${spec.name.toLowerCase()}, Captain, but there's nothing to sign new hands with.`,
+              "#ffcc55", "external");
+          }
+        } else {
+          f.earned = Math.round((f.earned ?? 0) - fromAcct);
+          p.credits -= fromWallet;
+          const was = spec.name;
+          f.duty = nextId; f.dutySinceMs = Date.now(); f.dutyPeriods = 0;
+          f.note = `rotated off ${was.toLowerCase()}`;
+          this.pushChatter(f.officer?.name ?? `${name} Crew`,
+            `Rotating the ${name} off ${was.toLowerCase()} onto ${nextSpec.name.toLowerCase()} — ${fee}cr to sign the change.`,
+            "#8cf", "external");
+          dispatchHook("onFleetRotate", {
+            hullId: f.hullId, name, from: spec.id, to: nextId, fee,
+            fromAccount: fromAcct, fromWallet, station: f.storedAtName,
+            officer: f.officer?.name,
+          });
+        }
       }
     }
+
   }
   /**
    * 0.9.8 — fleet presence. A frame on duty is no longer purely abstract: when
