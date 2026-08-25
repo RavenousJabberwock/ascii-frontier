@@ -167,7 +167,13 @@ export type ScriptHookName =
   // frame appears in, or leaves, the world around the pilot.
   | "onFleetRent"
   | "onFleetOfficer"
-  | "onFleetPresence";
+  | "onFleetPresence"
+  // 1.0.2 — turret mounts and duty rotation. `onTurretFired` fires each time a
+  // point-defence mount takes a shot; `onFleetRotate` when a frame on a rotating
+  // roster hands itself over to the next duty in the cycle.
+  | "onTurretFired"
+  | "onFleetRotate";
+
 
 
 
@@ -234,6 +240,9 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onFleetRent:          [],
   onFleetOfficer:       [],
   onFleetPresence:      [],
+  onTurretFired:        [],
+  onFleetRotate:        [],
+
 
 
 };
@@ -2191,7 +2200,9 @@ function insurancePremium(p: PlayerState): number {
 // battle damage — as a `FleetShip` instead of trading it in. Swapping back is a
 // flat transfer fee plus the same cargo/berth fit checks a trade-in runs.
 // ---------------------------------------------------------------------------
-type RefitStat = "hull" | "shield" | "cargo" | "speed" | "berths";
+// 1.0.2 — `turret` is the first refit that is not a stat widening: each level
+// bolts an autonomous point-defence mount to the frame (see updateTurrets).
+type RefitStat = "hull" | "shield" | "cargo" | "speed" | "berths" | "turret";
 type ShipRefit = Partial<Record<RefitStat, number>>;
 const REFIT_MAX = 3;
 const REFIT_SPECS: Array<{
@@ -2202,7 +2213,16 @@ const REFIT_SPECS: Array<{
   { id: "cargo",  name: "Hold restructure",   per: 8,  unit: "cargo",  desc: "bulkheads moved aft to free stowage" },
   { id: "speed",  name: "Thrust remap",       per: 6,  unit: "spd",    desc: "injector remap and a lighter shroud" },
   { id: "berths", name: "Deck partition",     per: 1,  unit: "berth",  desc: "one more bunk carved out of the crew deck" },
+  { id: "turret", name: "Point-defence mount", per: 1, unit: "turret", desc: "a hull hardpoint that tracks and fires on hostiles by itself" },
 ];
+// 1.0.2 — point-defence turrets. Each turret level fires independently of your
+// nose: it picks the nearest hostile inside TURRET_RANGE and shoots for a
+// fraction of the mounted weapon's damage on its own cadence, so a heavily
+// refitted frame keeps chipping while you line up the real shot.
+const TURRET_RANGE = 1100;
+const TURRET_COOLDOWN = 1.9;      // seconds between shots, per mount
+const TURRET_DMG_MUL = 0.5;       // share of the mounted weapon's damage
+
 function refitLevel(refit: ShipRefit | undefined, stat: RefitStat): number {
   return Math.max(0, Math.min(REFIT_MAX, refit?.[stat] ?? 0));
 }
@@ -2248,6 +2268,14 @@ interface FleetShip {
   rentOwed?: number;
   officer?: CrewMember;
   presenceId?: number;
+  // 1.0.2 — duty rotation. With `rotate` set the frame runs a duty for
+  // FLEET_ROTATE_PERIODS settled periods and then signs its hands over to the
+  // next duty in the roster on its own (half the usual sign-on fee, paid out of
+  // the frame's own account). `dutyPeriods` counts the periods worked since the
+  // current duty started.
+  rotate?: boolean;
+  dutyPeriods?: number;
+
 }
 const FLEET_MAX = 3;              // hangar berths the player may hold
 const FLEET_BERTH_FEE = 800;      // charged when a frame is parked
@@ -2275,6 +2303,11 @@ type FleetDuty = "idle" | "freight" | "patrol" | "prospect";
 const FLEET_PAY_PERIOD = 60;      // seconds of real time per settled period
 const FLEET_STANDDOWN = 0.35;     // fraction of hull below which a duty stops
 const FLEET_EARN_CAP = 24000;     // per-frame account ceiling
+// 1.0.2 — duty rotation. A rotating frame changes duty after this many settled
+// periods, and only pays FLEET_ROTATE_HIRE_MUL of the usual sign-on fee.
+const FLEET_ROTATE_PERIODS = 5;
+const FLEET_ROTATE_HIRE_MUL = 0.5;
+
 const FLEET_DUTY_SPECS: Array<{
   id: Exclude<FleetDuty, "idle">;
   name: string;
@@ -8957,6 +8990,8 @@ export class Voidwake {
     // Gunner autopilot + loot pickup + ambient chatter (cheap per-tick work).
     this.updateGunner(dt, fwd);
     this.updateTactical(dt, fwd);
+    this.updateTurrets(dt);
+
     this.pickupLoot();
     this.tickAmbientChatter(dt);
     this.tickTradeSim(dt);
@@ -9262,20 +9297,26 @@ export class Voidwake {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
-          // ownerId -2 = gunner-fired shot; -3 = tactical-fired shot.
+          // ownerId -2 = gunner-fired shot; -3 = tactical-fired shot;
+          // -4 = point-defence turret (1.0.2), which hits for a fraction of the
+          // mounted weapon and never rolls a critical.
           const gunnerFired   = playerShot && e.ownerId === -2;
           const tacticalFired = playerShot && e.ownerId === -3;
+          const turretFired   = playerShot && e.ownerId === -4;
           const shooterWepId = gunnerFired
             ? (this.player?.ship.gunnerWeaponId ?? this.player?.ship.weaponId)
             : this.player?.ship.weaponId;
           let dmg = playerShot
             ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
+          if (turretFired) dmg = Math.max(2, Math.round(dmg * TURRET_DMG_MUL));
+
           // 0.5.6 — critical hits. Base 8% on any player shot; +5% with a
           // Gunner aboard; +15% floor when a Tactical Officer fires. Crits
           // apply a 2× multiplier and post a brief "★ CRIT" chatter line.
           let crit = false;
-          if (playerShot) {
+          if (playerShot && !turretFired) {
+
             let critChance = 0.08;
             if (this.player?.gunner) critChance += 0.05;
             if (tacticalFired) critChance = Math.max(critChance, 0.23);
@@ -10366,6 +10407,53 @@ export class Voidwake {
         "#ff7a7a");
     }
   }
+
+  // --- Point-defence turrets (1.0.2) --------------------------------------
+  // Each level of the `turret` refit is an autonomous mount. Unlike the Gunner
+  // and the Tactical Officer, a turret does not care where the nose is pointed:
+  // it takes the nearest live hostile inside TURRET_RANGE, leads it crudely, and
+  // fires for TURRET_DMG_MUL of the mounted weapon's damage. Mounts are staggered
+  // so three turrets read as a steady patter rather than a volley.
+  private _turretCooldowns: number[] = [];
+  updateTurrets(dt: number) {
+    const p = this.player;
+    if (!p || this.options.peaceful) return;
+    const mounts = refitLevel(p.ship.refit, "turret");
+    if (mounts <= 0) return;
+    let best: Entity | null = null, bestD2 = Infinity;
+    const r2 = TURRET_RANGE * TURRET_RANGE;
+    for (const e of this.entities) {
+      if (e.kind !== "hostile" || (e.hull ?? 1) <= 0) continue;
+      const d2 = V.d2(e.pos, p.pos);
+      if (d2 > r2 || d2 < 1) continue;
+      if (d2 < bestD2) { bestD2 = d2; best = e; }
+    }
+    const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+    for (let i = 0; i < mounts; i++) {
+      // Stagger fresh mounts across the cadence so they don't fire in lockstep.
+      if (this._turretCooldowns[i] == null) this._turretCooldowns[i] = (TURRET_COOLDOWN / mounts) * i;
+      this._turretCooldowns[i] -= dt;
+      if (!best) continue;
+      if (this._turretCooldowns[i] > 0) continue;
+      this._turretCooldowns[i] = TURRET_COOLDOWN * effectiveCooldownMul(p);
+      const rel = V.sub(best.pos, p.pos);
+      const d = Math.max(1, V.len(rel));
+      const aim = V.scale(rel, 1 / d);
+      this.entities.push({
+        id: nextId(), kind: "bullet", name: "pd shot",
+        pos: { ...p.pos }, vel: V.scale(aim, 300),
+        faction: "player", ownerId: -4, ttl: 2,
+        ttlAt: performance.now() / 1000 + 2,
+      });
+      this.beep(980, 0.03, "square");
+      dispatchHook("onTurretFired", {
+        mount: i + 1, mounts, targetId: best.id, target: best.name,
+        distance: Math.round(d), damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL)),
+      });
+    }
+  }
+
+
 
 
 
@@ -13522,12 +13610,15 @@ export class Voidwake {
             dispatchHook("onCrewLevelUp", { name: f.officer.name, role: f.officer.role, level: after, xp: f.officer.xp });
           }
         }
+        f.dutyPeriods = Math.round((f.dutyPeriods ?? 0) + periods);
         dispatchHook("onFleetIncome", {
           hullId: f.hullId, name, duty: f.duty, paid: net, banked: Math.round(f.earned),
           station: f.storedAtName, fuel: Math.round(f.fuel),
           officer: f.officer?.name, officerRole: f.officer?.role,
+          periodsOnDuty: f.dutyPeriods, rotating: !!f.rotate,
         });
       }
+
       // ---- 0.9.8 berth rent -------------------------------------------------
       const rent = Math.round(fleetRentPerPeriod(p, f) * periods);
       let fromAccount = Math.min(rent, Math.round(f.earned ?? 0));
@@ -13575,14 +13666,56 @@ export class Voidwake {
         : null;
       if (standDown) {
         const was = spec.name.toLowerCase();
-        f.duty = "idle"; f.note = standDown;
+        f.duty = "idle"; f.note = standDown; f.dutyPeriods = 0;
         this.pushChatter(f.officer?.name ?? `${name} Crew`, `Standing down from the ${was} — she ${standDown}. Berthed at ${f.storedAtName}.`, "#ffcc55", "external");
         dispatchHook("onFleetIncident", {
           hullId: f.hullId, name, duty: "idle", reason: standDown,
           hull: Math.round(f.hull), fuel: Math.round(f.fuel), station: f.storedAtName,
         });
+        if (f.rotate) {
+          f.rotate = false;
+          this.pushChatter(`${f.storedAtName} Dockmaster`,
+            `Rotation on the ${name} is off the roster until she's fit to work again.`, "#ffcc55", "external");
+        }
+        continue;
+      }
+      // ---- 1.0.2 duty rotation ---------------------------------------------
+      // A rotating frame hands its hands over to the next duty in the roster
+      // once it has worked its stint, at half the usual sign-on fee. The fee
+      // comes out of the frame's own account first, then your wallet; if neither
+      // can cover it the frame keeps working the duty it is on and says so once.
+      if (f.rotate && (f.dutyPeriods ?? 0) >= FLEET_ROTATE_PERIODS) {
+        const ids = FLEET_DUTY_SPECS.map((d) => d.id);
+        const nextId = ids[(ids.indexOf(spec.id) + 1) % ids.length];
+        const nextSpec = fleetDutySpec(nextId)!;
+        const fee = Math.round(nextSpec.hire * FLEET_ROTATE_HIRE_MUL * merchantBuyMult(p));
+        const fromAcct = Math.min(fee, Math.round(f.earned ?? 0));
+        const fromWallet = fee - fromAcct;
+        if (p.credits < fromWallet) {
+          if (f.note !== "rotation stalled — no credits to sign new hands") {
+            f.note = "rotation stalled — no credits to sign new hands";
+            this.pushChatter(f.officer?.name ?? `${name} Crew`,
+              `We're due to rotate off the ${spec.name.toLowerCase()}, Captain, but there's nothing to sign new hands with.`,
+              "#ffcc55", "external");
+          }
+        } else {
+          f.earned = Math.round((f.earned ?? 0) - fromAcct);
+          p.credits -= fromWallet;
+          const was = spec.name;
+          f.duty = nextId; f.dutySinceMs = Date.now(); f.dutyPeriods = 0;
+          f.note = `rotated off ${was.toLowerCase()}`;
+          this.pushChatter(f.officer?.name ?? `${name} Crew`,
+            `Rotating the ${name} off ${was.toLowerCase()} onto ${nextSpec.name.toLowerCase()} — ${fee}cr to sign the change.`,
+            "#8cf", "external");
+          dispatchHook("onFleetRotate", {
+            hullId: f.hullId, name, from: spec.id, to: nextId, fee,
+            fromAccount: fromAcct, fromWallet, station: f.storedAtName,
+            officer: f.officer?.name,
+          });
+        }
       }
     }
+
   }
   /**
    * 0.9.8 — fleet presence. A frame on duty is no longer purely abstract: when
