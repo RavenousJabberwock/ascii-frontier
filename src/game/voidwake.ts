@@ -9315,7 +9315,8 @@ export class Voidwake {
           // Gunner aboard; +15% floor when a Tactical Officer fires. Crits
           // apply a 2× multiplier and post a brief "★ CRIT" chatter line.
           let crit = false;
-          if (playerShot) {
+          if (playerShot && !turretFired) {
+
             let critChance = 0.08;
             if (this.player?.gunner) critChance += 0.05;
             if (tacticalFired) critChance = Math.max(critChance, 0.23);
