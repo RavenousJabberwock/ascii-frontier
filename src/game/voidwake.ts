@@ -167,7 +167,13 @@ export type ScriptHookName =
   // frame appears in, or leaves, the world around the pilot.
   | "onFleetRent"
   | "onFleetOfficer"
-  | "onFleetPresence";
+  | "onFleetPresence"
+  // 1.0.2 — turret mounts and duty rotation. `onTurretFired` fires each time a
+  // point-defence mount takes a shot; `onFleetRotate` when a frame on a rotating
+  // roster hands itself over to the next duty in the cycle.
+  | "onTurretFired"
+  | "onFleetRotate";
+
 
 
 
