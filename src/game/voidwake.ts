@@ -2268,6 +2268,14 @@ interface FleetShip {
   rentOwed?: number;
   officer?: CrewMember;
   presenceId?: number;
+  // 1.0.2 — duty rotation. With `rotate` set the frame runs a duty for
+  // FLEET_ROTATE_PERIODS settled periods and then signs its hands over to the
+  // next duty in the roster on its own (half the usual sign-on fee, paid out of
+  // the frame's own account). `dutyPeriods` counts the periods worked since the
+  // current duty started.
+  rotate?: boolean;
+  dutyPeriods?: number;
+
 }
 const FLEET_MAX = 3;              // hangar berths the player may hold
 const FLEET_BERTH_FEE = 800;      // charged when a frame is parked
