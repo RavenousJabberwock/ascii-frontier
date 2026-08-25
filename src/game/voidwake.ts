@@ -2200,7 +2200,9 @@ function insurancePremium(p: PlayerState): number {
 // battle damage — as a `FleetShip` instead of trading it in. Swapping back is a
 // flat transfer fee plus the same cargo/berth fit checks a trade-in runs.
 // ---------------------------------------------------------------------------
-type RefitStat = "hull" | "shield" | "cargo" | "speed" | "berths";
+// 1.0.2 — `turret` is the first refit that is not a stat widening: each level
+// bolts an autonomous point-defence mount to the frame (see updateTurrets).
+type RefitStat = "hull" | "shield" | "cargo" | "speed" | "berths" | "turret";
 type ShipRefit = Partial<Record<RefitStat, number>>;
 const REFIT_MAX = 3;
 const REFIT_SPECS: Array<{
@@ -2211,7 +2213,16 @@ const REFIT_SPECS: Array<{
   { id: "cargo",  name: "Hold restructure",   per: 8,  unit: "cargo",  desc: "bulkheads moved aft to free stowage" },
   { id: "speed",  name: "Thrust remap",       per: 6,  unit: "spd",    desc: "injector remap and a lighter shroud" },
   { id: "berths", name: "Deck partition",     per: 1,  unit: "berth",  desc: "one more bunk carved out of the crew deck" },
+  { id: "turret", name: "Point-defence mount", per: 1, unit: "turret", desc: "a hull hardpoint that tracks and fires on hostiles by itself" },
 ];
+// 1.0.2 — point-defence turrets. Each turret level fires independently of your
+// nose: it picks the nearest hostile inside TURRET_RANGE and shoots for a
+// fraction of the mounted weapon's damage on its own cadence, so a heavily
+// refitted frame keeps chipping while you line up the real shot.
+const TURRET_RANGE = 1100;
+const TURRET_COOLDOWN = 1.9;      // seconds between shots, per mount
+const TURRET_DMG_MUL = 0.5;       // share of the mounted weapon's damage
+
 function refitLevel(refit: ShipRefit | undefined, stat: RefitStat): number {
   return Math.max(0, Math.min(REFIT_MAX, refit?.[stat] ?? 0));
 }
