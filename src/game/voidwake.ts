@@ -9297,15 +9297,20 @@ export class Voidwake {
           // Damage value: player's weapon if the shot came from the player,
           // otherwise a flat NPC damage value.
           const playerShot = e.faction === "player";
-          // ownerId -2 = gunner-fired shot; -3 = tactical-fired shot.
+          // ownerId -2 = gunner-fired shot; -3 = tactical-fired shot;
+          // -4 = point-defence turret (1.0.2), which hits for a fraction of the
+          // mounted weapon and never rolls a critical.
           const gunnerFired   = playerShot && e.ownerId === -2;
           const tacticalFired = playerShot && e.ownerId === -3;
+          const turretFired   = playerShot && e.ownerId === -4;
           const shooterWepId = gunnerFired
             ? (this.player?.ship.gunnerWeaponId ?? this.player?.ship.weaponId)
             : this.player?.ship.weaponId;
           let dmg = playerShot
             ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
+          if (turretFired) dmg = Math.max(2, Math.round(dmg * TURRET_DMG_MUL));
+
           // 0.5.6 — critical hits. Base 8% on any player shot; +5% with a
           // Gunner aboard; +15% floor when a Tactical Officer fires. Crits
           // apply a 2× multiplier and post a brief "★ CRIT" chatter line.
