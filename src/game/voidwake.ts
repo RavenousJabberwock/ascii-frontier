@@ -13610,12 +13610,15 @@ export class Voidwake {
             dispatchHook("onCrewLevelUp", { name: f.officer.name, role: f.officer.role, level: after, xp: f.officer.xp });
           }
         }
+        f.dutyPeriods = Math.round((f.dutyPeriods ?? 0) + periods);
         dispatchHook("onFleetIncome", {
           hullId: f.hullId, name, duty: f.duty, paid: net, banked: Math.round(f.earned),
           station: f.storedAtName, fuel: Math.round(f.fuel),
           officer: f.officer?.name, officerRole: f.officer?.role,
+          periodsOnDuty: f.dutyPeriods, rotating: !!f.rotate,
         });
       }
+
       // ---- 0.9.8 berth rent -------------------------------------------------
       const rent = Math.round(fleetRentPerPeriod(p, f) * periods);
       let fromAccount = Math.min(rent, Math.round(f.earned ?? 0));
