@@ -596,3 +596,49 @@ frontier.on("onPlayerDock", function()
   end
 end)
 ```
+
+## Turret mounts and duty rotation (1.0.2)
+
+`onTurretFired` fires once per shot per mount, so keep the handler cheap — log a
+running tally rather than a chat line per shot. `onFleetRotate` covers both the
+roster toggle (`rotating` present) and an automatic change-over (`from` / `to`).
+
+```lua
+-- Turret tally: report how much chip damage the mounts contributed, on docking.
+local pdShots, pdDamage = 0, 0
+frontier.on("onTurretFired", function(t)
+  pdShots = pdShots + 1
+  pdDamage = pdDamage + (t.damage or 0)
+end)
+
+frontier.on("onPlayerDock", function()
+  if pdShots > 0 then
+    frontier.chat("Gunnery", ("Mounts fired %d times for about %d damage this run.")
+      :format(pdShots, pdDamage), "#ffcc55")
+    pdShots, pdDamage = 0, 0
+  end
+end)
+
+-- Rotation log: note every automatic change-over and what it cost.
+frontier.on("onFleetRotate", function(r)
+  if r.rotating ~= nil then
+    frontier.log(("[fleet] %s rotation %s"):format(r.name, r.rotating and "ON" or "OFF"))
+  else
+    frontier.chat("Purser",
+      ("%s rotated %s → %s for %dcr (%dcr from its account)."):
+        format(r.name, r.from, r.to, r.fee or 0, r.fromAccount or 0), "#8cf")
+  end
+end)
+
+-- Nudge frames onto the roster once they are earning well.
+frontier.on("onPlayerDock", function()
+  for _, s in ipairs(frontier.fleet()) do
+    if not s.active and s.duty ~= "idle" and not s.rotating
+       and (s.periodsOnDuty or 0) >= (s.rotatePeriods or 5) then
+      frontier.log(("%s has worked %d periods of %s — consider rotating it.")
+        :format(s.name, s.periodsOnDuty, s.duty))
+    end
+  end
+end)
+```
+
