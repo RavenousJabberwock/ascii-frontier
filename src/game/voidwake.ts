@@ -13686,8 +13686,8 @@ export class Voidwake {
       // can cover it the frame keeps working the duty it is on and says so once.
       if (f.rotate && (f.dutyPeriods ?? 0) >= FLEET_ROTATE_PERIODS) {
         const ids = FLEET_DUTY_SPECS.map((d) => d.id);
-        const nextId = ids[(ids.indexOf(spec.id) + 1) % ids.length];
-        const nextSpec = fleetDutySpec(nextId)!;
+        const nextDuty = ids[(ids.indexOf(spec.id) + 1) % ids.length];
+        const nextSpec = fleetDutySpec(nextDuty)!;
         const fee = Math.round(nextSpec.hire * FLEET_ROTATE_HIRE_MUL * merchantBuyMult(p));
         const fromAcct = Math.min(fee, Math.round(f.earned ?? 0));
         const fromWallet = fee - fromAcct;
@@ -13702,13 +13702,13 @@ export class Voidwake {
           f.earned = Math.round((f.earned ?? 0) - fromAcct);
           p.credits -= fromWallet;
           const was = spec.name;
-          f.duty = nextId; f.dutySinceMs = Date.now(); f.dutyPeriods = 0;
+          f.duty = nextDuty; f.dutySinceMs = Date.now(); f.dutyPeriods = 0;
           f.note = `rotated off ${was.toLowerCase()}`;
           this.pushChatter(f.officer?.name ?? `${name} Crew`,
             `Rotating the ${name} off ${was.toLowerCase()} onto ${nextSpec.name.toLowerCase()} — ${fee}cr to sign the change.`,
             "#8cf", "external");
           dispatchHook("onFleetRotate", {
-            hullId: f.hullId, name, from: spec.id, to: nextId, fee,
+            hullId: f.hullId, name, from: spec.id, to: nextDuty, fee,
             fromAccount: fromAcct, fromWallet, station: f.storedAtName,
             officer: f.officer?.name,
           });
