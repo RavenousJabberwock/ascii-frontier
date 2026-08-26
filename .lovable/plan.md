@@ -1,4 +1,36 @@
+# 1.0.2 — Turret Mounts & Duty Rotation
+
+Ships as **1.0.2**. Closes both of 1.0's fleet/refit deferments.
+
+- **Point-defence mounts** (closes "refit slots beyond the five stats").
+  `RefitStat` gains `"turret"`, the first refit that is not a stat widening.
+  `updateTurrets(dt)` runs per frame after `updateTactical`: each of the up to
+  `REFIT_MAX` mounts picks the nearest live hostile inside `TURRET_RANGE`
+  (1100u), fires on its own `TURRET_COOLDOWN` (1.9s, staggered across mounts and
+  scaled by `effectiveCooldownMul`) and spawns a bullet with `ownerId -4`. Turret
+  hits deal `TURRET_DMG_MUL` (50%) of the mounted weapon's damage and never roll
+  a critical, so mounts are chip damage rather than a second gun.
+- **Duty rotation** (closes "multi-frame duty chaining"). `FleetShip` gains
+  `rotate` / `dutyPeriods`. `tickFleetDuty` counts worked periods and, after
+  `FLEET_ROTATE_PERIODS` (5), signs the frame over to the next duty in
+  `FLEET_DUTY_SPECS` for `FLEET_ROTATE_HIRE_MUL` (half) of the usual hire, paid
+  from the frame's own account first and the wallet second. A stand-down clears
+  the counter and drops the frame off the roster; an unaffordable change-over
+  stalls once with a note instead of repeating. `fleetToggleRotate(idx)` backs a
+  `Rotate …` row in the Hangar page.
+- **Scripting.** New hooks `onTurretFired`
+  (`{ mount, mounts, targetId, target, distance, damage }`) and `onFleetRotate`
+  (roster toggle, or `{ from, to, fee, fromAccount, fromWallet }` on a
+  change-over). `frontier.fleet()` rows gain `rotating`, `periodsOnDuty` and
+  `rotatePeriods`; `onFleetIncome` gains `periodsOnDuty` and `rotating`.
+
+## Deferred past 1.0.2
+
+- Player-to-NPC free-text comms (templated replies only today).
+- Turret-specific ammunition/weapon choice (mounts mirror the fitted weapon).
+
 # 1.0.0 — Prime Time
+
 
 Ships as **1.0.0** — the first stable release.
 
