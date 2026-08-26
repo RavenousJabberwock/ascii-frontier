@@ -183,9 +183,13 @@ contact and the TARGET panel tells you exactly what you are looking at.
   Escorts fly their own armed fighter in formation, shoot hostiles that come
   inside ~1200u, and bill a wage every dock. They take no berth. Lose one in
   combat and the contract is gone with the hull.
-- **Refit Bay** (Shipyard). Five permanent lines on the frame you fly —
-  bracing, emitters, hold, thrust, deck partition — three levels each. Refits
-  stay with the hull, so they follow it into a hangar and are lost on trade-in.
+- **Refit Bay** (Shipyard). Six permanent lines on the frame you fly —
+  bracing, emitters, hold, thrust, deck partition and point-defence mounts —
+  three levels each. Refits stay with the hull, so they follow it into a hangar
+  and are lost on trade-in.
+- **Point-defence mounts.** Each turret level fires on its own at the nearest
+  hostile within 1100u for half your weapon's damage, whichever way you're
+  facing. Handy cover while you fly, not a replacement for aiming.
 - **Your fleet.** Buy a hull in `KEEP` mode and the yard berths your old frame
   (800cr) instead of buying it back; up to three sit in hangars with their own
   modules, guns, refits and damage. On the `Hangar` page each frame can be put
@@ -194,7 +198,10 @@ contact and the TARGET panel tells you exactly what you are looking at.
   minute, burning its own fuel and occasionally getting knocked about. Collect,
   repair, refuel and insure it there; a frame parked at another dock can be
   ferried in for 600cr. Ships stand themselves down when dry, badly damaged or
-  full of money — nothing is ever lost while you're away.
+  full of money — nothing is ever lost while you're away. Switch `Rotate` on and
+  the frame cycles through the duties by itself, five periods at a time, for half
+  the sign-on fee.
+
 - **Character Sheet** (`C`) shows portraits, attributes, your ship
   silhouette, and a plain-language description of every fitted module.
 
