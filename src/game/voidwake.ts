@@ -13511,7 +13511,7 @@ export class Voidwake {
       hullId: f.hullId, name, rotating: f.rotate, duty: f.duty ?? "idle",
       station: f.storedAtName, periodsOnDuty: f.dutyPeriods ?? 0,
     });
-    this.sfx("blip");
+    this.sfx("click");
   }
 
   /** Structural max for a stored frame (hull + modules + refits). */
