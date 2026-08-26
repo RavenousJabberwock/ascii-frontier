@@ -552,6 +552,15 @@ covering every hook shipped so far.
 | `onFleetRent`       | `{ hullId, name, paid, arrears?/owed?, station, source }` | berth rent settled from the frame's account (`source="account"`), your wallet, or dropped into arrears (0.9.8) |
 | `onFleetOfficer`    | `{ hullId, name, action, officer, role, level, station }` | `action` is `"seconded"` or `"recalled"` (0.9.8) |
 | `onFleetPresence`   | `{ hullId, name, phase, station, duty, officer?, x?, y?, z? }` | `phase` is `"arrived"` or `"left"` as a working frame enters/leaves the world (0.9.8) |
+| `onFleetRotate`     | roster toggle: `{ hullId, name, rotating, duty, station, periodsOnDuty }`; change-over: `{ hullId, name, from, to, fee, fromAccount, fromWallet, station, officer? }` | a frame put on/off the rotating roster, or rotated itself onto the next duty (1.0.2) |
+| `onTurretFired`     | `{ mount, mounts, targetId, target, distance, damage }` | a point-defence mount took a shot (1.0.2) |
+
+Since 1.0.2 `frontier.fleet()` rows also carry `rotating`, `periodsOnDuty` and
+`rotatePeriods`, and `onFleetIncome` payloads include `periodsOnDuty` /
+`rotating`. `refit` rows may include a `turret` level (0–3), which is the number
+of autonomous point-defence mounts on that hull rather than a stat bonus.
+
+
 
 Since 1.0.0 `onFleetIncome` payloads reflect **officer role affinity**
 (`FLEET_OFFICER_AFFINITY`), and `onReputationChange` fires once per affected
