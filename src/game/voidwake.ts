@@ -12439,7 +12439,11 @@ export class Voidwake {
                   ? { name: f.officer.name, role: f.officer.role, level: crewLevel(f.officer) }
                   : undefined,
                 present: f.presenceId != null,
+                // 1.0.2 — rotating roster
+                rotating: !!f.rotate, periodsOnDuty: f.dutyPeriods ?? 0,
+                rotatePeriods: FLEET_ROTATE_PERIODS,
                 note: f.note ?? "",
+
               };
             }),
           ];
