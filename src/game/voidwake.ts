@@ -14066,6 +14066,11 @@ export class Voidwake {
         const nextSpec = fleetDutySpec(order[(order.indexOf(f.duty ?? "idle") + 1) % order.length]);
         rows.push(`Duty ${h.name} #${idx + 1} — ${spec ? `${spec.name}, ${this.fleetNet(f)}cr/min net` : "idle"}`
           + `  →  ${nextSpec ? `${nextSpec.name} (${Math.round(nextSpec.hire * merchantBuyMult(p))}cr to sign on; ${nextSpec.desc})` : "stand down"}`);
+        // 1.0.2 — rotating roster: the frame changes duty by itself each stint.
+        rows.push(`Rotate ${h.name} #${idx + 1} — ${f.rotate
+          ? `ON: changes duty every ${FLEET_ROTATE_PERIODS} periods for half hire (${(f.dutyPeriods ?? 0)}/${FLEET_ROTATE_PERIODS} worked) → hold current duty`
+          : `OFF: holds one duty until you change it → rotate duties automatically`}`);
+
         // 0.9.8 — second a named crewmate to the frame, or bring them back.
         rows.push(`Officer ${h.name} #${idx + 1} — ${f.officer
           ? `${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name} aboard (+${Math.round((fleetOfficerGrossMul(f) - 1) * 100)}% gross, -30% wages) → recall to your crew`
