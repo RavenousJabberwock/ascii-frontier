@@ -13461,7 +13461,7 @@ export class Voidwake {
     const name = this.fleetName(f);
     if (next === "idle") {
       const was = fleetDutySpec(f.duty)?.name ?? "duty";
-      f.duty = "idle"; f.dutySinceMs = undefined;
+      f.duty = "idle"; f.dutySinceMs = undefined; f.dutyPeriods = 0;
       this.pushLog(`Stood the ${name} down from ${was}; its hands are paid off.`);
       dispatchHook("onFleetDuty", { hullId: f.hullId, name, duty: "idle", station: f.storedAtName });
       return;
@@ -13478,7 +13478,7 @@ export class Voidwake {
     const hire = Math.round(spec.hire * merchantBuyMult(p));
     if (p.credits < hire) { this.pushLog(`Signing hands for a ${spec.name.toLowerCase()} costs ${hire}cr.`); return; }
     p.credits -= hire;
-    f.duty = next; f.dutySinceMs = Date.now(); f.note = undefined;
+    f.duty = next; f.dutySinceMs = Date.now(); f.note = undefined; f.dutyPeriods = 0;
     this.pushLog(`${name} signed on for ${spec.name.toLowerCase()} out of ${f.storedAtName} — ${hire}cr up front, ~${this.fleetNet(f)}cr/min net.`);
     this.pushChatter(`${name} Crew`, `Hands aboard, Captain. We'll work the ${spec.name.toLowerCase()} and bank your cut.`, "#8cf", "external");
     dispatchHook("onFleetDuty", {
@@ -13487,6 +13487,33 @@ export class Voidwake {
     });
     this.sfx("chime");
   }
+  /**
+   * 1.0.2 — put a frame on (or off) the rotating roster. A rotating frame works
+   * FLEET_ROTATE_PERIODS periods of its current duty and then signs itself over
+   * to the next duty in the roster for half the usual hire, so a fleet can run
+   * a full spread of work without you visiting the hangar between tours.
+   */
+  fleetToggleRotate(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const name = this.fleetName(f);
+    f.rotate = !f.rotate;
+    if (f.rotate) {
+      if (!fleetDutySpec(f.duty)) {
+        this.pushLog(`Put the ${name} on the rotating roster — it starts rotating once you sign it onto a duty.`);
+      } else {
+        this.pushLog(`${name} is on the rotating roster: ${FLEET_ROTATE_PERIODS} periods per duty, then it changes over itself.`);
+      }
+    } else {
+      this.pushLog(`Took the ${name} off the rotating roster; it will hold its current duty.`);
+    }
+    dispatchHook("onFleetRotate", {
+      hullId: f.hullId, name, rotating: f.rotate, duty: f.duty ?? "idle",
+      station: f.storedAtName, periodsOnDuty: f.dutyPeriods ?? 0,
+    });
+    this.sfx("blip");
+  }
+
   /** Structural max for a stored frame (hull + modules + refits). */
   private fleetHullMax(f: FleetShip): number {
     const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
