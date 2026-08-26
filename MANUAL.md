@@ -306,11 +306,19 @@ species or to veteran commanders are listed but flagged `LOCKED` so you can
 see what else flies out there.
 
 **Refit Bay** (0.9.6). The yard will also rebuild the frame you already fly.
-Five lines — structural bracing, emitter tuning, hold restructure, thrust remap,
-deck partition — go three levels deep each and add +30 hull, +25 shield, +8
-cargo, +6 speed or +1 berth per level. Prices scale with the frame and with each
-step taken, and the usual haggling perks apply. Refits belong to the hull, so
-they follow it into a hangar and are **lost if you trade it in**.
+Six lines — structural bracing, emitter tuning, hold restructure, thrust remap,
+deck partition and point-defence mounts — go three levels deep each and add +30
+hull, +25 shield, +8 cargo, +6 speed, +1 berth or +1 turret per level. Prices
+scale with the frame and with each step taken, and the usual haggling perks
+apply. Refits belong to the hull, so they follow it into a hangar and are **lost
+if you trade it in**.
+
+**Point-defence mounts** (1.0.2). Each level of the turret refit is an
+autonomous gun: it does not care where your nose is pointed, picks the nearest
+hostile within 1100u, and fires every 1.9 seconds for half your mounted weapon's
+damage. Mounts are staggered, so three of them read as a steady patter. Turret
+fire never lands a critical, and it stays quiet in Peaceful mode.
+
 
 **The hangar** (0.9.6). You no longer have to sell the old ship to buy a new
 one. The Shipyard has a purchase-mode row: `TRADE IN` behaves as before, while
