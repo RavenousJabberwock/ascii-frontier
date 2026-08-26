@@ -350,6 +350,16 @@ parked at to the one you are standing in. You can only take a frame out where it
 is berthed, so recall first if it is elsewhere, and stand a duty down before you
 fly or sell that frame.
 
+**Duty rotation** (1.0.2). The `Rotate …` row puts a frame on a rotating roster.
+It works five pay periods of whatever duty it is on, then signs its hands over to
+the next duty in the cycle by itself for half the usual fee — drawn from the
+frame's own account before your wallet. The row shows how many periods of the
+current stint are done. Standing down for fuel, damage or a full account takes
+the frame off the roster, and a change-over the frame cannot pay for stalls with
+a note rather than repeating every period.
+
+
+
 **Fleet command** (0.9.8). Keeping a frame parked is no longer free: every pay
 period each berthed hull accrues **berth rent** scaled to its list price. Rent
 comes out of that frame's own duty account first, so a working ship pays its own
