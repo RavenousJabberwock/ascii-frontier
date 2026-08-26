@@ -14436,6 +14436,8 @@ export class Voidwake {
       if (row.startsWith("Fly ")) this.fleetSwap(idx);
       else if (row.startsWith("Sell ")) this.fleetSell(idx);
       else if (row.startsWith("Duty ")) this.fleetCycleDuty(idx);
+      else if (row.startsWith("Rotate ")) this.fleetToggleRotate(idx);
+
       else if (row.startsWith("Collect ")) this.fleetCollect(idx);
       else if (row.startsWith("Repair ")) this.fleetRepair(idx);
       else if (row.startsWith("Refuel ")) this.fleetRefuel(idx);
