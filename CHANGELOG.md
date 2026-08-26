@@ -4,7 +4,27 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 1.0.2 — Turret Mounts & Duty Rotation
+Two long-deferred items land: a refit that does something other than widen a
+stat, and a fleet that can keep itself busy across several kinds of work.
+
+- **Point-defence mounts.** A sixth Refit Bay line, three levels deep. Each level
+  bolts an autonomous turret to your frame: it ignores where your nose is
+  pointed, takes the nearest hostile inside 1100u, and fires every 1.9 seconds
+  for half your mounted weapon's damage. Turret fire never crits — it is steady
+  chip damage while you line up the real shot.
+- **Duty rotation.** A berthed frame can go on a rotating roster (`Rotate …` in
+  the Hangar). It works five pay periods of its current duty, then signs its
+  hands over to the next duty in the cycle for half the usual fee, paid out of
+  its own account before your wallet. Standing down for fuel, damage or a full
+  account takes the frame off the roster and says so; a change-over it cannot
+  afford stalls with a note instead of nagging every period.
+- **Scripting.** New hooks `onTurretFired` and `onFleetRotate`. `frontier.fleet()`
+  rows now carry `rotating`, `periodsOnDuty` and `rotatePeriods`, and
+  `onFleetIncome` reports `periodsOnDuty` / `rotating`.
+
 ## 1.0.1 — Wider Contract Board
+
 Three new job families join the eight classics, so a station board is far less
 likely to hand you three variations on "shoot that raider".
 
