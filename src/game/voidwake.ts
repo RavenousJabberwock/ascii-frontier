@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "1.0.1";
+const VERSION = "1.0.2";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -12439,7 +12439,11 @@ export class Voidwake {
                   ? { name: f.officer.name, role: f.officer.role, level: crewLevel(f.officer) }
                   : undefined,
                 present: f.presenceId != null,
+                // 1.0.2 — rotating roster
+                rotating: !!f.rotate, periodsOnDuty: f.dutyPeriods ?? 0,
+                rotatePeriods: FLEET_ROTATE_PERIODS,
                 note: f.note ?? "",
+
               };
             }),
           ];
@@ -13461,7 +13465,7 @@ export class Voidwake {
     const name = this.fleetName(f);
     if (next === "idle") {
       const was = fleetDutySpec(f.duty)?.name ?? "duty";
-      f.duty = "idle"; f.dutySinceMs = undefined;
+      f.duty = "idle"; f.dutySinceMs = undefined; f.dutyPeriods = 0;
       this.pushLog(`Stood the ${name} down from ${was}; its hands are paid off.`);
       dispatchHook("onFleetDuty", { hullId: f.hullId, name, duty: "idle", station: f.storedAtName });
       return;
@@ -13478,7 +13482,7 @@ export class Voidwake {
     const hire = Math.round(spec.hire * merchantBuyMult(p));
     if (p.credits < hire) { this.pushLog(`Signing hands for a ${spec.name.toLowerCase()} costs ${hire}cr.`); return; }
     p.credits -= hire;
-    f.duty = next; f.dutySinceMs = Date.now(); f.note = undefined;
+    f.duty = next; f.dutySinceMs = Date.now(); f.note = undefined; f.dutyPeriods = 0;
     this.pushLog(`${name} signed on for ${spec.name.toLowerCase()} out of ${f.storedAtName} — ${hire}cr up front, ~${this.fleetNet(f)}cr/min net.`);
     this.pushChatter(`${name} Crew`, `Hands aboard, Captain. We'll work the ${spec.name.toLowerCase()} and bank your cut.`, "#8cf", "external");
     dispatchHook("onFleetDuty", {
@@ -13487,6 +13491,33 @@ export class Voidwake {
     });
     this.sfx("chime");
   }
+  /**
+   * 1.0.2 — put a frame on (or off) the rotating roster. A rotating frame works
+   * FLEET_ROTATE_PERIODS periods of its current duty and then signs itself over
+   * to the next duty in the roster for half the usual hire, so a fleet can run
+   * a full spread of work without you visiting the hangar between tours.
+   */
+  fleetToggleRotate(idx: number): void {
+    const p = this.player; if (!p) return;
+    const f = p.fleet?.[idx]; if (!f) return;
+    const name = this.fleetName(f);
+    f.rotate = !f.rotate;
+    if (f.rotate) {
+      if (!fleetDutySpec(f.duty)) {
+        this.pushLog(`Put the ${name} on the rotating roster — it starts rotating once you sign it onto a duty.`);
+      } else {
+        this.pushLog(`${name} is on the rotating roster: ${FLEET_ROTATE_PERIODS} periods per duty, then it changes over itself.`);
+      }
+    } else {
+      this.pushLog(`Took the ${name} off the rotating roster; it will hold its current duty.`);
+    }
+    dispatchHook("onFleetRotate", {
+      hullId: f.hullId, name, rotating: f.rotate, duty: f.duty ?? "idle",
+      station: f.storedAtName, periodsOnDuty: f.dutyPeriods ?? 0,
+    });
+    this.sfx("click");
+  }
+
   /** Structural max for a stored frame (hull + modules + refits). */
   private fleetHullMax(f: FleetShip): number {
     const h = SHIP_HULLS.find((x) => x.id === f.hullId) ?? SHIP_HULLS[0];
@@ -13686,8 +13717,8 @@ export class Voidwake {
       // can cover it the frame keeps working the duty it is on and says so once.
       if (f.rotate && (f.dutyPeriods ?? 0) >= FLEET_ROTATE_PERIODS) {
         const ids = FLEET_DUTY_SPECS.map((d) => d.id);
-        const nextId = ids[(ids.indexOf(spec.id) + 1) % ids.length];
-        const nextSpec = fleetDutySpec(nextId)!;
+        const nextDuty = ids[(ids.indexOf(spec.id) + 1) % ids.length];
+        const nextSpec = fleetDutySpec(nextDuty)!;
         const fee = Math.round(nextSpec.hire * FLEET_ROTATE_HIRE_MUL * merchantBuyMult(p));
         const fromAcct = Math.min(fee, Math.round(f.earned ?? 0));
         const fromWallet = fee - fromAcct;
@@ -13702,13 +13733,13 @@ export class Voidwake {
           f.earned = Math.round((f.earned ?? 0) - fromAcct);
           p.credits -= fromWallet;
           const was = spec.name;
-          f.duty = nextId; f.dutySinceMs = Date.now(); f.dutyPeriods = 0;
+          f.duty = nextDuty; f.dutySinceMs = Date.now(); f.dutyPeriods = 0;
           f.note = `rotated off ${was.toLowerCase()}`;
           this.pushChatter(f.officer?.name ?? `${name} Crew`,
             `Rotating the ${name} off ${was.toLowerCase()} onto ${nextSpec.name.toLowerCase()} — ${fee}cr to sign the change.`,
             "#8cf", "external");
           dispatchHook("onFleetRotate", {
-            hullId: f.hullId, name, from: spec.id, to: nextId, fee,
+            hullId: f.hullId, name, from: spec.id, to: nextDuty, fee,
             fromAccount: fromAcct, fromWallet, station: f.storedAtName,
             officer: f.officer?.name,
           });
@@ -14039,6 +14070,11 @@ export class Voidwake {
         const nextSpec = fleetDutySpec(order[(order.indexOf(f.duty ?? "idle") + 1) % order.length]);
         rows.push(`Duty ${h.name} #${idx + 1} — ${spec ? `${spec.name}, ${this.fleetNet(f)}cr/min net` : "idle"}`
           + `  →  ${nextSpec ? `${nextSpec.name} (${Math.round(nextSpec.hire * merchantBuyMult(p))}cr to sign on; ${nextSpec.desc})` : "stand down"}`);
+        // 1.0.2 — rotating roster: the frame changes duty by itself each stint.
+        rows.push(`Rotate ${h.name} #${idx + 1} — ${f.rotate
+          ? `ON: changes duty every ${FLEET_ROTATE_PERIODS} periods for half hire (${(f.dutyPeriods ?? 0)}/${FLEET_ROTATE_PERIODS} worked) → hold current duty`
+          : `OFF: holds one duty until you change it → rotate duties automatically`}`);
+
         // 0.9.8 — second a named crewmate to the frame, or bring them back.
         rows.push(`Officer ${h.name} #${idx + 1} — ${f.officer
           ? `${CREW_ROLE_INFO[f.officer.role].title} ${f.officer.name} aboard (+${Math.round((fleetOfficerGrossMul(f) - 1) * 100)}% gross, -30% wages) → recall to your crew`
@@ -14404,6 +14440,8 @@ export class Voidwake {
       if (row.startsWith("Fly ")) this.fleetSwap(idx);
       else if (row.startsWith("Sell ")) this.fleetSell(idx);
       else if (row.startsWith("Duty ")) this.fleetCycleDuty(idx);
+      else if (row.startsWith("Rotate ")) this.fleetToggleRotate(idx);
+
       else if (row.startsWith("Collect ")) this.fleetCollect(idx);
       else if (row.startsWith("Repair ")) this.fleetRepair(idx);
       else if (row.startsWith("Refuel ")) this.fleetRefuel(idx);
