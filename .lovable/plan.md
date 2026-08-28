@@ -1,3 +1,21 @@
+# 1.0.2.1 — Point Defence Control
+
+Patch release on 1.0.2; no save or mod breakage.
+
+- `Options.turretMode` (`"auto" | "target" | "off"`, default `auto`) with a
+  `Point Defence: …` row in Options ▸ Gameplay. `updateTurrets` returns early on
+  `off` and, on `target`, prefers `this.targetId` while it is a live hostile
+  inside `TURRET_RANGE` before falling back to nearest-first.
+- New Lua read surface `frontier.turrets()` →
+  `{ mounts, max, range, cooldown, damage, mode }`; bridge entry + sample in
+  `lua-samples.md`.
+- Docs: CHANGELOG, MANUAL refit section, engine README API notes.
+
+## Still deferred
+
+- Player-to-NPC free-text comms (templated replies only today).
+- Turret-specific ammunition/weapon choice (mounts mirror the fitted weapon).
+
 # 1.0.2 — Turret Mounts & Duty Rotation
 
 Ships as **1.0.2**. Closes both of 1.0's fleet/refit deferments.
