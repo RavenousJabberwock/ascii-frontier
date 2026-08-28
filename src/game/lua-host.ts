@@ -440,6 +440,13 @@ export class LuaHost {
     });
     lua.lua_setfield(L, -2, to_luastring("fleet"));
 
+    // frontier.turrets() → point-defence mount status (read-only)
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      pushJsAsLua(Ls, this.bridge.turrets?.() ?? null, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("turrets"));
+
     // frontier.events() → list of live frontier events (read-only)
     lua.lua_pushjsfunction(L, (Ls: L) => {
       pushJsAsLua(Ls, this.bridge.events?.() ?? [], 0);
