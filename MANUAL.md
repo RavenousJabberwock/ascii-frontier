@@ -319,6 +319,11 @@ hostile within 1100u, and fires every 1.9 seconds for half your mounted weapon's
 damage. Mounts are staggered, so three of them read as a steady patter. Turret
 fire never lands a critical, and it stays quiet in Peaceful mode.
 
+**Point Defence mode** (1.0.2.1). `Options ▸ Gameplay ▸ Point Defence`
+picks how the mounts choose their shot: `auto` is nearest-hostile-first,
+`target` makes them favour your tracked contact whenever it is a hostile inside
+1100u so you can concentrate fire, and `off` holds them entirely.
+
 
 **The hangar** (0.9.6). You no longer have to sell the old ship to buy a new
 one. The Shipyard has a purchase-mode row: `TRADE IN` behaves as before, while
