@@ -12034,10 +12034,16 @@ export class Voidwake {
       this.options.reticleShape = modes[(idx + (right ? 1 : -1) + n) % n];
     }
     if (i === 13 && (left || right)) this.options.questOffers = !(this.options.questOffers !== false);
+    if (i === 14 && (left || right)) {
+      const modes: Array<"auto" | "target" | "off"> = ["auto", "target", "off"];
+      const idx = Math.max(0, modes.indexOf(this.options.turretMode ?? "auto"));
+      const n = modes.length;
+      this.options.turretMode = modes[(idx + (right ? 1 : -1) + n) % n];
+    }
     // "Chat Windows" opens a nested sub-page with the three comms controls
     // (width, height, word-wrap). Kept out of the flat Gameplay list so the
     // list stays scannable and there's room for future per-tab options.
-    if (i === 14 && this.input.consume("enter")) {
+    if (i === 15 && this.input.consume("enter")) {
       this.optionsSection = "chat"; this.menuCursor = 0;
       return;
     }
