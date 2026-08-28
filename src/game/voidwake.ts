@@ -7970,7 +7970,7 @@ export class Voidwake {
           // Bounce a subsection back to the Options hub. Keybinds goes back
           // to Controls (its parent), not straight to root.
           if (this.optionsSection === "keybinds") this.optionsSection = "controls";
-          else if (this.optionsSection === "chat") { this.optionsSection = "gameplay"; this.menuCursor = 13; }
+          else if (this.optionsSection === "chat") { this.optionsSection = "gameplay"; this.menuCursor = 14; }
           else this.optionsSection = "root";
           this.menuCursor = 0;
         } else {
@@ -12095,7 +12095,7 @@ export class Voidwake {
     }
     if (i === 2 && (left || right)) this.options.commsWrap = !this.options.commsWrap;
     if (this.input.consume("enter") && items[i] === "Back") {
-      this.optionsSection = "gameplay"; this.menuCursor = 13;
+      this.optionsSection = "gameplay"; this.menuCursor = 14;
     }
   }
   private optionsChatItems(): string[] {
