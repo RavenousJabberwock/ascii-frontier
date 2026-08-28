@@ -10418,15 +10418,29 @@ export class Voidwake {
   updateTurrets(dt: number) {
     const p = this.player;
     if (!p || this.options.peaceful) return;
+    // 1.0.2.1 — Options ▸ Gameplay ▸ Point Defence. "off" holds the mounts,
+    // "target" makes them respect your tracked contact when it is a hostile in
+    // range (so you can concentrate fire), "auto" is the 1.0.2 nearest-first.
+    const mode = this.options.turretMode ?? "auto";
+    if (mode === "off") return;
     const mounts = refitLevel(p.ship.refit, "turret");
     if (mounts <= 0) return;
     let best: Entity | null = null, bestD2 = Infinity;
     const r2 = TURRET_RANGE * TURRET_RANGE;
-    for (const e of this.entities) {
-      if (e.kind !== "hostile" || (e.hull ?? 1) <= 0) continue;
-      const d2 = V.d2(e.pos, p.pos);
-      if (d2 > r2 || d2 < 1) continue;
-      if (d2 < bestD2) { bestD2 = d2; best = e; }
+    if (mode === "target" && this.targetId != null) {
+      const t = this.byId(this.targetId);
+      if (t && t.kind === "hostile" && (t.hull ?? 1) > 0) {
+        const d2 = V.d2(t.pos, p.pos);
+        if (d2 <= r2 && d2 >= 1) { best = t; bestD2 = d2; }
+      }
+    }
+    if (!best) {
+      for (const e of this.entities) {
+        if (e.kind !== "hostile" || (e.hull ?? 1) <= 0) continue;
+        const d2 = V.d2(e.pos, p.pos);
+        if (d2 > r2 || d2 < 1) continue;
+        if (d2 < bestD2) { bestD2 = d2; best = e; }
+      }
     }
     const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
     for (let i = 0; i < mounts; i++) {
