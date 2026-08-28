@@ -3208,6 +3208,7 @@ function defaultOptions(): Options {
     commsRows: 12,
     commsWrap: false,
     questOffers: true,
+    turretMode: "auto",
   };
 }
 
