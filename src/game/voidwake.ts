@@ -12415,6 +12415,19 @@ export class Voidwake {
           secondsLeft: Math.round(left), distance: Math.round(dist),
           x: ev.pos.x, y: ev.pos.y, z: ev.pos.z,
         })),
+        // 1.0.2.1 — mount status so a script can report or gate on point defence.
+        turrets: () => {
+          const p = this.player; if (!p) return { mounts: 0, range: TURRET_RANGE, damage: 0, mode: this.options.turretMode ?? "auto" };
+          const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+          return {
+            mounts: refitLevel(p.ship.refit, "turret"),
+            max: REFIT_MAX,
+            range: TURRET_RANGE,
+            cooldown: TURRET_COOLDOWN,
+            damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL)),
+            mode: this.options.turretMode ?? "auto",
+          };
+        },
         holdings: () => {
           const p = this.player; if (!p) return [];
           return (p.ownedStations ?? []).map((s0) => ({
