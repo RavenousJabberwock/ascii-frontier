@@ -149,6 +149,8 @@ export interface LuaHostBridge {
   holdings?: () => Array<Record<string, unknown>>;
   // 0.9.6 — active frame + hangar contents, including refit levels.
   fleet?: () => Array<Record<string, unknown>>;
+  // 1.0.2.1 — point-defence mount status: level, range, per-shot damage, mode.
+  turrets?: () => Record<string, unknown>;
   // 0.9.0 — live frontier events (advisories currently moving the economy).
   events?: () => Array<Record<string, unknown>>;
   // 0.9.1 — navigation surface: read the tracked contact and current screen,
