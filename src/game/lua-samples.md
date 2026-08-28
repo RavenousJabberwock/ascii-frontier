@@ -642,3 +642,20 @@ frontier.on("onPlayerDock", function()
 end)
 ```
 
+
+## Point-defence status (1.0.2.1)
+
+`frontier.turrets()` reports the mounts on the frame you are flying and the
+`Options ▸ Gameplay ▸ Point Defence` mode, so a script can nag you when you
+left the mounts switched off.
+
+```lua
+frontier.on("onPlayerDamaged", function()
+  local t = frontier.turrets and frontier.turrets()
+  if t and (t.mounts or 0) > 0 and t.mode == "off" then
+    frontier.chat("Gunnery",
+      ("%d mounts idle, Captain — point defence is switched off."):format(t.mounts),
+      "#ffcc55")
+  end
+end)
+```

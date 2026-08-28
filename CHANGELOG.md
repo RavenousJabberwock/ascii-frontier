@@ -4,6 +4,18 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 1.0.2.1 — Point Defence Control
+
+A small patch on top of 1.0.2.
+
+- **Point Defence mode.** New `Options ▸ Gameplay ▸ Point Defence` cycles
+  `auto` / `target` / `off`. `auto` keeps the 1.0.2 nearest-hostile behaviour,
+  `target` makes every mount favour your tracked contact while it is a hostile
+  inside 1100u, and `off` holds the mounts without unbolting the refit.
+- **Scripting.** New read surface `frontier.turrets()` →
+  `{ mounts, max, range, cooldown, damage, mode }`.
+- Saves and mods from 1.0.2 load unchanged; the option defaults to `auto`.
+
 ## 1.0.2 — Turret Mounts & Duty Rotation
 Two long-deferred items land: a refit that does something other than widen a
 stat, and a fleet that can keep itself busy across several kinds of work.

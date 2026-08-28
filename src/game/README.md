@@ -560,6 +560,11 @@ Since 1.0.2 `frontier.fleet()` rows also carry `rotating`, `periodsOnDuty` and
 `rotating`. `refit` rows may include a `turret` level (0–3), which is the number
 of autonomous point-defence mounts on that hull rather than a stat bonus.
 
+Since 1.0.2.1 `frontier.turrets()` returns
+`{ mounts, max, range, cooldown, damage, mode }` for the frame you are flying,
+where `mode` is the `Options ▸ Gameplay ▸ Point Defence` setting
+(`"auto"` / `"target"` / `"off"`).
+
 
 
 Since 1.0.0 `onFleetIncome` payloads reflect **officer role affinity**
