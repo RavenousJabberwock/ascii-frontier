@@ -12069,6 +12069,7 @@ export class Voidwake {
       `Reticle Color: ${this.options.reticleColor ?? "green"}`,
       `Reticle Shape: ${this.options.reticleShape ?? "cross"}`,
       `Quest Offers: ${this.options.questOffers === false ? "OFF" : "ON"}`,
+      `Point Defence: ${this.options.turretMode ?? "auto"}`,
       `Chat Windows ▸`,
       "Back",
     ];
