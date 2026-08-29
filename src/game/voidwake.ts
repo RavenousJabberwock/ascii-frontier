@@ -3215,6 +3215,9 @@ function defaultOptions(): Options {
     commsWrap: false,
     questOffers: true,
     turretMode: "auto",
+    render3d: "off",
+    render3dStrength: 2,
+    render3dConvergence: 2500,
   };
 }
 
