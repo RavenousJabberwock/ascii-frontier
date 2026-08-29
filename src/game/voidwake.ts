@@ -6194,7 +6194,7 @@ export class Voidwake {
   // Options screen has been split into a small hub with three subsections
   // (Gameplay / Audio / Controls) plus a Keybinds sub-page under Controls.
   // "root" is the hub itself.
-  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "mods" | "chat" = "root";
+  optionsSection: "root" | "gameplay" | "audio" | "controls" | "keybinds" | "scripting" | "mods" | "chat" | "threed" = "root";
   // Lua scripting (0.5.5): source is edited via a browser prompt from the
   // Options ▸ Scripting page and persisted in localStorage. The runtime
   // (LuaHost) is created lazily on the first enable so users who never open
