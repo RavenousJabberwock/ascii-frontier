@@ -5527,7 +5527,70 @@ const CELL_H = 16;  // px per glyph row
 const GLOW_PAD = 10;
 const GLOW_ATLAS_MAX = 512;
 
-interface Cell { ch: string; color: string; glow?: boolean }
+// `z` is the camera-space depth of whatever painted this cell, in world
+// units. Only the world layer stamps it (see Voidwake.stampDepth); HUD and
+// menu writes replace the cell object wholesale, so they naturally come back
+// with `z === undefined` and are treated as sitting on the screen plane.
+// The 3D output pipeline is the only consumer.
+interface Cell { ch: string; color: string; glow?: boolean; z?: number }
+
+// ---- 3D output pipeline -----------------------------------------------------
+// The engine renders one 2D cell grid and then hands it to a "3D mode" at
+// paint time. Every mode gets the same inputs — glyph, colour, cell position
+// and per-cell camera depth — so new stereo formats (interlaced, side-by-side,
+// wiggle/parallax, quad-buffer) can be added here without touching a single
+// draw call. 1.0.3 ships the anaglyph family; `kind` is the dispatch key.
+type Render3DKind = "off" | "anaglyph";
+
+interface Render3DMode {
+  id: string;
+  label: string;
+  kind: Render3DKind;
+  // Anaglyph channel masks: which RGB channels each eye is allowed to write.
+  left?: readonly [number, number, number];
+  right?: readonly [number, number, number];
+}
+
+const RENDER_3D_MODES: readonly Render3DMode[] = [
+  { id: "off", label: "off", kind: "off" },
+  { id: "anaglyph-rc", label: "anaglyph red/cyan", kind: "anaglyph", left: [1, 0, 0], right: [0, 1, 1] },
+  { id: "anaglyph-gm", label: "anaglyph green/magenta", kind: "anaglyph", left: [0, 1, 0], right: [1, 0, 1] },
+  { id: "anaglyph-ab", label: "anaglyph amber/blue", kind: "anaglyph", left: [1, 1, 0], right: [0, 0, 1] },
+];
+
+function render3DMode(id: string | undefined): Render3DMode | null {
+  const m = RENDER_3D_MODES.find((x) => x.id === (id ?? "off"));
+  return m && m.kind !== "off" ? m : null;
+}
+
+// Depth stamped onto the starfield / deep-sky layer: effectively infinity, so
+// the background always sits at maximum negative parallax (behind the screen).
+const RENDER_3D_SKY_Z = 60000;
+
+// Per-eye colour derivation. An anaglyph eye may only carry its own channels,
+// so the glyph colour is collapsed to luminance and then masked. Memoized
+// because a dense frame asks for the same handful of (colour, mask) pairs
+// thousands of times.
+const _tintCache = new Map<string, string>();
+function channelTint(hex: string, mask: readonly [number, number, number]): string {
+  const key = hex + "|" + mask[0] + mask[1] + mask[2];
+  const hit = _tintCache.get(key);
+  if (hit) return hit;
+  let r = 255, g = 255, b = 255;
+  if (hex.charCodeAt(0) === 35 /* # */) {
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length >= 7) {
+      r = parseInt(hex.slice(1, 3), 16); g = parseInt(hex.slice(3, 5), 16); b = parseInt(hex.slice(5, 7), 16);
+    }
+  }
+  // Luminance keeps relative brightness (a dim hull stays dim) while the mask
+  // decides which glasses filter can see it.
+  const lum = Math.min(255, Math.round(0.30 * r + 0.59 * g + 0.11 * b));
+  const out = `rgb(${Math.round(lum * mask[0])},${Math.round(lum * mask[1])},${Math.round(lum * mask[2])})`;
+  if (_tintCache.size < 4096) _tintCache.set(key, out);
+  return out;
+}
 
 // (blankGrid removed — replaced by Voidwake.acquireGrid which reuses a
 // single buffer across frames instead of allocating cols*rows cells per frame.)
