@@ -12035,6 +12035,7 @@ export class Voidwake {
     if (this.optionsSection === "scripting") { this.updateOptionsScripting(); return; }
     if (this.optionsSection === "mods")      { this.updateOptionsMods();      return; }
     if (this.optionsSection === "chat")      { this.updateOptionsChat();      return; }
+    if (this.optionsSection === "threed")    { this.updateOptions3D();        return; }
   }
 
   // Root Options hub. Scripting became a real subsection in 0.5.5; Mods
