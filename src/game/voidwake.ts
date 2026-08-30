@@ -12040,7 +12040,7 @@ export class Voidwake {
 
   // Root Options hub. Scripting became a real subsection in 0.5.5; Mods
   // followed in 0.7.0. No greyed-out placeholders remain.
-  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Mods", "Back"];
+  private optionsRootItems = ["Gameplay", "3D", "Audio", "Controls", "Scripting", "Mods", "Back"];
   // Reserved for future greyed-out rows. Empty in 0.7.0.
   private optionsRootDisabled: number[] = [];
   private updateOptionsRoot() {
@@ -12053,6 +12053,7 @@ export class Voidwake {
     else if (c === "Controls")  { this.optionsSection = "controls";  this.menuCursor = 0; }
     else if (c === "Scripting") { this.optionsSection = "scripting"; this.menuCursor = 0; }
     else if (c === "Mods")      { this.optionsSection = "mods";      this.menuCursor = 0; }
+    else if (c === "3D")        { this.optionsSection = "threed";    this.menuCursor = 0; }
     else if (c === "Back")      { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
   }
 
@@ -15864,6 +15865,11 @@ export class Voidwake {
         title = "OPTIONS ▸ MODS";
         items = this.optionsModsItems();
         hint = "↑/↓ select   ENTER toggle/apply   ESC back";
+        break;
+      case "threed":
+        title = "OPTIONS ▸ 3D";
+        items = this.options3DItems();
+        hint = "←/→ change   ↑/↓ field   ESC back";
         break;
       case "chat":
         title = "OPTIONS ▸ GAMEPLAY ▸ CHAT WINDOWS";
