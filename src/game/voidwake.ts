@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "1.0.2.1";
+const VERSION = "1.0.3";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -15293,7 +15293,9 @@ export class Voidwake {
     // no-ops. Amber gives a classic amber-CRT feel, cyan/white/red/etc.
     // recolor the entire HUD (and starfield) at once without touching any
     // draw call. Alpha is low so glyphs remain readable.
-    if (this.screen === "playing") {
+    // Skipped while a 3D mode is active: a multiply tint would collapse the
+    // per-eye channel separation the anaglyph pass just built.
+    if (this.screen === "playing" && !mode3d) {
       const scheme = this.options.hudScheme ?? "green";
       if (scheme !== "green") {
         const tint = ({
