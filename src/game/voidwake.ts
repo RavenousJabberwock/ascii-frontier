@@ -12180,6 +12180,45 @@ export class Voidwake {
     ];
   }
 
+  // --- Options ▸ 3D --------------------------------------------------------
+  // 1.0.3 — output-format page for the stereo pipeline. Deliberately generic:
+  // "Mode" walks RENDER_3D_MODES, so adding an interlaced / side-by-side /
+  // wiggle renderer to that table makes it selectable here with no menu work.
+  private updateOptions3D() {
+    const items = this.options3DItems();
+    this.menuNav(items.length);
+    const left = this.input.consume("arrowleft");
+    const right = this.input.consume("arrowright");
+    const i = this.menuCursor;
+    if (i === 0 && (left || right)) {
+      const n = RENDER_3D_MODES.length;
+      const cur = Math.max(0, RENDER_3D_MODES.findIndex((m) => m.id === (this.options.render3d ?? "off")));
+      this.options.render3d = RENDER_3D_MODES[(cur + (right ? 1 : -1) + n) % n].id;
+    }
+    if (i === 1) {
+      const delta = right ? 1 : left ? -1 : 0;
+      this.options.render3dStrength = Math.max(1, Math.min(6, (this.options.render3dStrength ?? 2) + delta));
+    }
+    if (i === 2) {
+      const delta = right ? 500 : left ? -500 : 0;
+      this.options.render3dConvergence = Math.max(500, Math.min(8000, (this.options.render3dConvergence ?? 2500) + delta));
+    }
+    if (this.input.consume("enter") && items[i] === "Back") {
+      this.optionsSection = "root"; this.menuCursor = 0;
+    }
+  }
+  private options3DItems(): string[] {
+    const mode = RENDER_3D_MODES.find((m) => m.id === (this.options.render3d ?? "off")) ?? RENDER_3D_MODES[0];
+    return [
+      `Mode: ${mode.label}`,
+      `Depth Strength: ${this.options.render3dStrength ?? 2}`,
+      `Convergence: ${this.options.render3dConvergence ?? 2500} u`,
+      "Back",
+    ];
+  }
+
+
+
   // --- Options ▸ Audio -----------------------------------------------------
   // Master / SFX / Music volumes, radio preset, radio custom URL.
   private updateOptionsAudio() {
