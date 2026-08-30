@@ -15092,9 +15092,25 @@ export class Voidwake {
     const sdt = Math.min(0.1, this._lastRenderTs ? now - this._lastRenderTs : 0.016);
     this._lastRenderTs = now;
 
+    // 1.0.3 — is the 3D pipeline live for this frame? Cached on the instance so
+    // the per-sprite depth stamp in renderPlaying is a single boolean test.
+    const mode3d = this.screen === "playing" ? render3DMode(this.options.render3d) : null;
+    this._depth3d = mode3d !== null;
+
     // Starfield layer — drawn first so menus/HUD/entities overdraw it.
     if (this.screen === "playing" && this.player) {
       this.drawWorldStarfield(grid, sdt);
+      // Everything painted so far is sky (galactic band, core, distant stars):
+      // stamp it at effectively-infinite depth before entities overdraw it.
+      if (this._depth3d) {
+        for (let y = 0; y < rows; y++) {
+          const row = grid[y];
+          for (let x = 0; x < cols; x++) {
+            const c = row[x];
+            if (c.ch !== " ") c.z = RENDER_3D_SKY_Z;
+          }
+        }
+      }
     } else if (
       this.screen === "title" || this.screen === "create-char" ||
       this.screen === "create-ship" || this.screen === "load" ||
