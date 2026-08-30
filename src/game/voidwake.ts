@@ -6369,6 +6369,9 @@ export class Voidwake {
   // Reusable grid buffer — allocated once per resize, reset in place each
   // frame instead of allocating ~rows*cols fresh objects (was a major GC source).
   private _gridBuf: Cell[][] | null = null;
+  // 1.0.3 — true while a 3D output mode is active, so the world layer stamps
+  // per-cell camera depth. Recomputed once per frame in render().
+  private _depth3d = false;
   private _gridCols = 0;
   private _gridRows = 0;
   // Respect OS-level motion preference. When true, skip flashes / fire FX /
