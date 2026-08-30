@@ -15387,6 +15387,49 @@ export class Voidwake {
     return g;
   }
 
+  // ---- 1.0.3 3D cell painter --------------------------------------------
+  // Dispatch point for the whole 3D pipeline. One depth-stamped cell in, one
+  // stereo-composited glyph out. Future formats (interlaced, side-by-side,
+  // wiggle) add a `kind` branch here and a row in RENDER_3D_MODES — nothing
+  // in the world renderer needs to know which format is active.
+  private paintCell3D(
+    ctx: CanvasRenderingContext2D,
+    mode: Render3DMode,
+    strength: number,
+    convergence: number,
+    c: Cell,
+    px: number,
+    py: number,
+  ) {
+    // Horizontal disparity in CSS pixels. Objects at the convergence depth get
+    // zero parallax (they sit on the glass), nearer objects get crossed
+    // (pop-out) disparity and the sky gets the full uncrossed offset. Clamped
+    // so a body you are about to dock with can't tear into double vision.
+    const z = c.z ?? convergence;
+    let par = strength * 0.5 * (convergence / Math.max(1, z) - 1);
+    if (par > 7) par = 7; else if (par < -7) par = -7;
+    switch (mode.kind) {
+      case "anaglyph": {
+        const prevOp = ctx.globalCompositeOperation;
+        // Additive so the two eye images sum to near-white where they overlap,
+        // which is what an anaglyph filter pair expects to see.
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = channelTint(c.color, mode.left ?? [1, 0, 0]);
+        ctx.fillText(c.ch, px + par * 0.5, py);
+        ctx.fillStyle = channelTint(c.color, mode.right ?? [0, 1, 1]);
+        ctx.fillText(c.ch, px - par * 0.5, py);
+        ctx.globalCompositeOperation = prevOp;
+        break;
+      }
+      default:
+        ctx.fillStyle = c.color;
+        ctx.fillText(c.ch, px, py);
+        break;
+    }
+  }
+
+
+
 
 
   // Starfield -----------------------------------------------------------------
