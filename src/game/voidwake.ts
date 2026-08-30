@@ -15174,11 +15174,22 @@ export class Voidwake {
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";
     let lastFill: string | null = null;
+    // 1.0.3 — 3D pass parameters. Only cells carrying a depth stamp (the world
+    // layer) get the stereo treatment; HUD, Comms, menus and overlays keep
+    // their normal single-image colours and sit on the screen plane.
+    const strength3d = mode3d ? Math.max(1, Math.min(6, this.options.render3dStrength ?? 2)) : 0;
+    const conv3d = Math.max(500, Math.min(8000, this.options.render3dConvergence ?? 2500));
     for (let y = 0; y < rows; y++) {
       const row = grid[y];
       for (let x = 0; x < cols; x++) {
         const c = row[x];
         if (c.ch === " ") continue;
+        if (mode3d && c.z !== undefined) {
+          this.paintCell3D(ctx, mode3d, strength3d, conv3d, c,
+            x * CELL_W + shakeDX, y * CELL_H + shakeDY);
+          lastFill = null;
+          continue;
+        }
         if (c.glow) {
           const tile = this.glowTile(c.ch, c.color, fontStr);
           if (tile) {
