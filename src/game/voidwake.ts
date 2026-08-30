@@ -17068,6 +17068,23 @@ export class Voidwake {
         const ly = sy2 + ry + 1;
         if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe", vpRight);
       }
+
+      // 1.0.3 — 3D depth stamp. Entities are drawn far→near, so writing this
+      // sprite's camera depth over its own bounding box after it is painted
+      // leaves every visible cell carrying the depth of the nearest thing
+      // that owns it. Costs nothing when the 3D pipeline is off.
+      if (this._depth3d) {
+        const rr = Math.max(1, Math.ceil(rCells) + 2);
+        const zx0 = Math.max(vpLeft + 1, sx - rr), zx1 = Math.min(vpRight - 1, sx + rr);
+        const zy0 = Math.max(vpTop + 1, sy2 - rr), zy1 = Math.min(vpBottom - 1, sy2 + rr);
+        for (let zy = zy0; zy <= zy1; zy++) {
+          const zrow = g[zy];
+          for (let zx = zx0; zx <= zx1; zx++) {
+            const zc = zrow[zx];
+            if (zc.ch !== " ") zc.z = proj.z;
+          }
+        }
+      }
     }
 
     // ---------------------------------------------------------------------
