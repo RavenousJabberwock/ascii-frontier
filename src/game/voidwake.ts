@@ -15369,6 +15369,7 @@ export class Voidwake {
         const c = row[x];
         if (c.ch !== " ") c.ch = " ";
         if (c.glow) c.glow = false;
+        if (c.z !== undefined) c.z = undefined;
         // color is overwritten by any draw; resetting it is unnecessary.
       }
     }
