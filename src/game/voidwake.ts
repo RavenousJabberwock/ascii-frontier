@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "1.0.2.1";
+const VERSION = "1.0.3";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -3215,7 +3215,7 @@ function defaultOptions(): Options {
     commsWrap: false,
     questOffers: true,
     turretMode: "auto",
-    render3d: "off",
+    render3d: "anaglyph-rc",
     render3dStrength: 2,
     render3dConvergence: 2500,
   };
@@ -6369,6 +6369,9 @@ export class Voidwake {
   // Reusable grid buffer — allocated once per resize, reset in place each
   // frame instead of allocating ~rows*cols fresh objects (was a major GC source).
   private _gridBuf: Cell[][] | null = null;
+  // 1.0.3 — true while a 3D output mode is active, so the world layer stamps
+  // per-cell camera depth. Recomputed once per frame in render().
+  private _depth3d = false;
   private _gridCols = 0;
   private _gridRows = 0;
   // Respect OS-level motion preference. When true, skip flashes / fire FX /
@@ -12040,7 +12043,7 @@ export class Voidwake {
 
   // Root Options hub. Scripting became a real subsection in 0.5.5; Mods
   // followed in 0.7.0. No greyed-out placeholders remain.
-  private optionsRootItems = ["Gameplay", "Audio", "Controls", "Scripting", "Mods", "Back"];
+  private optionsRootItems = ["Gameplay", "3D", "Audio", "Controls", "Scripting", "Mods", "Back"];
   // Reserved for future greyed-out rows. Empty in 0.7.0.
   private optionsRootDisabled: number[] = [];
   private updateOptionsRoot() {
@@ -12053,6 +12056,7 @@ export class Voidwake {
     else if (c === "Controls")  { this.optionsSection = "controls";  this.menuCursor = 0; }
     else if (c === "Scripting") { this.optionsSection = "scripting"; this.menuCursor = 0; }
     else if (c === "Mods")      { this.optionsSection = "mods";      this.menuCursor = 0; }
+    else if (c === "3D")        { this.optionsSection = "threed";    this.menuCursor = 0; }
     else if (c === "Back")      { this.screen = this.player ? "menu" : "title"; this.menuCursor = 0; }
   }
 
@@ -12179,6 +12183,45 @@ export class Voidwake {
       "Back",
     ];
   }
+
+  // --- Options ▸ 3D --------------------------------------------------------
+  // 1.0.3 — output-format page for the stereo pipeline. Deliberately generic:
+  // "Mode" walks RENDER_3D_MODES, so adding an interlaced / side-by-side /
+  // wiggle renderer to that table makes it selectable here with no menu work.
+  private updateOptions3D() {
+    const items = this.options3DItems();
+    this.menuNav(items.length);
+    const left = this.input.consume("arrowleft");
+    const right = this.input.consume("arrowright");
+    const i = this.menuCursor;
+    if (i === 0 && (left || right)) {
+      const n = RENDER_3D_MODES.length;
+      const cur = Math.max(0, RENDER_3D_MODES.findIndex((m) => m.id === (this.options.render3d ?? "off")));
+      this.options.render3d = RENDER_3D_MODES[(cur + (right ? 1 : -1) + n) % n].id;
+    }
+    if (i === 1) {
+      const delta = right ? 1 : left ? -1 : 0;
+      this.options.render3dStrength = Math.max(1, Math.min(6, (this.options.render3dStrength ?? 2) + delta));
+    }
+    if (i === 2) {
+      const delta = right ? 500 : left ? -500 : 0;
+      this.options.render3dConvergence = Math.max(500, Math.min(8000, (this.options.render3dConvergence ?? 2500) + delta));
+    }
+    if (this.input.consume("enter") && items[i] === "Back") {
+      this.optionsSection = "root"; this.menuCursor = 0;
+    }
+  }
+  private options3DItems(): string[] {
+    const mode = RENDER_3D_MODES.find((m) => m.id === (this.options.render3d ?? "off")) ?? RENDER_3D_MODES[0];
+    return [
+      `Mode: ${mode.label}`,
+      `Depth Strength: ${this.options.render3dStrength ?? 2}`,
+      `Convergence: ${this.options.render3dConvergence ?? 2500} u`,
+      "Back",
+    ];
+  }
+
+
 
   // --- Options ▸ Audio -----------------------------------------------------
   // Master / SFX / Music volumes, radio preset, radio custom URL.
@@ -15052,9 +15095,25 @@ export class Voidwake {
     const sdt = Math.min(0.1, this._lastRenderTs ? now - this._lastRenderTs : 0.016);
     this._lastRenderTs = now;
 
+    // 1.0.3 — is the 3D pipeline live for this frame? Cached on the instance so
+    // the per-sprite depth stamp in renderPlaying is a single boolean test.
+    const mode3d = this.screen === "playing" ? render3DMode(this.options.render3d) : null;
+    this._depth3d = mode3d !== null;
+
     // Starfield layer — drawn first so menus/HUD/entities overdraw it.
     if (this.screen === "playing" && this.player) {
       this.drawWorldStarfield(grid, sdt);
+      // Everything painted so far is sky (galactic band, core, distant stars):
+      // stamp it at effectively-infinite depth before entities overdraw it.
+      if (this._depth3d) {
+        for (let y = 0; y < rows; y++) {
+          const row = grid[y];
+          for (let x = 0; x < cols; x++) {
+            const c = row[x];
+            if (c.ch !== " ") c.z = RENDER_3D_SKY_Z;
+          }
+        }
+      }
     } else if (
       this.screen === "title" || this.screen === "create-char" ||
       this.screen === "create-ship" || this.screen === "load" ||
@@ -15115,11 +15174,22 @@ export class Voidwake {
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";
     let lastFill: string | null = null;
+    // 1.0.3 — 3D pass parameters. Only cells carrying a depth stamp (the world
+    // layer) get the stereo treatment; HUD, Comms, menus and overlays keep
+    // their normal single-image colours and sit on the screen plane.
+    const strength3d = mode3d ? Math.max(1, Math.min(6, this.options.render3dStrength ?? 2)) : 0;
+    const conv3d = Math.max(500, Math.min(8000, this.options.render3dConvergence ?? 2500));
     for (let y = 0; y < rows; y++) {
       const row = grid[y];
       for (let x = 0; x < cols; x++) {
         const c = row[x];
         if (c.ch === " ") continue;
+        if (mode3d && c.z !== undefined) {
+          this.paintCell3D(ctx, mode3d, strength3d, conv3d, c,
+            x * CELL_W + shakeDX, y * CELL_H + shakeDY);
+          lastFill = null;
+          continue;
+        }
         if (c.glow) {
           const tile = this.glowTile(c.ch, c.color, fontStr);
           if (tile) {
@@ -15223,7 +15293,9 @@ export class Voidwake {
     // no-ops. Amber gives a classic amber-CRT feel, cyan/white/red/etc.
     // recolor the entire HUD (and starfield) at once without touching any
     // draw call. Alpha is low so glyphs remain readable.
-    if (this.screen === "playing") {
+    // Skipped while a 3D mode is active: a multiply tint would collapse the
+    // per-eye channel separation the anaglyph pass just built.
+    if (this.screen === "playing" && !mode3d) {
       const scheme = this.options.hudScheme ?? "green";
       if (scheme !== "green") {
         const tint = ({
@@ -15310,11 +15382,55 @@ export class Voidwake {
         const c = row[x];
         if (c.ch !== " ") c.ch = " ";
         if (c.glow) c.glow = false;
+        if (c.z !== undefined) c.z = undefined;
         // color is overwritten by any draw; resetting it is unnecessary.
       }
     }
     return g;
   }
+
+  // ---- 1.0.3 3D cell painter --------------------------------------------
+  // Dispatch point for the whole 3D pipeline. One depth-stamped cell in, one
+  // stereo-composited glyph out. Future formats (interlaced, side-by-side,
+  // wiggle) add a `kind` branch here and a row in RENDER_3D_MODES — nothing
+  // in the world renderer needs to know which format is active.
+  private paintCell3D(
+    ctx: CanvasRenderingContext2D,
+    mode: Render3DMode,
+    strength: number,
+    convergence: number,
+    c: Cell,
+    px: number,
+    py: number,
+  ) {
+    // Horizontal disparity in CSS pixels. Objects at the convergence depth get
+    // zero parallax (they sit on the glass), nearer objects get crossed
+    // (pop-out) disparity and the sky gets the full uncrossed offset. Clamped
+    // so a body you are about to dock with can't tear into double vision.
+    const z = c.z ?? convergence;
+    let par = strength * 0.5 * (convergence / Math.max(1, z) - 1);
+    if (par > 7) par = 7; else if (par < -7) par = -7;
+    switch (mode.kind) {
+      case "anaglyph": {
+        const prevOp = ctx.globalCompositeOperation;
+        // Additive so the two eye images sum to near-white where they overlap,
+        // which is what an anaglyph filter pair expects to see.
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = channelTint(c.color, mode.left ?? [1, 0, 0]);
+        ctx.fillText(c.ch, px + par * 0.5, py);
+        ctx.fillStyle = channelTint(c.color, mode.right ?? [0, 1, 1]);
+        ctx.fillText(c.ch, px - par * 0.5, py);
+        ctx.globalCompositeOperation = prevOp;
+        break;
+      }
+      default:
+        ctx.fillStyle = c.color;
+        ctx.fillText(c.ch, px, py);
+        break;
+    }
+  }
+
+
 
 
 
@@ -15825,6 +15941,11 @@ export class Voidwake {
         title = "OPTIONS ▸ MODS";
         items = this.optionsModsItems();
         hint = "↑/↓ select   ENTER toggle/apply   ESC back";
+        break;
+      case "threed":
+        title = "OPTIONS ▸ 3D";
+        items = this.options3DItems();
+        hint = "←/→ change   ↑/↓ field   ESC back";
         break;
       case "chat":
         title = "OPTIONS ▸ GAMEPLAY ▸ CHAT WINDOWS";
@@ -17022,6 +17143,23 @@ export class Voidwake {
         const lx = sx - Math.floor(e.name.length / 2);
         const ly = sy2 + ry + 1;
         if (ly < vpBottom) putText(g, Math.max(vpLeft + 1, lx), ly, e.name, "#9fe", vpRight);
+      }
+
+      // 1.0.3 — 3D depth stamp. Entities are drawn far→near, so writing this
+      // sprite's camera depth over its own bounding box after it is painted
+      // leaves every visible cell carrying the depth of the nearest thing
+      // that owns it. Costs nothing when the 3D pipeline is off.
+      if (this._depth3d) {
+        const rr = Math.max(1, Math.ceil(rCells) + 2);
+        const zx0 = Math.max(vpLeft + 1, sx - rr), zx1 = Math.min(vpRight - 1, sx + rr);
+        const zy0 = Math.max(vpTop + 1, sy2 - rr), zy1 = Math.min(vpBottom - 1, sy2 + rr);
+        for (let zy = zy0; zy <= zy1; zy++) {
+          const zrow = g[zy];
+          for (let zx = zx0; zx <= zx1; zx++) {
+            const zc = zrow[zx];
+            if (zc.ch !== " ") zc.z = proj.z;
+          }
+        }
       }
     }
 
