@@ -3215,7 +3215,7 @@ function defaultOptions(): Options {
     commsWrap: false,
     questOffers: true,
     turretMode: "auto",
-    render3d: "anaglyph-rc",
+    render3d: "off",
     render3dStrength: 2,
     render3dConvergence: 2500,
   };
@@ -15186,7 +15186,7 @@ export class Voidwake {
         if (c.ch === " ") continue;
         if (mode3d && c.z !== undefined) {
           this.paintCell3D(ctx, mode3d, strength3d, conv3d, c,
-            x * CELL_W + shakeDX, y * CELL_H + shakeDY);
+            x * CELL_W + shakeDX, y * CELL_H + shakeDY, fontStr);
           lastFill = null;
           continue;
         }
@@ -15402,24 +15402,37 @@ export class Voidwake {
     c: Cell,
     px: number,
     py: number,
+    fontStr: string,
   ) {
-    // Horizontal disparity in CSS pixels. Objects at the convergence depth get
-    // zero parallax (they sit on the glass), nearer objects get crossed
+    // Horizontal disparity in CSS pixels. An object at the convergence depth
+    // gets zero parallax (it sits on the glass), anything nearer gets crossed
     // (pop-out) disparity and the sky gets the full uncrossed offset. Clamped
     // so a body you are about to dock with can't tear into double vision.
     const z = c.z ?? convergence;
-    let par = strength * 0.5 * (convergence / Math.max(1, z) - 1);
-    if (par > 7) par = 7; else if (par < -7) par = -7;
+    let par = strength * 2 * (1 - convergence / Math.max(1, z));
+    if (par > 9) par = 9; else if (par < -9) par = -9;
+    const half = par * 0.5;
     switch (mode.kind) {
       case "anaglyph": {
         const prevOp = ctx.globalCompositeOperation;
-        // Additive so the two eye images sum to near-white where they overlap,
-        // which is what an anaglyph filter pair expects to see.
+        // Additive so the two eye images sum back toward white where they
+        // overlap, which is what an anaglyph filter pair expects to see.
         ctx.globalCompositeOperation = "lighter";
-        ctx.fillStyle = channelTint(c.color, mode.left ?? [1, 0, 0]);
-        ctx.fillText(c.ch, px + par * 0.5, py);
-        ctx.fillStyle = channelTint(c.color, mode.right ?? [0, 1, 1]);
-        ctx.fillText(c.ch, px - par * 0.5, py);
+        const lc = channelTint(c.color, mode.left ?? [1, 0, 0]);
+        const rc = channelTint(c.color, mode.right ?? [0, 1, 1]);
+        // Glowing glyphs keep their baked halo: glowTile caches per colour, so
+        // the two eye tints simply become two more cached tiles.
+        const lt = c.glow ? this.glowTile(c.ch, lc, fontStr) : null;
+        const rt = c.glow ? this.glowTile(c.ch, rc, fontStr) : null;
+        if (lt && rt) {
+          ctx.drawImage(lt.canvas, px - half - GLOW_PAD, py - GLOW_PAD, lt.w, lt.h);
+          ctx.drawImage(rt.canvas, px + half - GLOW_PAD, py - GLOW_PAD, rt.w, rt.h);
+        } else {
+          ctx.fillStyle = lc;
+          ctx.fillText(c.ch, px - half, py);
+          ctx.fillStyle = rc;
+          ctx.fillText(c.ch, px + half, py);
+        }
         ctx.globalCompositeOperation = prevOp;
         break;
       }

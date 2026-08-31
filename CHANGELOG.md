@@ -4,7 +4,20 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 1.0.3 — 3D Stereo Engine
+
+- New `Options ▸ 3D` menu: mode (off / anaglyph red-cyan, green-magenta,
+  amber-blue), depth strength, and convergence distance.
+- World cells now carry a camera-space depth stamp; the paint pass renders two
+  tinted eye images with depth-derived horizontal disparity. Distant sky sits at
+  maximum uncrossed parallax, objects at the convergence plane sit on the glass.
+- HUD, Comms, menus, and overlays stay on the screen plane in full colour.
+- Glowing glyphs keep their baked halo in 3D via per-eye cached glow tiles.
+- The mode registry (`RENDER_3D_MODES`) is renderer-agnostic, so side-by-side
+  and interlaced outputs can be added later without touching the pipeline.
+
 ## 1.0.2.1 — Point Defence Control
+
 
 A small patch on top of 1.0.2.
 
