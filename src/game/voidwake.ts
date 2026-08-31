@@ -6372,6 +6372,7 @@ export class Voidwake {
   // 1.0.3 — true while a 3D output mode is active, so the world layer stamps
   // per-cell camera depth. Recomputed once per frame in render().
   private _depth3d = false;
+  private _dbg3d = 0;
   private _gridCols = 0;
   private _gridRows = 0;
   // Respect OS-level motion preference. When true, skip flashes / fire FX /
@@ -15174,6 +15175,10 @@ export class Voidwake {
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";
     let lastFill: string | null = null;
+    if (this.screen === "playing" && (this._dbg3d = (this._dbg3d ?? 0) + 1) % 120 === 0) {
+      let zc = 0; for (let y=0;y<rows;y++) for (let x=0;x<cols;x++) if (grid[y][x].z !== undefined) zc++;
+      console.log("DBG3D", this.options.render3d, !!mode3d, zc);
+    }
     // 1.0.3 — 3D pass parameters. Only cells carrying a depth stamp (the world
     // layer) get the stereo treatment; HUD, Comms, menus and overlays keep
     // their normal single-image colours and sit on the screen plane.
