@@ -104,6 +104,11 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onFleetRent",
   "onFleetOfficer",
   "onFleetPresence",
+  // 1.0.2 — turret mounts and duty rotation
+  "onTurretFired",
+  "onFleetRotate",
+  // 1.0.4 — stereo output format changed
+  "onRender3DChanged",
 ];
 
 export interface LuaHostBridge {
@@ -171,6 +176,11 @@ export interface LuaHostBridge {
   // mood, transcript) plus a disposition probe for any entity id.
   hail?: () => Record<string, unknown> | null;
   disposition?: (id: number) => string | null;
+  // 1.0.4 — stereo output. `render3d()` reports the active mode plus the full
+  // mode registry so a mod can offer its own picker; `setRender3d` writes the
+  // mode id / depth strength / convergence and returns the new state.
+  render3d?: () => Record<string, unknown>;
+  setRender3d?: (opts: { mode?: string; strength?: number; convergence?: number }) => Record<string, unknown> | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -505,6 +515,34 @@ export class LuaHost {
     pushGetter("reputation", () => this.bridge.reputation?.() ?? {});
     pushGetter("perf", () => this.bridge.perf?.() ?? {});
     pushGetter("hail", () => this.bridge.hail?.() ?? null);
+    pushGetter("render3d", () => this.bridge.render3d?.() ?? { mode: "off", kind: "off", modes: [] });
+
+    // frontier.setRender3d{ mode=?, strength=?, convergence=? } → new state | nil
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      if (lua.lua_type(Ls, 1) !== lua.LUA_TTABLE) {
+        return lauxlib.luaL_error(Ls, to_luastring("frontier.setRender3d: expected table"));
+      }
+      const readStr = (f: string) => {
+        lua.lua_getfield(Ls, 1, to_luastring(f));
+        const v = lua.lua_type(Ls, -1) === lua.LUA_TSTRING ? lua.lua_tojsstring(Ls, -1) : undefined;
+        lua.lua_pop(Ls, 1);
+        return v == null ? undefined : String(v);
+      };
+      const readNum = (f: string) => {
+        lua.lua_getfield(Ls, 1, to_luastring(f));
+        const v = lua.lua_type(Ls, -1) === lua.LUA_TNUMBER ? Number(lua.lua_tonumber(Ls, -1)) : undefined;
+        lua.lua_pop(Ls, 1);
+        return v;
+      };
+      const out = this.bridge.setRender3d?.({
+        mode: readStr("mode"),
+        strength: readNum("strength"),
+        convergence: readNum("convergence"),
+      }) ?? null;
+      pushJsAsLua(Ls, out, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("setRender3d"));
 
     // frontier.disposition(id) → "friendly" | "neutral" | "hostile" | nil
     lua.lua_pushjsfunction(L, (Ls: L) => {

@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "1.0.3";
+const VERSION = "1.0.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -246,6 +246,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onFleetPresence:      [],
   onTurretFired:        [],
   onFleetRotate:        [],
+  onRender3DChanged:    [],
 
 
 
