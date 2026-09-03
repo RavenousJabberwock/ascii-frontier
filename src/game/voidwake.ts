@@ -15407,11 +15407,11 @@ export class Voidwake {
     return g;
   }
 
-  // ---- 1.0.3 3D cell painter --------------------------------------------
+  // ---- 3D cell painter ----------------------------------------------------
   // Dispatch point for the whole 3D pipeline. One depth-stamped cell in, one
-  // stereo-composited glyph out. Future formats (interlaced, side-by-side,
-  // wiggle) add a `kind` branch here and a row in RENDER_3D_MODES — nothing
-  // in the world renderer needs to know which format is active.
+  // stereo-composited glyph out. Future formats (side-by-side, quad-buffer)
+  // add a `kind` branch here and a row in RENDER_3D_MODES — nothing in the
+  // world renderer needs to know which format is active.
   private paintCell3D(
     ctx: CanvasRenderingContext2D,
     mode: Render3DMode,
@@ -15421,6 +15421,9 @@ export class Voidwake {
     px: number,
     py: number,
     fontStr: string,
+    cx = 0,
+    cy = 0,
+    t = 0,
   ) {
     // Horizontal disparity in CSS pixels. An object at the convergence depth
     // gets zero parallax (it sits on the glass), anything nearer gets crossed
@@ -15430,14 +15433,21 @@ export class Voidwake {
     let par = strength * 2 * (1 - convergence / Math.max(1, z));
     if (par > 9) par = 9; else if (par < -9) par = -9;
     const half = par * 0.5;
+    // Single-image eye draw shared by the interlaced and wiggle families: they
+    // keep the glyph's own colour (no channel masking) and only shift it.
+    const drawEye = (dx: number) => {
+      const tile = c.glow ? this.glowTile(c.ch, c.color, fontStr) : null;
+      if (tile) ctx.drawImage(tile.canvas, px + dx - GLOW_PAD, py - GLOW_PAD, tile.w, tile.h);
+      else { ctx.fillStyle = c.color; ctx.fillText(c.ch, px + dx, py); }
+    };
     switch (mode.kind) {
       case "anaglyph": {
         const prevOp = ctx.globalCompositeOperation;
         // Additive so the two eye images sum back toward white where they
         // overlap, which is what an anaglyph filter pair expects to see.
         ctx.globalCompositeOperation = "lighter";
-        const lc = channelTint(c.color, mode.left ?? [1, 0, 0]);
-        const rc = channelTint(c.color, mode.right ?? [0, 1, 1]);
+        const lc = channelTint(c.color, mode.left ?? [1, 0, 0], mode.colour ?? "gray");
+        const rc = channelTint(c.color, mode.right ?? [0, 1, 1], mode.colour ?? "gray");
         // Glowing glyphs keep their baked halo: glowTile caches per colour, so
         // the two eye tints simply become two more cached tiles.
         const lt = c.glow ? this.glowTile(c.ch, lc, fontStr) : null;
@@ -15454,12 +15464,31 @@ export class Voidwake {
         ctx.globalCompositeOperation = prevOp;
         break;
       }
+      case "interlaced": {
+        // Passive-polarised panels and lenticular overlays want one eye per
+        // scanline (or column). The cell grid is the natural unit here: even
+        // lines carry the left eye, odd lines the right.
+        const parity = (mode.axis === "col" ? cx : cy) & 1;
+        drawEye(parity ? half : -half);
+        break;
+      }
+      case "wiggle": {
+        // Glasses-free depth cue: alternate the two eye images fast enough
+        // that the parallax reads as volume. Honours reduced-motion by
+        // collapsing to a single centred image.
+        if (this._reducedMotion) { drawEye(0); break; }
+        const period = mode.period ?? 0.09;
+        const phase = Math.floor(t / period) & 1;
+        drawEye(phase ? half : -half);
+        break;
+      }
       default:
         ctx.fillStyle = c.color;
         ctx.fillText(c.ch, px, py);
         break;
     }
   }
+
 
 
 
