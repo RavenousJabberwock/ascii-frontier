@@ -12209,8 +12209,8 @@ export class Voidwake {
 
   // --- Options ▸ 3D --------------------------------------------------------
   // 1.0.3 — output-format page for the stereo pipeline. Deliberately generic:
-  // "Mode" walks RENDER_3D_MODES, so adding an interlaced / side-by-side /
-  // wiggle renderer to that table makes it selectable here with no menu work.
+  // "Mode" walks RENDER_3D_MODES, so adding a side-by-side / quad-buffer
+  // renderer to that table makes it selectable here with no menu work.
   private updateOptions3D() {
     const items = this.options3DItems();
     this.menuNav(items.length);
@@ -12220,15 +12220,13 @@ export class Voidwake {
     if (i === 0 && (left || right)) {
       const n = RENDER_3D_MODES.length;
       const cur = Math.max(0, RENDER_3D_MODES.findIndex((m) => m.id === (this.options.render3d ?? "off")));
-      this.options.render3d = RENDER_3D_MODES[(cur + (right ? 1 : -1) + n) % n].id;
+      this.applyRender3D({ mode: RENDER_3D_MODES[(cur + (right ? 1 : -1) + n) % n].id });
     }
-    if (i === 1) {
-      const delta = right ? 1 : left ? -1 : 0;
-      this.options.render3dStrength = Math.max(1, Math.min(6, (this.options.render3dStrength ?? 2) + delta));
+    if (i === 1 && (left || right)) {
+      this.applyRender3D({ strength: (this.options.render3dStrength ?? 2) + (right ? 1 : -1) });
     }
-    if (i === 2) {
-      const delta = right ? 500 : left ? -500 : 0;
-      this.options.render3dConvergence = Math.max(500, Math.min(8000, (this.options.render3dConvergence ?? 2500) + delta));
+    if (i === 2 && (left || right)) {
+      this.applyRender3D({ convergence: (this.options.render3dConvergence ?? 2500) + (right ? 500 : -500) });
     }
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
@@ -12243,6 +12241,41 @@ export class Voidwake {
       "Back",
     ];
   }
+
+  // 1.0.4 — single write path for the stereo settings, shared by the Options
+  // page and `frontier.setRender3d`. Clamps, persists nothing itself (the
+  // normal options save handles that) and dispatches `onRender3DChanged`.
+  private applyRender3D(o: { mode?: string; strength?: number; convergence?: number }): Record<string, unknown> {
+    if (o.mode !== undefined) {
+      const m = RENDER_3D_MODES.find((x) => x.id === o.mode);
+      if (m) this.options.render3d = m.id;
+    }
+    if (o.strength !== undefined && Number.isFinite(o.strength)) {
+      this.options.render3dStrength = Math.max(1, Math.min(6, Math.round(o.strength)));
+    }
+    if (o.convergence !== undefined && Number.isFinite(o.convergence)) {
+      this.options.render3dConvergence = Math.max(500, Math.min(8000, Math.round(o.convergence)));
+    }
+    const state = this.render3DState();
+    dispatchHook("onRender3DChanged", state);
+    return state;
+  }
+
+  // Read surface: active mode plus the whole registry, so scripts and mods can
+  // build their own picker without hard-coding the format list.
+  private render3DState(): Record<string, unknown> {
+    const mode = RENDER_3D_MODES.find((m) => m.id === (this.options.render3d ?? "off")) ?? RENDER_3D_MODES[0];
+    return {
+      mode: mode.id,
+      label: mode.label,
+      kind: mode.kind,
+      enabled: mode.kind !== "off",
+      strength: this.options.render3dStrength ?? 2,
+      convergence: this.options.render3dConvergence ?? 2500,
+      modes: RENDER_3D_MODES.map((m) => ({ id: m.id, label: m.label, kind: m.kind })),
+    };
+  }
+
 
 
 
