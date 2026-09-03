@@ -172,7 +172,11 @@ export type ScriptHookName =
   // point-defence mount takes a shot; `onFleetRotate` when a frame on a rotating
   // roster hands itself over to the next duty in the cycle.
   | "onTurretFired"
-  | "onFleetRotate";
+  | "onFleetRotate"
+  // 1.0.4 — stereo output changed (menu or `frontier.setRender3d`). Carries the
+  // mode id, kind, depth strength and convergence distance.
+  | "onRender3DChanged";
+
 
 
 
