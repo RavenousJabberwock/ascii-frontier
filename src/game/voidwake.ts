@@ -5549,7 +5549,11 @@ interface Cell { ch: string; color: string; glow?: boolean; z?: number }
 // and per-cell camera depth — so new stereo formats (interlaced, side-by-side,
 // wiggle/parallax, quad-buffer) can be added here without touching a single
 // draw call. 1.0.3 ships the anaglyph family; `kind` is the dispatch key.
-type Render3DKind = "off" | "anaglyph";
+// 1.0.4 adds three more families on top of the anaglyph one: half-colour
+// anaglyph (keeps hue in each eye, less colour loss, slightly more ghosting),
+// interlaced (row/column, for passive-polarised panels and lenticular
+// overlays) and wiggle (glasses-free time-alternating parallax).
+type Render3DKind = "off" | "anaglyph" | "interlaced" | "wiggle";
 
 interface Render3DMode {
   id: string;
@@ -5558,13 +5562,24 @@ interface Render3DMode {
   // Anaglyph channel masks: which RGB channels each eye is allowed to write.
   left?: readonly [number, number, number];
   right?: readonly [number, number, number];
+  // "gray" collapses the glyph to luminance before masking (least ghosting);
+  // "half" keeps the glyph's own channel values (more colour, more ghosting).
+  colour?: "gray" | "half";
+  // Interlaced modes: which axis alternates eyes.
+  axis?: "row" | "col";
+  // Wiggle: seconds per eye swap.
+  period?: number;
 }
 
 const RENDER_3D_MODES: readonly Render3DMode[] = [
   { id: "off", label: "off", kind: "off" },
-  { id: "anaglyph-rc", label: "anaglyph red/cyan", kind: "anaglyph", left: [1, 0, 0], right: [0, 1, 1] },
-  { id: "anaglyph-gm", label: "anaglyph green/magenta", kind: "anaglyph", left: [0, 1, 0], right: [1, 0, 1] },
-  { id: "anaglyph-ab", label: "anaglyph amber/blue", kind: "anaglyph", left: [1, 1, 0], right: [0, 0, 1] },
+  { id: "anaglyph-rc", label: "anaglyph red/cyan", kind: "anaglyph", left: [1, 0, 0], right: [0, 1, 1], colour: "gray" },
+  { id: "anaglyph-rc-half", label: "anaglyph red/cyan (half-colour)", kind: "anaglyph", left: [1, 0, 0], right: [0, 1, 1], colour: "half" },
+  { id: "anaglyph-gm", label: "anaglyph green/magenta", kind: "anaglyph", left: [0, 1, 0], right: [1, 0, 1], colour: "gray" },
+  { id: "anaglyph-ab", label: "anaglyph amber/blue", kind: "anaglyph", left: [1, 1, 0], right: [0, 0, 1], colour: "gray" },
+  { id: "interlace-row", label: "interlaced (rows)", kind: "interlaced", axis: "row" },
+  { id: "interlace-col", label: "interlaced (columns)", kind: "interlaced", axis: "col" },
+  { id: "wiggle", label: "wiggle (no glasses)", kind: "wiggle", period: 0.09 },
 ];
 
 function render3DMode(id: string | undefined): Render3DMode | null {
@@ -5576,13 +5591,14 @@ function render3DMode(id: string | undefined): Render3DMode | null {
 // the background always sits at maximum negative parallax (behind the screen).
 const RENDER_3D_SKY_Z = 60000;
 
-// Per-eye colour derivation. An anaglyph eye may only carry its own channels,
-// so the glyph colour is collapsed to luminance and then masked. Memoized
-// because a dense frame asks for the same handful of (colour, mask) pairs
-// thousands of times.
+// Per-eye colour derivation. A grey anaglyph eye may only carry its own
+// channels, so the glyph colour is collapsed to luminance and then masked;
+// a half-colour eye keeps its own channel values instead. Memoized because a
+// dense frame asks for the same handful of (colour, mask) pairs thousands of
+// times.
 const _tintCache = new Map<string, string>();
-function channelTint(hex: string, mask: readonly [number, number, number]): string {
-  const key = hex + "|" + mask[0] + mask[1] + mask[2];
+function channelTint(hex: string, mask: readonly [number, number, number], colour: "gray" | "half" = "gray"): string {
+  const key = hex + "|" + mask[0] + mask[1] + mask[2] + colour;
   const hit = _tintCache.get(key);
   if (hit) return hit;
   let r = 255, g = 255, b = 255;
@@ -5596,10 +5612,12 @@ function channelTint(hex: string, mask: readonly [number, number, number]): stri
   // Luminance keeps relative brightness (a dim hull stays dim) while the mask
   // decides which glasses filter can see it.
   const lum = Math.min(255, Math.round(0.30 * r + 0.59 * g + 0.11 * b));
-  const out = `rgb(${Math.round(lum * mask[0])},${Math.round(lum * mask[1])},${Math.round(lum * mask[2])})`;
+  const src = colour === "half" ? [r, g, b] : [lum, lum, lum];
+  const out = `rgb(${Math.round(src[0] * mask[0])},${Math.round(src[1] * mask[1])},${Math.round(src[2] * mask[2])})`;
   if (_tintCache.size < 4096) _tintCache.set(key, out);
   return out;
 }
+
 
 // (blankGrid removed — replaced by Voidwake.acquireGrid which reuses a
 // single buffer across frames instead of allocating cols*rows cells per frame.)
