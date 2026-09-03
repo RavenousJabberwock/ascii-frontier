@@ -15204,7 +15204,8 @@ export class Voidwake {
         if (c.ch === " ") continue;
         if (mode3d && c.z !== undefined) {
           this.paintCell3D(ctx, mode3d, strength3d, conv3d, c,
-            x * CELL_W + shakeDX, y * CELL_H + shakeDY, fontStr);
+            x * CELL_W + shakeDX, y * CELL_H + shakeDY, fontStr, x, y, now);
+
           lastFill = null;
           continue;
         }
