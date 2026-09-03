@@ -565,6 +565,25 @@ Since 1.0.2.1 `frontier.turrets()` returns
 where `mode` is the `Options ▸ Gameplay ▸ Point Defence` setting
 (`"auto"` / `"target"` / `"off"`).
 
+### 3D output (1.0.4)
+
+`frontier.render3d()` returns the live stereo state and the whole mode registry:
+
+```lua
+local v = frontier.render3d()
+-- v.mode "off" | "anaglyph-rc" | "anaglyph-rc-half" | "anaglyph-gm"
+--        | "anaglyph-ab" | "interlace-row" | "interlace-col" | "wiggle"
+-- v.kind "off" | "anaglyph" | "interlaced" | "wiggle"
+-- v.enabled, v.strength (1..6), v.convergence (500..8000 u)
+-- v.modes  = { { id, label, kind }, ... }  -- everything this build can output
+```
+
+`frontier.setRender3d{ mode = "wiggle", strength = 3, convergence = 2000 }`
+writes any subset of those fields (values are clamped) and returns the new
+state. Both the Options page and this call dispatch `onRender3DChanged` with
+the same payload, so a mod-supplied picker stays in step with the menu.
+
+
 
 
 Since 1.0.0 `onFleetIncome` payloads reflect **officer role affinity**

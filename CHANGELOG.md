@@ -4,6 +4,28 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 1.0.4 — 3D Output Formats & Stereo Scripting
+
+- Four new entries in `Options ▸ 3D ▸ Mode`, all riding the existing depth
+  pipeline:
+  - **anaglyph red/cyan (half-colour)** — keeps each eye's own channel values
+    instead of collapsing to luminance: much more colour, slightly more
+    ghosting.
+  - **interlaced (rows)** and **interlaced (columns)** — one eye per grid line
+    or column, for passive-polarised panels and lenticular overlays.
+  - **wiggle (no glasses)** — fast time-alternating parallax; collapses to a
+    single centred image under reduced-motion.
+- Scripting/modding surface for the stereo engine:
+  - `frontier.render3d()` → `{ mode, label, kind, enabled, strength,
+    convergence, modes }`, where `modes` is the live registry so a mod can build
+    its own picker without hard-coding format ids.
+  - `frontier.setRender3d{ mode=, strength=, convergence= }` → the new state
+    (clamped the same way the menu clamps it).
+  - New hook `onRender3DChanged`, fired by the Options page and by
+    `setRender3d` alike.
+- The Options page and the script API now share one write path, so a mod
+  changing the format can never desync from the menu display.
+
 ## 1.0.3 — 3D Stereo Engine
 
 - New `Options ▸ 3D` menu: mode (off / anaglyph red-cyan, green-magenta,

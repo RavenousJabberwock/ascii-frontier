@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "1.0.3";
+const VERSION = "1.0.4";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -172,7 +172,11 @@ export type ScriptHookName =
   // point-defence mount takes a shot; `onFleetRotate` when a frame on a rotating
   // roster hands itself over to the next duty in the cycle.
   | "onTurretFired"
-  | "onFleetRotate";
+  | "onFleetRotate"
+  // 1.0.4 — stereo output changed (menu or `frontier.setRender3d`). Carries the
+  // mode id, kind, depth strength and convergence distance.
+  | "onRender3DChanged";
+
 
 
 
@@ -242,6 +246,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onFleetPresence:      [],
   onTurretFired:        [],
   onFleetRotate:        [],
+  onRender3DChanged:    [],
 
 
 
@@ -5549,7 +5554,11 @@ interface Cell { ch: string; color: string; glow?: boolean; z?: number }
 // and per-cell camera depth — so new stereo formats (interlaced, side-by-side,
 // wiggle/parallax, quad-buffer) can be added here without touching a single
 // draw call. 1.0.3 ships the anaglyph family; `kind` is the dispatch key.
-type Render3DKind = "off" | "anaglyph";
+// 1.0.4 adds three more families on top of the anaglyph one: half-colour
+// anaglyph (keeps hue in each eye, less colour loss, slightly more ghosting),
+// interlaced (row/column, for passive-polarised panels and lenticular
+// overlays) and wiggle (glasses-free time-alternating parallax).
+type Render3DKind = "off" | "anaglyph" | "interlaced" | "wiggle";
 
 interface Render3DMode {
   id: string;
@@ -5558,13 +5567,24 @@ interface Render3DMode {
   // Anaglyph channel masks: which RGB channels each eye is allowed to write.
   left?: readonly [number, number, number];
   right?: readonly [number, number, number];
+  // "gray" collapses the glyph to luminance before masking (least ghosting);
+  // "half" keeps the glyph's own channel values (more colour, more ghosting).
+  colour?: "gray" | "half";
+  // Interlaced modes: which axis alternates eyes.
+  axis?: "row" | "col";
+  // Wiggle: seconds per eye swap.
+  period?: number;
 }
 
 const RENDER_3D_MODES: readonly Render3DMode[] = [
   { id: "off", label: "off", kind: "off" },
-  { id: "anaglyph-rc", label: "anaglyph red/cyan", kind: "anaglyph", left: [1, 0, 0], right: [0, 1, 1] },
-  { id: "anaglyph-gm", label: "anaglyph green/magenta", kind: "anaglyph", left: [0, 1, 0], right: [1, 0, 1] },
-  { id: "anaglyph-ab", label: "anaglyph amber/blue", kind: "anaglyph", left: [1, 1, 0], right: [0, 0, 1] },
+  { id: "anaglyph-rc", label: "anaglyph red/cyan", kind: "anaglyph", left: [1, 0, 0], right: [0, 1, 1], colour: "gray" },
+  { id: "anaglyph-rc-half", label: "anaglyph red/cyan (half-colour)", kind: "anaglyph", left: [1, 0, 0], right: [0, 1, 1], colour: "half" },
+  { id: "anaglyph-gm", label: "anaglyph green/magenta", kind: "anaglyph", left: [0, 1, 0], right: [1, 0, 1], colour: "gray" },
+  { id: "anaglyph-ab", label: "anaglyph amber/blue", kind: "anaglyph", left: [1, 1, 0], right: [0, 0, 1], colour: "gray" },
+  { id: "interlace-row", label: "interlaced (rows)", kind: "interlaced", axis: "row" },
+  { id: "interlace-col", label: "interlaced (columns)", kind: "interlaced", axis: "col" },
+  { id: "wiggle", label: "wiggle (no glasses)", kind: "wiggle", period: 0.09 },
 ];
 
 function render3DMode(id: string | undefined): Render3DMode | null {
@@ -5576,13 +5596,14 @@ function render3DMode(id: string | undefined): Render3DMode | null {
 // the background always sits at maximum negative parallax (behind the screen).
 const RENDER_3D_SKY_Z = 60000;
 
-// Per-eye colour derivation. An anaglyph eye may only carry its own channels,
-// so the glyph colour is collapsed to luminance and then masked. Memoized
-// because a dense frame asks for the same handful of (colour, mask) pairs
-// thousands of times.
+// Per-eye colour derivation. A grey anaglyph eye may only carry its own
+// channels, so the glyph colour is collapsed to luminance and then masked;
+// a half-colour eye keeps its own channel values instead. Memoized because a
+// dense frame asks for the same handful of (colour, mask) pairs thousands of
+// times.
 const _tintCache = new Map<string, string>();
-function channelTint(hex: string, mask: readonly [number, number, number]): string {
-  const key = hex + "|" + mask[0] + mask[1] + mask[2];
+function channelTint(hex: string, mask: readonly [number, number, number], colour: "gray" | "half" = "gray"): string {
+  const key = hex + "|" + mask[0] + mask[1] + mask[2] + colour;
   const hit = _tintCache.get(key);
   if (hit) return hit;
   let r = 255, g = 255, b = 255;
@@ -5596,10 +5617,12 @@ function channelTint(hex: string, mask: readonly [number, number, number]): stri
   // Luminance keeps relative brightness (a dim hull stays dim) while the mask
   // decides which glasses filter can see it.
   const lum = Math.min(255, Math.round(0.30 * r + 0.59 * g + 0.11 * b));
-  const out = `rgb(${Math.round(lum * mask[0])},${Math.round(lum * mask[1])},${Math.round(lum * mask[2])})`;
+  const src = colour === "half" ? [r, g, b] : [lum, lum, lum];
+  const out = `rgb(${Math.round(src[0] * mask[0])},${Math.round(src[1] * mask[1])},${Math.round(src[2] * mask[2])})`;
   if (_tintCache.size < 4096) _tintCache.set(key, out);
   return out;
 }
+
 
 // (blankGrid removed — replaced by Voidwake.acquireGrid which reuses a
 // single buffer across frames instead of allocating cols*rows cells per frame.)
@@ -12186,8 +12209,8 @@ export class Voidwake {
 
   // --- Options ▸ 3D --------------------------------------------------------
   // 1.0.3 — output-format page for the stereo pipeline. Deliberately generic:
-  // "Mode" walks RENDER_3D_MODES, so adding an interlaced / side-by-side /
-  // wiggle renderer to that table makes it selectable here with no menu work.
+  // "Mode" walks RENDER_3D_MODES, so adding a side-by-side / quad-buffer
+  // renderer to that table makes it selectable here with no menu work.
   private updateOptions3D() {
     const items = this.options3DItems();
     this.menuNav(items.length);
@@ -12197,15 +12220,13 @@ export class Voidwake {
     if (i === 0 && (left || right)) {
       const n = RENDER_3D_MODES.length;
       const cur = Math.max(0, RENDER_3D_MODES.findIndex((m) => m.id === (this.options.render3d ?? "off")));
-      this.options.render3d = RENDER_3D_MODES[(cur + (right ? 1 : -1) + n) % n].id;
+      this.applyRender3D({ mode: RENDER_3D_MODES[(cur + (right ? 1 : -1) + n) % n].id });
     }
-    if (i === 1) {
-      const delta = right ? 1 : left ? -1 : 0;
-      this.options.render3dStrength = Math.max(1, Math.min(6, (this.options.render3dStrength ?? 2) + delta));
+    if (i === 1 && (left || right)) {
+      this.applyRender3D({ strength: (this.options.render3dStrength ?? 2) + (right ? 1 : -1) });
     }
-    if (i === 2) {
-      const delta = right ? 500 : left ? -500 : 0;
-      this.options.render3dConvergence = Math.max(500, Math.min(8000, (this.options.render3dConvergence ?? 2500) + delta));
+    if (i === 2 && (left || right)) {
+      this.applyRender3D({ convergence: (this.options.render3dConvergence ?? 2500) + (right ? 500 : -500) });
     }
     if (this.input.consume("enter") && items[i] === "Back") {
       this.optionsSection = "root"; this.menuCursor = 0;
@@ -12220,6 +12241,41 @@ export class Voidwake {
       "Back",
     ];
   }
+
+  // 1.0.4 — single write path for the stereo settings, shared by the Options
+  // page and `frontier.setRender3d`. Clamps, persists nothing itself (the
+  // normal options save handles that) and dispatches `onRender3DChanged`.
+  private applyRender3D(o: { mode?: string; strength?: number; convergence?: number }): Record<string, unknown> {
+    if (o.mode !== undefined) {
+      const m = RENDER_3D_MODES.find((x) => x.id === o.mode);
+      if (m) this.options.render3d = m.id;
+    }
+    if (o.strength !== undefined && Number.isFinite(o.strength)) {
+      this.options.render3dStrength = Math.max(1, Math.min(6, Math.round(o.strength)));
+    }
+    if (o.convergence !== undefined && Number.isFinite(o.convergence)) {
+      this.options.render3dConvergence = Math.max(500, Math.min(8000, Math.round(o.convergence)));
+    }
+    const state = this.render3DState();
+    dispatchHook("onRender3DChanged", state);
+    return state;
+  }
+
+  // Read surface: active mode plus the whole registry, so scripts and mods can
+  // build their own picker without hard-coding the format list.
+  private render3DState(): Record<string, unknown> {
+    const mode = RENDER_3D_MODES.find((m) => m.id === (this.options.render3d ?? "off")) ?? RENDER_3D_MODES[0];
+    return {
+      mode: mode.id,
+      label: mode.label,
+      kind: mode.kind,
+      enabled: mode.kind !== "off",
+      strength: this.options.render3dStrength ?? 2,
+      convergence: this.options.render3dConvergence ?? 2500,
+      modes: RENDER_3D_MODES.map((m) => ({ id: m.id, label: m.label, kind: m.kind })),
+    };
+  }
+
 
 
 
@@ -12706,6 +12762,11 @@ export class Voidwake {
           const e = this.byId(id);
           return e ? this.hailDisposition(e) : null;
         },
+        // 1.0.4 — stereo output read/write. `modes` is the live registry, so a
+        // mod-supplied picker never has to hard-code the format list.
+        render3d: () => this.render3DState(),
+        setRender3d: (o) => this.applyRender3D(o),
+
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
@@ -15186,7 +15247,8 @@ export class Voidwake {
         if (c.ch === " ") continue;
         if (mode3d && c.z !== undefined) {
           this.paintCell3D(ctx, mode3d, strength3d, conv3d, c,
-            x * CELL_W + shakeDX, y * CELL_H + shakeDY, fontStr);
+            x * CELL_W + shakeDX, y * CELL_H + shakeDY, fontStr, x, y, now);
+
           lastFill = null;
           continue;
         }
@@ -15389,11 +15451,11 @@ export class Voidwake {
     return g;
   }
 
-  // ---- 1.0.3 3D cell painter --------------------------------------------
+  // ---- 3D cell painter ----------------------------------------------------
   // Dispatch point for the whole 3D pipeline. One depth-stamped cell in, one
-  // stereo-composited glyph out. Future formats (interlaced, side-by-side,
-  // wiggle) add a `kind` branch here and a row in RENDER_3D_MODES — nothing
-  // in the world renderer needs to know which format is active.
+  // stereo-composited glyph out. Future formats (side-by-side, quad-buffer)
+  // add a `kind` branch here and a row in RENDER_3D_MODES — nothing in the
+  // world renderer needs to know which format is active.
   private paintCell3D(
     ctx: CanvasRenderingContext2D,
     mode: Render3DMode,
@@ -15403,6 +15465,9 @@ export class Voidwake {
     px: number,
     py: number,
     fontStr: string,
+    cx = 0,
+    cy = 0,
+    t = 0,
   ) {
     // Horizontal disparity in CSS pixels. An object at the convergence depth
     // gets zero parallax (it sits on the glass), anything nearer gets crossed
@@ -15412,14 +15477,21 @@ export class Voidwake {
     let par = strength * 2 * (1 - convergence / Math.max(1, z));
     if (par > 9) par = 9; else if (par < -9) par = -9;
     const half = par * 0.5;
+    // Single-image eye draw shared by the interlaced and wiggle families: they
+    // keep the glyph's own colour (no channel masking) and only shift it.
+    const drawEye = (dx: number) => {
+      const tile = c.glow ? this.glowTile(c.ch, c.color, fontStr) : null;
+      if (tile) ctx.drawImage(tile.canvas, px + dx - GLOW_PAD, py - GLOW_PAD, tile.w, tile.h);
+      else { ctx.fillStyle = c.color; ctx.fillText(c.ch, px + dx, py); }
+    };
     switch (mode.kind) {
       case "anaglyph": {
         const prevOp = ctx.globalCompositeOperation;
         // Additive so the two eye images sum back toward white where they
         // overlap, which is what an anaglyph filter pair expects to see.
         ctx.globalCompositeOperation = "lighter";
-        const lc = channelTint(c.color, mode.left ?? [1, 0, 0]);
-        const rc = channelTint(c.color, mode.right ?? [0, 1, 1]);
+        const lc = channelTint(c.color, mode.left ?? [1, 0, 0], mode.colour ?? "gray");
+        const rc = channelTint(c.color, mode.right ?? [0, 1, 1], mode.colour ?? "gray");
         // Glowing glyphs keep their baked halo: glowTile caches per colour, so
         // the two eye tints simply become two more cached tiles.
         const lt = c.glow ? this.glowTile(c.ch, lc, fontStr) : null;
@@ -15436,12 +15508,31 @@ export class Voidwake {
         ctx.globalCompositeOperation = prevOp;
         break;
       }
+      case "interlaced": {
+        // Passive-polarised panels and lenticular overlays want one eye per
+        // scanline (or column). The cell grid is the natural unit here: even
+        // lines carry the left eye, odd lines the right.
+        const parity = (mode.axis === "col" ? cx : cy) & 1;
+        drawEye(parity ? half : -half);
+        break;
+      }
+      case "wiggle": {
+        // Glasses-free depth cue: alternate the two eye images fast enough
+        // that the parallax reads as volume. Honours reduced-motion by
+        // collapsing to a single centred image.
+        if (this._reducedMotion) { drawEye(0); break; }
+        const period = mode.period ?? 0.09;
+        const phase = Math.floor(t / period) & 1;
+        drawEye(phase ? half : -half);
+        break;
+      }
       default:
         ctx.fillStyle = c.color;
         ctx.fillText(c.ch, px, py);
         break;
     }
   }
+
 
 
 

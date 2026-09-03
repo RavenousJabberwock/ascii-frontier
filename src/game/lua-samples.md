@@ -659,3 +659,39 @@ frontier.on("onPlayerDamaged", function()
   end
 end)
 ```
+
+
+## Stereo output switcher (1.0.4)
+
+Cycles the 3D output format from a script, eases depth off while docked (menus
+sit on the screen plane anyway) and logs whatever changed it.
+
+```lua
+frontier.on("onRender3DChanged", function(v)
+  frontier.log(("[3d] %s (%s) depth %d, convergence %du")
+    :format(v.label, v.kind, v.strength or 0, v.convergence or 0))
+end)
+
+-- Walk to the next format in the registry — no hard-coded id list.
+local function next3d()
+  local v = frontier.render3d()
+  local ids = {}
+  for _, m in ipairs(v.modes or {}) do ids[#ids + 1] = m.id end
+  for i, id in ipairs(ids) do
+    if id == v.mode then
+      frontier.setRender3d{ mode = ids[(i % #ids) + 1] }
+      return
+    end
+  end
+end
+
+-- Comfort pass: shallower depth in a fight, deeper while cruising.
+frontier.on("onPlayerDamaged", function()
+  local v = frontier.render3d()
+  if v.enabled and (v.strength or 0) > 2 then frontier.setRender3d{ strength = 2 } end
+end)
+
+frontier.on("onPlayerDock", function(evt)
+  if evt.kind == "station" then next3d() end
+end)
+```
