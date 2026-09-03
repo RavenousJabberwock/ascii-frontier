@@ -12729,6 +12729,11 @@ export class Voidwake {
           const e = this.byId(id);
           return e ? this.hailDisposition(e) : null;
         },
+        // 1.0.4 — stereo output read/write. `modes` is the live registry, so a
+        // mod-supplied picker never has to hard-code the format list.
+        render3d: () => this.render3DState(),
+        setRender3d: (o) => this.applyRender3D(o),
+
         getPlayerSnapshot: () => {
           const p = this.player; if (!p) return null;
           return {
