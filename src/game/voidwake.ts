@@ -13497,6 +13497,8 @@ export class Voidwake {
       weaponId: p.ship.weaponId, gunnerWeaponId: p.ship.gunnerWeaponId,
       modules: [...p.ship.modules],
       refit: p.ship.refit ? { ...p.ship.refit } : undefined,
+      turretAmmo: p.ship.turretAmmo,
+
       insured: p.ship.insured,
       storedAt: st?.id, storedAtName: st?.name ?? "Yard",
       storedAtMs: Date.now(),
