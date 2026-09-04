@@ -2228,6 +2228,38 @@ const TURRET_RANGE = 1100;
 const TURRET_COOLDOWN = 1.9;      // seconds between shots, per mount
 const TURRET_DMG_MUL = 0.5;       // share of the mounted weapon's damage
 
+// 1.0.5 — turret ammunition. Closes the 1.0.2 deferment ("mounts mirror the
+// fitted weapon"): the mounts still derive their damage from the gun in the
+// nose, but the belt you load reshapes that damage into a cadence/range/impact
+// trade. One belt is fitted per frame (`PlayerShip.turretAmmo`), bought once at
+// the Refit Bay and travelling with the hull like a refit does.
+interface TurretLoadout {
+  id: string; name: string;
+  dmgMul: number;       // multiplies TURRET_DMG_MUL
+  cdMul: number;        // multiplies TURRET_COOLDOWN
+  rangeMul: number;     // multiplies TURRET_RANGE
+  speed: number;        // bullet speed, u/s
+  price: number;        // one-off fitting cost, before haggling
+  desc: string;
+}
+const TURRET_LOADOUTS: TurretLoadout[] = [
+  { id: "slug",    name: "Standard slugs",  dmgMul: 1.00, cdMul: 1.00, rangeMul: 1.00, speed: 300, price: 0,
+    desc: "the belt the mount ships with — balanced, endless, free" },
+  { id: "flak",    name: "Flak canisters",  dmgMul: 1.55, cdMul: 1.40, rangeMul: 0.70, speed: 240, price: 2600,
+    desc: "heavy bursts at knife range; slow to cycle, brutal up close" },
+  { id: "tracker", name: "Tracker darts",   dmgMul: 0.62, cdMul: 0.62, rangeMul: 1.35, speed: 420, price: 3100,
+    desc: "fast light darts that reach further and chatter constantly" },
+  { id: "lance",   name: "Ion lances",      dmgMul: 1.20, cdMul: 1.15, rangeMul: 1.10, speed: 520, price: 4200,
+    desc: "high-velocity ion bolts — expensive, accurate, hard-hitting" },
+];
+function turretLoadoutSpec(id: string | undefined): TurretLoadout {
+  return TURRET_LOADOUTS.find((t) => t.id === id) ?? TURRET_LOADOUTS[0];
+}
+function turretLoadoutPrice(p: PlayerState, t: TurretLoadout): number {
+  return t.price <= 0 ? 0 : Math.max(200, Math.round(t.price * merchantBuyMult(p)));
+}
+
+
 function refitLevel(refit: ShipRefit | undefined, stat: RefitStat): number {
   return Math.max(0, Math.min(REFIT_MAX, refit?.[stat] ?? 0));
 }
@@ -2252,6 +2284,8 @@ interface FleetShip {
   gunnerWeaponId?: string;
   modules: string[];
   refit?: ShipRefit;
+  turretAmmo?: string;    // 1.0.5 — belt travels with the frame into the hangar
+
   insured?: boolean;
   storedAt?: number;      // station entity id, when it was parked at one
   storedAtName: string;
@@ -2526,6 +2560,10 @@ interface PlayerShip {
   // 0.9.6 — permanent per-stat refit levels bought at the yard's Refit Bay.
   // Undefined on older saves; every reader goes through refitLevel/refitBonus.
   refit?: ShipRefit;
+  // 1.0.5 — fitted turret ammunition belt (see TURRET_LOADOUTS). Undefined on
+  // older saves, which read as the free "slug" belt.
+  turretAmmo?: string;
+
 }
 
 // A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
@@ -12246,6 +12284,7 @@ export class Voidwake {
   // page and `frontier.setRender3d`. Clamps, persists nothing itself (the
   // normal options save handles that) and dispatches `onRender3DChanged`.
   private applyRender3D(o: { mode?: string; strength?: number; convergence?: number }): Record<string, unknown> {
+    const before = `${this.options.render3d}|${this.options.render3dStrength}|${this.options.render3dConvergence}`;
     if (o.mode !== undefined) {
       const m = RENDER_3D_MODES.find((x) => x.id === o.mode);
       if (m) this.options.render3d = m.id;
@@ -12257,9 +12296,14 @@ export class Voidwake {
       this.options.render3dConvergence = Math.max(500, Math.min(8000, Math.round(o.convergence)));
     }
     const state = this.render3DState();
-    dispatchHook("onRender3DChanged", state);
+    // 1.0.5 — only fire the hook when something actually moved, so a script
+    // that polls setRender3d in onTick does not spam its own handler.
+    if (`${this.options.render3d}|${this.options.render3dStrength}|${this.options.render3dConvergence}` !== before) {
+      dispatchHook("onRender3DChanged", state);
+    }
     return state;
   }
+
 
   // Read surface: active mode plus the whole registry, so scripts and mods can
   // build their own picker without hard-coding the format list.
@@ -13453,6 +13497,8 @@ export class Voidwake {
       weaponId: p.ship.weaponId, gunnerWeaponId: p.ship.gunnerWeaponId,
       modules: [...p.ship.modules],
       refit: p.ship.refit ? { ...p.ship.refit } : undefined,
+      turretAmmo: p.ship.turretAmmo,
+
       insured: p.ship.insured,
       storedAt: st?.id, storedAtName: st?.name ?? "Yard",
       storedAtMs: Date.now(),
