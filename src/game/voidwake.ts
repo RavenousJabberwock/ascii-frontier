@@ -12246,6 +12246,7 @@ export class Voidwake {
   // page and `frontier.setRender3d`. Clamps, persists nothing itself (the
   // normal options save handles that) and dispatches `onRender3DChanged`.
   private applyRender3D(o: { mode?: string; strength?: number; convergence?: number }): Record<string, unknown> {
+    const before = `${this.options.render3d}|${this.options.render3dStrength}|${this.options.render3dConvergence}`;
     if (o.mode !== undefined) {
       const m = RENDER_3D_MODES.find((x) => x.id === o.mode);
       if (m) this.options.render3d = m.id;
@@ -12257,9 +12258,14 @@ export class Voidwake {
       this.options.render3dConvergence = Math.max(500, Math.min(8000, Math.round(o.convergence)));
     }
     const state = this.render3DState();
-    dispatchHook("onRender3DChanged", state);
+    // 1.0.5 — only fire the hook when something actually moved, so a script
+    // that polls setRender3d in onTick does not spam its own handler.
+    if (`${this.options.render3d}|${this.options.render3dStrength}|${this.options.render3dConvergence}` !== before) {
+      dispatchHook("onRender3DChanged", state);
+    }
     return state;
   }
+
 
   // Read surface: active mode plus the whole registry, so scripts and mods can
   // build their own picker without hard-coding the format list.
