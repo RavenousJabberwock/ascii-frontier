@@ -2558,6 +2558,10 @@ interface PlayerShip {
   // 0.9.6 — permanent per-stat refit levels bought at the yard's Refit Bay.
   // Undefined on older saves; every reader goes through refitLevel/refitBonus.
   refit?: ShipRefit;
+  // 1.0.5 — fitted turret ammunition belt (see TURRET_LOADOUTS). Undefined on
+  // older saves, which read as the free "slug" belt.
+  turretAmmo?: string;
+
 }
 
 // A hired gunner who can auto-fire on hostiles, auto-mine asteroids,
