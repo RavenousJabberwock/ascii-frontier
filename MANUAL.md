@@ -479,6 +479,28 @@ stay quiet; the ship computer speaks for them.
 - **Chat Windows**: Comms panel size, wrap, and tab behaviour.
 - **Controls**: mouse-steer, gamepad, touch, full keybind editor.
 - **Mods / Scripting**: enable, reorder, and configure Lua mods.
+- **3D**: stereo output format, depth strength, convergence distance.
+
+### 3D output formats
+
+`Options ▸ 3D ▸ Mode` cycles the stereo renderer. The world layer gets the
+depth treatment; HUD, Comms and menus stay flat on the screen plane.
+
+| Mode | Needs | Notes |
+| --- | --- | --- |
+| off | — | Normal flat render. |
+| anaglyph red/cyan | red/cyan glasses | Cleanest separation; colours go grey. |
+| anaglyph red/cyan (half-colour) | red/cyan glasses | Keeps hull colour, a little more ghosting. |
+| anaglyph green/magenta | matching glasses | For TriOptiMax-style filters. |
+| anaglyph amber/blue | ColorCode glasses | Warm image, strong depth. |
+| interlaced (rows) | passive-polarised panel | One eye per grid line. |
+| interlaced (columns) | lenticular overlay | One eye per grid column. |
+| wiggle (no glasses) | nothing | Fast eye alternation; respects reduced-motion. |
+
+**Depth Strength** (1–6) scales disparity; **Convergence** sets the distance
+that sits exactly on the glass — anything closer pops out. Scripts can read and
+write all three (`frontier.render3d`, `frontier.setRender3d`).
+
 
 If the game stutters near a big star or black hole, that's the renderer
 drawing an enormous sprite — the current build clips those to the viewport,
