@@ -2284,6 +2284,8 @@ interface FleetShip {
   gunnerWeaponId?: string;
   modules: string[];
   refit?: ShipRefit;
+  turretAmmo?: string;    // 1.0.5 — belt travels with the frame into the hangar
+
   insured?: boolean;
   storedAt?: number;      // station entity id, when it was parked at one
   storedAtName: string;
