@@ -2228,6 +2228,38 @@ const TURRET_RANGE = 1100;
 const TURRET_COOLDOWN = 1.9;      // seconds between shots, per mount
 const TURRET_DMG_MUL = 0.5;       // share of the mounted weapon's damage
 
+// 1.0.5 — turret ammunition. Closes the 1.0.2 deferment ("mounts mirror the
+// fitted weapon"): the mounts still derive their damage from the gun in the
+// nose, but the belt you load reshapes that damage into a cadence/range/impact
+// trade. One belt is fitted per frame (`PlayerShip.turretAmmo`), bought once at
+// the Refit Bay and travelling with the hull like a refit does.
+interface TurretLoadout {
+  id: string; name: string;
+  dmgMul: number;       // multiplies TURRET_DMG_MUL
+  cdMul: number;        // multiplies TURRET_COOLDOWN
+  rangeMul: number;     // multiplies TURRET_RANGE
+  speed: number;        // bullet speed, u/s
+  price: number;        // one-off fitting cost, before haggling
+  desc: string;
+}
+const TURRET_LOADOUTS: TurretLoadout[] = [
+  { id: "slug",    name: "Standard slugs",  dmgMul: 1.00, cdMul: 1.00, rangeMul: 1.00, speed: 300, price: 0,
+    desc: "the belt the mount ships with — balanced, endless, free" },
+  { id: "flak",    name: "Flak canisters",  dmgMul: 1.55, cdMul: 1.40, rangeMul: 0.70, speed: 240, price: 2600,
+    desc: "heavy bursts at knife range; slow to cycle, brutal up close" },
+  { id: "tracker", name: "Tracker darts",   dmgMul: 0.62, cdMul: 0.62, rangeMul: 1.35, speed: 420, price: 3100,
+    desc: "fast light darts that reach further and chatter constantly" },
+  { id: "lance",   name: "Ion lances",      dmgMul: 1.20, cdMul: 1.15, rangeMul: 1.10, speed: 520, price: 4200,
+    desc: "high-velocity ion bolts — expensive, accurate, hard-hitting" },
+];
+function turretLoadoutSpec(id: string | undefined): TurretLoadout {
+  return TURRET_LOADOUTS.find((t) => t.id === id) ?? TURRET_LOADOUTS[0];
+}
+function turretLoadoutPrice(p: PlayerState, t: TurretLoadout): number {
+  return t.price <= 0 ? 0 : Math.max(200, Math.round(t.price * merchantBuyMult(p)));
+}
+
+
 function refitLevel(refit: ShipRefit | undefined, stat: RefitStat): number {
   return Math.max(0, Math.min(REFIT_MAX, refit?.[stat] ?? 0));
 }
