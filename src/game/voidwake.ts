@@ -14309,7 +14309,22 @@ export class Voidwake {
           ? `${r.name} [${bar}] — MAX — ${r.desc}`
           : `${r.name} [${bar}] — ${refitPrice(p, r.id)}cr — +${r.per} ${r.unit} — ${r.desc}`);
       }
+      // 1.0.5 — turret ammunition. Only shown once the frame has a mount, since
+      // a belt without a mount does nothing.
+      const mounts = refitLevel(p.ship.refit, "turret");
+      if (mounts > 0) {
+        const fitted = turretLoadoutSpec(p.ship.turretAmmo);
+        rows.push(`~ Ammunition — ${mounts} mount${mounts > 1 ? "s" : ""} loaded with ${fitted.name} ~`);
+        for (const t of TURRET_LOADOUTS) {
+          const price = turretLoadoutPrice(p, t);
+          const tag = t.id === fitted.id ? "LOADED" : price > 0 ? `${price}cr` : "free";
+          rows.push(`Ammo ${t.name} — ${tag} — ${Math.round(t.dmgMul * 100)}% impact, `
+            + `${Math.round(t.rangeMul * TURRET_RANGE)}u reach, `
+            + `${(TURRET_COOLDOWN * t.cdMul).toFixed(1)}s cycle — ${t.desc}`);
+        }
+      }
       rows.push("Back");
+
       return rows;
     }
 
