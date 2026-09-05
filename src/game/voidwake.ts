@@ -175,7 +175,10 @@ export type ScriptHookName =
   | "onFleetRotate"
   // 1.0.4 — stereo output changed (menu or `frontier.setRender3d`). Carries the
   // mode id, kind, depth strength and convergence distance.
-  | "onRender3DChanged";
+  | "onRender3DChanged"
+  // 1.0.5 — a turret ammunition belt was fitted (Refit Bay or
+  // `frontier.setTurretLoadout`).
+  | "onTurretLoadout";
 
 
 
@@ -247,6 +250,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onTurretFired:        [],
   onFleetRotate:        [],
   onRender3DChanged:    [],
+  onTurretLoadout:      [],
 
 
 
