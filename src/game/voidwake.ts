@@ -14102,6 +14102,33 @@ export class Voidwake {
     this.sfx("levelup");
   }
 
+  // 1.0.5 — one shared snapshot of the mounts, used by the Lua read surface and
+  // by both turret write surfaces so they always agree.
+  private turretStatus(): Record<string, unknown> {
+    const belts = TURRET_LOADOUTS.map((t) => ({
+      id: t.id, name: t.name, desc: t.desc, price: t.price,
+      damageMul: t.dmgMul, cooldownMul: t.cdMul, rangeMul: t.rangeMul,
+    }));
+    const p = this.player;
+    const mode = this.options.turretMode ?? "auto";
+    if (!p) return { mounts: 0, max: REFIT_MAX, range: TURRET_RANGE, baseRange: TURRET_RANGE,
+      cooldown: TURRET_COOLDOWN, damage: 0, mode, ammo: "slug", ammoName: TURRET_LOADOUTS[0].name,
+      ammoPrice: 0, loadouts: belts };
+    const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+    const belt = turretLoadoutSpec(p.ship.turretAmmo);
+    return {
+      mounts: refitLevel(p.ship.refit, "turret"),
+      max: REFIT_MAX,
+      range: Math.round(TURRET_RANGE * belt.rangeMul),
+      baseRange: TURRET_RANGE,
+      cooldown: Number((TURRET_COOLDOWN * belt.cdMul).toFixed(2)),
+      damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL * belt.dmgMul)),
+      mode,
+      ammo: belt.id, ammoName: belt.name, ammoPrice: turretLoadoutPrice(p, belt),
+      loadouts: belts,
+    };
+  }
+
   // 1.0.5 — fit a turret ammunition belt. Charged once; swapping back to the
   // standard slugs is always free, so a belt is never a dead end. `free` is
   // used by the Lua bridge, which changes the fitting without a sale.
