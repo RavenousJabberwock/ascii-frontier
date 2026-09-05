@@ -50,7 +50,7 @@ function hashString(s: string): number {
 const SAVE_PREFIX = "voidwake.save.";
 const TITLE_NOTICE_KEY = "voidwake.titleNotice";
 const FLIGHT_RECORDER_KEY = "voidwake.flightRecorder";
-const VERSION = "1.0.4";
+const VERSION = "1.0.5";
 
 // =============================================================================
 // Scripting Hooks (0.5.1)
@@ -175,7 +175,10 @@ export type ScriptHookName =
   | "onFleetRotate"
   // 1.0.4 — stereo output changed (menu or `frontier.setRender3d`). Carries the
   // mode id, kind, depth strength and convergence distance.
-  | "onRender3DChanged";
+  | "onRender3DChanged"
+  // 1.0.5 — a turret ammunition belt was fitted (Refit Bay or
+  // `frontier.setTurretLoadout`).
+  | "onTurretLoadout";
 
 
 
@@ -247,6 +250,7 @@ const _scriptHooks: Record<ScriptHookName, ScriptHookFn[]> = {
   onTurretFired:        [],
   onFleetRotate:        [],
   onRender3DChanged:    [],
+  onTurretLoadout:      [],
 
 
 
@@ -9449,7 +9453,10 @@ export class Voidwake {
           let dmg = playerShot
             ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
-          if (turretFired) dmg = Math.max(2, Math.round(dmg * TURRET_DMG_MUL));
+          // 1.0.5 — the fitted turret belt scales the mount's share of the gun.
+          if (turretFired) dmg = Math.max(2, Math.round(
+            dmg * TURRET_DMG_MUL * turretLoadoutSpec(this.player?.ship.turretAmmo).dmgMul));
+
 
           // 0.5.6 — critical hits. Base 8% on any player shot; +5% with a
           // Gunner aboard; +15% floor when a Tactical Officer fires. Crits
@@ -10565,8 +10572,12 @@ export class Voidwake {
     if (mode === "off") return;
     const mounts = refitLevel(p.ship.refit, "turret");
     if (mounts <= 0) return;
+    // 1.0.5 — the fitted belt reshapes reach, cadence and impact.
+    const belt = turretLoadoutSpec(p.ship.turretAmmo);
+    const range = TURRET_RANGE * belt.rangeMul;
+    const cadence = TURRET_COOLDOWN * belt.cdMul;
     let best: Entity | null = null, bestD2 = Infinity;
-    const r2 = TURRET_RANGE * TURRET_RANGE;
+    const r2 = range * range;
     if (mode === "target" && this.targetId != null) {
       const t = this.byId(this.targetId);
       if (t && t.kind === "hostile" && (t.hull ?? 1) > 0) {
@@ -10585,24 +10596,27 @@ export class Voidwake {
     const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
     for (let i = 0; i < mounts; i++) {
       // Stagger fresh mounts across the cadence so they don't fire in lockstep.
-      if (this._turretCooldowns[i] == null) this._turretCooldowns[i] = (TURRET_COOLDOWN / mounts) * i;
+      if (this._turretCooldowns[i] == null) this._turretCooldowns[i] = (cadence / mounts) * i;
       this._turretCooldowns[i] -= dt;
       if (!best) continue;
       if (this._turretCooldowns[i] > 0) continue;
-      this._turretCooldowns[i] = TURRET_COOLDOWN * effectiveCooldownMul(p);
+      this._turretCooldowns[i] = cadence * effectiveCooldownMul(p);
       const rel = V.sub(best.pos, p.pos);
       const d = Math.max(1, V.len(rel));
       const aim = V.scale(rel, 1 / d);
       this.entities.push({
         id: nextId(), kind: "bullet", name: "pd shot",
-        pos: { ...p.pos }, vel: V.scale(aim, 300),
+        pos: { ...p.pos }, vel: V.scale(aim, belt.speed),
         faction: "player", ownerId: -4, ttl: 2,
         ttlAt: performance.now() / 1000 + 2,
       });
-      this.beep(980, 0.03, "square");
+      this.beep(belt.id === "flak" ? 620 : belt.id === "lance" ? 1240 : 980, 0.03, "square");
       dispatchHook("onTurretFired", {
         mount: i + 1, mounts, targetId: best.id, target: best.name,
-        distance: Math.round(d), damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL)),
+        ammo: belt.id, ammoName: belt.name,
+        distance: Math.round(d),
+        damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL * belt.dmgMul)),
+
       });
     }
   }
@@ -11707,6 +11721,18 @@ export class Voidwake {
       .filter((r) => refitLevel(p.ship.refit, r.id) > 0)
       .map((r) => `${r.name} L${refitLevel(p.ship.refit, r.id)} (+${refitBonus(p.ship.refit, r.id)} ${r.unit})`);
     if (refitBits.length) putText(g, sx, sry++, `Refits: ${refitBits.join(", ")}`, "#6f9");
+    // 1.0.5 — the belt loaded across the mounts, and what it does to them.
+    if (refitLevel(p.ship.refit, "turret") > 0) {
+      const belt = turretLoadoutSpec(p.ship.turretAmmo);
+      const w0 = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+      putText(g, sx, sry++,
+        `Mounts: ${refitLevel(p.ship.refit, "turret")} x ${belt.name} — `
+        + `${Math.max(2, Math.round(w0.dmg * TURRET_DMG_MUL * belt.dmgMul))} dmg, `
+        + `${Math.round(TURRET_RANGE * belt.rangeMul)}u, `
+        + `${(TURRET_COOLDOWN * belt.cdMul).toFixed(1)}s (${this.options.turretMode ?? "auto"})`,
+        "#ffcc55", cols - 2);
+    }
+
     if (p.fleet?.length) {
       const berthed = p.fleet
         .map((f) => {
@@ -12632,18 +12658,22 @@ export class Voidwake {
           x: ev.pos.x, y: ev.pos.y, z: ev.pos.z,
         })),
         // 1.0.2.1 — mount status so a script can report or gate on point defence.
-        turrets: () => {
-          const p = this.player; if (!p) return { mounts: 0, range: TURRET_RANGE, damage: 0, mode: this.options.turretMode ?? "auto" };
-          const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
-          return {
-            mounts: refitLevel(p.ship.refit, "turret"),
-            max: REFIT_MAX,
-            range: TURRET_RANGE,
-            cooldown: TURRET_COOLDOWN,
-            damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL)),
-            mode: this.options.turretMode ?? "auto",
-          };
+        // 1.0.5 — plus the fitted ammunition belt and the whole belt registry,
+        // so a mod-supplied picker never hard-codes the list.
+        turrets: () => this.turretStatus(),
+        // 1.0.5 — write surfaces: point-defence mode and the fitted belt. The
+        // belt swap is free from a script (mods are not shopkeepers).
+        setTurretMode: (mode: string) => {
+          if (mode !== "auto" && mode !== "target" && mode !== "off") return null;
+          this.options.turretMode = mode;
+          return this.turretStatus();
         },
+        setTurretLoadout: (id: string) => {
+          if (!this.fitTurretAmmo(String(id), true)) return null;
+          return this.turretStatus();
+        },
+
+
         holdings: () => {
           const p = this.player; if (!p) return [];
           return (p.ownedStations ?? []).map((s0) => ({
@@ -13582,6 +13612,8 @@ export class Voidwake {
     p.ship.hullId = f.hullId;
     p.ship.modules = [...f.modules];
     p.ship.refit = f.refit ? { ...f.refit } : undefined;
+    p.ship.turretAmmo = f.turretAmmo;   // 1.0.5 — the belt is part of the frame
+
     p.ship.weaponId = f.weaponId;
     p.ship.gunnerWeaponId = f.gunnerWeaponId;
     p.ship.insured = f.insured;
@@ -14082,6 +14114,69 @@ export class Voidwake {
     this.sfx("levelup");
   }
 
+  // 1.0.5 — one shared snapshot of the mounts, used by the Lua read surface and
+  // by both turret write surfaces so they always agree.
+  private turretStatus(): Record<string, unknown> {
+    const belts = TURRET_LOADOUTS.map((t) => ({
+      id: t.id, name: t.name, desc: t.desc, price: t.price,
+      damageMul: t.dmgMul, cooldownMul: t.cdMul, rangeMul: t.rangeMul,
+    }));
+    const p = this.player;
+    const mode = this.options.turretMode ?? "auto";
+    if (!p) return { mounts: 0, max: REFIT_MAX, range: TURRET_RANGE, baseRange: TURRET_RANGE,
+      cooldown: TURRET_COOLDOWN, damage: 0, mode, ammo: "slug", ammoName: TURRET_LOADOUTS[0].name,
+      ammoPrice: 0, loadouts: belts };
+    const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+    const belt = turretLoadoutSpec(p.ship.turretAmmo);
+    return {
+      mounts: refitLevel(p.ship.refit, "turret"),
+      max: REFIT_MAX,
+      range: Math.round(TURRET_RANGE * belt.rangeMul),
+      baseRange: TURRET_RANGE,
+      cooldown: Number((TURRET_COOLDOWN * belt.cdMul).toFixed(2)),
+      damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL * belt.dmgMul)),
+      mode,
+      ammo: belt.id, ammoName: belt.name, ammoPrice: turretLoadoutPrice(p, belt),
+      loadouts: belts,
+    };
+  }
+
+  // 1.0.5 — fit a turret ammunition belt. Charged once; swapping back to the
+  // standard slugs is always free, so a belt is never a dead end. `free` is
+  // used by the Lua bridge, which changes the fitting without a sale.
+  fitTurretAmmo(id: string, free = false): boolean {
+    const p = this.player; if (!p) return false;
+    const belt = TURRET_LOADOUTS.find((t) => t.id === id);
+    if (!belt) { this.pushLog(`No such ammunition belt: ${id}.`); return false; }
+    if (turretLoadoutSpec(p.ship.turretAmmo).id === belt.id) {
+      this.pushLog(`${belt.name} are already loaded.`);
+      return false;
+    }
+    const cost = free ? 0 : turretLoadoutPrice(p, belt);
+    if (cost > 0 && p.credits < cost) {
+      this.pushLog(`The armourer wants ${cost}cr for a belt of ${belt.name.toLowerCase()}.`);
+      return false;
+    }
+    p.credits -= cost;
+    p.ship.turretAmmo = belt.id;
+    const mounts = refitLevel(p.ship.refit, "turret");
+    this.pushLog(cost > 0
+      ? `${belt.name} loaded across ${mounts} mount${mounts === 1 ? "" : "s"} for ${cost}cr.`
+      : `${belt.name} loaded across ${mounts} mount${mounts === 1 ? "" : "s"}.`);
+    this.pushChatter("Gunnery", `Mounts running ${belt.name.toLowerCase()} — ${belt.desc}.`, "#ffcc55");
+    dispatchHook("onTurretLoadout", {
+      ammo: belt.id, name: belt.name, cost, mounts,
+      damageMul: belt.dmgMul, cooldownMul: belt.cdMul, rangeMul: belt.rangeMul,
+      range: Math.round(TURRET_RANGE * belt.rangeMul),
+      cooldown: Number((TURRET_COOLDOWN * belt.cdMul).toFixed(2)),
+      stationId: this.dockedStationId,
+    });
+    this.sfx("levelup");
+    return true;
+  }
+
+
+
   // 0.8.4 — Take a warrant off a Bounty Office board. The mark is spawned
   // 2.5-5k out from the station as a boss-tagged pirate so the existing kill
   // handler pays the captain bonus and swings rep, and a bounty mission is
@@ -14297,7 +14392,22 @@ export class Voidwake {
           ? `${r.name} [${bar}] — MAX — ${r.desc}`
           : `${r.name} [${bar}] — ${refitPrice(p, r.id)}cr — +${r.per} ${r.unit} — ${r.desc}`);
       }
+      // 1.0.5 — turret ammunition. Only shown once the frame has a mount, since
+      // a belt without a mount does nothing.
+      const mounts = refitLevel(p.ship.refit, "turret");
+      if (mounts > 0) {
+        const fitted = turretLoadoutSpec(p.ship.turretAmmo);
+        rows.push(`~ Ammunition — ${mounts} mount${mounts > 1 ? "s" : ""} loaded with ${fitted.name} ~`);
+        for (const t of TURRET_LOADOUTS) {
+          const price = turretLoadoutPrice(p, t);
+          const tag = t.id === fitted.id ? "LOADED" : price > 0 ? `${price}cr` : "free";
+          rows.push(`Ammo ${t.name} — ${tag} — ${Math.round(t.dmgMul * 100)}% impact, `
+            + `${Math.round(t.rangeMul * TURRET_RANGE)}u reach, `
+            + `${(TURRET_COOLDOWN * t.cdMul).toFixed(1)}s cycle — ${t.desc}`);
+        }
+      }
       rows.push("Back");
+
       return rows;
     }
 
@@ -14686,8 +14796,14 @@ export class Voidwake {
     if (this.stationPage === "refit-bay") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~") || row === "Back") return;
+      if (row.startsWith("Ammo ")) {
+        const belt = TURRET_LOADOUTS.find((t) => row.startsWith(`Ammo ${t.name}`));
+        if (belt) this.fitTurretAmmo(belt.id);
+        return;
+      }
       const spec = REFIT_SPECS.find((r) => row.startsWith(r.name));
       if (spec) this.buyRefit(spec.id);
+
       return;
     }
 

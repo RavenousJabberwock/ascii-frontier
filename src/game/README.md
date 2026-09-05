@@ -553,7 +553,8 @@ covering every hook shipped so far.
 | `onFleetOfficer`    | `{ hullId, name, action, officer, role, level, station }` | `action` is `"seconded"` or `"recalled"` (0.9.8) |
 | `onFleetPresence`   | `{ hullId, name, phase, station, duty, officer?, x?, y?, z? }` | `phase` is `"arrived"` or `"left"` as a working frame enters/leaves the world (0.9.8) |
 | `onFleetRotate`     | roster toggle: `{ hullId, name, rotating, duty, station, periodsOnDuty }`; change-over: `{ hullId, name, from, to, fee, fromAccount, fromWallet, station, officer? }` | a frame put on/off the rotating roster, or rotated itself onto the next duty (1.0.2) |
-| `onTurretFired`     | `{ mount, mounts, targetId, target, distance, damage }` | a point-defence mount took a shot (1.0.2) |
+| `onTurretFired`     | `{ mount, mounts, targetId, target, distance, damage, ammo, ammoName }` | a point-defence mount took a shot (1.0.2; ammo fields 1.0.5) |
+| `onTurretLoadout`   | `{ ammo, name, cost, mounts, damageMul, cooldownMul, rangeMul, range, cooldown, stationId }` | a turret ammunition belt was fitted (1.0.5) |
 
 Since 1.0.2 `frontier.fleet()` rows also carry `rotating`, `periodsOnDuty` and
 `rotatePeriods`, and `onFleetIncome` payloads include `periodsOnDuty` /
@@ -564,6 +565,21 @@ Since 1.0.2.1 `frontier.turrets()` returns
 `{ mounts, max, range, cooldown, damage, mode }` for the frame you are flying,
 where `mode` is the `Options ▸ Gameplay ▸ Point Defence` setting
 (`"auto"` / `"target"` / `"off"`).
+
+Since 1.0.5 the same call also returns `ammo`, `ammoName`, `ammoPrice`,
+`baseRange` and `loadouts` — the live ammunition registry, each row
+`{ id, name, desc, price, damageMul, cooldownMul, rangeMul }`. `range`,
+`cooldown` and `damage` already fold in the fitted belt. Two writers pair with
+it:
+
+```lua
+frontier.setTurretMode("target")      -- "auto" | "target" | "off"
+frontier.setTurretLoadout("tracker")  -- any id from turrets().loadouts
+```
+
+Both return the new turret status (or `nil` on a bad argument). A script swap is
+free — mods are not shopkeepers — and fires `onTurretLoadout` exactly like the
+Refit Bay row does.
 
 ### 3D output (1.0.4)
 

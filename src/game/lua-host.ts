@@ -106,6 +106,7 @@ const HOOK_NAMES: ScriptHookName[] = [
   "onFleetPresence",
   // 1.0.2 — turret mounts and duty rotation
   "onTurretFired",
+  "onTurretLoadout",
   "onFleetRotate",
   // 1.0.4 — stereo output format changed
   "onRender3DChanged",
@@ -156,6 +157,9 @@ export interface LuaHostBridge {
   fleet?: () => Array<Record<string, unknown>>;
   // 1.0.2.1 — point-defence mount status: level, range, per-shot damage, mode.
   turrets?: () => Record<string, unknown>;
+  // 1.0.5 — turret write surfaces: point-defence mode and ammunition belt.
+  setTurretMode?: (mode: string) => Record<string, unknown> | null;
+  setTurretLoadout?: (id: string) => Record<string, unknown> | null;
   // 0.9.0 — live frontier events (advisories currently moving the economy).
   events?: () => Array<Record<string, unknown>>;
   // 0.9.1 — navigation surface: read the tracked contact and current screen,
@@ -456,6 +460,22 @@ export class LuaHost {
       return 1;
     });
     lua.lua_setfield(L, -2, to_luastring("turrets"));
+
+    // frontier.setTurretMode("auto"|"target"|"off") → turret status | nil
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const mode = String(lua.lua_tojsstring(Ls, 1) ?? "");
+      pushJsAsLua(Ls, this.bridge.setTurretMode?.(mode) ?? null, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("setTurretMode"));
+
+    // frontier.setTurretLoadout("slug"|"flak"|...) → turret status | nil
+    lua.lua_pushjsfunction(L, (Ls: L) => {
+      const id = String(lua.lua_tojsstring(Ls, 1) ?? "");
+      pushJsAsLua(Ls, this.bridge.setTurretLoadout?.(id) ?? null, 0);
+      return 1;
+    });
+    lua.lua_setfield(L, -2, to_luastring("setTurretLoadout"));
 
     // frontier.events() → list of live frontier events (read-only)
     lua.lua_pushjsfunction(L, (Ls: L) => {
