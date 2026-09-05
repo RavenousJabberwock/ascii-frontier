@@ -11721,6 +11721,18 @@ export class Voidwake {
       .filter((r) => refitLevel(p.ship.refit, r.id) > 0)
       .map((r) => `${r.name} L${refitLevel(p.ship.refit, r.id)} (+${refitBonus(p.ship.refit, r.id)} ${r.unit})`);
     if (refitBits.length) putText(g, sx, sry++, `Refits: ${refitBits.join(", ")}`, "#6f9");
+    // 1.0.5 — the belt loaded across the mounts, and what it does to them.
+    if (refitLevel(p.ship.refit, "turret") > 0) {
+      const belt = turretLoadoutSpec(p.ship.turretAmmo);
+      const w0 = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+      putText(g, sx, sry++,
+        `Mounts: ${refitLevel(p.ship.refit, "turret")} x ${belt.name} — `
+        + `${Math.max(2, Math.round(w0.dmg * TURRET_DMG_MUL * belt.dmgMul))} dmg, `
+        + `${Math.round(TURRET_RANGE * belt.rangeMul)}u, `
+        + `${(TURRET_COOLDOWN * belt.cdMul).toFixed(1)}s (${this.options.turretMode ?? "auto"})`,
+        "#ffcc55", cols - 2);
+    }
+
     if (p.fleet?.length) {
       const berthed = p.fleet
         .map((f) => {
