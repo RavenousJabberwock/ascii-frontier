@@ -12646,18 +12646,41 @@ export class Voidwake {
           x: ev.pos.x, y: ev.pos.y, z: ev.pos.z,
         })),
         // 1.0.2.1 — mount status so a script can report or gate on point defence.
+        // 1.0.5 — plus the fitted ammunition belt and the whole belt registry,
+        // so a mod-supplied picker never hard-codes the list.
         turrets: () => {
-          const p = this.player; if (!p) return { mounts: 0, range: TURRET_RANGE, damage: 0, mode: this.options.turretMode ?? "auto" };
+          const p = this.player;
+          const belts = TURRET_LOADOUTS.map((t) => ({
+            id: t.id, name: t.name, desc: t.desc, price: t.price,
+            damageMul: t.dmgMul, cooldownMul: t.cdMul, rangeMul: t.rangeMul,
+          }));
+          if (!p) return { mounts: 0, range: TURRET_RANGE, damage: 0, mode: this.options.turretMode ?? "auto", ammo: "slug", loadouts: belts };
           const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
+          const belt = turretLoadoutSpec(p.ship.turretAmmo);
           return {
             mounts: refitLevel(p.ship.refit, "turret"),
             max: REFIT_MAX,
-            range: TURRET_RANGE,
-            cooldown: TURRET_COOLDOWN,
-            damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL)),
+            range: Math.round(TURRET_RANGE * belt.rangeMul),
+            baseRange: TURRET_RANGE,
+            cooldown: Number((TURRET_COOLDOWN * belt.cdMul).toFixed(2)),
+            damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL * belt.dmgMul)),
             mode: this.options.turretMode ?? "auto",
+            ammo: belt.id, ammoName: belt.name, ammoPrice: turretLoadoutPrice(p, belt),
+            loadouts: belts,
           };
         },
+        // 1.0.5 — write surfaces: point-defence mode and the fitted belt. The
+        // belt swap is free from a script (mods are not shopkeepers).
+        setTurretMode: (mode) => {
+          if (mode !== "auto" && mode !== "target" && mode !== "off") return null;
+          this.options.turretMode = mode;
+          return this.bridge.turrets?.() ?? null;
+        },
+        setTurretLoadout: (id) => {
+          if (!this.fitTurretAmmo(String(id), true)) return null;
+          return this.bridge.turrets?.() ?? null;
+        },
+
         holdings: () => {
           const p = this.player; if (!p) return [];
           return (p.ownedStations ?? []).map((s0) => ({
