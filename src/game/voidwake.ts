@@ -14713,8 +14713,14 @@ export class Voidwake {
     if (this.stationPage === "refit-bay") {
       const row = lines[i] ?? "";
       if (!row || row.startsWith("~") || row === "Back") return;
+      if (row.startsWith("Ammo ")) {
+        const belt = TURRET_LOADOUTS.find((t) => row.startsWith(`Ammo ${t.name}`));
+        if (belt) this.fitTurretAmmo(belt.id);
+        return;
+      }
       const spec = REFIT_SPECS.find((r) => row.startsWith(r.name));
       if (spec) this.buyRefit(spec.id);
+
       return;
     }
 
