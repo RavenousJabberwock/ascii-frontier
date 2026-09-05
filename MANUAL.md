@@ -324,6 +324,15 @@ picks how the mounts choose their shot: `auto` is nearest-hostile-first,
 `target` makes them favour your tracked contact whenever it is a hostile inside
 1100u so you can concentrate fire, and `off` holds them entirely.
 
+**Turret ammunition** (1.0.5). Once a mount is fitted, the Refit Bay lists
+belts under an `Ammunition` header. **Standard slugs** are the free default;
+**flak canisters** hit half again as hard at two-thirds the reach and a slower
+cycle; **tracker darts** trade impact for a long reach and near-constant fire;
+**ion lances** are the expensive all-rounder with the fastest projectile. One
+belt is loaded at a time across every mount, it stays with the frame (into the
+hangar and back), and reverting to slugs costs nothing. The Character Sheet's
+`Mounts:` line shows what is loaded and the damage, reach and cycle it gives.
+
 
 **The hangar** (0.9.6). You no longer have to sell the old ship to buy a new
 one. The Shipyard has a purchase-mode row: `TRADE IN` behaves as before, while

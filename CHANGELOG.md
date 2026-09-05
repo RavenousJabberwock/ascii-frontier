@@ -4,6 +4,30 @@ All notable changes to **ASCII Frontier**. Versions are the engine `VERSION`
 constant in `src/game/voidwake.ts`. Dates are omitted deliberately — releases
 are milestone-driven, not calendar-driven.
 
+## 1.0.5 — Turret Loadouts
+
+- **Turret ammunition** (closes the 1.0.2 deferment "mounts mirror the fitted
+  weapon"). Once a frame carries at least one point-defence mount, the Refit Bay
+  sells a belt for it. Four belts, each a cadence/reach/impact trade on top of
+  the mounted gun's damage:
+  - **Standard slugs** — 100% impact, 1100u, 1.9s. Free, always available.
+  - **Flak canisters** — 155% impact, 770u, 2.7s. 2,600cr.
+  - **Tracker darts** — 62% impact, 1485u, 1.2s. 3,100cr.
+  - **Ion lances** — 120% impact, 1210u, 2.2s, fastest projectile. 4,200cr.
+  The belt is part of the frame, so it travels into the hangar with the hull and
+  survives a swap; reverting to slugs is always free. The Character Sheet now
+  shows a `Mounts:` line with the loaded belt and its live numbers.
+- **Scripting/modding.** `frontier.turrets()` gains `ammo`, `ammoName`,
+  `ammoPrice`, `baseRange` and a `loadouts` registry (id, name, desc, price and
+  the three multipliers) so a mod-built picker never hard-codes the belt list;
+  `range`/`cooldown`/`damage` now report the fitted belt's values. New writers
+  `frontier.setTurretMode(mode)` and `frontier.setTurretLoadout(id)` (free from a
+  script), and a new hook `onTurretLoadout`. `onTurretFired` payloads carry
+  `ammo` / `ammoName`.
+- **Fix:** `onRender3DChanged` only fires when a stereo value actually changes,
+  so a script polling `setRender3d` no longer re-enters its own handler each
+  tick.
+
 ## 1.0.4 — 3D Output Formats & Stereo Scripting
 
 - Four new entries in `Options ▸ 3D ▸ Mode`, all riding the existing depth
