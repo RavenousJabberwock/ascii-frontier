@@ -9449,7 +9449,10 @@ export class Voidwake {
           let dmg = playerShot
             ? (WEAPONS.find((x) => x.id === shooterWepId) ?? WEAPONS[0]).dmg
             : 6;
-          if (turretFired) dmg = Math.max(2, Math.round(dmg * TURRET_DMG_MUL));
+          // 1.0.5 — the fitted turret belt scales the mount's share of the gun.
+          if (turretFired) dmg = Math.max(2, Math.round(
+            dmg * TURRET_DMG_MUL * turretLoadoutSpec(this.player?.ship.turretAmmo).dmgMul));
+
 
           // 0.5.6 — critical hits. Base 8% on any player shot; +5% with a
           // Gunner aboard; +15% floor when a Tactical Officer fires. Crits
