@@ -695,3 +695,43 @@ frontier.on("onPlayerDock", function(evt)
   if evt.kind == "station" then next3d() end
 end)
 ```
+
+
+## Turret armourer (1.0.5)
+
+Reads the belt registry rather than a hard-coded list, loads flak when the
+shooting gets close, trackers when it is long-range, and logs every swap.
+
+```lua
+local function has(id)
+  for _, b in ipairs((frontier.turrets() or {}).loadouts or {}) do
+    if b.id == id then return true end
+  end
+end
+
+frontier.on("onTurretLoadout", function(t)
+  frontier.log(("[mounts] %d x %s — %d dmg, %du, %.1fs (%dcr)")
+    :format(t.mounts or 0, t.name, math.floor((t.damageMul or 1) * 100), t.range or 0,
+            t.cooldown or 0, t.cost or 0))
+end)
+
+-- Pick a belt to suit the fight the moment you take a hit.
+frontier.on("onPlayerDamaged", function()
+  local t = frontier.turrets()
+  if not t or (t.mounts or 0) == 0 then return end
+  local near = frontier.entities.list({ kind = "hostile", radius = 700, max = 1 })
+  local want = (#near > 0) and "flak" or "tracker"
+  if t.ammo ~= want and has(want) then
+    frontier.setTurretLoadout(want)
+    frontier.setTurretMode("target")
+  end
+end)
+
+-- Back to the free belt while docked, so nothing exotic is wasted on patrol.
+frontier.on("onPlayerDock", function(evt)
+  if evt.kind == "station" then
+    frontier.setTurretLoadout("slug")
+    frontier.setTurretMode("auto")
+  end
+end)
+```

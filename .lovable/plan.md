@@ -1,3 +1,29 @@
+# 1.0.5 — Turret Loadouts
+
+Ships as **1.0.5**. Closes the last of the 1.0.2 turret deferments.
+
+- **`TURRET_LOADOUTS`** (`slug` / `flak` / `tracker` / `lance`), each with
+  `dmgMul`, `cdMul`, `rangeMul`, projectile `speed`, one-off `price` and blurb.
+  `PlayerShip.turretAmmo` / `FleetShip.turretAmmo` hold the fitting, so it
+  travels with the hull through `shipSnapshot`/`fleetSwap` and defaults to
+  `slug` on older saves. `fitTurretAmmo(id, free?)` is the single write path
+  (Refit Bay row charges; the Lua setter does not).
+- `updateTurrets` derives reach, cadence and projectile speed from the belt; the
+  bullet-hit site scales `TURRET_DMG_MUL` by `dmgMul`. Character Sheet gains a
+  `Mounts:` line.
+- **Scripting.** `turretStatus()` shared by the read and both write surfaces:
+  `frontier.turrets()` + `ammo`/`ammoName`/`ammoPrice`/`baseRange`/`loadouts`,
+  `frontier.setTurretMode`, `frontier.setTurretLoadout`, hook `onTurretLoadout`,
+  `ammo` fields on `onTurretFired`.
+- **Fix.** `applyRender3D` compares before/after and only dispatches
+  `onRender3DChanged` on a real change.
+
+## Deferred past 1.0.5
+
+- Player-to-NPC free-text comms (templated replies only today).
+- Module bays / weapon hardpoints as refit slots (turret mounts are the only
+  non-stat refit).
+
 # 1.0.2.1 — Point Defence Control
 
 Patch release on 1.0.2; no save or mod breakage.
