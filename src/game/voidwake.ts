@@ -14094,6 +14094,42 @@ export class Voidwake {
     this.sfx("levelup");
   }
 
+  // 1.0.5 — fit a turret ammunition belt. Charged once; swapping back to the
+  // standard slugs is always free, so a belt is never a dead end. `free` is
+  // used by the Lua bridge, which changes the fitting without a sale.
+  fitTurretAmmo(id: string, free = false): boolean {
+    const p = this.player; if (!p) return false;
+    const belt = TURRET_LOADOUTS.find((t) => t.id === id);
+    if (!belt) { this.pushLog(`No such ammunition belt: ${id}.`); return false; }
+    if (turretLoadoutSpec(p.ship.turretAmmo).id === belt.id) {
+      this.pushLog(`${belt.name} are already loaded.`);
+      return false;
+    }
+    const cost = free ? 0 : turretLoadoutPrice(p, belt);
+    if (cost > 0 && p.credits < cost) {
+      this.pushLog(`The armourer wants ${cost}cr for a belt of ${belt.name.toLowerCase()}.`);
+      return false;
+    }
+    p.credits -= cost;
+    p.ship.turretAmmo = belt.id;
+    const mounts = refitLevel(p.ship.refit, "turret");
+    this.pushLog(cost > 0
+      ? `${belt.name} loaded across ${mounts} mount${mounts === 1 ? "" : "s"} for ${cost}cr.`
+      : `${belt.name} loaded across ${mounts} mount${mounts === 1 ? "" : "s"}.`);
+    this.pushChatter("Gunnery", `Mounts running ${belt.name.toLowerCase()} — ${belt.desc}.`, "#ffcc55");
+    dispatchHook("onTurretLoadout", {
+      ammo: belt.id, name: belt.name, cost, mounts,
+      damageMul: belt.dmgMul, cooldownMul: belt.cdMul, rangeMul: belt.rangeMul,
+      range: Math.round(TURRET_RANGE * belt.rangeMul),
+      cooldown: Number((TURRET_COOLDOWN * belt.cdMul).toFixed(2)),
+      stationId: this.dockedStationId,
+    });
+    this.sfx("levelup");
+    return true;
+  }
+
+
+
   // 0.8.4 — Take a warrant off a Bounty Office board. The mark is spawned
   // 2.5-5k out from the station as a boss-tagged pirate so the existing kill
   // handler pays the captain bonus and swings rep, and a bounty mission is
