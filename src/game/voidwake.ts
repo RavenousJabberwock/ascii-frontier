@@ -10565,8 +10565,12 @@ export class Voidwake {
     if (mode === "off") return;
     const mounts = refitLevel(p.ship.refit, "turret");
     if (mounts <= 0) return;
+    // 1.0.5 — the fitted belt reshapes reach, cadence and impact.
+    const belt = turretLoadoutSpec(p.ship.turretAmmo);
+    const range = TURRET_RANGE * belt.rangeMul;
+    const cadence = TURRET_COOLDOWN * belt.cdMul;
     let best: Entity | null = null, bestD2 = Infinity;
-    const r2 = TURRET_RANGE * TURRET_RANGE;
+    const r2 = range * range;
     if (mode === "target" && this.targetId != null) {
       const t = this.byId(this.targetId);
       if (t && t.kind === "hostile" && (t.hull ?? 1) > 0) {
@@ -10585,23 +10589,25 @@ export class Voidwake {
     const w = WEAPONS.find((x) => x.id === p.ship.weaponId) ?? WEAPONS[0];
     for (let i = 0; i < mounts; i++) {
       // Stagger fresh mounts across the cadence so they don't fire in lockstep.
-      if (this._turretCooldowns[i] == null) this._turretCooldowns[i] = (TURRET_COOLDOWN / mounts) * i;
+      if (this._turretCooldowns[i] == null) this._turretCooldowns[i] = (cadence / mounts) * i;
       this._turretCooldowns[i] -= dt;
       if (!best) continue;
       if (this._turretCooldowns[i] > 0) continue;
-      this._turretCooldowns[i] = TURRET_COOLDOWN * effectiveCooldownMul(p);
+      this._turretCooldowns[i] = cadence * effectiveCooldownMul(p);
       const rel = V.sub(best.pos, p.pos);
       const d = Math.max(1, V.len(rel));
       const aim = V.scale(rel, 1 / d);
       this.entities.push({
         id: nextId(), kind: "bullet", name: "pd shot",
-        pos: { ...p.pos }, vel: V.scale(aim, 300),
+        pos: { ...p.pos }, vel: V.scale(aim, belt.speed),
         faction: "player", ownerId: -4, ttl: 2,
         ttlAt: performance.now() / 1000 + 2,
       });
-      this.beep(980, 0.03, "square");
+      this.beep(belt.id === "flak" ? 620 : belt.id === "lance" ? 1240 : 980, 0.03, "square");
       dispatchHook("onTurretFired", {
         mount: i + 1, mounts, targetId: best.id, target: best.name,
+        ammo: belt.id, ammoName: belt.name,
+
         distance: Math.round(d), damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL)),
       });
     }
