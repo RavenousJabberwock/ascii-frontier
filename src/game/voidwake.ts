@@ -10607,8 +10607,9 @@ export class Voidwake {
       dispatchHook("onTurretFired", {
         mount: i + 1, mounts, targetId: best.id, target: best.name,
         ammo: belt.id, ammoName: belt.name,
+        distance: Math.round(d),
+        damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL * belt.dmgMul)),
 
-        distance: Math.round(d), damage: Math.max(2, Math.round(w.dmg * TURRET_DMG_MUL)),
       });
     }
   }
