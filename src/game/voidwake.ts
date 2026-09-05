@@ -13582,6 +13582,8 @@ export class Voidwake {
     p.ship.hullId = f.hullId;
     p.ship.modules = [...f.modules];
     p.ship.refit = f.refit ? { ...f.refit } : undefined;
+    p.ship.turretAmmo = f.turretAmmo;   // 1.0.5 — the belt is part of the frame
+
     p.ship.weaponId = f.weaponId;
     p.ship.gunnerWeaponId = f.gunnerWeaponId;
     p.ship.insured = f.insured;
